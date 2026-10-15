@@ -1,7 +1,6 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
-using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
@@ -13,9 +12,7 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 /// </summary>
 internal sealed class ApproveCommand(CliContext context)
 {
-    private const string UnknownApprover = "unknown";
     private const string VerifyVerb = "verify";
-    private const int HashPrefixLength = 12;
 
     private static readonly string[] ApproveValueOptions = ["--feature", "--key"];
     private static readonly string[] ApproveFlags = ["--sign"];
@@ -68,51 +65,22 @@ internal sealed class ApproveCommand(CliContext context)
             return ExitCode.Config;
         }
 
-        string approvedBy = await Git.ConfigValueAsync(manifest.Root, "user.email", cancellationToken) ?? UnknownApprover;
         ApprovalStore store = new(feature);
-        string record = store.Save(phase, approvedBy, context.Time.GetUtcNow(), ToolPin.RunningVersion);
-        await context.Output.WriteLineAsync($"Approved {ApprovalPhaseNames.ToName(phase)} of {feature.Id} as {approvedBy}: {Path.GetRelativePath(manifest.Root, record)}");
-
-        if (options.Flag("--sign") && await SignAsync(manifest.Root, record, options.Value("--key"), cancellationToken) is ExitCode failure)
+        ApprovalRecording recording = await new ApprovalRecorder(context, manifest.Root).RecordAsync(
+            feature, phase, [.. store.CurrentHashes(phase)], options.Flag("--sign"), options.Value("--key"), ApprovalChannel.Terminal, cancellationToken);
+        if (!recording.Recorded)
         {
-            return failure;
+            await context.Error.WriteLineAsync($"lockflight: {recording.Problem}");
+            return recording.FailureCode;
         }
 
-        // The approver stays in the approval record; the ledger is readable by the agent and needs only what was approved.
-        string phaseName = ApprovalPhaseNames.ToName(phase);
-        string artifacts = string.Join(',', store.CurrentHashes(phase).Select(artifact => $"{artifact.Name}={artifact.Hash[..Math.Min(HashPrefixLength, artifact.Hash.Length)]}"));
-        LedgerEvent approval = new(LedgerEventType.ApprovalRecorded, LedgerSignatures.ApprovePrefix + phaseName, $"{feature.Id} {phaseName} approved", null)
+        string record = Path.GetRelativePath(manifest.Root, recording.RecordPath!);
+        await context.Output.WriteLineAsync($"Approved {ApprovalPhaseNames.ToName(phase)} of {feature.Id} as {recording.ApprovedBy}: {record}");
+        if (recording.Signed)
         {
-            Approval = new LedgerApproval(feature.Id, phaseName, artifacts, Signed: options.Flag("--sign")),
-        };
-        await new LedgerWriter(manifest.Root, context.Time).AppendAsync(approval, cancellationToken);
+            await context.Output.WriteLineAsync($"Signed: {record}.sig");
+        }
+
         return ExitCode.Pass;
     }
-
-    /// <summary>Signs the record with the person's SSH key; null when signed, else the exit code of the failure (already reported).</summary>
-    private async Task<ExitCode?> SignAsync(string root, string record, string? keyOption, CancellationToken cancellationToken)
-    {
-        string? key = keyOption ?? await Git.ConfigValueAsync(root, "user.signingkey", cancellationToken);
-        if (key is null)
-        {
-            await context.Error.WriteLineAsync(
-                "lockflight: --sign needs --key <file> or git config user.signingkey (an SSH key; prefer one that needs a touch to sign)");
-            return ExitCode.Config;
-        }
-
-        // ssh-keygen asks the agent or the key's owner (Touch ID / security-key touch) here; the engine never sees the private key.
-        ProcessResult signing = await ProcessRunner.RunAsync(
-            "ssh-keygen", ["-Y", "sign", "-f", ExpandHome(key), "-n", ApprovalStore.SignatureNamespace, record], root, cancellationToken);
-        if (signing.ExitCode != 0)
-        {
-            await context.Error.WriteLineAsync($"lockflight: signing failed: {signing.Combined.Trim()}");
-            return ExitCode.Error;
-        }
-
-        await context.Output.WriteLineAsync($"Signed: {Path.GetRelativePath(root, record)}.sig");
-        return null;
-    }
-
-    private static string ExpandHome(string path) =>
-        path.StartsWith("~/", StringComparison.Ordinal) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), path[2..]) : path;
 }

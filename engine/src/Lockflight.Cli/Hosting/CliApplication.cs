@@ -63,7 +63,8 @@ internal static class CliApplication
         Human decisions (approve, redgreen reset, baseline, adopt apply|undo and update refuse to run inside a Claude Code
         session, a `!` command included: run them in a separate terminal window)
           approve spec|tasks [--feature <id>] [--sign [--key <file>]]
-                                                        approve the feature's artifacts, optionally SSH-signed
+                                                        approve the feature's artifacts, optionally SSH-signed;
+                                                        in Claude Code, type /lockflight:approve spec|tasks instead
           redgreen reset [--feature <id>]               discard the feature's red/green evidence
           baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories
           adopt apply [--speckit-preset <dir>] [--skip-speckit]

@@ -1,6 +1,9 @@
+using System.Text;
+using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
+using Lockflight.Cli.Lifecycle.Approvals;
 using Lockflight.Cli.Updating;
 
 namespace Lockflight.Cli.Hooks;
@@ -37,6 +40,12 @@ internal sealed class HookCommand(CliContext context)
             return await ReportAsync(HookDecision.Block("invalid-hook-input", "lockflight: hook input is not valid JSON"), hookEvent, projectRoot: null, input: null, cancellationToken);
         }
 
+        // Every typed slash command expands through this hook; only the approval command is the engine's business.
+        if (hookEvent == HookEvent.UserPromptExpansion && !SessionApproval.Handles(input))
+        {
+            return ExitCode.Pass;
+        }
+
         ManifestLoadResult loadResult = ManifestLocator.Discover(ProjectDirectory(input));
         if (loadResult.Status == ManifestLoadStatus.NotFound)
         {
@@ -54,9 +63,15 @@ internal sealed class HookCommand(CliContext context)
             return await ReportAsync(precondition, hookEvent, manifest.Root, input, cancellationToken);
         }
 
+        if (hookEvent == HookEvent.UserPromptExpansion)
+        {
+            return await ApproveInSessionAsync(input, manifest, cancellationToken);
+        }
+
         HookDecision decision = hookEvent switch
         {
-            HookEvent.PreToolUse => await new ProtectedPathGuard(context.Error, context.Environment).DecideAsync(input, manifest),
+            HookEvent.PreToolUse => ApprovalCommandRelay.Decide(input)
+                ?? await new ProtectedPathGuard(context.Error, context.Environment).DecideAsync(input, manifest),
             HookEvent.Stop => await StopGate.DecideAsync(manifest, context.Time, cancellationToken),
             _ => HookDecision.Allow,
         };
@@ -67,6 +82,45 @@ internal sealed class HookCommand(CliContext context)
         }
 
         return await ReportAsync(decision, hookEvent, manifest.Root, input, cancellationToken);
+    }
+
+    /// <summary>
+    /// <c>/lockflight:approve</c>: a refusal or the digest goes to stderr with exit 2, which Claude Code shows the person and keeps
+    /// from the agent; a recorded approval lets the command run, with a confirmation for the person and a note for the agent.
+    /// </summary>
+    private async Task<ExitCode> ApproveInSessionAsync(HookInput input, Manifest manifest, CancellationToken cancellationToken)
+    {
+        SessionApprovalResult result = await new SessionApproval(context, manifest).DecideAsync(input, cancellationToken);
+        switch (result.Outcome)
+        {
+            case SessionApprovalOutcome.Refused:
+                return await ReportAsync(HookDecision.Block(result.Code!, result.Message!), HookEvent.UserPromptExpansion, manifest.Root, input, cancellationToken);
+            case SessionApprovalOutcome.Shown:
+                await context.Error.WriteLineAsync(result.Message);
+                return ExitCode.HookBlock;
+            case SessionApprovalOutcome.Recorded:
+                await context.Output.WriteLineAsync(ToExpansionOutput(result.Message!, result.AgentContext!));
+                return ExitCode.Pass;
+            default:
+                return ExitCode.Pass;
+        }
+    }
+
+    private static string ToExpansionOutput(string userMessage, string agentContext)
+    {
+        using MemoryStream stream = new();
+        using (Utf8JsonWriter writer = new(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("systemMessage", userMessage);
+            writer.WriteStartObject("hookSpecificOutput");
+            writer.WriteString("hookEventName", "UserPromptExpansion");
+            writer.WriteString("additionalContext", agentContext);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
     /// <summary>Checks that apply before any guard: protocol compatibility, known event, lockdown, engine version parity.</summary>

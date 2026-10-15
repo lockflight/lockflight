@@ -67,11 +67,13 @@ tests. A build that fails is a verdict (FAIL, or COMPILE_RED for a red).
 
 These refuse to run inside a Claude Code session (exit 2), and that includes a `!` command typed in Claude Code. Run them
 in a separate terminal window, not with `!` in Claude Code (a `!` command runs inside the session and is refused). The refusal prints the exact line to copy, for example
-`cd '/path/to/project' && .lockflight/bin/lockflight approve spec`.
+`cd '/path/to/project' && .lockflight/bin/lockflight approve spec`. A spec or tasks approval can also be given in the session
+by typing `/lockflight:approve` (below).
 
 | Command | What it does |
 |---|---|
-| `approve spec\|tasks [--feature <id>] [--sign [--key <file>]]` | Records an approval bound to the artifacts' hashes. `--sign` adds an SSH signature (`ssh-keygen -Y sign`); the key defaults to `git config user.signingkey`. |
+| `approve spec\|tasks [--feature <id>] [--sign [--key <file>]]` | Records an approval bound to the artifacts' hashes. `--sign` adds an SSH signature (`ssh-keygen -Y sign`); the key defaults to `git config user.signingkey`. A signed approval is signed before it replaces the record: when signing fails, nothing is recorded (exit 3) and an existing approval stays as it was. |
+| `/lockflight:approve spec\|tasks [--feature <id>] [--sign [--key <file>]]`, typed in Claude Code | The same approval without leaving the session. It works only when **you type it** in an interactive session (not for the agent's own skill call, a headless `claude -p` session or a scheduled turn). The first time, the engine shows you, and not the agent, what you are approving: each file with the start of its hash, the requirements and stories (spec) or the task counts and covered requirements (tasks), open `[NEEDS CLARIFICATION]` markers, the current approval, and a one-time code. Type `/lockflight:approve spec <code>` within 10 minutes to record it; the code works once, and only while the files stay exactly as shown. The record, the signature and the ledger line are the same as the command's (the ledger's `channel` says `session`). With `--sign`, the key must be in an SSH agent or be a security key: the hook has no terminal to ask for a passphrase. |
 | `redgreen reset [--feature <id>]` | Discards the feature's red/green evidence (and says so when there is none). |
 | `baseline build\|tests\|deps [--path <dir>]` | Accepts the current build warnings, failing tests or vulnerable-package advisories (brownfield adoption). In a workspace, `--path <unit>` writes that unit's own baseline. |
 | `adopt apply` | Applies the reviewed plan. It refuses when the setup changed after the plan was made, or when the working tree is not clean. It backs up `CLAUDE.md`, `lockflight.yaml`, `.claude/` (not `settings.local.json`), `.specify/` and `specs/`, and adds a git ref `refs/lockflight/backup/<id>`. Then it:

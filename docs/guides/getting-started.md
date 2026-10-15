@@ -44,7 +44,8 @@ Commit in the shell, and in each service repository after `workspace sync`. Star
   `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
   root, as the skills do; `doctor` reports a pin that cannot be restored on this machine.
 - **Human decisions** (`approve`, `baseline`, `redgreen reset`, `adopt apply|undo`, `update`) are yours: run them in a separate
-  terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused).
+  terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
+  approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`).
 - **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. It pulls your checkout, reinstalls the engine and the
   plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
   commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at
@@ -105,14 +106,15 @@ Everything above, plus the lifecycle:
    | Step | Who | Check |
    |---|---|---|
    | `/speckit-specify`, `/speckit-clarify` | agent + you | `lockflight phase check specify` |
-   | approve the spec | **you**, in a separate terminal window (not `!` in Claude Code): `.lockflight/bin/lockflight approve spec [--sign]` | hash-bound record |
+   | approve the spec | **you**: type `/lockflight:approve spec` in Claude Code, review what the engine shows, then type the line with its code; or, in a separate terminal window (not `!` in Claude Code), `.lockflight/bin/lockflight approve spec [--sign]` | hash-bound record |
    | `/speckit-plan`, `/speckit-tasks` | agent | `lockflight phase check tasks` |
-   | approve the tasks | **you**, the same way: `.lockflight/bin/lockflight approve tasks [--sign]` | hash-bound record |
+   | approve the tasks | **you**, the same way: `/lockflight:approve tasks`, or `.lockflight/bin/lockflight approve tasks [--sign]` | hash-bound record |
    | per story: stubs → tests → `redgreen red` → implement → `redgreen green` | agent | red must fail in production code; tests locked until green |
    | `lockflight trace`, `lockflight review`, `gate run --profile pr` | agent | every requirement covered; review findings confirmed by reproductions |
    | PR and merge | **you** | CI runs the same gates with the base branch's policy |
 
-   Approvals are refused inside Claude Code sessions on purpose, a `!` command included: they are your decision.
+   Approvals are your decision: the agent cannot give them. Inside Claude Code only what you type yourself counts
+   (`/lockflight:approve`); the engine refuses `lockflight approve` run from the session, a `!` command included.
 3. Now and then: `.lockflight/bin/lockflight ledger retro` (or ask for a retro) to see recurring incidents and suggested remedies.
 
 ## Levi and the status line

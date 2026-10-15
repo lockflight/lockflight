@@ -21,6 +21,12 @@ internal static class EnvironmentVariables
     /// <summary>Set to <c>1</c> by Claude Code in every shell the agent starts.</summary>
     public const string ClaudeCode = "CLAUDECODE";
 
+    /// <summary>How Claude Code was started: <c>cli</c> for an interactive session, <c>sdk-cli</c> for a headless one (<c>claude -p</c>).</summary>
+    public const string ClaudeCodeEntrypoint = "CLAUDE_CODE_ENTRYPOINT";
+
+    /// <summary><c>1</c> when a person attends the Claude Code session, <c>0</c> for a headless one.</summary>
+    public const string ClaudeCodeSessionAttended = "CLAUDE_CODE_SESSION_ATTENDED";
+
     /// <summary>Any value turns off color, and with it Levi (https://no-color.org).</summary>
     public const string NoColor = "NO_COLOR";
 

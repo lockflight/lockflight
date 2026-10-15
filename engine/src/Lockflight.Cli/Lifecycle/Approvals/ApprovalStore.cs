@@ -18,30 +18,39 @@ internal sealed class ApprovalStore(Feature feature)
 
     public string RecordPath(ApprovalPhase phase) => Path.Combine(feature.RecordDirectory, "approvals", $"{ApprovalPhaseNames.ToName(phase)}.json");
 
-    public string Save(ApprovalPhase phase, string approvedBy, DateTimeOffset at, string engineVersion)
-    {
-        JsonObject artifacts = [];
-        foreach ((string name, string hash) in CurrentHashes(phase))
-        {
-            artifacts[name] = hash;
-        }
+    public string Save(ApprovalPhase phase, string approvedBy, DateTimeOffset at, string engineVersion) =>
+        Save(phase, [.. CurrentHashes(phase)], approvedBy, at, engineVersion);
 
-        JsonObject record = new()
-        {
-            ["schema"] = Schema,
-            ["feature"] = feature.Id,
-            ["phase"] = ApprovalPhaseNames.ToName(phase),
-            ["artifacts"] = artifacts,
-            ["approvedBy"] = approvedBy,
-            ["at"] = at.ToString("O", CultureInfo.InvariantCulture),
-            ["engineVersion"] = engineVersion,
-        };
+    /// <summary>Writes the record over <paramref name="artifacts"/> (the hashes the person approved) and drops an older signature.</summary>
+    public string Save(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> artifacts, string approvedBy, DateTimeOffset at, string engineVersion)
+    {
         string path = RecordPath(phase);
-        JsonFiles.Write(path, record);
+        JsonFiles.Write(path, Render(phase, artifacts, approvedBy, at, engineVersion));
 
         // A signature belongs to the record it was made over; a new record makes it meaningless (and ssh-keygen would prompt to overwrite it).
         File.Delete(path + ".sig");
         return path;
+    }
+
+    /// <summary>The approval record's content, for <see cref="Save(ApprovalPhase, IReadOnlyList{ValueTuple{string, string}}, string, DateTimeOffset, string)"/> or a file signed before it replaces the record.</summary>
+    public JsonObject Render(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> artifacts, string approvedBy, DateTimeOffset at, string engineVersion)
+    {
+        JsonObject hashes = [];
+        foreach ((string name, string hash) in artifacts)
+        {
+            hashes[name] = hash;
+        }
+
+        return new JsonObject
+        {
+            ["schema"] = Schema,
+            ["feature"] = feature.Id,
+            ["phase"] = ApprovalPhaseNames.ToName(phase),
+            ["artifacts"] = hashes,
+            ["approvedBy"] = approvedBy,
+            ["at"] = at.ToString("O", CultureInfo.InvariantCulture),
+            ["engineVersion"] = engineVersion,
+        };
     }
 
     /// <summary>

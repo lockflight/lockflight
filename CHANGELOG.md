@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- Approve a spec or tasks without leaving Claude Code: type `/lockflight:approve spec|tasks`, review what the engine shows
+  you, then type the line with its one-time code. It works only when typed in an interactive session, and the approval is
+  bound to the content you were shown. The guard blocks any tool call that would queue the command as a prompt (a scheduled
+  task, a loop, a message to a session). The ledger's `approval.recorded` line has a `channel` field (`terminal` or
+  `session`).
 - `lockflight propose <path> --from <file>` (or `--delete`) writes a change to a protected file as a git patch in
   `.lockflight/local/proposals/`, one per file. It prints the protecting rule, a high-risk flag, a diffstat and the
   `git apply` command for you to run, and applies nothing itself. The `CLAUDE.md` block and the guard's block message point
@@ -15,6 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `doctor` checks that a development tool pin can be restored on this machine (local feed or tools cache).
 
 ### Changed
+- `lockflight approve --sign` records nothing when signing fails, instead of leaving an unsigned record.
 - The skills, the session banner and the `CLAUDE.md` block run the project's linked engine (`.lockflight/bin/lockflight`), so
   commands work when the tool pin is a development build that no package feed has. A stale development pin tells the agent to
   ask you for `lockflight update`.

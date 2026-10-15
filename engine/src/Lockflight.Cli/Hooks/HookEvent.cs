@@ -20,4 +20,7 @@ internal enum HookEvent
 
     /// <summary>A session starts — the engine injects a short project banner.</summary>
     SessionStart = 5,
+
+    /// <summary>The person's typed prompt expands a slash command — <c>/lockflight:approve</c> records an approval in the session.</summary>
+    UserPromptExpansion = 6,
 }

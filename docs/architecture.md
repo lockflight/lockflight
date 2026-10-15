@@ -40,7 +40,7 @@ each control can and cannot guarantee, see [guardrails and boundaries](guides/gu
 
 ## The engine on every hook call
 
-The plugin registers three hooks: `SessionStart`, `PreToolUse` and `Stop`. Each runs a small shim,
+The plugin registers four hooks: `SessionStart`, `PreToolUse`, `UserPromptExpansion` and `Stop`. Each runs a small shim,
 [`lockflight-hook`](../plugins/lockflight/bin/lockflight-hook), which finds the project from `CLAUDE_PROJECT_DIR` and runs the
 engine linked into `.lockflight/bin/`. Running the binary directly keeps a hook at a few milliseconds.
 
@@ -54,6 +54,11 @@ The shim has three states:
 The contract with Claude Code: a block is **exit 2 with the reason on stderr**; structured answers go to stdout as JSON.
 `PreToolUse` is registered with `onFailure: "block"`, so a guard that cannot start blocks rather than allows. Claude Code does
 not offer that for `Stop`, which is why the Stop gate is best effort and CI is the definition of done.
+
+`UserPromptExpansion` fires when the person's typed prompt expands a slash command, never for the agent's own skill calls. The
+engine ignores every command except `/lockflight:approve`, which it handles only in an interactive, attended session: it shows
+the person (on stderr with exit 2, which the agent does not see) what would be approved with a one-time code, and records the
+approval when the person types that code while the files are unchanged.
 
 ## The guard
 
@@ -138,7 +143,7 @@ types add fields, and readers ignore fields they do not know:
 |---|---|
 | `hook.blocked` | `tool`, `call` (shortened, credentials masked), `session`, `agent` |
 | `gate.completed` | `trigger` (`command` for `lockflight gate run`, `stop-hook` for the Stop hook), `durationMs`, `cache` (`hit` when the Stop gate's cache of the last PASS answered, `miss` when it was consulted and the gate ran, `none` when it was not consulted) |
-| `approval.recorded` | `feature`, `phase`, `artifacts` (each artifact with the first 12 characters of its hash), `signed` |
+| `approval.recorded` | `feature`, `phase`, `artifacts` (each artifact with the first 12 characters of its hash), `signed`, `channel` (`terminal` for `lockflight approve`, `session` for `/lockflight:approve`) |
 | `evidence.recorded`, `config.written` | none |
 
 No line names a person: who approved a phase is kept in the approval record, not in the ledger.

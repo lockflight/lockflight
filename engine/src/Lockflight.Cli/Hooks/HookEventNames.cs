@@ -10,6 +10,7 @@ internal static class HookEventNames
         "stop" => HookEvent.Stop,
         "subagent-stop" => HookEvent.SubagentStop,
         "session-start" => HookEvent.SessionStart,
+        "user-prompt-expansion" => HookEvent.UserPromptExpansion,
         _ => HookEvent.Unknown,
     };
 
@@ -20,6 +21,7 @@ internal static class HookEventNames
         HookEvent.Stop => "stop",
         HookEvent.SubagentStop => "subagent-stop",
         HookEvent.SessionStart => "session-start",
+        HookEvent.UserPromptExpansion => "user-prompt-expansion",
         _ => "unknown",
     };
 }
