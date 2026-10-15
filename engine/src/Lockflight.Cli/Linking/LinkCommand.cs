@@ -14,6 +14,10 @@ internal sealed class LinkCommand(CliContext context)
     private const UnixFileMode ExecutableMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
         | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
 
+    /// <summary>The linked engine of the project at <paramref name="root"/> (<c>.exe</c> on Windows).</summary>
+    public static string BinaryPath(string root) =>
+        Path.Combine(root, RelativeBinDirectory, OperatingSystem.IsWindows() ? "lockflight.exe" : "lockflight");
+
     public async Task<ExitCode> RunAsync(CancellationToken cancellationToken)
     {
         if (await ManifestRequirement.LoadAsync(context, context.WorkingDirectory, cancellationToken) is not Manifest manifest)
@@ -28,9 +32,8 @@ internal sealed class LinkCommand(CliContext context)
             return ExitCode.Error;
         }
 
-        string targetDirectory = Path.Combine(manifest.Root, RelativeBinDirectory);
-        Directory.CreateDirectory(targetDirectory);
-        string target = Path.Combine(targetDirectory, OperatingSystem.IsWindows() ? "lockflight.exe" : "lockflight");
+        string target = BinaryPath(manifest.Root);
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
 
         // Copy to a temporary name and rename, so a concurrently running hook never sees a half-written binary.
         string temporary = target + ".tmp";

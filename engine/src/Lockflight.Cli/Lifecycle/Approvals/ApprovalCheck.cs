@@ -1,3 +1,5 @@
+using Lockflight.Cli.Hosting;
+
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
@@ -11,9 +13,9 @@ internal sealed record ApprovalCheck(ApprovalPhase Phase, ApprovalState State, s
         return State switch
         {
             ApprovalState.Valid => $"{phase} approved by {ApprovedBy}",
-            ApprovalState.Stale => $"{phase} approval is stale: {string.Join(", ", ChangedArtifacts)} changed; ask the user to run 'lockflight approve {phase}' again in their own terminal",
-            ApprovalState.Invalid => $"{phase} approval record is not valid here: {Problem}; ask the user to run 'lockflight approve {phase}' in their own terminal",
-            _ => $"{phase} is not approved; ask the user to review it and run 'lockflight approve {phase}' in their own terminal",
+            ApprovalState.Stale => $"{phase} approval is stale: {string.Join(", ", ChangedArtifacts)} changed; {HumanOnlyCommands.AskTheUser($"approve {phase}")} again",
+            ApprovalState.Invalid => $"{phase} approval record is not valid here: {Problem}; {HumanOnlyCommands.AskTheUser($"approve {phase}")}",
+            _ => $"{phase} is not approved; ask the user to review it, then {HumanOnlyCommands.AskTheUser($"approve {phase}")[4..]}",
         };
     }
 }

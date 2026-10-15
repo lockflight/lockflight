@@ -28,7 +28,7 @@ internal static class BuildStep
         DiagnosticsBaseline baseline = new(run.ProjectRoot, run.UnitPath);
         if (!baseline.Exists)
         {
-            string note = diagnostics.Count == 0 ? string.Empty : $"{diagnostics.Count} warnings, no baseline yet (a human runs: dotnet lockflight baseline build)";
+            string note = diagnostics.Count == 0 ? string.Empty : $"{diagnostics.Count} warnings, no baseline yet (a human runs: .lockflight/bin/lockflight baseline build, in a separate terminal window)";
             return new GateStep(Name, buildRun.ExitCode, Verdict.Pass, buildRun.DurationMs, note);
         }
 

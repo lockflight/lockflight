@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Hooks;
 
@@ -32,13 +33,21 @@ internal static class SessionBanner
             writer.WriteString("hookEventName", "SessionStart");
             writer.WriteString(
                 "additionalContext",
-                $"Lockflight project at {manifest.Root}. Protected paths (changed by a human or a lockflight command, not by the agent): {ProtectedList(manifest)}.{UnitsNote(manifest)}{StartDirectoryNote(manifest, sessionDirectory)}");
+                $"Lockflight project at {manifest.Root}. {EngineNote(manifest)} Protected paths (changed by a human or a lockflight command, not by the agent): {ProtectedList(manifest)}.{UnitsNote(manifest)}{StartDirectoryNote(manifest, sessionDirectory)}");
             writer.WriteEndObject();
             writer.WriteEndObject();
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());
     }
+
+    /// <summary>
+    /// The one command form for every install mode: the linked engine the hooks run, which needs no package feed. The human
+    /// decisions refuse to run in the session, a <c>!</c> command included.
+    /// </summary>
+    private static string EngineNote(Manifest manifest) =>
+        $"Always run Lockflight commands as {EngineCommand.Linked} <command> from {manifest.Root} (the engine the hooks run; not dotnet lockflight). "
+        + $"Human decisions (approve, baseline, redgreen reset, adopt apply|undo, update) are the user's: ask them to run the command {HumanOnlyCommands.WhereToRun}.";
 
     private static string UnitsNote(Manifest manifest) => manifest.Units.Count == 0
         ? string.Empty

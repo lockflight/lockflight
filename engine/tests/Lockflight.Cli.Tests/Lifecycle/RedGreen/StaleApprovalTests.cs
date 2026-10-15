@@ -33,7 +33,7 @@ public sealed class StaleApprovalTests : IDisposable
 
         Assert.Equal(ExitCode.Fail, exitCode);
         Assert.Contains("tasks approval is stale: tasks.md changed", error, StringComparison.Ordinal);
-        Assert.Contains("in their own terminal", error, StringComparison.Ordinal);
+        Assert.Contains("in a separate terminal window", error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class StaleApprovalTests : IDisposable
 
         Assert.Equal(ExitCode.Fail, exitCode);
         Assert.Contains("spec is not approved", error, StringComparison.Ordinal);
-        Assert.Contains("in their own terminal", error, StringComparison.Ordinal);
+        Assert.Contains("in a separate terminal window", error, StringComparison.Ordinal);
     }
 
     public void Dispose() => root.Delete(recursive: true);

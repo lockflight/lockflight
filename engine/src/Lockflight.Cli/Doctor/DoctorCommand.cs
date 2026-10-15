@@ -10,7 +10,8 @@ internal sealed class DoctorCommand(CliContext context)
     public async Task<ExitCode> RunAsync(CancellationToken cancellationToken)
     {
         string root = ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory;
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root, context.Environment.Get(EnvironmentVariables.Home), context.Time, cancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(
+            root, context.Environment.HomeDirectory(), context.Environment.Get(EnvironmentVariables.NuGetPackages), context.Time, cancellationToken);
 
         foreach (DoctorCheck check in checks)
         {

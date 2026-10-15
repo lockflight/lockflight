@@ -104,8 +104,8 @@ It shows you a plan first: what it keeps, what it protects, what it flags. Nothi
 ~/.lockflight/bin/lockflight adopt apply      # the plan gives you the exact command
 ```
 
-Approvals and adoption are yours to run, in your own terminal: the engine refuses them inside an agent session. Apply backs
-up first, and `adopt undo` reverts it. You're gated. The [getting-started guide](docs/guides/getting-started.md)
+Approvals and adoption are yours to run, in a separate terminal window: the engine refuses them inside an agent session, a
+`!` command in Claude Code included. Apply backs up first, and `adopt undo` reverts it. You're gated. The [getting-started guide](docs/guides/getting-started.md)
 covers the profiles (`lite` for gates and guard, `standard` for the full lifecycle), workspace shells and the status line.
 
 > [!NOTE]

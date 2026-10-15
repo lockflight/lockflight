@@ -125,7 +125,7 @@ internal sealed class HookCommand(CliContext context)
     private string? UpdateNotice() =>
         context.Environment.HomeDirectory() is string home && UserInstall.InstalledVersion(home) is string installed
         && !ToolPin.Matches(installed, ToolPin.RunningVersion)
-            ? $"Lockflight {installed} is installed; this project runs {ToolPin.RunningVersion}. In your terminal: {EngineCommand.UserInstall} update"
+            ? $"Lockflight {installed} is installed; this project runs {ToolPin.RunningVersion}. Run {EngineCommand.UserInstall} update in the project {HumanOnlyCommands.WhereToRun}."
             : null;
 
     /// <summary>CLAUDE_PROJECT_DIR stays at the session's root after `cd` or entering a worktree; the payload cwd does not.</summary>

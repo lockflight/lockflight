@@ -23,4 +23,22 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("lockflight gate run --profile pr")]
     [InlineData("echo approve && lockflight phase check tasks")]
     public void OtherCommandsPass(string command) => Assert.Null(HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
+
+    [Fact]
+    public void TheRefusalSaysToUseASeparateTerminalAndNotTheBangPrefix()
+    {
+        string refusal = HumanOnlyCommands.Refusal(["approve", "spec", "--feature", "001-orders"], "/work/shop", EngineCommand.Linked);
+
+        Assert.Contains("'approve spec' records a human decision", refusal, StringComparison.Ordinal);
+        Assert.Contains("separate terminal window", refusal, StringComparison.Ordinal);
+        Assert.Contains("not with `!` in Claude Code", refusal, StringComparison.Ordinal);
+        Assert.EndsWith("cd '/work/shop' && .lockflight/bin/lockflight approve spec --feature 001-orders", refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCommandToCopyQuotesArgumentsTheShellWouldSplit() =>
+        Assert.EndsWith(
+            "cd '/work/my shop' && dotnet lockflight approve tasks --sign --key '/keys/it'\\''s key'",
+            HumanOnlyCommands.Refusal(["approve", "tasks", "--sign", "--key", "/keys/it's key"], "/work/my shop", EngineCommand.Tool),
+            StringComparison.Ordinal);
 }

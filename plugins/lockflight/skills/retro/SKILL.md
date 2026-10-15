@@ -5,7 +5,8 @@ description: Show Lockflight's retro — recurring incidents from the local ledg
 
 # Lockflight retro
 
-1. Run `dotnet lockflight ledger retro` (`--days N` to change the window, `--min N` for the recurrence threshold).
+1. Run `.lockflight/bin/lockflight ledger retro` from the project root (`--days N` to change the window, `--min N` for the
+   recurrence threshold).
 2. Present the recurring incidents and the suggested remedy rung for each, most frequent first.
 3. For each one the user wants to act on, propose a concrete change at the most deterministic rung that would have prevented
    it: an analyzer or build setting, a check or test, a skill update, a path-scoped rule — and only as a last resort an

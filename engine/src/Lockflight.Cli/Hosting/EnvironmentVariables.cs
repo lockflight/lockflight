@@ -32,4 +32,7 @@ internal static class EnvironmentVariables
 
     /// <summary>The user's home directory on Windows, used when <see cref="Home"/> is unset.</summary>
     public const string UserProfile = "USERPROFILE";
+
+    /// <summary>The NuGet global packages folder, where <c>dotnet tool restore</c> caches tools; <c>~/.nuget/packages</c> when unset.</summary>
+    public const string NuGetPackages = "NUGET_PACKAGES";
 }

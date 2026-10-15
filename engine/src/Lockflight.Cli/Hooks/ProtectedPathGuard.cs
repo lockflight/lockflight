@@ -46,7 +46,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
         ShellDialect dialect = input.ToolName == "PowerShell" ? ShellDialect.PowerShell : ShellDialect.Posix;
         if (input.Command is string command && HumanOnlyCommands.FindIn(command, dialect) is string blocked)
         {
-            return HookDecision.Block("human-only-command", $"lockflight: 'lockflight {blocked}' records a human decision; ask the user to run it in their own terminal.");
+            return HookDecision.Block("human-only-command", $"lockflight: 'lockflight {blocked}' records a human decision; {HumanOnlyCommands.AskTheUser(blocked)}.");
         }
 
         IReadOnlyList<string> globs = DefaultProtectedPaths.For(manifest);

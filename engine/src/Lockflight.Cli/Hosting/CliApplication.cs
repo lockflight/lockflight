@@ -22,13 +22,10 @@ namespace Lockflight.Cli.Hosting;
 /// <summary>Parses the command line and dispatches to a command.</summary>
 internal static class CliApplication
 {
-    /// <summary>A command and its verb (<c>approve spec</c>, <c>redgreen reset</c>): what a refusal names.</summary>
-    private const int CommandWords = 2;
-
     private static readonly string Usage = $"""
         lockflight — gated delivery engine for Claude Code agents
 
-        Usage: lockflight <command> [options]   (in a project: dotnet lockflight <command> [options])
+        Usage: lockflight <command> [options]   (in a project, from its root: .lockflight/bin/lockflight <command> [options])
 
         Setup
           init [--profile lite|standard] [--no-link]    onboard: manifest, tool pin, settings, CI job, link
@@ -63,7 +60,8 @@ internal static class CliApplication
                                                         .lockflight/local/proposals/ for a person to review and
                                                         git apply; applies nothing itself
 
-        Human decisions (approve, redgreen reset, baseline and adopt apply|undo refuse to run inside a Claude Code session)
+        Human decisions (approve, redgreen reset, baseline, adopt apply|undo and update refuse to run inside a Claude Code
+        session, a `!` command included: run them in a separate terminal window)
           approve spec|tasks [--feature <id>] [--sign [--key <file>]]
                                                         approve the feature's artifacts, optionally SSH-signed
           redgreen reset [--feature <id>]               discard the feature's red/green evidence
@@ -101,8 +99,7 @@ internal static class CliApplication
 
         if (HumanOnlyCommands.IsReserved(args) && HumanOnlyCommands.RunsUnderAgent(context.Environment))
         {
-            await context.Error.WriteLineAsync(
-                $"lockflight: '{string.Join(' ', args.Take(CommandWords))}' records a human decision and does not run inside a Claude Code session; run it in your own terminal.");
+            await context.Error.WriteLineAsync(HumanOnlyCommands.Refusal(args, ProjectDirectory(context), EngineFor(context)));
             // Exit 2, the verdict the PreToolUse guard gives the same command line: a refusal to the agent, not a failed check.
             return ExitCode.HookBlock;
         }
@@ -144,6 +141,15 @@ internal static class CliApplication
             return ExitCode.Error;
         }
     }
+
+    private static string ProjectDirectory(CliContext context) =>
+        ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory;
+
+    /// <summary>The project's linked engine when there is one: it runs whatever the install mode; else how this engine was started.</summary>
+    private static string EngineFor(CliContext context) =>
+        File.Exists(LinkCommand.BinaryPath(ProjectDirectory(context)))
+            ? EngineCommand.Linked
+            : EngineCommand.Name;
 
     private static IEnumerable<string> HookEvents() =>
         Enum.GetValues<HookEvent>().Where(hookEvent => hookEvent != HookEvent.Unknown).Select(HookEventNames.ToName);

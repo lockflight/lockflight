@@ -5,11 +5,14 @@ description: Run the review of record for the current feature — an independent
 
 # Lockflight review
 
-The engine builds the reviewer's prompt from the spec and the diff; you do not brief the reviewer, because a briefing from the author steers it away from defects. Do not try to
-review the change yourself instead — your review of your own work is not independent.
+The engine builds the reviewer's prompt from the spec and the diff; you do not brief the reviewer, because a briefing from the
+author steers it away from defects. Do not try to review the change yourself instead — your review of your own work is not
+independent.
 
-1. Make sure the work is committed or at least saved, and the gates pass (`dotnet lockflight gate run --profile stop`).
-2. Run `dotnet lockflight review --base <base branch>` (default `main`; add `--feature <id>` when several features exist).
+1. Make sure the work is committed or at least saved, and the gates pass (`.lockflight/bin/lockflight gate run --profile stop`,
+   from the project root: the engine the hooks run).
+2. Run `.lockflight/bin/lockflight review --base <base branch>` (default `main`; add `--feature <id>` when several features
+   exist).
 3. Read the findings:
    - **confirmed** — the reproduction fails on the current code: the defect is real. Fix it in production code, add the
      reproduction as a regression test in the next red/green cycle, and re-run the review.
