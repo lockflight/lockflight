@@ -24,6 +24,8 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
     private readonly List<(string Delimiter, bool StripsTabs)> pendingHereDocuments = [];
     private int index;
     private char? quote;
+    private int? quotedFrom;
+    private bool literalDollar;
     private bool? awaitedDelimiterStripsTabs;
 
     public static List<ShellToken> Tokenize(string command, ShellDialect dialect) => new ShellTokenizer(command, dialect).Run();
@@ -81,6 +83,7 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
             return;
         }
 
+        literalDollar |= openQuote == '\'' && character == '$';
         current.Append(character);
         index++;
     }
@@ -90,6 +93,7 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
         char character = command[index];
         if (character is '\'' or '"')
         {
+            quotedFrom ??= current.Length;
             quote = character;
             index++;
         }
@@ -130,8 +134,11 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
         }
     }
 
+    /// <summary>Escaped and quoted text is literal: a <c>$</c> in it starts no expansion.</summary>
     private void AppendEscape((string Text, int Length) escaped)
     {
+        quotedFrom ??= current.Length;
+        literalDollar |= escaped.Text.Contains('$', StringComparison.Ordinal);
         current.Append(escaped.Text);
         index += escaped.Length;
     }
@@ -166,8 +173,9 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
 
     private void OpenSubstitution(char closer, int width)
     {
-        frames.Push(new OpenFrame(closer, IsSubstitution: true, current.ToString(), quote));
+        frames.Push(new OpenFrame(closer, IsSubstitution: true, current.ToString(), quote) { QuotedFrom = quotedFrom, LiteralDollar = literalDollar });
         current.Clear();
+        ResetWordMarks();
         quote = null;
         tokens.Add(new ShellToken(ShellTokenKind.SubstitutionOpen, command.Substring(index, width)));
         index += width;
@@ -195,6 +203,8 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
         {
             current.Append(frame.SavedWord).Append(SubstitutionPlaceholder);
             quote = frame.SavedQuote;
+            quotedFrom = frame.QuotedFrom;
+            literalDollar = frame.LiteralDollar;
         }
     }
 
@@ -256,6 +266,7 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
         if (descriptorPrefix)
         {
             current.Clear();
+            ResetWordMarks();
         }
         else
         {
@@ -296,6 +307,7 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
     {
         if (current.Length == 0)
         {
+            ResetWordMarks();
             return;
         }
 
@@ -307,10 +319,22 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
             awaitedDelimiterStripsTabs = null;
         }
 
-        tokens.Add(new ShellToken(ShellTokenKind.Word, word));
+        tokens.Add(new ShellToken(ShellTokenKind.Word, word) { QuotedFrom = quotedFrom, LiteralDollar = literalDollar });
+        ResetWordMarks();
+    }
+
+    private void ResetWordMarks()
+    {
+        quotedFrom = null;
+        literalDollar = false;
     }
 
     private char Peek(int offset) => index + offset < command.Length ? command[index + offset] : Nothing;
 
-    private sealed record OpenFrame(char Closer, bool IsSubstitution, string SavedWord, char? SavedQuote);
+    private sealed record OpenFrame(char Closer, bool IsSubstitution, string SavedWord, char? SavedQuote)
+    {
+        public int? QuotedFrom { get; init; }
+
+        public bool LiteralDollar { get; init; }
+    }
 }

@@ -38,7 +38,7 @@ internal sealed record ShellCommand(string Program, IReadOnlyList<string> Argume
         {
             string word = words[index];
             string name = ProgramName(word);
-            if (IsAssignment(word) || Keywords.Contains(name))
+            if (ShellAssignment.IsAssignment(word) || Keywords.Contains(name))
             {
                 index++;
             }
@@ -62,16 +62,9 @@ internal sealed record ShellCommand(string Program, IReadOnlyList<string> Argume
         return name.EndsWith(".exe", StringComparison.Ordinal) ? name[..^4] : name;
     }
 
-    /// <summary><c>NAME=value</c> before a command (not an option, not a path that happens to contain '=').</summary>
-    private static bool IsAssignment(string word)
-    {
-        int equals = word.IndexOf('=', StringComparison.Ordinal);
-        return equals > 0 && (char.IsAsciiLetter(word[0]) || word[0] == '_') && word[..equals].All(character => char.IsAsciiLetterOrDigit(character) || character == '_');
-    }
-
     private static int SkipWrapper(IReadOnlyList<string> words, int index, HashSet<string> optionsWithValue, bool takesDuration)
     {
-        while (index < words.Count && (words[index].StartsWith('-') || IsAssignment(words[index])))
+        while (index < words.Count && (words[index].StartsWith('-') || ShellAssignment.IsAssignment(words[index])))
         {
             index += optionsWithValue.Contains(words[index]) ? 2 : 1;
         }

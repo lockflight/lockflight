@@ -3,9 +3,10 @@ namespace Lockflight.Cli.Hooks;
 /// <summary>
 /// git subcommands that overwrite or delete working-tree files the agent did not name as edits: <c>checkout -- &lt;paths&gt;</c>,
 /// <c>checkout -f</c>, <c>switch -f</c>, <c>restore</c>, <c>stash</c>, <c>reset --hard</c>, <c>clean -f</c>, <c>read-tree -u</c>,
-/// <c>apply</c>, <c>rm</c> and <c>mv</c>. Pathspecs may be files or directories, so each counts as both. Commands that only bring
-/// in committed states (<c>switch &lt;branch&gt;</c>, <c>merge</c>, <c>pull</c>, <c>rebase</c>, <c>cherry-pick</c>, <c>am</c>) are not
-/// treated as writes: their content is reviewed where it was committed.
+/// <c>apply</c>, <c>rm</c>, <c>mv</c> and <c>archive -o</c> (the paths an archive is made of are only read). Pathspecs may be
+/// files or directories, so each counts as both. Commands that only bring in committed states (<c>switch &lt;branch&gt;</c>,
+/// <c>merge</c>, <c>pull</c>, <c>rebase</c>, <c>cherry-pick</c>, <c>am</c>) are not treated as writes: their content is reviewed
+/// where it was committed.
 /// </summary>
 internal static class GitWriteTargets
 {
@@ -61,6 +62,7 @@ internal static class GitWriteTargets
             "rm" when !arguments.Contains("--cached") => [.. afterSeparator, .. ShellArguments.Operands(beforeSeparator, [])],
             "mv" => [.. afterSeparator, .. ShellArguments.Operands(beforeSeparator, [])],
             "worktree" => WorktreePath(arguments),
+            "archive" when ShellArguments.OptionValue(arguments, "-o", "--output") is string output => [output],
             _ => [],
         };
 

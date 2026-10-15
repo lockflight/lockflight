@@ -64,11 +64,16 @@ It recognises:
   the target (`"$(pwd)/x"`) is also judged like a variable.
 - **Variables in a target:** `$PWD`, `$HOME` and `~` are resolved. A target built from another variable is blocked only when the
   literal part after it could be a protected path (`"$X/secrets/k"`, `$DIR/lockflight.yaml`); `"$TMPDIR/build.log"` or a bare
-  `"$FILE"` are allowed, because the guard cannot follow variables.
+  `"$FILE"` are allowed, because the guard cannot follow variables. One exception: a variable the same command line set to plain
+  literal text in the current shell (`S=/tmp/out; cd $S && …`, `export S=/tmp/out`) is replaced by that text in `cd` and write
+  targets; an assignment in a subshell, a pipeline or the background, before a single command (`S=x cmd`), after `||`, inside
+  `if`/loops/functions, or to anything but literal text (`$(…)`, `~`, a glob) leaves the variable unknown, and so do `unset`,
+  `read`, `eval`, `source` and arithmetic.
 - **git commands that rewrite files** the agent did not name as edits: `git checkout [<rev>] [--] <paths>` (a single operand
   such as `git checkout test` or `git checkout .` counts as a path; a branch name that is no path in the working tree matches
   nothing), `git checkout -f`, `git switch -f`, `git restore`, `git stash [push] [-- <paths>]`, `git stash pop|apply`,
-  `git reset --hard`, `git clean -f`, `git read-tree -u`, `git rm`, `git mv`.
+  `git reset --hard`, `git clean -f`, `git read-tree -u`, `git rm`, `git mv`, and the output file of `git archive -o` (the paths
+  an archive is made of are only read, so `git archive HEAD x | tar -x -C dir` writes under `dir` only).
 - **`dotnet format`:** its `--include` files, its project or solution directory, or the whole current directory (source files
   only).
 - **PowerShell:** `Set-Content`, `Add-Content`, `Clear-Content`, `Out-File`, `Tee-Object`, `Set-Item`, `New-Item`, `Export-Csv`,
