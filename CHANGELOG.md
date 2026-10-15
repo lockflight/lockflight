@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [Unreleased]
 
 ### Added
+- `lockflight propose <path> --from <file>` (or `--delete`) writes a change to a protected file as a git patch in
+  `.lockflight/local/proposals/`, one per file. It prints the protecting rule, a high-risk flag, a diffstat and the
+  `git apply` command for you to run, and applies nothing itself. The `CLAUDE.md` block and the guard's block message point
+  the agent at it instead of hand-written patches.
 - The ledger records what started each gate run (`command` or `stop-hook`), how long it took and whether the Stop cache
   answered it; `ledger retro` shows how many Stop gates ran, how many the cache answered and their total time.
 

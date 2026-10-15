@@ -126,7 +126,7 @@ marked rather than failed.
 
 ## The ledger
 
-The engine appends events (guard blocks, verdicts, rejected reds, confirmed findings) to
+The engine appends events (guard blocks, verdicts, rejected reds, confirmed findings, proposed patches) to
 `.lockflight/ledger/events-<month>.jsonl`, with credentials masked. `ledger retro` clusters recurring incidents and suggests a
 remedy, preferring the most deterministic one; remedies are changes a person reviews. The ledger is local and fail-open: it is
 a learning aid, not an audit log.

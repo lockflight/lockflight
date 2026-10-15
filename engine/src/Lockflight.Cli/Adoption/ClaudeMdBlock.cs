@@ -21,8 +21,10 @@ internal static class ClaudeMdBlock
           verdict. FAIL or NOT-EARNED means not done.
         - **Protected files** (`lockflight.yaml`, `.lockflight/`, Claude Code settings, hooks, agents, skills and commands, build
           and package config, each unit's control files) are changed by a person or a `lockflight` command; the guard blocks
-          your edits. When a task needs one changed (a rename, a package bump), write the exact change as a patch outside the
-          project, for example `/tmp/<task>.patch`, and ask the user to review and `git apply` it.
+          your edits, and a user's permission in chat does not lift it, so never ask for permission to bypass it. When a task
+          needs one changed (a rename, a package bump), write the complete new file in your scratch directory and run
+          `lockflight propose <path> --from <file>` (`<path> --delete` to remove one; several pairs in one call), then give
+          the user the `git apply` command it prints. It writes one patch per file and applies nothing.
         - **Human decisions** are run by the user in their own terminal; ask, never run them: `lockflight approve` (sign off a
           spec or tasks), `lockflight baseline` (accept build warnings, failing tests or package advisories the project
           already has) and `lockflight redgreen reset` (discard a feature's test-first evidence).

@@ -128,7 +128,9 @@ unit:
 It also checks that the plugin is enabled at user scope and that no SDK pin keeps `dotnet lockflight` from running.
 
 Protected files are changed by the user or by `lockflight` commands, never by your edits. The full list is in
-docs/guides/configuration.md, "Built-in protected paths". The guard will block you, and that is intended.
+docs/guides/configuration.md, "Built-in protected paths". The guard will block you, and that is intended; never ask the user
+for permission to bypass it. When one needs changing, write the complete new file in your scratch directory, run
+`dotnet lockflight propose <path> --from <file>` and give the user the `git apply` command it prints.
 
 ## 7. Hand over
 

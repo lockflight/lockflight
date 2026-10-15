@@ -44,6 +44,13 @@ the error on stderr, so a session is never bricked. Run `dotnet lockflight docto
 with `LOCKFLIGHT_DEBUG=1` and report it. A `LOCKFLIGHT_HOOK_LOG` that points at a path that cannot be written is reported and
 skipped; it never blocks.
 
+## The agent needs to change a protected file
+
+The block is intended. The agent writes the complete new file outside the project and runs
+`dotnet lockflight propose <path> --from <file>` (or `<path> --delete`); you read the patch it prints and apply it with the
+printed `git apply` command at the project root. See
+[proposing a protected change](guardrails-and-boundaries.md#proposing-a-protected-change).
+
 ## A shell command is blocked after a `cd`
 
 After a `cd` whose target the guard cannot know (`cd "$(git rev-parse --show-toplevel)"`, `cd $DIR`, `cd ~`, `cd -`, `popd`), a

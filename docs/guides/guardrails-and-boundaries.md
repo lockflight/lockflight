@@ -19,6 +19,7 @@ that shell, it can do. That fixes what Lockflight can honestly promise.
 | Trace | G | built from that evidence |
 | Review of record (`lockflight review`) | G | independent prompt, but the agent may skip running it |
 | Ledger and retro | G | local and fail-open; never an audit log |
+| Proposals (`lockflight propose`) | G | it changes nothing by itself: it writes a patch and the person reads and applies it; the guard keeps blocking the agent's own `git apply` |
 | **CI gates with the base branch's policy** | **B** where the check is **required** (rulesets/branch protection); otherwise advisory | runs on GitHub, with policy the PR cannot change |
 | **Signed approvals verified in CI** | **B** only when all hold: presence-gated key (Touch ID / security key), allowed signers from the base branch, a required check, and a policy requiring approvals for the change | a file key without a passphrase could be used by the agent. Not in the generated workflow: add `approve verify` as shown in [CI hardening](ci-hardening.md) |
 | Merge | G (the agent could use your token); B only with a separate identity for the agent | |
@@ -105,6 +106,16 @@ It does **not** see:
 
 Paths are compared after collapsing `..` and then resolving symbolic links, so `link/../x` is judged as `x` even when `link`
 points elsewhere. That is why it is a guardrail: it stops the common accidents, not a determined agent.
+
+## Proposing a protected change
+
+When a task needs a protected file changed (a project rename that touches `Directory.Build.props`, a package source, a Claude
+Code hook), the agent does not edit it and does not ask you for permission to bypass the guard; permission given in the chat
+does not lift a block. Instead it writes the complete new file in its scratch directory and runs
+`lockflight propose <path> --from <file>`, which writes one patch per file to `.lockflight/local/proposals/` and prints the
+command for you, `git apply --check <patch> && git apply <patch>`. Read the patch first, especially when it is marked **high
+risk**: one line in build, analyzer, hook, CI or package configuration can switch a control off. The command itself changes
+nothing in the project, and the agent cannot apply the patch: `git apply` rewrites the working tree, so the guard blocks it.
 
 ## GitHub plan limits
 

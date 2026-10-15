@@ -238,7 +238,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
             {
                 return HookDecision.Block(
                     $"protected-path:{matchedGlob}",
-                    $"lockflight: '{target}' is protected by rule '{matchedGlob}'. Protected files are changed by a human or a lockflight command, not by the agent.");
+                    $"lockflight: '{target}' is protected by rule '{matchedGlob}'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.");
             }
 
             if (relative is { Length: > 0 } && testLocks.FirstOrDefault(testLock => PathRules.Matches(testLock.Glob, relative)) is { Glob: string lockedGlob, Reason: string reason })

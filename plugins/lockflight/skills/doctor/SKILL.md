@@ -13,4 +13,5 @@ description: Diagnose a Lockflight setup — manifest, engine pin, linked engine
 2. Report each line. For `FAIL`/`warn`, give the fix shown after `→`.
 3. Apply fixes that are Lockflight commands yourself (`dotnet tool restore`, `dotnet lockflight link`, `dotnet lockflight init`).
    Fixes that need an edit to a protected file (for example a broken `lockflight.yaml`) are for the user: show the exact
-   location from the error (`lockflight.yaml:line:column`) and what to change.
+   location from the error (`lockflight.yaml:line:column`), write the corrected file in your scratch directory, run
+   `dotnet lockflight propose lockflight.yaml --from <file>` and give the user the `git apply` command it prints.

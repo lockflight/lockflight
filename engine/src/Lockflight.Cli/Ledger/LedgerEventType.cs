@@ -17,4 +17,7 @@ internal enum LedgerEventType
 
     /// <summary>A person approved a feature's spec or tasks.</summary>
     ApprovalRecorded = 5,
+
+    /// <summary><c>lockflight propose</c> wrote a patch for a person to apply (the path and its rule, never the content).</summary>
+    ProposalCreated = 6,
 }
