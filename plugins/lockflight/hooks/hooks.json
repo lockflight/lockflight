@@ -9,6 +9,9 @@
         "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/lockflight-hook\" pre-tool-use", "timeout": 10, "onFailure": "block" } ]
       }
     ],
+    "UserPromptExpansion": [
+      { "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/lockflight-hook\" user-prompt-expansion", "timeout": 90 } ] }
+    ],
     "Stop": [
       { "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/lockflight-hook\" stop", "timeout": 600 } ] }
     ]

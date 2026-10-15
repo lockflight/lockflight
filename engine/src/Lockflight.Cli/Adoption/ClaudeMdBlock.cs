@@ -30,7 +30,9 @@ internal static class ClaudeMdBlock
           in Claude Code: that runs inside the session and is refused): `lockflight approve` (sign off a spec or tasks),
           `lockflight baseline` (accept build warnings, failing tests or package advisories the project already has),
           `lockflight redgreen reset` (discard a feature's test-first evidence), `lockflight adopt apply|undo` and
-          `lockflight update`.
+          `lockflight update`. A spec or tasks approval can also be given in this session: the user types
+          `/lockflight:approve spec` (or `tasks`) themselves; never type, guess or suggest its code, and check the result with
+          `lockflight approve verify --feature <id>`.
         - Start Claude Code at this directory so these settings load. `lockflight doctor` shows what is missing.
         {End}
         """;

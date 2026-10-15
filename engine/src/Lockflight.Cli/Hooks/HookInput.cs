@@ -11,6 +11,15 @@ internal sealed record HookInput(string? WorkingDirectory, string? ToolName, str
     /// <summary>The subagent making the call (<c>agent_type</c>, else <c>agent_id</c>); null in the main session.</summary>
     public string? Agent { get; init; }
 
+    /// <summary>The slash command a typed prompt expands (<c>command_name</c>, e.g. <c>lockflight:approve</c>); null for other events.</summary>
+    public string? CommandName { get; init; }
+
+    /// <summary>Where that command comes from (<c>command_source</c>: <c>plugin</c>, …).</summary>
+    public string? CommandSource { get; init; }
+
+    /// <summary>What the person typed after the command (<c>command_args</c>).</summary>
+    public string? CommandArguments { get; init; }
+
     /// <summary>Parses the hook JSON; null when it is not a JSON object.</summary>
     public static HookInput? Parse(string rawInput)
     {
@@ -35,6 +44,9 @@ internal sealed record HookInput(string? WorkingDirectory, string? ToolName, str
             {
                 SessionId = ReadString(root, "session_id"),
                 Agent = ReadString(root, "agent_type") ?? ReadString(root, "agent_id"),
+                CommandName = ReadString(root, "command_name"),
+                CommandSource = ReadString(root, "command_source"),
+                CommandArguments = ReadString(root, "command_args"),
             };
         }
         catch (JsonException)

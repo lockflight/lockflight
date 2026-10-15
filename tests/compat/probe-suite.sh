@@ -20,6 +20,13 @@ checkenv() { # $1=name $2=expected exit $3=project dir $4=json
   printf '%-44s expected=%s got=%s %s\n' "$1" "$2" "$got" "$r"
 }
 fp() { printf '"file_path":"%s"' "$(winpath "$1")"; }
+# A typed slash command (UserPromptExpansion); $1=dir $2=command name $3=arguments.
+expansion() { printf '{"cwd":"%s","hook_event_name":"UserPromptExpansion","expansion_type":"slash_command","command_name":"%s","command_args":"%s","command_source":"plugin"}' "$(winpath "$1")" "$2" "$3"; }
+checkexp() { # $1=name $2=expected exit $3=entrypoint $4=attended $5=json [$6=text stderr must contain]
+  printf '%s' "$5" | CLAUDE_CODE_ENTRYPOINT="$3" CLAUDE_CODE_SESSION_ATTENDED="$4" "$SHIM" user-prompt-expansion >/dev/null 2>"$WORK/err"; got=$?
+  if [ "$got" = "$2" ] && { [ -z "${6:-}" ] || grep -qF -- "$6" "$WORK/err"; }; then pass=$((pass+1)); r=ok; else fail=$((fail+1)); r="FAIL ($(head -c 400 "$WORK/err"))"; fi
+  printf '%-44s expected=%s got=%s %s\n' "$1" "$2" "$got" "$r"
+}
 
 plain="$WORK/plain"; mkdir -p "$plain"
 proj="$WORK/proj"; mkdir -p "$proj/src"
@@ -37,6 +44,8 @@ check "not restored: nested tool_name Read"  2 "$proj" '{"cwd":"'"$(winpath "$pr
 check "not restored: nested Read before"      2 "$proj" '{"x":{"tool_name":"Read"},"cwd":"'"$(winpath "$proj")"'","tool_name":"Bash"}'
 check "not restored: restore in another key"  2 "$proj" '{"cwd":"'"$(winpath "$proj")"'","tool_name":"Bash","tool_input":{"command":"rm -rf src"},"y":{"command":"dotnet tool restore"}}'
 check "not restored: tool_name inside a string" 2 "$proj" '{"cwd":"'"$(winpath "$proj")"'","tool_name":"Bash","tool_input":{"description":"\"tool_name\":\"Read\"","command":"rm x"}}'
+checkexp "no manifest: approve expansion"     0 cli 1 "$(expansion "$plain" lockflight:approve spec)"
+checkexp "not restored: approve expansion"   0 cli 1 "$(expansion "$proj" lockflight:approve spec)"
 checkenv "env dir, no manifest: Write"     0 "$plain" "$(json "$plain" Write "$(fp "$plain/a")")"
 checkenv "env dir, not restored: Write"    2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 checkenv "env dir, not restored: Read"     0 "$proj"  "$(json "$proj" Read "$(fp "$proj/src/a.cs")")"
@@ -61,6 +70,12 @@ case "$(uname -s)" in
     mkdir -p "$proj/secrets" && ln -s "$proj/secrets" "$proj/innocent"
     check "linked: write via symlinked dir"        2 "$proj" "$(json "$proj" Write "$(fp "$proj/innocent/k")")" ;;
 esac
+mkdir -p "$proj/specs/001-probe" && printf -- '- **FR-001**: Probe\n' > "$proj/specs/001-probe/spec.md"
+checkexp "linked: other slash command ignored"  0 sdk-cli 0 "$(expansion "$proj" lockflight:status "")"
+checkexp "linked: approve, headless refused"    2 sdk-cli 0 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
+checkexp "linked: approve, unattended refused"  2 cli 0 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
+checkexp "linked: approve, attended shows code" 2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "/lockflight:approve spec "
+checkexp "linked: approve, wrong code refused"  2 cli 1 "$(expansion "$proj" lockflight:approve "spec zzzzzz")" "not the code shown"
 check "linked: malformed JSON"            2 "$proj"  '{"cwd":"'"$proj"'","tool_name":'
 # Shell writes, checked while the pin still matches (after the pin changes below, every call is blocked anyway).
 check "linked: bash redirect into protected" 2 "$proj" "$(json "$proj" Bash "\"command\":\"echo x > secrets/k\"")"
