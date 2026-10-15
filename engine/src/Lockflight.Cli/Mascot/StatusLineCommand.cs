@@ -36,8 +36,9 @@ internal sealed class StatusLineCommand(CliContext context)
         }
 
         IReadOnlyList<string> face = MascotArt.RenderFace();
-        await context.Output.WriteLineAsync($"{face[0]}  \u001b[1mLockflight\u001b[22m{MascotArt.Reset}");
-        await context.Output.WriteLineAsync($"{face[1]}  {MascotArt.Foreground(Accent(pose))}{text}{MascotArt.Reset}");
+        TextWriter terminal = context.RawOutput ?? context.Output;
+        await terminal.WriteLineAsync($"{face[0]}  \u001b[1mLockflight\u001b[22m{MascotArt.Reset}");
+        await terminal.WriteLineAsync($"{face[1]}  {MascotArt.Foreground(Accent(pose))}{TerminalText.Clean(text)}{MascotArt.Reset}");
         return ExitCode.Pass;
     }
 

@@ -90,7 +90,19 @@ internal sealed class HookCommand(CliContext context)
     /// </summary>
     private async Task<ExitCode> ApproveInSessionAsync(HookInput input, Manifest manifest, CancellationToken cancellationToken)
     {
-        SessionApprovalResult result = await new SessionApproval(context, manifest).DecideAsync(input, cancellationToken);
+        SessionApprovalResult result;
+        try
+        {
+            result = await new SessionApproval(context, manifest).DecideAsync(input, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Failing open here would hand the command to the agent; nothing is recorded either way, so the person sees why.
+            result = SessionApprovalResult.Refused(
+                "session-approval:internal-error",
+                $"lockflight: nothing was approved: internal error: {exception.Message}. Run lockflight approve {HumanOnlyCommands.WhereToRun}.");
+        }
+
         switch (result.Outcome)
         {
             case SessionApprovalOutcome.Refused:

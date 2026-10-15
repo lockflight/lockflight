@@ -36,6 +36,12 @@ internal sealed class ProposeCommand(CliContext context)
             return ExitCode.Config;
         }
 
+        if (ProposalFiles.DirectoryProblem(manifest.Root) is string directoryProblem)
+        {
+            await context.Error.WriteLineAsync($"lockflight {Command}: {directoryProblem}. No patch was written.".AsMemory(), cancellationToken);
+            return ExitCode.Config;
+        }
+
         List<(ProposalTarget Target, byte[] Patch)> patches = [];
         foreach (ProposalTarget target in targets)
         {
@@ -55,7 +61,12 @@ internal sealed class ProposeCommand(CliContext context)
         {
             string patchPath = ProposalFiles.NewPath(manifest.Root, now, target.RelativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(patchPath)!);
-            await File.WriteAllBytesAsync(patchPath, patch, cancellationToken);
+            // CreateNew never follows or replaces whatever is already at the path.
+            await using (FileStream file = new(patchPath, FileMode.CreateNew, FileAccess.Write))
+            {
+                await file.WriteAsync(patch, cancellationToken);
+            }
+
             await ReportAsync(target, DiffStat.Of(patch), Path.GetRelativePath(manifest.Root, patchPath).Replace('\\', '/'), cancellationToken);
             await ledger.AppendAsync(LedgerEntry(target), cancellationToken);
         }
@@ -78,7 +89,7 @@ internal sealed class ProposeCommand(CliContext context)
             {
                 refusals.Add(resolution.Error!);
             }
-            else if (targets.Any(earlier => string.Equals(earlier.RelativePath, target.RelativePath, StringComparison.OrdinalIgnoreCase)))
+            else if (targets.Any(earlier => OnDiskNames.SameName(earlier.RelativePath, target.RelativePath)))
             {
                 refusals.Add($"'{target.RelativePath}' is named more than once; propose one new content per file");
             }

@@ -316,6 +316,299 @@ public sealed class SessionApprovalTests : IDisposable
         Assert.Contains("signed by", verifyOutput, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("not json at all")]
+    [InlineData("[]")]
+    [InlineData("{}")]
+    [InlineData("")]
+    public async Task AnUnreadableWaitingCodeApprovesNothing(string content)
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+        await File.WriteAllTextAsync(WaitingCodePath("spec"), content, TestContext.Current.CancellationToken);
+
+        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("no approval code is waiting", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+        Assert.False(File.Exists(WaitingCodePath("spec")));
+    }
+
+    [Theory]
+    [InlineData("schema", "\"lockflight.session-approval/v0\"")]
+    [InlineData("phase", "\"tasks\"")]
+    [InlineData("feature", "\"../001-orders\"")]
+    [InlineData("feature", "\"specs/001-orders\"")]
+    [InlineData("feature", "\"..\"")]
+    [InlineData("feature", "42")]
+    [InlineData("salt", "\"not hex\"")]
+    [InlineData("codeHash", "null")]
+    [InlineData("expiresAt", "\"tomorrow\"")]
+    [InlineData("artifacts", "[\"spec.md\"]")]
+    public async Task AWaitingCodeWithABadFieldApprovesNothing(string field, string json)
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+        JsonObject entry = JsonNode.Parse(await File.ReadAllTextAsync(WaitingCodePath("spec"), TestContext.Current.CancellationToken))!.AsObject();
+        entry[field] = JsonNode.Parse(json);
+        await File.WriteAllTextAsync(WaitingCodePath("spec"), entry.ToJsonString(), TestContext.Current.CancellationToken);
+
+        (ExitCode exitCode, _, _) = await TypeAsync($"spec {Code}");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.False(File.Exists(RecordPath("spec")));
+        Assert.False(File.Exists(WaitingCodePath("spec")));
+    }
+
+    [Fact]
+    public async Task AWaitingCodeCopiedToAnotherPhaseApprovesNothing()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await CreateProjectAsync();
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), "- [ ] T001 [US1] (FR-001) Test placing an order\n", cancellationToken);
+        await TypeAsync("spec");
+        File.Copy(WaitingCodePath("spec"), WaitingCodePath("tasks"));
+
+        (ExitCode exitCode, _, string error) = await TypeAsync($"tasks {Code}");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("no approval code is waiting for the tasks", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("tasks")));
+        Assert.False(File.Exists(WaitingCodePath("tasks")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ALinkInPlaceOfTheWaitingCodeIsRefusedAndNotFollowed(bool codeTyped)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await CreateProjectAsync();
+        string target = Path.Combine(root.FullName, "elsewhere.json");
+        await File.WriteAllTextAsync(target, "untouched", cancellationToken);
+        Directory.CreateDirectory(Path.GetDirectoryName(WaitingCodePath("spec"))!);
+        File.CreateSymbolicLink(WaitingCodePath("spec"), target);
+
+        (ExitCode exitCode, _, string error) = await TypeAsync(codeTyped ? $"spec {Code}" : "spec");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("spec.json is a symbolic link", error, StringComparison.Ordinal);
+        Assert.Equal("untouched", await File.ReadAllTextAsync(target, cancellationToken));
+        Assert.False(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
+    public async Task AWaitingCodesDirectoryThatIsALinkIsRefused()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        await CreateProjectAsync();
+        DirectoryInfo elsewhere = Directory.CreateDirectory(Path.Combine(root.FullName, "elsewhere"));
+        Directory.CreateDirectory(Path.Combine(root.FullName, ".lockflight", "local"));
+        Directory.CreateSymbolicLink(Path.Combine(root.FullName, ApprovalCodes.RelativeDirectory), elsewhere.FullName);
+
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains($"{ApprovalCodes.RelativeDirectory} is a symbolic link", error, StringComparison.Ordinal);
+        Assert.Empty(elsewhere.GetFileSystemInfos());
+    }
+
+    [Fact]
+    public async Task ADirectoryInPlaceOfTheWaitingCodeIsRefused()
+    {
+        await CreateProjectAsync();
+        Directory.CreateDirectory(WaitingCodePath("spec"));
+
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("spec.json is a directory", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
+    public async Task AClockThatWentBackDoesNotStretchTheCodesLife()
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+        time.Advance(TimeSpan.FromHours(-1));
+
+        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("the code expired", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+        Assert.False(File.Exists(WaitingCodePath("spec")));
+    }
+
+    [Fact]
+    public async Task AClockSyncStepBackKeepsTheCode()
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+        time.Advance(TimeSpan.FromSeconds(-30));
+
+        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+    }
+
+    [Fact]
+    public async Task ANewerDigestReplacesTheOlderCode()
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+        await TypeAsync("spec");
+
+        (ExitCode olderExit, _, string error) = await TypeAsync($"spec {Code}");
+
+        Assert.Equal(ExitCode.HookBlock, olderExit);
+        Assert.Contains("not the code shown", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+
+        (ExitCode newerExit, _, _) = await TypeAsync($"spec {SecondCode}");
+
+        Assert.Equal(ExitCode.Pass, newerExit);
+    }
+
+    [Fact]
+    public async Task APlanDeletedBetweenTheStepsIsNotApproved()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await CreateProjectAsync();
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), "- [ ] T001 [US1] (FR-001) Test placing an order\n", cancellationToken);
+        await TypeAsync("tasks");
+        File.Delete(Path.Combine(SpecDirectory, "plan.md"));
+
+        (ExitCode exitCode, _, string error) = await TypeAsync($"tasks {Code}");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("the tasks changed since you saw it (plan.md)", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("tasks")));
+    }
+
+    [Theory]
+    [InlineData("spec --feature ../001-orders")]
+    [InlineData("spec --feature specs/001-orders")]
+    [InlineData("spec --feature specs\\001-orders")]
+    [InlineData("spec --feature ..")]
+    [InlineData("spec --feature .")]
+    [InlineData("spec k7m2qx --feature ../001-orders")]
+    [InlineData("spec k7m2qx --feature ./001-orders")]
+    public async Task AFeatureGivenAsAPathIsRefused(string arguments)
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+
+        (ExitCode exitCode, _, string error) = await TypeAsync(arguments);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("--feature takes a feature ID", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+    }
+
+    [Theory]
+    [InlineData("spec --force")]
+    [InlineData("spec --sign=yes")]
+    [InlineData("spec --feature")]
+    [InlineData("spec --sign --sign")]
+    [InlineData("spec k7m2qx extra")]
+    [InlineData("spec k7m2qx --yes")]
+    [InlineData("spec k7m2qx --feature 001-orders --feature 001-orders")]
+    [InlineData("specs k7m2qx")]
+    [InlineData("spec-tasks k7m2qx")]
+    public async Task AnUnknownOrMalformedArgumentIsAUsageRefusal(string arguments)
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+
+        (ExitCode exitCode, _, string error) = await TypeAsync(arguments);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("nothing was approved", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+        Assert.True(File.Exists(WaitingCodePath("spec")));
+    }
+
+    [Fact]
+    public async Task ExtraWhitespaceAroundTheWordsIsIgnored()
+    {
+        await CreateProjectAsync();
+        (ExitCode showExit, _, string digest) = await TypeAsync("   spec \t ");
+
+        Assert.Equal(ExitCode.HookBlock, showExit);
+        Assert.Contains($"/lockflight:approve spec {Code}", digest, StringComparison.Ordinal);
+
+        (ExitCode recordExit, _, string error) = await TypeAsync($"\tSPEC \n  {Code}   ");
+
+        Assert.True(recordExit == ExitCode.Pass, error);
+        Assert.True(File.Exists(RecordPath("spec")));
+    }
+
+    [Theory]
+    [InlineData("Lockflight:Approve")]
+    [InlineData("LOCKFLIGHT:APPROVE")]
+    public async Task TheCommandInAnotherCaseIsStillCheckedByTheEngine(string commandName)
+    {
+        await CreateProjectAsync();
+
+        (ExitCode exitCode, string output, string error) = await TypeAsync("spec", new Dictionary<string, string>(), commandName);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Empty(output);
+        Assert.Contains("nothing was approved", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(WaitingCodePath("spec")));
+    }
+
+    [Theory]
+    [InlineData("user")]
+    [InlineData("Plugin")]
+    [InlineData("")]
+    [InlineData(null)]
+    public async Task AnySourceButThePluginIsRefusedAtBothSteps(string? source)
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+
+        (ExitCode showExit, _, _) = await TypeAsync("spec", AttendedSession, source: source);
+        (ExitCode recordExit, _, string error) = await TypeAsync($"spec {SecondCode}", AttendedSession, source: source);
+
+        Assert.Equal(ExitCode.HookBlock, showExit);
+        Assert.Equal(ExitCode.HookBlock, recordExit);
+        Assert.Contains("not from the Lockflight plugin", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
+    public async Task AnEngineErrorDuringTheApprovalRefusesInsteadOfPassingTheCommandOn()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Uses Unix file permissions.");
+            return;
+        }
+
+        await CreateProjectAsync();
+        File.SetUnixFileMode(SpecPath, UnixFileMode.None);
+        try
+        {
+            (ExitCode exitCode, string output, string error) = await TypeAsync("spec");
+
+            Assert.Equal(ExitCode.HookBlock, exitCode);
+            Assert.Empty(output);
+            Assert.Contains("nothing was approved: internal error", error, StringComparison.Ordinal);
+            Assert.False(File.Exists(RecordPath("spec")));
+        }
+        finally
+        {
+            File.SetUnixFileMode(SpecPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(root);
 
     private async Task CreateProjectAsync()
@@ -334,9 +627,9 @@ public sealed class SessionApprovalTests : IDisposable
     private Task<(ExitCode ExitCode, string Output, string Error)> TypeAsync(string arguments) => TypeAsync(arguments, AttendedSession);
 
     private async Task<(ExitCode ExitCode, string Output, string Error)> TypeAsync(
-        string arguments, IReadOnlyDictionary<string, string> environment, string commandName = SessionApproval.CommandName, string source = "plugin")
+        string arguments, IReadOnlyDictionary<string, string> environment, string commandName = SessionApproval.CommandName, string? source = "plugin")
     {
-        string payload = JsonSerializer.Serialize(new Dictionary<string, string>
+        Dictionary<string, string> fields = new()
         {
             ["session_id"] = "session-1",
             ["cwd"] = root.FullName,
@@ -344,9 +637,14 @@ public sealed class SessionApprovalTests : IDisposable
             ["expansion_type"] = "slash_command",
             ["command_name"] = commandName,
             ["command_args"] = arguments,
-            ["command_source"] = source,
             ["prompt"] = $"/{commandName} {arguments}",
-        });
+        };
+        if (source is not null)
+        {
+            fields["command_source"] = source;
+        }
+
+        string payload = JsonSerializer.Serialize(fields);
         using StringWriter output = new();
         using StringWriter error = new();
         CliContext context = new(new StringReader(payload), output, error, root.FullName, time)

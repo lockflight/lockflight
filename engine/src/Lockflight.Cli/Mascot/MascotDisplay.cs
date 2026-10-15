@@ -33,11 +33,12 @@ internal static class MascotDisplay
         }
 
         IReadOnlyList<string> lines = MascotArt.Render(pose);
-        await context.Output.WriteLineAsync();
+        TextWriter terminal = context.RawOutput ?? context.Output;
+        await terminal.WriteLineAsync();
         for (int index = 0; index < lines.Count; index++)
         {
-            string text = index == lines.Count / 2 ? $"   {caption}" : string.Empty;
-            await context.Output.WriteLineAsync($"  {lines[index]}{text}");
+            string text = index == lines.Count / 2 ? $"   {TerminalText.Clean(caption)}" : string.Empty;
+            await terminal.WriteLineAsync($"  {lines[index]}{text}");
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Paths;
 
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
@@ -29,7 +30,28 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
 
     public static TimeSpan Lifetime { get; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>How far the clock may step back (a time sync) before a waiting code counts as issued in the future.</summary>
+    private static TimeSpan ClockStepAllowance { get; } = TimeSpan.FromMinutes(1);
+
     public string PathOf(ApprovalPhase phase) => Path.Combine(root, RelativeDirectory, $"{ApprovalPhaseNames.ToName(phase)}.json");
+
+    /// <summary>
+    /// Why the phase's waiting code cannot be kept safely: a part of <see cref="RelativeDirectory"/> or the code's own file is a
+    /// symbolic link, a file where a directory belongs, or a directory where the file belongs. Null when it can.
+    /// </summary>
+    public string? StateProblem(ApprovalPhase phase)
+    {
+        if (ProjectDirectories.Problem(root, RelativeDirectory) is string problem)
+        {
+            return problem;
+        }
+
+        string path = PathOf(phase);
+        string shown = $"{RelativeDirectory}/{Path.GetFileName(path)}";
+        return new FileInfo(path).LinkTarget is not null ? $"{shown} is a symbolic link"
+            : Directory.Exists(path) ? $"{shown} is a directory, not a file"
+            : null;
+    }
 
     /// <summary>Issues a new code for the phase, replacing any code waiting for it; returns the code to show the person.</summary>
     public string Issue(string featureId, ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> artifacts)
@@ -42,7 +64,7 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
             hashes[name] = hash;
         }
 
-        JsonFiles.Write(PathOf(phase), new JsonObject
+        Write(PathOf(phase), new JsonObject
         {
             ["schema"] = Schema,
             ["feature"] = featureId,
@@ -55,7 +77,11 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
         return code;
     }
 
-    /// <summary>Checks a typed code (ignoring case and surrounding space); an expired or unreadable entry is discarded.</summary>
+    /// <summary>
+    /// Checks a typed code (ignoring case and surrounding space). An unreadable entry, or one written for another phase, is
+    /// discarded as if none were waiting; an expired one, or one that expires further ahead than a code lives (the clock went
+    /// back by more than a time sync would), is discarded as expired.
+    /// </summary>
     public ApprovalCodeCheck Check(ApprovalPhase phase, string typedCode)
     {
         string path = PathOf(phase);
@@ -64,13 +90,14 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
             return ApprovalCodeCheck.Of(ApprovalCodeState.NoneWaiting);
         }
 
-        if (Read(path) is not WaitingCode waiting)
+        if (Read(path, phase) is not WaitingCode waiting)
         {
             Discard(phase);
             return ApprovalCodeCheck.Of(ApprovalCodeState.NoneWaiting);
         }
 
-        if (time.GetUtcNow() >= waiting.ExpiresAt)
+        DateTimeOffset now = time.GetUtcNow();
+        if (now >= waiting.ExpiresAt || waiting.ExpiresAt - now > Lifetime + ClockStepAllowance)
         {
             Discard(phase);
             return ApprovalCodeCheck.Of(ApprovalCodeState.Expired);
@@ -88,12 +115,24 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
     private static byte[] HashOf(string code, byte[] salt) =>
         Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(code), salt, Iterations, HashAlgorithmName.SHA256, HashLength);
 
-    private static WaitingCode? Read(string path)
+    /// <summary>Writes a new entry; whatever was at the path is removed first, so the write never follows a link left there.</summary>
+    private static void Write(string path, JsonObject entry)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.Delete(path);
+        using FileStream file = new(path, FileMode.CreateNew, FileAccess.Write);
+        file.Write(Encoding.UTF8.GetBytes(JsonFiles.Format(entry)));
+    }
+
+    private static WaitingCode? Read(string path, ApprovalPhase phase)
     {
         try
         {
             if (JsonNode.Parse(File.ReadAllText(path)) is not JsonObject entry
+                || Text(entry["schema"]) != Schema
+                || Text(entry["phase"]) != ApprovalPhaseNames.ToName(phase)
                 || Text(entry["feature"]) is not string feature
+                || !FeatureLocator.IsPlainId(feature)
                 || entry["artifacts"] is not JsonObject artifacts
                 || Text(entry["salt"]) is not string salt
                 || Text(entry["codeHash"]) is not string codeHash
@@ -105,7 +144,7 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
             (string Name, string Hash)[] hashes = [.. artifacts.Select(artifact => (artifact.Key, Text(artifact.Value) ?? string.Empty))];
             return new WaitingCode(feature, hashes, Convert.FromHexString(salt), Convert.FromHexString(codeHash), expiresAt);
         }
-        catch (Exception exception) when (exception is JsonException or FormatException or IOException)
+        catch (Exception exception) when (exception is JsonException or FormatException or IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
         {
             return null;
         }

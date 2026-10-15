@@ -17,7 +17,9 @@ internal static class ApprovalCommandRelay
 
     public static HookDecision? Decide(HookInput input)
     {
-        if (input.ToolName is not string toolName || FileTools.Contains(toolName))
+        // A call without a tool name is checked too: only a known file tool is exempt.
+        string toolName = input.ToolName ?? "(unnamed tool)";
+        if (FileTools.Contains(toolName))
         {
             return null;
         }
