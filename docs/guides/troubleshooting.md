@@ -64,7 +64,7 @@ skipped; it never blocks.
 ## The agent needs to change a protected file
 
 The block is intended. The agent writes the complete new file outside the project and runs
-`dotnet lockflight propose <path> --from <file>` (or `<path> --delete`); you read the patch it prints and apply it with the
+`.lockflight/bin/lockflight propose <path> --from <file>` (or `<path> --delete`); you read the patch it prints and apply it with the
 printed `git apply` command at the project root. See
 [proposing a protected change](guardrails-and-boundaries.md#proposing-a-protected-change).
 

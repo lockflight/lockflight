@@ -114,7 +114,9 @@ internal sealed class HookCommand(CliContext context)
 
         string reason = pin.Status == ToolPinStatus.Unreadable
             ? $"lockflight: the engine pin cannot be read: {pin.Problem}. Fix dotnet-tools.json (a protected file: a human edit), then run exactly: {RecoveryCommands.RestoreAndLink}"
-            : $"lockflight: running engine {ToolPin.RunningVersion} but the project pins {pin.Version}. Run exactly: {RecoveryCommands.RestoreAndLink}";
+            : pin.Version!.Contains("-dev.", StringComparison.Ordinal)
+                ? $"lockflight: running engine {ToolPin.RunningVersion} but the project pins the development build {pin.Version}, which no package feed has. Ask the user to run ~/.lockflight/bin/lockflight update {HumanOnlyCommands.WhereToRun}."
+                : $"lockflight: running engine {ToolPin.RunningVersion} but the project pins {pin.Version}. Run exactly: {RecoveryCommands.RestoreAndLink}";
         return HookDecision.Block("stale-engine", reason);
     }
 

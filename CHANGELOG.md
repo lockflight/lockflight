@@ -12,8 +12,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   the agent at it instead of hand-written patches.
 - The ledger records what started each gate run (`command` or `stop-hook`), how long it took and whether the Stop cache
   answered it; `ledger retro` shows how many Stop gates ran, how many the cache answered and their total time.
+- `doctor` checks that a development tool pin can be restored on this machine (local feed or tools cache).
 
 ### Changed
+- The skills, the session banner and the `CLAUDE.md` block run the project's linked engine (`.lockflight/bin/lockflight`), so
+  commands work when the tool pin is a development build that no package feed has. A stale development pin tells the agent to
+  ask you for `lockflight update`.
+- A human-only command refused inside Claude Code (also with `!`) says to use a separate terminal window and prints the exact
+  line to copy.
 - Approvals are recorded in the ledger as `approval.recorded`, with the feature, phase, artifact hash prefixes and signing
   status, and no longer include the approver's email.
 
