@@ -58,6 +58,7 @@ public sealed class ShellGuardScenarioTests : IDisposable
     [InlineData("rsync -a /tmp/conf/ secrets")]
     [InlineData("find . -name '*.props' -delete")]
     [InlineData("patch -p1 < fix.patch")]
+    [InlineData("git apply --check .lockflight/local/proposals/20261015-101500-global-json.patch && git apply .lockflight/local/proposals/20261015-101500-global-json.patch")]
     public async Task HiddenFormsOfAProtectedWriteAreBlocked(string command)
     {
         (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
@@ -103,6 +104,9 @@ public sealed class ShellGuardScenarioTests : IDisposable
     [InlineData("find . -name '*.cs'")]
     [InlineData("tar -czf out.tgz src")]
     [InlineData("pushd src && echo x > a.txt && popd")]
+    [InlineData("dotnet lockflight propose src/Directory.Build.props --from /tmp/props.new")]
+    [InlineData("lockflight propose lockflight.yaml --from \"$TMPDIR/manifest.new\" secrets/k --delete")]
+    [InlineData("git apply --check .lockflight/local/proposals/20261015-101500-global-json.patch")]
     public async Task OrdinaryCommandsStayAllowed(string command)
     {
         (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
@@ -135,6 +139,14 @@ public sealed class ShellGuardScenarioTests : IDisposable
         (_, _, string error) = await RunAsync("Bash", "(cd secrets && echo x > k)");
 
         Assert.Contains("'secrets/k'", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AProtectedPathBlockPointsTheAgentAtAProposal()
+    {
+        (_, _, string error) = await RunAsync("Bash", "echo x > src/Directory.Build.props");
+
+        Assert.Contains("lockflight propose", error, StringComparison.Ordinal);
     }
 
     private void OpenRedCycle()

@@ -15,7 +15,7 @@
 | **Test lock** | While a cycle is red, the guard blocks edits to the test projects, so the agent can't change the tests to fit the code. |
 | **Trace** | The matrix from requirement (`FR-###`) to the tests that went red, then green, for it. |
 | **Review of record** | `lockflight review`: an independent reviewer whose prompt the engine builds. Blocker and major findings count only when their reproduction test fails. |
-| **Protected path** | A file or glob that only a human or a Lockflight command may change. The PreToolUse guard blocks agent writes to it. |
+| **Protected path** | A file or glob that only a human or a Lockflight command may change. The PreToolUse guard blocks agent writes to it; the agent proposes a change with `lockflight propose` instead. |
 | **Guardrail / boundary** | A guardrail prevents accidents but can be circumvented from the agent's own shell. A boundary holds even against a determined agent. See [guardrails and boundaries](guardrails-and-boundaries.md). |
 | **Baseline** | Accepted existing problems (build warnings, failing tests, advisories) for brownfield adoption. Only a human records them. |
 | **Lockdown** | `.lockflight/lockdown` exists: only reads are allowed until a human removes it. |

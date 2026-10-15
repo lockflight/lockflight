@@ -21,6 +21,8 @@ internal static class LedgerSignatures
 
     public const string ApprovePrefix = "approve:";
 
+    public const string ProposalPrefix = "proposal:";
+
     /// <summary>Marks a passing gate run inside a <c>gate:&lt;profile&gt;:&lt;verdict&gt;:&lt;steps&gt;</c> signature.</summary>
     public const string GatePassed = ":PASS";
 }

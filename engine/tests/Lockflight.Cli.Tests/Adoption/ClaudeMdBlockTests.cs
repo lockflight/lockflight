@@ -35,4 +35,12 @@ public sealed class ClaudeMdBlockTests
         Assert.Contains("discard a feature's test-first evidence", ClaudeMdBlock.Text, StringComparison.Ordinal);
         Assert.Contains("git apply", ClaudeMdBlock.Text, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void TheBlockSendsProtectedChangesThroughProposeAndNeverAsksToBypassTheGuard()
+    {
+        Assert.Contains("lockflight propose <path> --from <file>", ClaudeMdBlock.Text, StringComparison.Ordinal);
+        Assert.Contains("never ask", ClaudeMdBlock.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("/tmp/<task>.patch", ClaudeMdBlock.Text, StringComparison.Ordinal);
+    }
 }

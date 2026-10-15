@@ -12,6 +12,7 @@ using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Mascot;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Proposals;
 using Lockflight.Cli.Review;
 using Lockflight.Cli.Updating;
 using Lockflight.Cli.Workspace;
@@ -57,6 +58,10 @@ internal static class CliApplication
           review [--feature <id>] [--base <ref>] [--model <name>] [--budget <usd>]
                                                         review of record bound to evidence (main, sonnet, 1.00)
           ledger retro [--days 30] [--min 2]            recurring incidents → suggested remedies
+          propose <path> (--from <file> | --delete) [<path> …]
+                                                        a protected change as one patch per file in
+                                                        .lockflight/local/proposals/ for a person to review and
+                                                        git apply; applies nothing itself
 
         Human decisions (approve, redgreen reset, baseline and adopt apply|undo refuse to run inside a Claude Code session)
           approve spec|tasks [--feature <id>] [--sign [--key <file>]]
@@ -119,6 +124,7 @@ internal static class CliApplication
                 ["redgreen", string verb, .. string[] redGreenOptions] => await new RedGreenCommand(context).RunAsync(verb, redGreenOptions, cancellationToken),
                 ["review", .. string[] reviewOptions] => await new ReviewCommand(context).RunAsync(reviewOptions, cancellationToken),
                 ["ledger", "retro", .. string[] retroOptions] => await new RetroCommand(context).RunAsync(retroOptions, cancellationToken),
+                ["propose", .. string[] proposeArguments] => await new ProposeCommand(context).RunAsync(proposeArguments, cancellationToken),
                 ["trace", .. string[] traceOptions] => await new TraceCommand(context).RunAsync(traceOptions, cancellationToken),
                 ["approve", _, ..] => await new ApproveCommand(context).RunAsync(args[1..], cancellationToken),
                 ["workspace", "sync", .. string[] syncOptions] => await new WorkspaceSyncCommand(context).RunAsync(syncOptions, cancellationToken),

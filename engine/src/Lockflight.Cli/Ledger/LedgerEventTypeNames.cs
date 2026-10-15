@@ -8,6 +8,7 @@ internal static class LedgerEventTypeNames
     public const string ConfigWritten = "config.written";
     public const string EvidenceRecorded = "evidence.recorded";
     public const string ApprovalRecorded = "approval.recorded";
+    public const string ProposalCreated = "proposal.created";
 
     public static string ToName(LedgerEventType type) => type switch
     {
@@ -16,6 +17,7 @@ internal static class LedgerEventTypeNames
         LedgerEventType.ConfigWritten => ConfigWritten,
         LedgerEventType.EvidenceRecorded => EvidenceRecorded,
         LedgerEventType.ApprovalRecorded => ApprovalRecorded,
+        LedgerEventType.ProposalCreated => ProposalCreated,
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown ledger event type."),
     };
 }
