@@ -24,6 +24,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   status, and no longer include the approver's email.
 
 ### Fixed
+- The shell guard follows a variable that the same command line sets to plain text (`S=/tmp/out; cd $S && …`), so writes to a
+  scratch directory are no longer blocked. Variables it cannot know exactly are judged as before.
+- `git archive -o FILE` is checked as a write to `FILE`.
 - Per-unit Stop timings are no longer counted as incidents in `ledger retro` or shown as verdicts in the status line.
 - `phase check tasks` names each misplaced task with its line and why it counted as implementation, and says how to mark test
   and stub tasks.

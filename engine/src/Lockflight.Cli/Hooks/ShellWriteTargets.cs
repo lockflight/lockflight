@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Lockflight.Cli.Hooks;
 
 /// <summary>
@@ -15,6 +17,9 @@ internal sealed class ShellWriteTargets(ShellWritesBuilder writes)
     /// <summary>The last simple command seen: the left side of a pipe when the next one reads it.</summary>
     private ShellCommand? previous;
 
+    /// <summary>Set once the command line does something after which no variable is known (<see cref="ShellLiteralVariables"/>).</summary>
+    private readonly StrongBox<bool> variablesUntracked = new();
+
     public static ShellWrites Find(string command, ShellDialect dialect)
     {
         ShellWritesBuilder writes = new();
@@ -25,15 +30,19 @@ internal sealed class ShellWriteTargets(ShellWritesBuilder writes)
     private void Scan(string command, ShellDialect dialect, ShellLocations start, int depth)
     {
         ShellLocations locations = start;
-        List<string> segment = [];
+        ShellLiteralVariables variables = new(dialect, variablesUntracked);
+        List<ShellWord> segment = [];
         Stack<OpenGroup> groups = new();
         ShellTokenKind? redirect = null;
-        bool piped = false;
+        ShellTokenKind? previousKind = null;
+        string? before = null;
         foreach (ShellToken token in ShellTokenizer.Tokenize(command, dialect))
         {
+            ShellTokenKind? kindBefore = previousKind;
+            previousKind = token.Kind;
             if (token.IsWord)
             {
-                AddWord(token.Text, ref redirect, segment, locations);
+                AddWord(variables.Word(token), ref redirect, segment);
                 continue;
             }
 
@@ -41,44 +50,69 @@ internal sealed class ShellWriteTargets(ShellWritesBuilder writes)
             redirect = token.Kind is ShellTokenKind.WriteRedirect or ShellTokenKind.InputRedirect ? token.Kind : null;
             if (token.Kind is ShellTokenKind.Separator or ShellTokenKind.SubshellOpen)
             {
-                Run(segment, dialect, locations, depth, piped);
+                bool definesFunction = token.Kind == ShellTokenKind.SubshellOpen && segment.Count > 0;
+                Run(segment, dialect, locations, variables, depth, before, after: token.Text);
                 segment = [];
-                piped = token.Text is "|" or "|&";
+                before = token.Text;
+                variables.EndList(token.Text);
+                bool arithmetic = token.Kind == ShellTokenKind.SubshellOpen
+                    && kindBefore is ShellTokenKind.SubshellOpen or ShellTokenKind.SubstitutionOpen;
+                if (definesFunction || arithmetic)
+                {
+                    // "name()" defines a function, which may set variables when it is called; "((" and "$((" may assign.
+                    variables.Untrack();
+                }
             }
 
             if (token.Kind is ShellTokenKind.SubshellOpen or ShellTokenKind.SubstitutionOpen or ShellTokenKind.GroupOpen)
             {
-                // A subshell or substitution runs in a copy of the shell: its cd ends with it. A PowerShell group does not.
+                // A subshell or substitution runs in a copy of the shell: its cd and its assignments end with it. A PowerShell group
+                // does not.
                 // "> $(cmd)": the substitution's output is the redirect target.
-                groups.Push(new OpenGroup(token.Kind, segment, locations, piped, pendingRedirect));
-                piped = false;
+                groups.Push(new OpenGroup(token.Kind, segment, locations, variables, before, pendingRedirect));
+                before = null;
                 segment = [];
                 locations = token.Kind == ShellTokenKind.GroupOpen ? locations : locations.Copy();
+                variables = token.Kind == ShellTokenKind.GroupOpen ? variables : variables.Copy();
             }
             else if (token.Kind == ShellTokenKind.Close)
             {
-                Run(segment, dialect, locations, depth, piped);
+                Run(segment, dialect, locations, variables, depth, before, after: null);
                 segment = [];
                 if (groups.TryPop(out OpenGroup? group))
                 {
-                    piped = group.Piped;
+                    before = group.Before;
                     redirect = group.Redirect;
                     segment = group.Kind == ShellTokenKind.SubshellOpen ? [] : group.Segment;
                     locations = group.Locations;
+                    variables = group.Variables;
                     if (group.Kind == ShellTokenKind.GroupOpen)
                     {
                         // A PowerShell group's value stands for one word; the tokenizer adds no placeholder for it.
-                        AddWord(ShellTokenizer.SubstitutionPlaceholder, ref redirect, segment, locations);
+                        ShellToken placeholder = new(ShellTokenKind.Word, ShellTokenizer.SubstitutionPlaceholder);
+                        AddWord(new ShellWord(placeholder.Text, placeholder), ref redirect, segment);
                     }
                 }
             }
         }
 
-        Run(segment, dialect, locations, depth, piped);
+        Run(segment, dialect, locations, variables, depth, before, after: null);
     }
 
-    private void Run(List<string> words, ShellDialect dialect, ShellLocations locations, int depth, bool piped)
+    private void Run(
+        List<ShellWord> segment, ShellDialect dialect, ShellLocations locations, ShellLiteralVariables variables, int depth, string? before, string? after)
     {
+        // A variable the statement assigns is expanded in its redirections with the value from before it.
+        bool assigns = segment.Any(word => word.Assignment is not null && !word.RedirectTarget);
+        foreach (ShellWord target in segment.Where(word => word.RedirectTarget))
+        {
+            writes.AddFile(assigns ? target.Source.Text : target.Text, locations);
+        }
+
+        List<ShellWord> commandWords = [.. segment.Where(word => !word.RedirectTarget)];
+        variables.Run(commandWords, before, after);
+        List<string> words = [.. commandWords.Select(word => word.Text)];
+        bool piped = before is "|" or "|&";
         if (words.FirstOrDefault(DotnetFileApi.Writes) is string apiCall)
         {
             writes.Hide($"'{apiCall}' (a .NET file API call)");
@@ -125,11 +159,11 @@ internal sealed class ShellWriteTargets(ShellWritesBuilder writes)
     }
 
     /// <summary>A word is a command word, or the target of the redirection before it.</summary>
-    private void AddWord(string word, ref ShellTokenKind? redirect, List<string> segment, ShellLocations locations)
+    private static void AddWord(ShellWord word, ref ShellTokenKind? redirect, List<ShellWord> segment)
     {
         if (redirect == ShellTokenKind.WriteRedirect)
         {
-            writes.AddFile(word, locations);
+            segment.Add(word with { RedirectTarget = true });
         }
         else if (redirect is null)
         {
@@ -139,5 +173,6 @@ internal sealed class ShellWriteTargets(ShellWritesBuilder writes)
         redirect = null;
     }
 
-    private sealed record OpenGroup(ShellTokenKind Kind, List<string> Segment, ShellLocations Locations, bool Piped, ShellTokenKind? Redirect);
+    private sealed record OpenGroup(
+        ShellTokenKind Kind, List<ShellWord> Segment, ShellLocations Locations, ShellLiteralVariables Variables, string? Before, ShellTokenKind? Redirect);
 }

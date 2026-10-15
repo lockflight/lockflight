@@ -21,6 +21,24 @@ public sealed class ShellTokenizerTests
         Assert.Equal(expected, Describe(ShellTokenizer.Tokenize(command, ShellDialect.Posix)));
 
     [Theory]
+    [InlineData("S=/x", null, false)]
+    [InlineData("S=\"/x\"", 2, false)]
+    [InlineData("'S'=/x", 0, false)]
+    [InlineData("S=$X", null, false)]
+    [InlineData("S=\"$X\"", 2, false)]
+    [InlineData("S='$X'", 2, true)]
+    [InlineData("S=\\$X", 2, true)]
+    [InlineData("S=$'\\x24X'", 2, true)]
+    [InlineData("S=$(echo '$X')", null, false)]
+    public void AWordRecordsWhereQuotingStartsAndWhetherADollarIsLiteral(string command, int? quotedFrom, bool literalDollar)
+    {
+        ShellToken word = ShellTokenizer.Tokenize(command, ShellDialect.Posix).Last();
+
+        Assert.Equal(quotedFrom, word.QuotedFrom);
+        Assert.Equal(literalDollar, word.LiteralDollar);
+    }
+
+    [Theory]
     [InlineData("Set-Content -Path C:\\a\\b -Value x", "Set-Content|-Path|C:\\a\\b|-Value|x")]
     [InlineData("& { Remove-Item x }", ";|;|Remove-Item|x|;")]
     [InlineData("$t = @'\nRemove-Item x\n'@\nls", "$t|=|Remove-Item x|;|ls")]

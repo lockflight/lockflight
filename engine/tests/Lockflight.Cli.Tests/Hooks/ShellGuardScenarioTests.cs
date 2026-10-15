@@ -9,6 +9,8 @@ public sealed class ShellGuardScenarioTests : IDisposable
 {
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-shell-");
 
+    private static string ScratchDirectory => Path.Combine(Path.GetTempPath(), "lockflight-scratch");
+
     public ShellGuardScenarioTests()
     {
         File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
@@ -131,6 +133,42 @@ public sealed class ShellGuardScenarioTests : IDisposable
 
         Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
         Assert.Contains("lockflight:", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("S={scratch}; cd $S/async-uk && cat > dump.py <<'EOF'\nprint(1)\nEOF")]
+    [InlineData("S={scratch}; git archive HEAD src/Directory.Build.props lockflight.yaml | tar -x -C $S")]
+    [InlineData("export S={scratch} && echo x > ${S}/notes.txt")]
+    public async Task WritesThroughAVariableSetToAScratchDirectoryAreAllowed(string command)
+    {
+        string resolved = command.Replace("{scratch}", ScratchDirectory, StringComparison.Ordinal);
+
+        (ExitCode exitCode, _, string error) = await RunAsync("Bash", resolved);
+
+        Assert.True(exitCode == ExitCode.Pass, $"'{resolved}' was blocked: {error}");
+    }
+
+    [Theory]
+    [InlineData("cd $S/async-uk && cat > lockflight.yaml")]
+    [InlineData("cd $S && git archive HEAD | tar -x")]
+    [InlineData("S=$(mktemp -d); echo x > $S/lockflight.yaml")]
+    [InlineData("S={scratch}; S=$(pwd); echo x > $S/lockflight.yaml")]
+    [InlineData("(S={scratch}); echo x > $S/lockflight.yaml")]
+    [InlineData("echo x > $S/lockflight.yaml; S={scratch}")]
+    [InlineData("S={scratch} true; echo x > $S/lockflight.yaml")]
+    [InlineData("S={scratch} echo x > $S/lockflight.yaml")]
+    [InlineData("echo x > ${S:-{scratch}}/lockflight.yaml")]
+    [InlineData("S={root}/src; echo x > ${S}/../lockflight.yaml")]
+    [InlineData("S={root}; cd $S/secrets && echo x > k")]
+    [InlineData("S={root}; tar -xf a.tar -C $S")]
+    [InlineData("S={scratch}; git archive -o lockflight.yaml HEAD")]
+    public async Task WritesThroughAVariableNotKnownToBeOutsideStayBlocked(string command)
+    {
+        string resolved = command.Replace("{scratch}", ScratchDirectory, StringComparison.Ordinal).Replace("{root}", projectRoot.FullName, StringComparison.Ordinal);
+
+        (ExitCode exitCode, _, _) = await RunAsync("Bash", resolved);
+
+        Assert.True(exitCode == ExitCode.HookBlock, $"'{resolved}' was allowed");
     }
 
     [Fact]
