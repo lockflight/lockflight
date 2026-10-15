@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 
@@ -9,6 +10,7 @@ namespace Lockflight.Cli.Mascot;
 /// <summary>
 /// <c>lockflight statusline</c>: Claude Code's status line command. Reads the session JSON on stdin, and in a Lockflight project
 /// prints Levi's face beside the last verdict from the local ledger (a Stop gate, a gate run or a guard block in the past day).
+/// Approvals, evidence, configuration writes and per-unit Stop times are not verdicts and leave the last one shown.
 /// The status line is shown to the person only, never to the model. Outside a Lockflight project it prints nothing.
 /// </summary>
 internal sealed class StatusLineCommand(CliContext context)
@@ -62,7 +64,8 @@ internal sealed class StatusLineCommand(CliContext context)
 
     private static bool IsVerdict(LedgerRecord record) =>
         record.Type == LedgerEventTypeNames.HookBlocked
-        || (record.Type == LedgerEventTypeNames.GateCompleted && record.Signature.StartsWith("gate:", StringComparison.Ordinal));
+        || (record.Type == LedgerEventTypeNames.GateCompleted && record.Signature.StartsWith("gate:", StringComparison.Ordinal)
+            && !StopTimings.IsTiming(record.Signature));
 
     private static (MascotPose Pose, string Text) Describe(LedgerRecord record, DateTimeOffset now)
     {

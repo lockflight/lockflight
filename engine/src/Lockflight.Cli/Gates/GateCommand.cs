@@ -63,9 +63,11 @@ internal sealed class GateCommand(CliContext context)
             return ExitCode.Config;
         }
 
+        long started = context.Time.GetTimestamp();
         GateResult result = workspaceRun
             ? await WorkspaceGateRunner.RunAsync(manifest!, run, units, useCache: false, context.Output, cancellationToken)
             : await GateRunner.RunAsync(run, context.Output, cancellationToken);
+        long durationMs = (long)context.Time.GetElapsedTime(started).TotalMilliseconds;
         await context.Output.WriteLineAsync($"Scope: {result.Scope}");
         await context.Output.WriteLineAsync($"Result: {VerdictNames.ToContractName(result.Verdict)}");
         await MascotDisplay.DrawAsync(context, MascotDisplay.For(result.Verdict), VerdictNames.ToContractName(result.Verdict));
@@ -77,22 +79,11 @@ internal sealed class GateCommand(CliContext context)
 
         if (manifest is not null)
         {
-            await RecordAsync(manifest, result, cancellationToken);
+            LedgerGateRun gateRun = new(GateTrigger.Command, durationMs, StopCacheResult.None);
+            await new LedgerWriter(manifest.Root, context.Time).AppendAsync(GateRunEvents.Completed(result, gateRun), cancellationToken);
         }
 
         return VerdictNames.ToExitCode(result.Verdict);
-    }
-
-    private async Task RecordAsync(Manifest manifest, GateResult result, CancellationToken cancellationToken)
-    {
-        string failingSteps = string.Join(',', result.Steps.Where(step => !VerdictNames.AllowsNextStep(step.Verdict)).Select(step => step.Name));
-        string verdict = VerdictNames.ToContractName(result.Verdict);
-        LedgerEvent completed = new(
-            LedgerEventType.GateCompleted,
-            $"gate:{GateProfileNames.ToName(result.Profile)}:{verdict}:{failingSteps}",
-            verdict,
-            result.Summary);
-        await new LedgerWriter(manifest.Root, context.Time).AppendAsync(completed, cancellationToken);
     }
 
     private static bool SameDirectory(string first, string second) =>

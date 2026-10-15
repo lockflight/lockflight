@@ -58,6 +58,21 @@ internal sealed class LedgerWriter(string projectRoot, TimeProvider time)
                 WriteIfPresent(writer, "agent", eventContext.Agent);
             }
 
+            if (ledgerEvent.GateRun is LedgerGateRun gateRun)
+            {
+                writer.WriteString("trigger", GateTriggerNames.ToName(gateRun.Trigger));
+                writer.WriteNumber("durationMs", gateRun.DurationMs);
+                writer.WriteString("cache", StopCacheResultNames.ToName(gateRun.Cache));
+            }
+
+            if (ledgerEvent.Approval is LedgerApproval approval)
+            {
+                writer.WriteString("feature", approval.Feature);
+                writer.WriteString("phase", approval.Phase);
+                writer.WriteString("artifacts", approval.Artifacts);
+                writer.WriteBoolean("signed", approval.Signed);
+            }
+
             writer.WriteEndObject();
         }
 

@@ -1,11 +1,13 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Ledger;
 
 namespace Lockflight.Cli.Hooks;
 
 /// <summary>
 /// Stop hook: runs the stop profile when the manifest enables it, skipping the run when nothing changed since the last PASS.
-/// Best effort — CI is the hard definition of done.
+/// Every decision it makes is recorded as a <c>gate.completed</c> line with the <c>stop-hook</c> trigger, its time and whether
+/// the cache answered, so the Stop gate's cost can be measured. Best effort — CI is the hard definition of done.
 /// </summary>
 internal static class StopGate
 {
@@ -16,48 +18,51 @@ internal static class StopGate
             return HookDecision.Allow;
         }
 
+        long started = time.GetTimestamp();
         StopGateCache cache = new(manifest.Root, unitPath: null);
         string? inputsHash = await InputsHash.ComputeAsync(manifest.Root, cancellationToken);
+        StopCacheResult cacheResult = inputsHash is null ? StopCacheResult.None : StopCacheResult.Miss;
         if (inputsHash is not null && await cache.PassedWithAsync(inputsHash, cancellationToken))
         {
+            GateResult cached = new(manifest.Root, GateProfile.Stop, Verdict.Pass, TestsTotal: null, Steps: []);
+            await RecordAsync(manifest, cached, Run(time, started, StopCacheResult.Hit), time, cancellationToken);
             return HookDecision.Allow;
         }
 
+        GateResult result;
         if (manifest.Units.Count > 0 && Path.GetFullPath(manifest.StopTarget ?? ".", manifest.Root).TrimEnd(Path.DirectorySeparatorChar) == Path.GetFullPath(manifest.Root).TrimEnd(Path.DirectorySeparatorChar))
         {
             // A workspace: every changed unit, each also with its own cache entry, so a PASS of one survives edits to another.
             GateRunContext workspace = new(manifest.Root, manifest.Root, GateProfile.Stop, manifest.Gates, BaseRef: null, time);
-            GateResult judged = await WorkspaceGateRunner.RunAsync(manifest, workspace, [], useCache: true, TextWriter.Null, cancellationToken);
-            await StopTimings.RecordAsync(manifest, judged, time, cancellationToken);
-            if (!VerdictNames.AllowsNextStep(judged.Verdict))
-            {
-                return Blocked(judged);
-            }
-
-            if (inputsHash is not null)
-            {
-                await cache.RememberPassAsync(inputsHash, cancellationToken);
-            }
-
-            return HookDecision.Allow;
+            result = await WorkspaceGateRunner.RunAsync(manifest, workspace, [], useCache: true, TextWriter.Null, cancellationToken);
+            await StopTimings.RecordAsync(manifest, result, time, cancellationToken);
         }
-
-        string target = Path.GetFullPath(manifest.StopTarget ?? ".", manifest.Root);
-
-        GateRunContext run = new(target, manifest.Root, GateProfile.Stop, manifest.Gates, BaseRef: null, time) { UnitPath = UnitResolver.Owning(manifest, target)?.Path, BuildFile = manifest.Gates.BuildFile };
-        GateResult result = await GateRunner.RunAsync(run, TextWriter.Null, cancellationToken);
-        if (VerdictNames.AllowsNextStep(result.Verdict))
+        else
         {
-            if (inputsHash is not null)
-            {
-                await cache.RememberPassAsync(inputsHash, cancellationToken);
-            }
-
-            return HookDecision.Allow;
+            string target = Path.GetFullPath(manifest.StopTarget ?? ".", manifest.Root);
+            GateRunContext run = new(target, manifest.Root, GateProfile.Stop, manifest.Gates, BaseRef: null, time) { UnitPath = UnitResolver.Owning(manifest, target)?.Path, BuildFile = manifest.Gates.BuildFile };
+            result = await GateRunner.RunAsync(run, TextWriter.Null, cancellationToken);
         }
 
-        return Blocked(result);
+        await RecordAsync(manifest, result, Run(time, started, cacheResult), time, cancellationToken);
+        if (!VerdictNames.AllowsNextStep(result.Verdict))
+        {
+            return Blocked(result);
+        }
+
+        if (inputsHash is not null)
+        {
+            await cache.RememberPassAsync(inputsHash, cancellationToken);
+        }
+
+        return HookDecision.Allow;
     }
+
+    private static LedgerGateRun Run(TimeProvider time, long started, StopCacheResult cache) =>
+        new(GateTrigger.StopHook, (long)time.GetElapsedTime(started).TotalMilliseconds, cache);
+
+    private static Task RecordAsync(Manifest manifest, GateResult result, LedgerGateRun run, TimeProvider time, CancellationToken cancellationToken) =>
+        new LedgerWriter(manifest.Root, time).AppendAsync(GateRunEvents.Completed(result, run), cancellationToken);
 
     private static HookDecision Blocked(GateResult result) => HookDecision.Block(
         $"stop-gate:{VerdictNames.ToContractName(result.Verdict)}",

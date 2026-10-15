@@ -40,7 +40,12 @@ internal static class LedgerReader
                 return null;
             }
 
-            return new LedgerRecord(at, Text(root, "type"), Text(root, "signature"), Text(root, "summary"), Text(root, "detail") is { Length: > 0 } detail ? detail : null);
+            return new LedgerRecord(at, Text(root, "type"), Text(root, "signature"), Text(root, "summary"), Text(root, "detail") is { Length: > 0 } detail ? detail : null)
+            {
+                Trigger = Text(root, "trigger") is { Length: > 0 } trigger ? trigger : null,
+                DurationMs = root.TryGetProperty("durationMs", out JsonElement duration) && duration.ValueKind == JsonValueKind.Number && duration.TryGetInt64(out long milliseconds) ? milliseconds : null,
+                Cache = Text(root, "cache") is { Length: > 0 } cache ? cache : null,
+            };
         }
         catch (JsonException)
         {

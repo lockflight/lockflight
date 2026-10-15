@@ -44,6 +44,25 @@ public sealed class StatusLineCommandTests : IDisposable
         Assert.Equal($"Lockflight · {expected} · 5m ago", output);
     }
 
+    [Theory]
+    [InlineData("approval.recorded", "approve:spec", "001-orders spec approved")]
+    [InlineData("gate.completed", "gate:stop-unit:services/orders", "1250")]
+    public async Task EventsThatAreNotVerdictsLeaveTheLastVerdictShown(string type, string signature, string summary)
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        string ledger = Path.Combine(root.FullName, ".lockflight", "ledger");
+        Directory.CreateDirectory(ledger);
+        string earlier = DateTimeOffset.UtcNow.AddMinutes(-5).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        string later = DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        File.WriteAllText(Path.Combine(ledger, $"events-{DateTimeOffset.UtcNow:yyyy-MM}.jsonl"),
+            $$"""{"ts":"{{earlier}}","type":"gate.completed","signature":"gate:stop:PASS:","summary":"PASS","trigger":"stop-hook","durationMs":900,"cache":"miss"}""" + "\n"
+            + $$"""{"ts":"{{later}}","type":"{{type}}","signature":"{{signature}}","summary":"{{summary}}"}""" + "\n");
+
+        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain());
+
+        Assert.Equal("Lockflight · stop gate PASS · 5m ago", output);
+    }
+
     [Fact]
     public async Task InColorItDrawsLevisFaceOnTwoLines()
     {

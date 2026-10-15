@@ -30,6 +30,23 @@ public sealed class IncidentClusteringTests
     }
 
     [Fact]
+    public void StopUnitTimingsAndStopHookGateRunsAreNotIncidents()
+    {
+        LedgerRecord[] records =
+        [
+            Record("gate.completed", "gate:stop-unit:services/orders", "184000"),
+            Record("gate.completed", "gate:stop:FAIL:build", "FAIL") with { Trigger = "stop-hook" },
+            Record("gate.completed", "gate:stop:FAIL:build", "FAIL") with { Trigger = "command" },
+            Record("approval.recorded", "approve:spec", "f1 spec approved"),
+        ];
+
+        IncidentCluster cluster = Assert.Single(IncidentClustering.Cluster(records));
+
+        Assert.Equal("gate:stop:FAIL:build", cluster.Fingerprint);
+        Assert.Equal(1, cluster.Count);
+    }
+
+    [Fact]
     public void MalformedLedgerLinesAreSkipped()
     {
         Assert.Null(LedgerReader.Parse("{ not json"));

@@ -15,6 +15,7 @@ internal sealed class ApproveCommand(CliContext context)
 {
     private const string UnknownApprover = "unknown";
     private const string VerifyVerb = "verify";
+    private const int HashPrefixLength = 12;
 
     private static readonly string[] ApproveValueOptions = ["--feature", "--key"];
     private static readonly string[] ApproveFlags = ["--sign"];
@@ -77,13 +78,14 @@ internal sealed class ApproveCommand(CliContext context)
             return failure;
         }
 
-        await new LedgerWriter(manifest.Root, context.Time).AppendAsync(
-            new LedgerEvent(
-                LedgerEventType.ConfigWritten,
-                LedgerSignatures.ApprovePrefix + ApprovalPhaseNames.ToName(phase),
-                $"{feature.Id} approved by {approvedBy}",
-                null),
-            cancellationToken);
+        // The approver stays in the approval record; the ledger is readable by the agent and needs only what was approved.
+        string phaseName = ApprovalPhaseNames.ToName(phase);
+        string artifacts = string.Join(',', store.CurrentHashes(phase).Select(artifact => $"{artifact.Name}={artifact.Hash[..Math.Min(HashPrefixLength, artifact.Hash.Length)]}"));
+        LedgerEvent approval = new(LedgerEventType.ApprovalRecorded, LedgerSignatures.ApprovePrefix + phaseName, $"{feature.Id} {phaseName} approved", null)
+        {
+            Approval = new LedgerApproval(feature.Id, phaseName, artifacts, Signed: options.Flag("--sign")),
+        };
+        await new LedgerWriter(manifest.Root, context.Time).AppendAsync(approval, cancellationToken);
         return ExitCode.Pass;
     }
 

@@ -131,6 +131,18 @@ The engine appends events (guard blocks, verdicts, rejected reds, confirmed find
 remedy, preferring the most deterministic one; remedies are changes a person reviews. The ledger is local and fail-open: it is
 a learning aid, not an audit log.
 
+Each line has a `type`, a `signature` (the fingerprint incidents are grouped by), a `summary` and an optional `detail`; some
+types add fields, and readers ignore fields they do not know:
+
+| Type | Extra fields |
+|---|---|
+| `hook.blocked` | `tool`, `call` (shortened, credentials masked), `session`, `agent` |
+| `gate.completed` | `trigger` (`command` for `lockflight gate run`, `stop-hook` for the Stop hook), `durationMs`, `cache` (`hit` when the Stop gate's cache of the last PASS answered, `miss` when it was consulted and the gate ran, `none` when it was not consulted) |
+| `approval.recorded` | `feature`, `phase`, `artifacts` (each artifact with the first 12 characters of its hash), `signed` |
+| `evidence.recorded`, `config.written` | none |
+
+No line names a person: who approved a phase is kept in the approval record, not in the ledger.
+
 ## Where the trust comes from
 
 | On your machine (guardrails) | Outside the agent's reach (boundaries) |

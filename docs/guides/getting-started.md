@@ -72,7 +72,8 @@ Commit in the shell, and in each service repository after `workspace sync`. Star
    - `dotnet lockflight gate run` runs format → build → tests; `--profile pr` adds vulnerable packages, secrets and — when
      `gates.coverage.collector` is set — patch coverage, as the generated CI workflow does;
    - the Stop gate is **off**; turn it on (`stop.gate: true`) once you know how long build + tests take. It gets at most
-     540 s per turn (below the plugin's 600 s Stop hook timeout), whatever `gates.timeoutSeconds` says.
+     540 s per turn (below the plugin's 600 s Stop hook timeout), whatever `gates.timeoutSeconds` says. Once it is on,
+     `ledger retro` shows how many Stop gates ran, how many the cache of the last PASS answered, and their time in all.
 
 ## Standard profile
 
@@ -117,7 +118,7 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
   Claude Code starts (it sets `CLAUDECODE`) get plain text, so the agent never pays tokens for him. `LOCKFLIGHT_MASCOT=0`
   turns him off.
 - **In Claude Code's status line** (optional). `lockflight statusline` prints his face and the last verdict from the local
-  ledger, for example `guard blocked **/.env · 2m ago` or `Stop gate FAIL · just now`. The status line is shown to you only
+  ledger, for example `guard blocked **/.env · 2m ago`, `stop gate PASS · just now` or `Stop gate FAIL · just now`. The status line is shown to you only
   and costs no tokens. A plugin cannot set it, so add it to your user settings (`~/.claude/settings.json`) yourself, unless
   you already have a status line you want to keep:
 

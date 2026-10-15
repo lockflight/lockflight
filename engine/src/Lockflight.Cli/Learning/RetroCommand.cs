@@ -1,5 +1,6 @@
 using System.Globalization;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 
@@ -76,8 +77,9 @@ internal sealed class RetroCommand(CliContext context)
 
     private async Task WriteActivityAsync(IReadOnlyList<LedgerRecord> records)
     {
-        int gates = records.Count(record => record.Type == LedgerEventTypeNames.GateCompleted);
-        int passing = records.Count(record => record.Type == LedgerEventTypeNames.GateCompleted && record.Signature.Contains(LedgerSignatures.GatePassed, StringComparison.Ordinal));
+        LedgerRecord[] gateRuns = [.. records.Where(record => record.Type == LedgerEventTypeNames.GateCompleted && !StopTimings.IsTiming(record.Signature))];
+        int passing = gateRuns.Count(record => record.Signature.Contains(LedgerSignatures.GatePassed, StringComparison.Ordinal));
+        LedgerRecord[] stopHookRuns = [.. gateRuns.Where(record => record.Trigger == GateTriggerNames.StopHook)];
         int reds = records.Count(record => record.Signature.StartsWith(LedgerSignatures.RedPrefix, StringComparison.Ordinal));
         int acceptedReds = records.Count(record => record.Signature == LedgerSignatures.RedAccepted);
         int reviews = records.Count(record => record.Signature.StartsWith(LedgerSignatures.ReviewPrefix, StringComparison.Ordinal));
@@ -88,7 +90,15 @@ internal sealed class RetroCommand(CliContext context)
             .Sum();
 
         await context.Output.WriteLineAsync("## Activity\n");
-        await context.Output.WriteLineAsync($"- Gate runs: {gates} ({passing} PASS)");
+        await context.Output.WriteLineAsync($"- Gate runs: {gateRuns.Length} ({passing} PASS)");
+        if (stopHookRuns.Length > 0)
+        {
+            int cacheHits = stopHookRuns.Count(record => record.Cache == StopCacheResultNames.Hit);
+            double seconds = stopHookRuns.Sum(record => record.DurationMs ?? 0) / 1000.0;
+            await context.Output.WriteLineAsync(
+                string.Create(CultureInfo.InvariantCulture, $"- Stop hook gates: {stopHookRuns.Length} ({cacheHits} from the cache), {seconds:0.0} s in all"));
+        }
+
         await context.Output.WriteLineAsync($"- Hook blocks: {records.Count(record => record.Type == LedgerEventTypeNames.HookBlocked)}");
         await context.Output.WriteLineAsync($"- Reds: {reds} ({acceptedReds} accepted) · greens closed: {records.Count(record => record.Signature == LedgerSignatures.GreenAccepted)}");
         await context.Output.WriteLineAsync($"- Approvals: {records.Count(record => record.Signature.StartsWith(LedgerSignatures.ApprovePrefix, StringComparison.Ordinal))}");
