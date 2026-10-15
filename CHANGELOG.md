@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0-alpha.5] — 2026-10-15
+
 ### Added
 - `lockflight update` installs the newest engine from a package feed when Lockflight was not installed from source
   (`--source <feed>` to override); it works whatever SDK a project's `global.json` pins.
@@ -93,6 +95,7 @@ The first public release. Earlier versions were private previews; this entry sum
 - Levi, the pixel lock-keeper, in your terminal and, if you like, in Claude Code's status line (`lockflight statusline`). Only
   people see him.
 
-[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.4...HEAD
+[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.5...HEAD
+[0.2.0-alpha.5]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.4...v0.2.0-alpha.5
 [0.2.0-alpha.4]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.3...v0.2.0-alpha.4
 [0.2.0-alpha.3]: https://github.com/lockflight/lockflight/releases/tag/v0.2.0-alpha.3
