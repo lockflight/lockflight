@@ -5,11 +5,17 @@ namespace Lockflight.Cli.Lifecycle;
 /// <summary>
 /// Deterministic checks at the end of the specify and tasks phases. Tasks that belong to no user story (setup,
 /// foundational, polish) need no requirement; story tasks must cite known requirements, and within a story the test tasks come
-/// before the implementation tasks (stub declarations may come first).
+/// before the implementation tasks (stub declarations may come anywhere). A failure names each task, its line and why it was
+/// classified as it was, because the agent fixing tasks.md cannot see the classification rules.
 /// </summary>
 internal static class PhaseChecks
 {
     private const int MaxListed = 5;
+
+    private const string HowToMark = "Mark a test task with a '### Tests for …' heading above it, test wording at the start "
+        + "('Write tests …', 'Spec for …', 'Cover … with tests') or the test file it writes (*.spec.ts, *.test.ts, *Tests.cs, a *.Tests/ "
+        + "project); mark a stub declaration with 'stub', 'skeleton', 'declare signatures' or 'NotImplementedException' so it may "
+        + "come first; move implementation tasks after the story's last test task";
 
     public static IReadOnlyList<PhaseCheckItem> Specify(Feature feature)
     {
@@ -67,17 +73,14 @@ internal static class PhaseChecks
         items.Add(new("tasks.cite-requirements", uncited.Length == 0 && unknown.Length == 0, (uncited.Length, unknown.Length) switch
         {
             (0, 0) => "every story task cites known requirements",
-            (_, 0) => $"story tasks without (FR-xxx): {string.Join(", ", uncited.Take(MaxListed).Select(task => task.Id))}",
+            (_, 0) => $"story tasks that cite no FR-xxx: {Listed([.. uncited.Select(task => $"{task.Id} line {task.Line}")])}",
             _ => $"tasks cite requirements the spec does not define: {string.Join(", ", unknown.Take(MaxListed))}",
         }));
 
-        string[] misordered = [.. storyTasks
-            .GroupBy(task => task.Story)
-            .Where(story => !TestsFirst(story))
-            .Select(story => $"US{story.Key}")];
-        items.Add(new("tasks.tests-first", misordered.Length == 0, misordered.Length == 0
+        string[] outOfOrder = [.. storyTasks.GroupBy(task => task.Story).SelectMany(OutOfOrder)];
+        items.Add(new("tasks.tests-first", outOfOrder.Length == 0, outOfOrder.Length == 0
             ? "in every story the tests come before the implementation"
-            : $"implementation before tests (or no test task) in: {string.Join(", ", misordered)}"));
+            : $"{Listed(outOfOrder)}. {HowToMark}"));
 
         string[] unknownUnits = [.. Testing.TestWorkspaces.UnitsNamedIn(feature).Where(unit => !units.Contains(unit, StringComparer.OrdinalIgnoreCase)).Order(StringComparer.Ordinal)];
         if (unknownUnits.Length > 0 || units.Count > 0)
@@ -90,15 +93,24 @@ internal static class PhaseChecks
         return items;
     }
 
-    private static bool TestsFirst(IEnumerable<TaskLine> story)
+    /// <summary>The story's implementation tasks that come before its last test task, or the story itself when it has no test task.</summary>
+    private static IEnumerable<string> OutOfOrder(IGrouping<int?, TaskLine> story)
     {
-        TaskLine[] work = [.. story.Where(task => !IsStub(task)).OrderBy(task => task.Line)];
-        int firstImplementation = Array.FindIndex(work, task => !task.IsTest);
-        int lastTest = Array.FindLastIndex(work, task => task.IsTest);
-        return lastTest >= 0 && (firstImplementation < 0 || lastTest < firstImplementation);
+        TaskLine[] work = [.. story.Where(task => task.Role != TaskRole.Stub).OrderBy(task => task.Line)];
+        TaskLine? lastTest = work.LastOrDefault(task => task.Role == TaskRole.Test);
+        if (lastTest is null)
+        {
+            return [$"US{story.Key} has no test task"];
+        }
+
+        return work
+            .Where(task => task.Role == TaskRole.Implementation && task.Line < lastTest.Line)
+            .Select(task => $"{task.Id} line {task.Line}: {task.Reason} comes before test task {lastTest.Id} (line {lastTest.Line}) of US{story.Key}");
     }
 
-    private static bool IsStub(TaskLine task) => task.Description.Contains("stub", StringComparison.OrdinalIgnoreCase);
+    private static string Listed(string[] entries) => entries.Length > MaxListed
+        ? $"{string.Join("; ", entries.Take(MaxListed))}; and {entries.Length - MaxListed} more"
+        : string.Join("; ", entries);
 
     private static string Lines(IReadOnlyList<int> lines) => string.Join(", ", lines.Take(MaxListed));
 }

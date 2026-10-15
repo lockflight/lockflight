@@ -16,7 +16,8 @@ stop and ask, you never approve on the user's behalf.
 3. **Plan and tasks.** Run `/speckit-plan`, then `/speckit-tasks`. Every story task cites its requirements `(FR-001)`; within a
    story the stub declaration comes first, then the test tasks, then the implementation. Tests are mandatory here, whatever
    the stock `/speckit-tasks` text says (the Lockflight preset appends these rules to it). Run
-   `dotnet lockflight phase check tasks` until it passes.
+   `dotnet lockflight phase check tasks` until it passes; a failure names each misplaced task, its line and why it counted as
+   implementation.
 4. **Human gate — tasks.** Ask the user to approve with `/lockflight:approve tasks`. Wait.
 5. **Start.** `dotnet lockflight redgreen start` records the test inventory (once per feature) and runs the suite once. If it
    warns that tests already fail, tell the user: they decide whether to run `dotnet lockflight baseline tests` in their own

@@ -159,7 +159,7 @@ branch's commits since the merge base, so `--base` also scopes `format` (and `co
 
 | Command | Who | Purpose |
 |---|---|---|
-| `phase check specify\|tasks [--feature id]` | agent | deterministic phase-exit checks |
+| `phase check specify\|tasks [--feature id]` | agent | deterministic phase-exit checks; for tasks, a failure names each task, its line and how it was classified (test, stub or implementation) |
 | `approve spec\|tasks [--sign [--key file]]` | **human** | hash-bound approval, optional SSH signature |
 | `approve verify (--feature id \| --base ref) [--allowed-signers file] [--require spec,tasks]` | CI | verify records, hashes, signatures |
 | `redgreen start\|red\|green\|status` | agent | red/green cycles; tests locked while red; `red`/`green` refuse while the spec or tasks approval is stale or missing |
