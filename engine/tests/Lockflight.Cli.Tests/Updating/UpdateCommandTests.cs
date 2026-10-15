@@ -28,7 +28,7 @@ public sealed class UpdateCommandTests : IDisposable
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["update", "--project"], "", root.FullName, agent);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("own terminal", error, StringComparison.Ordinal);
+        Assert.Contains("separate terminal window", error, StringComparison.Ordinal);
     }
 
     [Fact]

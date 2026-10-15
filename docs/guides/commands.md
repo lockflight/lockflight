@@ -1,6 +1,12 @@
 # Commands
 
-Run every command as `dotnet lockflight <command>` in a project that pins the tool. `lockflight --help` prints the same list.
+In a project that is set up, run every command as `.lockflight/bin/lockflight <command>` from the project root (the directory
+holding `lockflight.yaml`). That is the engine the hooks run: `init`, `link` and `update` keep it at the pinned version, it works
+whatever way Lockflight was installed, and it needs no package feed (on Windows, Git Bash finds `lockflight.exe` by this name).
+The skills tell the agent to run it the same way. Before a project is linked, use `~/.lockflight/bin/lockflight` (installed from
+source) or `dotnet lockflight` (the tool pin, also what CI and teammates who restore the pin use). `lockflight --help` prints
+the same list.
+
 Commands that take `--feature <id>` resolve the feature in this order:
 1. the explicit `--feature`;
 2. Spec Kit's `.specify/feature.json` (a malformed file is an error, not a fallback);
@@ -17,7 +23,7 @@ option without its value is a usage error (exit 4); a value starting with `-` (f
 | Command | What it does |
 |---|---|
 | `init [--profile lite\|standard] [--ci pr\|manual\|none] [--no-link]` | Onboards the repository: `lockflight.yaml`, tool pin (in the existing `dotnet-tools.json`, else `.config/dotnet-tools.json`, else a new root one), `.gitignore`, `.claude/settings.json`, the CI workflow (installing every .NET channel the test projects target) and, for standard, `.gitattributes`. `--ci` sets when the workflow runs: `pr` (the default) on every pull request and push to `main`, `manual` only when started by hand (`workflow_dispatch`), `none` writes no workflow. Then it links the engine. Idempotent; it only merges into existing files. At a workspace shell root, a new manifest lists the child directories that look like units (their own repository, a solution, a `package.json`), and the child repositories are added to `.gitignore`. A root that builds by itself (a solution or project file at the root) is one repository: only child directories that are their own repository become units. |
-| `doctor` | Readiness report: manifest, tool pin, linked engine, `.gitignore`, Claude settings, Git Bash (Windows), PyYAML for Spec Kit, the Lockflight Spec Kit preset (a FAIL in the standard profile), the `claude` CLI, and — when `gates.coverage.collector` is set — the collector package in every test project. In a workspace it also checks:
+| `doctor` | Readiness report: manifest, tool pin, whether the pinned engine can be restored (a development build from `scripts/dev-install.sh` is on no package feed: doctor looks for it in the local feed `~/.lockflight/feed` and the NuGet tools cache, without the network), linked engine, `.gitignore`, Claude settings, Git Bash (Windows), PyYAML for Spec Kit, the Lockflight Spec Kit preset (a FAIL in the standard profile), the `claude` CLI, and — when `gates.coverage.collector` is set — the collector package in every test project. In a workspace it also checks:
 <ul>
 <li>that every unit is cloned;</li>
 <li>that no unit has its own <code>lockflight.yaml</code>;</li>
@@ -59,7 +65,9 @@ tests. A build that fails is a verdict (FAIL, or COMPILE_RED for a red).
 
 ## Human decisions
 
-These refuse to run inside a Claude Code session (exit 2). Run them in your own terminal.
+These refuse to run inside a Claude Code session (exit 2), and that includes a `!` command typed in Claude Code. Run them
+in a separate terminal window, not with `!` in Claude Code (a `!` command runs inside the session and is refused). The refusal prints the exact line to copy, for example
+`cd '/path/to/project' && .lockflight/bin/lockflight approve spec`.
 
 | Command | What it does |
 |---|---|

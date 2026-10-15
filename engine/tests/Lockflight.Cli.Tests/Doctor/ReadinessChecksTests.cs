@@ -6,6 +6,8 @@ namespace Lockflight.Cli.Tests.Doctor;
 
 public sealed class ReadinessChecksTests : IDisposable
 {
+    private const string DevelopmentVersion = "0.2.0-dev.20260101000000";
+
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-doctor-");
 
     [Fact]
@@ -101,6 +103,78 @@ public sealed class ReadinessChecksTests : IDisposable
         Assert.Contains("Git for Windows", check.Fix, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ADevelopmentPinOnNoLocalFeedAndNotInTheToolsCacheFails()
+    {
+        PinEngine(DevelopmentVersion);
+        string home = HomeWithUserInstall();
+
+        DoctorCheck check = ReadinessChecks.CheckPinRestorable(root.FullName, home, nugetPackages: null)!;
+
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.Contains(DevelopmentVersion, check.Detail, StringComparison.Ordinal);
+        Assert.Contains("~/.lockflight/bin/lockflight update", check.Fix, StringComparison.Ordinal);
+        Assert.Contains("separate terminal window", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithoutAnInstallFromSourceTheFixIsToInstallOne()
+    {
+        PinEngine(DevelopmentVersion);
+
+        DoctorCheck check = ReadinessChecks.CheckPinRestorable(root.FullName, Path.Combine(root.FullName, "home"), nugetPackages: null)!;
+
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.Contains("scripts/dev-install.sh", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADevelopmentPinOnlyInTheLocalFeedWarnsThatAPlainRestoreCannotGetIt()
+    {
+        PinEngine(DevelopmentVersion);
+        string home = HomeWithUserInstall();
+        Write($"home/.lockflight/feed/Lockflight.Cli.{DevelopmentVersion}.nupkg", string.Empty);
+
+        DoctorCheck check = ReadinessChecks.CheckPinRestorable(root.FullName, home, nugetPackages: null)!;
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("--add-source", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADevelopmentPinInTheToolsCachePasses()
+    {
+        PinEngine(DevelopmentVersion);
+        Directory.CreateDirectory(Path.Combine(root.FullName, "packages", "lockflight.cli", DevelopmentVersion));
+
+        DoctorCheck check = ReadinessChecks.CheckPinRestorable(root.FullName, Path.Combine(root.FullName, "home"), Path.Combine(root.FullName, "packages"))!;
+
+        Assert.Equal(CheckStatus.Pass, check.Status);
+    }
+
+    [Fact]
+    public void TheToolsCacheDefaultsToTheNuGetFolderInTheHome()
+    {
+        PinEngine(DevelopmentVersion);
+        Directory.CreateDirectory(Path.Combine(root.FullName, "home", ".nuget", "packages", "lockflight.cli", DevelopmentVersion));
+
+        DoctorCheck check = ReadinessChecks.CheckPinRestorable(root.FullName, Path.Combine(root.FullName, "home"), nugetPackages: null)!;
+
+        Assert.Equal(CheckStatus.Pass, check.Status);
+    }
+
+    [Fact]
+    public void AReleasePinIsNotLookedUpOnAnyFeed()
+    {
+        PinEngine("0.2.0-alpha.2");
+
+        Assert.Null(ReadinessChecks.CheckPinRestorable(root.FullName, Path.Combine(root.FullName, "home"), nugetPackages: null));
+    }
+
+    [Fact]
+    public void WithoutAPinThereIsNoRestoreCheck() =>
+        Assert.Null(ReadinessChecks.CheckPinRestorable(root.FullName, Path.Combine(root.FullName, "home"), nugetPackages: null));
+
     public void Dispose() => root.Delete(recursive: true);
 
     private async Task<DoctorCheck> CheckAsync(string name)
@@ -114,5 +188,14 @@ public sealed class ReadinessChecksTests : IDisposable
         string path = Path.Combine(root.FullName, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
+    }
+
+    private void PinEngine(string version) =>
+        Write("dotnet-tools.json", $$"""{ "version": 1, "isRoot": true, "tools": { "lockflight.cli": { "version": "{{version}}", "commands": ["lockflight"] } } }""");
+
+    private string HomeWithUserInstall()
+    {
+        Write("home/.lockflight/bin/lockflight", string.Empty);
+        return Path.Combine(root.FullName, "home");
     }
 }

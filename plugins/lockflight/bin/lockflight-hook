@@ -92,5 +92,9 @@ if [ "$tool" = "Bash" ]; then
     "dotnet tool restore"|"dotnet tool restore && dotnet lockflight link"|"dotnet lockflight link") exit 0 ;;
   esac
 fi
+if grep -rqs -e '-dev\.' "$root/.config/dotnet-tools.json" "$root/dotnet-tools.json"; then
+  echo "lockflight: engine not linked in this project, and the pin is a development build that no package feed has. Ask the user to run ~/.lockflight/bin/lockflight update in a separate terminal window (not with ! in Claude Code: that runs inside the session and is refused)." >&2
+  exit 2
+fi
 echo "lockflight: engine not installed in this project (pinned in dotnet-tools.json). Run exactly: dotnet tool restore && dotnet lockflight link" >&2
 exit 2

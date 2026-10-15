@@ -10,7 +10,7 @@ The plugin adds these skills to Claude Code. Claude picks them from what you ask
 | `status` | "what has Lockflight been doing?" | Readiness, lockdown, and recent blocks and verdicts from the ledger |
 | `gate` | "check the code", or before declaring a task done | Runs `gate run` and explains the verdict |
 | `feature` | "build feature X" | The standard lifecycle: specify → clarify → plan → tasks → red/green per story → trace → gates |
-| `approve` | **only you can invoke it** | Summarises exactly what would be approved and gives you the command to run in your own terminal |
+| `approve` | **only you can invoke it** | Summarises exactly what would be approved and gives you the command to run in a separate terminal window (not with `!` in Claude Code) |
 | `review` | "review this before the PR" | Runs the review of record and handles confirmed, unverified and not-reproduced findings |
 | `retro` | "what keeps going wrong?" | Runs `ledger retro` and walks through the suggested remedies |
 

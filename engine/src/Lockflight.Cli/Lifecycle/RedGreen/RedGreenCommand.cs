@@ -132,8 +132,8 @@ internal sealed class RedGreenCommand(CliContext context)
 
         await context.Output.WriteLineAsync($"WARN {failing.Length} {(failing.Length == 1 ? "test fails" : "tests fail")} before any change: {string.Join(", ", failing.Take(RedGreenSession.MaxTestsListed))}");
         await context.Output.WriteLineAsync(
-            "     Every green will be refused while they fail. If they fail for reasons outside this feature, ask the user to run " +
-            "'dotnet lockflight baseline tests' in their own terminal and to merge that baseline in its own pull request first: CI " +
+            "     Every green will be refused while they fail. If they fail for reasons outside this feature, " +
+            HumanOnlyCommands.AskTheUser("baseline tests") + ", and to merge that baseline in its own pull request first: CI " +
             "takes baselines from the base branch, so one added in the feature's pull request is discarded.");
     }
 

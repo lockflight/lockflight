@@ -98,6 +98,9 @@ check "pin mismatch: Write blocked"       2 "$proj"  "$(json "$proj" Write "$(fp
 check "pin mismatch: Read allowed"        0 "$proj"  "$(json "$proj" Read "$(fp "$proj/src/a.cs")")"
 check "pin mismatch: restore+link allowed" 0 "$proj" "$(json "$proj" Bash "\"command\":\"dotnet tool restore && dotnet lockflight link\"")"
 check "pin mismatch: other Bash blocked"  2 "$proj"  "$(json "$proj" Bash "\"command\":\"dotnet build\"")"
+sed 's/"9.9.9"/"9.9.9-dev.1"/' "$proj/dotnet-tools.json" > "$WORK/t" && mv "$WORK/t" "$proj/dotnet-tools.json"
+check "dev pin mismatch: Write blocked"   2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
+if grep -q 'lockflight update' "$WORK/err"; then pass=$((pass+1)); echo "dev pin mismatch: names update: ok"; else fail=$((fail+1)); echo "dev pin mismatch: names update: FAIL ($(head -c 400 "$WORK/err"))"; fi
 case "$ENGINE" in
   *.exe) ;;
   *)

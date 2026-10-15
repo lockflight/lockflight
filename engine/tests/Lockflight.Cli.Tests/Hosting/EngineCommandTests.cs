@@ -7,7 +7,9 @@ public sealed class EngineCommandTests
     [Theory]
     [InlineData("/home/u/.lockflight/tools/0.2.0-dev.1/lockflight", EngineCommand.UserInstall)]
     [InlineData("/home/u/.lockflight/bin/lockflight", EngineCommand.UserInstall)]
-    [InlineData("/home/u/project/.lockflight/bin/lockflight", EngineCommand.Tool)]
+    [InlineData("/home/u/project/.lockflight/bin/lockflight", EngineCommand.Linked)]
+    [InlineData("/home/u/project/.lockflight/bin/lockflight.exe", EngineCommand.Linked)]
+    [InlineData("/home/u/project/tools/lockflight", EngineCommand.Tool)]
     [InlineData("/home/u/.nuget/packages/lockflight.cli/0.2.0/tools/lockflight", EngineCommand.Tool)]
     public void TheCommandFollowsWhereTheEngineRunsFrom(string processPath, string expected)
     {

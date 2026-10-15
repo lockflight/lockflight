@@ -14,8 +14,9 @@ internal static class ClaudeMdBlock
         {Begin}
         ## Lockflight
 
-        This project is gated by Lockflight: checks, not instructions, decide when work is done. `lockflight` below is
-        `dotnet lockflight`, or `~/.lockflight/bin/lockflight` when Lockflight was installed from source.
+        This project is gated by Lockflight: checks, not instructions, decide when work is done. Run Lockflight as
+        `.lockflight/bin/lockflight <command>` from this directory: it is the engine the hooks run and works however Lockflight
+        was installed (`lockflight` below means that).
 
         - **Done means a gate verdict.** Before you report a task done or commit, run `lockflight gate run` and report its
           verdict. FAIL or NOT-EARNED means not done.
@@ -25,9 +26,11 @@ internal static class ClaudeMdBlock
           needs one changed (a rename, a package bump), write the complete new file in your scratch directory and run
           `lockflight propose <path> --from <file>` (`<path> --delete` to remove one; several pairs in one call), then give
           the user the `git apply` command it prints. It writes one patch per file and applies nothing.
-        - **Human decisions** are run by the user in their own terminal; ask, never run them: `lockflight approve` (sign off a
-          spec or tasks), `lockflight baseline` (accept build warnings, failing tests or package advisories the project
-          already has) and `lockflight redgreen reset` (discard a feature's test-first evidence).
+        - **Human decisions** are the user's; ask, never run them. They run them in a separate terminal window (not with `!`
+          in Claude Code: that runs inside the session and is refused): `lockflight approve` (sign off a spec or tasks),
+          `lockflight baseline` (accept build warnings, failing tests or package advisories the project already has),
+          `lockflight redgreen reset` (discard a feature's test-first evidence), `lockflight adopt apply|undo` and
+          `lockflight update`.
         - Start Claude Code at this directory so these settings load. `lockflight doctor` shows what is missing.
         {End}
         """;

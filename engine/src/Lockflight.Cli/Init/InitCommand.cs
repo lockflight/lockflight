@@ -103,7 +103,7 @@ internal sealed class InitCommand(CliContext context)
         ExitCode linkResult = await new LinkCommand(rootContext).RunAsync(cancellationToken);
         if (linkResult == ExitCode.Pass)
         {
-            await context.Output.WriteLineAsync($"Next: commit these files, then run `{EngineCommand.Name} doctor`.");
+            await context.Output.WriteLineAsync($"Next: commit these files, then run `{EngineCommand.Linked} doctor` from the project root.");
         }
 
         return linkResult;

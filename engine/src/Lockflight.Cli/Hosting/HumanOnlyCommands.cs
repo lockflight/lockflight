@@ -10,6 +10,15 @@ namespace Lockflight.Cli.Hosting;
 /// </summary>
 internal static class HumanOnlyCommands
 {
+    /// <summary>
+    /// Where a person runs a reserved command. A <c>!</c> command in Claude Code runs inside the session (with <c>CLAUDECODE</c> set),
+    /// so the engine refuses it there too.
+    /// </summary>
+    public const string WhereToRun = "in a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused)";
+
+    /// <summary>A command and its verb (<c>approve spec</c>, <c>redgreen reset</c>): what a refusal names.</summary>
+    private const int CommandWords = 2;
+
     /// <summary>Command words (subcommand, optional sub-subcommand) reserved for a person.</summary>
     private static readonly string[][] Reserved = [["baseline"], ["approve"], ["redgreen", "reset"], ["adopt", "apply"], ["adopt", "undo"], ["update"]];
 
@@ -18,6 +27,18 @@ internal static class HumanOnlyCommands
         && !(args.Count >= 2 && args[0] == "approve" && args[1] == "verify");
 
     public static bool RunsUnderAgent(EnvironmentReader environment) => environment.Get(EnvironmentVariables.ClaudeCode) == "1";
+
+    /// <summary>What the agent is told when a reserved command is due: who runs it, with which command line, and where.</summary>
+    public static string AskTheUser(string command) =>
+        $"ask the user to run '{EngineCommand.Name} {command}' from the project root {WhereToRun}";
+
+    /// <summary>
+    /// The engine's refusal of a reserved command run inside a Claude Code session, ending with the exact command line a person
+    /// copies into another terminal: <c>cd</c> to <paramref name="directory"/>, then <paramref name="engine"/> with the same arguments.
+    /// </summary>
+    public static string Refusal(IReadOnlyList<string> args, string directory, string engine) =>
+        $"lockflight: '{string.Join(' ', args.Take(CommandWords))}' records a human decision and does not run inside a Claude Code session. "
+        + $"Run it {WhereToRun}:\n  cd {ShellQuoting.Quote(directory)} && {engine} {string.Join(' ', args.Select(ShellQuoting.QuoteIfNeeded))}";
 
     /// <summary>Finds a reserved command in a shell command line: <c>lockflight …</c>, <c>dotnet lockflight …</c> or a path to the binary.</summary>
     public static string? FindIn(string command, ShellDialect dialect)

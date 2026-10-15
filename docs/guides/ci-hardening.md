@@ -39,7 +39,7 @@ Only the PR's own commits are scanned for secrets, so existing history in a brow
 **Baselines go in their own pull request.** Because the workflow takes `.lockflight/baselines/` from the base branch, a
 baseline committed in a feature's pull request is discarded when that pull request is judged, by design. When a brownfield
 repository has tests that already fail (or warnings, or advisories) that a feature should not own, run
-`dotnet lockflight baseline tests` (or `build`, `deps`) yourself, merge that baseline in a separate pull request first, then
+`.lockflight/bin/lockflight baseline tests` (or `build`, `deps`) yourself in a separate terminal window, merge that baseline in a separate pull request first, then
 continue the feature. `redgreen start` warns when tests already fail before the feature changes anything.
 
 **Multi-targeted test projects.** `init` reads the test projects' `TargetFramework(s)` and makes `setup-dotnet` install every

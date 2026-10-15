@@ -26,5 +26,5 @@ internal static class ManifestRequirement
         $"lockflight: {error.Describe()}. Fix {Manifest.FileName} (a person's change: it is protected) and run the command again.";
 
     private static string Missing(string startDirectory) =>
-        $"lockflight: no {Manifest.FileName} from {startDirectory} upwards; run 'dotnet lockflight init' first";
+        $"lockflight: no {Manifest.FileName} from {startDirectory} upwards; run '{EngineCommand.Name} init' first";
 }

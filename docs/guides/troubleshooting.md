@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Start with `dotnet lockflight doctor` (or ask Claude to run the `lockflight:doctor` skill). Every `FAIL` or `warn` line has a
+Start with `.lockflight/bin/lockflight doctor` from the project root (or ask Claude to run the `lockflight:doctor` skill). Every `FAIL` or `warn` line has a
 fix after the `→`.
 
 ## Every tool call is blocked: "engine not installed in this project"
@@ -14,6 +14,23 @@ dotnet tool restore && dotnet lockflight link
 dotnet tool restore
 dotnet lockflight link
 ```
+
+With an install from source the pin is a development build that no package feed has, so these commands cannot restore it.
+Run `~/.lockflight/bin/lockflight link` yourself from the project root, or `~/.lockflight/bin/lockflight update` (which also
+re-pins) in a separate terminal window: not with `!` in Claude Code, where `update` is refused.
+
+## `dotnet lockflight` fails: the pinned version is not found
+
+`doctor` reports **pin restorable** as FAIL: the project pins a development build (`0.2.0-dev.…`, from `scripts/dev-install.sh`)
+that is neither in this machine's local feed (`~/.lockflight/feed`) nor in the NuGet tools cache, so `dotnet tool restore` and
+`dotnet lockflight` cannot get it. Typically the pin came from a teammate's install, or from an older install whose packages were
+cleaned up. The hooks are not affected while the linked engine is there, and the agent runs `.lockflight/bin/lockflight`, not
+`dotnet lockflight`.
+
+Fix: run `~/.lockflight/bin/lockflight update` in the project, in a separate terminal window, not with `!` in Claude Code (a `!` command runs inside the session and is refused). It re-pins the project to your installed engine and
+links it; commit `dotnet-tools.json`. Without an install from source, run `scripts/dev-install.sh` in a Lockflight checkout
+first. When doctor only warns that the version is in the local feed, `dotnet tool restore --add-source ~/.lockflight/feed`
+restores it.
 
 ## Every write is blocked: "the project is in lockdown"
 
@@ -32,7 +49,7 @@ show you the change but cannot make it.
 The linked binary is older or newer than the version pinned in `dotnet-tools.json` — typically after a version bump was pulled.
 A stale engine must not judge the project with old rules, so it behaves like recovery mode: the read-only tools and exactly the
 restore commands above are allowed (the agent may run `dotnet tool restore && dotnet lockflight link` itself); every other tool
-call is blocked with that command.
+call is blocked with that command. For a development pin, use the commands for an install from source above.
 
 If the message says **"the engine pin cannot be read"**, `dotnet-tools.json` is malformed. It is protected, so fix it yourself,
 then run the restore command.
@@ -40,14 +57,14 @@ then run the restore command.
 ## "lockflight: internal error" or "the engine failed (exit N)"
 
 The engine broke while deciding a hook. Hooks fail closed: a tool call is blocked, while Stop and SessionStart are allowed with
-the error on stderr, so a session is never bricked. Run `dotnet lockflight doctor`; if the error repeats, run the failing command
+the error on stderr, so a session is never bricked. Run `.lockflight/bin/lockflight doctor` from the project root; if the error repeats, run the failing command
 with `LOCKFLIGHT_DEBUG=1` and report it. A `LOCKFLIGHT_HOOK_LOG` that points at a path that cannot be written is reported and
 skipped; it never blocks.
 
 ## The agent needs to change a protected file
 
 The block is intended. The agent writes the complete new file outside the project and runs
-`dotnet lockflight propose <path> --from <file>` (or `<path> --delete`); you read the patch it prints and apply it with the
+`.lockflight/bin/lockflight propose <path> --from <file>` (or `<path> --delete`); you read the patch it prints and apply it with the
 printed `git apply` command at the project root. See
 [proposing a protected change](guardrails-and-boundaries.md#proposing-a-protected-change).
 
@@ -96,20 +113,20 @@ also rewrites the rest of the file, which an upstream pull request may not want.
 `gates.coverage.collector` is set, but a test project does not reference the collector's package, so `dotnet test --coverage`
 (or `--coverlet`) is an unknown option and the test application exits 5. Add `Microsoft.Testing.Extensions.CodeCoverage`
 (collector `microsoft`) or `coverlet.MTP` (collector `coverlet`) to every test project, or remove the setting.
-`dotnet lockflight doctor` lists the projects that miss it.
+`.lockflight/bin/lockflight doctor` lists the projects that miss it.
 
 ## `redgreen green` says "other tests fail" for tests the feature never touched
 
 `redgreen start` runs the suite once and warns when tests already fail before any change (often for environmental reasons,
 such as a test that needs an older SDK). Every green is refused while they fail. If they are not the feature's business, run
-`dotnet lockflight baseline tests` **in your own terminal** and merge that baseline in **its own pull request first**: CI takes
+`.lockflight/bin/lockflight baseline tests` **in a separate terminal window** (not with `!` in Claude Code) and merge that baseline in **its own pull request first**: CI takes
 baselines from the base branch, so a baseline committed in the feature's pull request is discarded there by design
 ([CI hardening](ci-hardening.md)).
 
 ## `redgreen red`/`green` refuse: "approval is stale"
 
-Approvals bind `spec.md`, `plan.md` and `tasks.md` by hash. After an edit, red/green refuses until you approve again in your
-own terminal (`dotnet lockflight approve spec` or `approve tasks`). `trace` prints a warning line instead of refusing.
+Approvals bind `spec.md`, `plan.md` and `tasks.md` by hash. After an edit, red/green refuses until you approve again in a
+separate terminal window (`.lockflight/bin/lockflight approve spec` or `approve tasks`). `trace` prints a warning line instead of refusing.
 
 ## Windows
 
@@ -117,8 +134,10 @@ The hook shim is a POSIX script, so Claude Code on Windows needs **Git Bash**. `
 
 ## "records a human decision and does not run inside a Claude Code session"
 
-`approve`, `baseline` and `redgreen reset` are refused when `CLAUDECODE=1` is set. That variable is set inside Claude Code
-sessions, including the `!` prefix. Run these commands in a separate terminal.
+`approve`, `baseline`, `redgreen reset`, `adopt apply|undo` and `update` are refused when `CLAUDECODE=1` is set. That variable
+is set inside Claude Code sessions, and a command typed with the `!` prefix runs inside the session too, so it is refused as
+well. Open a separate terminal window and paste the line the refusal prints: it changes to the project root and runs the same
+command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approve spec`.
 
 ## Uninstall
 

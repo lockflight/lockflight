@@ -5,8 +5,9 @@ description: Run Lockflight's deterministic gates (format, build, tests; with --
 
 # Lockflight gate
 
-1. Run `dotnet lockflight gate run --profile stop` (or `--profile pr` when the user asks for the full CI set) from the repository
-   root. Add `--result artifacts/lockflight/result.json` when the user wants the JSON envelope.
+1. Run `.lockflight/bin/lockflight gate run --profile stop` (or `--profile pr` when the user asks for the full CI set) from the
+   project root (the directory holding `lockflight.yaml`; `.lockflight/bin/lockflight` is the engine the hooks run). Add
+   `--result artifacts/lockflight/result.json` when the user wants the JSON envelope.
 2. Read the last two lines: `Scope: …` (what was judged, such as `N tests`) and `Result: <VERDICT>`.
    - **PASS** — every step passed over a non-empty scope.
    - **N/A** — no step applied to this run (for example `--profile edit` with no changed C# lines); exit 0. Say that nothing

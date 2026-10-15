@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
@@ -93,6 +94,16 @@ public sealed class HookRobustnessTests : IDisposable
     }
 
     [Fact]
+    public async Task TheSessionBannerNamesTheEngineCommandAndWhereHumanDecisionsRun()
+    {
+        (_, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName);
+        string banner = JsonNode.Parse(output)!["hookSpecificOutput"]!["additionalContext"]!.GetValue<string>();
+
+        Assert.Contains($"Always run Lockflight commands as .lockflight/bin/lockflight <command> from {projectRoot.FullName}", banner, StringComparison.Ordinal);
+        Assert.Contains("not with `!` in Claude Code", banner, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task TheSessionBannerStaysShortWithAHugeManifest()
     {
         string globs = string.Concat(Enumerable.Range(0, 2000).Select(index => $"  - generated/{index}/**\n"));
@@ -143,6 +154,8 @@ public sealed class HookRobustnessTests : IDisposable
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Contains("records a human decision", error, StringComparison.Ordinal);
+        Assert.Contains("not with `!` in Claude Code", error, StringComparison.Ordinal);
+        Assert.Contains($"cd '{projectRoot.FullName}' && dotnet lockflight approve spec", error, StringComparison.Ordinal);
     }
 
     private string BashPayload(string command) => JsonSerializer.Serialize(new Dictionary<string, object>

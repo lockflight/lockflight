@@ -52,9 +52,10 @@ internal static class AdoptionPlanWriter
     {
         StringBuilder text = new();
         text.AppendLine("# Lockflight adoption plan").AppendLine()
-            .AppendLine($"Made {plan.At:yyyy-MM-dd HH:mm} UTC for `{plan.Root}`. Review it, then run `{EngineCommand.Name} adopt apply` in your own")
-            .AppendLine("terminal (it backs up first; `adopt undo` restores). Nothing is replaced automatically: the team's own hooks, skills and")
-            .AppendLine("agents stay, and become protected from the agent.").AppendLine();
+            .AppendLine($"Made {plan.At:yyyy-MM-dd HH:mm} UTC for `{plan.Root}`. Review it, then run `{EngineCommand.Name} adopt apply` from the")
+            .AppendLine($"project root {HumanOnlyCommands.WhereToRun}.")
+            .AppendLine("It backs up first; `adopt undo` restores. Nothing is replaced automatically: the team's own hooks, skills and agents")
+            .AppendLine("stay, and become protected from the agent.").AppendLine();
         foreach (IGrouping<AdoptionArea, AdoptionItem> area in plan.Items.GroupBy(item => item.Area).OrderBy(group => group.Key))
         {
             text.AppendLine($"## {Title(area.Key)}").AppendLine().AppendLine("| Item | Action | Why |").AppendLine("|---|---|---|");
