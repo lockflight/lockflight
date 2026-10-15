@@ -18,6 +18,9 @@ internal static class PatchBuilder
     private const string NullDevice = "/dev/null";
     private const string PatchFileName = "proposal.patch";
 
+    /// <summary>Ends git's options, so a file named like an option (<c>-x.txt</c>) is still a path.</summary>
+    private const string EndOfOptions = "--";
+
     /// <summary><c>git diff --no-index</c> exits 1 when the files differ, which is the expected outcome here.</summary>
     private const int DifferencesFound = 1;
 
@@ -54,6 +57,11 @@ internal static class PatchBuilder
                 ? PatchBuild.Failed("git treats the file as binary, which a text patch cannot carry")
                 : PatchBuild.Built(patch);
         }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A name the temporary directory cannot hold (too long for it, say) is a refusal, not a crash.
+            return PatchBuild.Failed($"could not stage the file for git diff: {exception.Message}");
+        }
         finally
         {
             if (Directory.Exists(staging))
@@ -70,9 +78,9 @@ internal static class PatchBuilder
     /// </summary>
     private static (string Directory, string[] Paths) Operands(string staging, ProposalTarget target) => target.Change switch
     {
-        ProposalChange.Added => (Path.Combine(staging, After), [.. Prefixes, NullDevice, target.RelativePath]),
-        ProposalChange.Deleted => (Path.Combine(staging, Before), [.. Prefixes, target.RelativePath, NullDevice]),
-        _ => (staging, ["--no-prefix", $"{Before}/{target.RelativePath}", $"{After}/{target.RelativePath}"]),
+        ProposalChange.Added => (Path.Combine(staging, After), [.. Prefixes, EndOfOptions, NullDevice, target.RelativePath]),
+        ProposalChange.Deleted => (Path.Combine(staging, Before), [.. Prefixes, EndOfOptions, target.RelativePath, NullDevice]),
+        _ => (staging, ["--no-prefix", EndOfOptions, $"{Before}/{target.RelativePath}", $"{After}/{target.RelativePath}"]),
     };
 
     private static void Stage(string tree, string relativePath, byte[]? content, UnixFileMode? mode)

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Lockflight.Cli.Paths;
 
 namespace Lockflight.Cli.Proposals;
 
@@ -21,13 +22,22 @@ internal static class ProposalFiles
         string directory = Path.Combine(projectRoot, RelativeDirectory.Replace('/', Path.DirectorySeparatorChar));
         string stem = $"{now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}-{Slug(relativePath)}";
         string path = Path.Combine(directory, stem + Extension);
-        for (int attempt = 2; File.Exists(path); attempt++)
+        for (int attempt = 2; Path.Exists(path); attempt++)
         {
             path = Path.Combine(directory, $"{stem}-{attempt}{Extension}");
         }
 
         return path;
     }
+
+    /// <summary>
+    /// Why patches cannot be written under <see cref="RelativeDirectory"/>: a part of it is a symbolic link (the patch would land
+    /// wherever it points) or a file. Null when they can.
+    /// </summary>
+    public static string? DirectoryProblem(string projectRoot) =>
+        ProjectDirectories.Problem(projectRoot, RelativeDirectory) is string problem
+            ? $"{problem}, so a patch cannot be written safely; ask the person to replace it with a directory"
+            : null;
 
     /// <summary>The path in lower-case letters, digits and single dashes (<c>src/Directory.Build.props</c> → <c>src-directory-build-props</c>).</summary>
     public static string Slug(string relativePath)

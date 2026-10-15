@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Lifecycle;
 
@@ -28,6 +29,13 @@ internal static class FeatureLocator
         [LockflightDirectory, FeaturesDirectory, string id, _, ..] => id,
         _ => null,
     };
+
+    /// <summary>
+    /// Whether <paramref name="id"/> is a feature ID that can only name a directory directly under <c>specs/</c>: not empty, not
+    /// <c>.</c> or <c>..</c>, no path separator and no control character.
+    /// </summary>
+    public static bool IsPlainId(string id) =>
+        id.Length > 0 && id is not "." and not ".." && id.IndexOfAny(['/', '\\']) < 0 && TerminalText.IsPlainName(id);
 
     public static FeatureLookup Resolve(string root, string? requested)
     {

@@ -93,6 +93,8 @@ internal static class CliApplication
 
     public static async Task<ExitCode> RunAsync(string[] args, CliContext context, CancellationToken cancellationToken)
     {
+        // Every command prints names and text from the project; none of it may reach the terminal as control sequences.
+        context = context.ForTerminal();
         if (args.Length == 0 || args.Any(arg => arg is "-h" or "--help"))
         {
             await context.Output.WriteLineAsync(Usage);

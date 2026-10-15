@@ -25,7 +25,8 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest)
     private static readonly string[] ValueOptions = ["--feature", "--key"];
     private static readonly string[] Flags = ["--sign"];
 
-    public static bool Handles(HookInput input) => input.CommandName == CommandName;
+    /// <summary>Any spelling of the command: a differently cased one is refused rather than passed to the agent unchecked.</summary>
+    public static bool Handles(HookInput input) => string.Equals(input.CommandName, CommandName, StringComparison.OrdinalIgnoreCase);
 
     public async Task<SessionApprovalResult> DecideAsync(HookInput input, CancellationToken cancellationToken)
     {
@@ -54,6 +55,16 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest)
             || CommandOptions.Parse(split.OptionWords, ValueOptions, Flags) is not { Options: CommandOptions options })
         {
             return Refuse("usage", $"/{CommandName} takes {words[0]}, then optionally --feature <id>, --sign, --key <file> and the code it showed you", words);
+        }
+
+        if (options.Value("--feature") is string requested && !FeatureLocator.IsPlainId(requested))
+        {
+            return Refuse("usage", $"--feature takes a feature ID, the name of a directory under {FeatureLocator.SpecsDirectory}/, not a path", words);
+        }
+
+        if (Codes().StateProblem(phase) is string problem)
+        {
+            return Refuse("unsafe-state", $"{problem}; only the engine writes there, so remove it and type the command again", words);
         }
 
         return split.Code is string code

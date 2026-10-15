@@ -16,4 +16,16 @@ internal sealed record CliContext(TextReader Input, TextWriter Output, TextWrite
 
     /// <summary>Whether <see cref="Output"/> is a terminal a person reads (not a pipe or a file); false unless the host says so.</summary>
     public bool OutputIsTerminal { get; init; }
+
+    /// <summary>
+    /// <see cref="Output"/> without <see cref="TerminalSafeWriter"/>, for the engine's own escape sequences only (Levi's colours);
+    /// text from the project never goes here unless <see cref="TerminalText.Clean(string)"/> has made it printable. Null means
+    /// <see cref="Output"/> is not wrapped.
+    /// </summary>
+    public TextWriter? RawOutput { get; init; }
+
+    /// <summary>This context with standard output and error passed through <see cref="TerminalSafeWriter"/>.</summary>
+    public CliContext ForTerminal() => RawOutput is not null
+        ? this
+        : this with { Output = new TerminalSafeWriter(Output), Error = new TerminalSafeWriter(Error), RawOutput = Output };
 }
