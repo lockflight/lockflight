@@ -1,10 +1,12 @@
+using Lockflight.Cli.Gates;
 using Lockflight.Cli.Ledger;
 
 namespace Lockflight.Cli.Learning;
 
 /// <summary>
 /// Turns ledger records into incident clusters ($0, deterministic). Not incidents: passing gates, accepted reds and greens,
-/// approvals, configuration writes and rejected greens (normal test-first iteration).
+/// approvals, configuration writes and rejected greens (normal test-first iteration); per-unit Stop times; and the Stop hook's
+/// own gate lines, because a red Stop gate is already counted once as its hook block.
 /// </summary>
 internal static class IncidentClustering
 {
@@ -24,7 +26,8 @@ internal static class IncidentClustering
     public static bool IsIncident(LedgerRecord record) => record.Type switch
     {
         LedgerEventTypeNames.HookBlocked => true,
-        LedgerEventTypeNames.GateCompleted => !record.Signature.Contains(LedgerSignatures.GatePassed, StringComparison.Ordinal),
+        LedgerEventTypeNames.GateCompleted => !record.Signature.Contains(LedgerSignatures.GatePassed, StringComparison.Ordinal)
+            && !StopTimings.IsTiming(record.Signature) && record.Trigger != GateTriggerNames.StopHook,
         LedgerEventTypeNames.EvidenceRecorded => record.Signature is LedgerSignatures.RedRejected or LedgerSignatures.RedCompileError
             or LedgerSignatures.ReviewChanges or LedgerSignatures.ReviewUnverified,
         _ => false,

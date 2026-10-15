@@ -78,6 +78,14 @@ internal sealed class ApprovalStore(Feature feature)
         return new ApprovalCheck(phase, changed.Length == 0 ? ApprovalState.Valid : ApprovalState.Stale, Text(record["approvedBy"]), changed);
     }
 
+    /// <summary>Each artifact the phase binds with the hash of its current content, or <c>absent</c> when it does not exist.</summary>
+    public IEnumerable<(string Name, string Hash)> CurrentHashes(ApprovalPhase phase) =>
+        ApprovalPhaseNames.ArtifactsOf(phase).Select(name =>
+        {
+            string path = Path.Combine(feature.SpecDirectory, name);
+            return (name, File.Exists(path) ? ArtifactHash.Of(path) : Absent);
+        });
+
     private static ApprovalCheck Invalid(ApprovalPhase phase, string problem) => new(phase, ApprovalState.Invalid, null, [], problem);
 
     private static JsonNode? Read(string path)
@@ -94,11 +102,4 @@ internal sealed class ApprovalStore(Feature feature)
 
     /// <summary>A string value; null for anything else (absent, a number, an object), so a malformed record never throws.</summary>
     private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue(out string? text) ? text : null;
-
-    private IEnumerable<(string Name, string Hash)> CurrentHashes(ApprovalPhase phase) =>
-        ApprovalPhaseNames.ArtifactsOf(phase).Select(name =>
-        {
-            string path = Path.Combine(feature.SpecDirectory, name);
-            return (name, File.Exists(path) ? ArtifactHash.Of(path) : Absent);
-        });
 }

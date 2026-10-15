@@ -5,7 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- The ledger records what started each gate run (`command` or `stop-hook`), how long it took and whether the Stop cache
+  answered it; `ledger retro` shows how many Stop gates ran, how many the cache answered and their total time.
+
+### Changed
+- Approvals are recorded in the ledger as `approval.recorded`, with the feature, phase, artifact hash prefixes and signing
+  status, and no longer include the approver's email.
+
 ### Fixed
+- Per-unit Stop timings are no longer counted as incidents in `ledger retro` or shown as verdicts in the status line.
 - `phase check tasks` names each misplaced task with its line and why it counted as implementation, and says how to mark test
   and stub tasks.
 - `phase check tasks` recognises frontend and test-file tasks ("Spec for …", `*.spec.ts`, `*.test.tsx`, `*Tests.cs`, "Cover …
