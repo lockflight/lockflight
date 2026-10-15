@@ -31,7 +31,8 @@ internal static class CliApplication
           init [--profile lite|standard] [--no-link]    onboard: manifest, tool pin, settings, CI job, link
           doctor                                        readiness report with fixes
           statusline                                    Claude Code status line: Levi and the last verdict
-          update                                        you: pull, rebuild and reinstall Lockflight, re-pin this project
+          update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
+                                                        package feed), re-pin this project
           adopt plan                                    inventory an existing Claude Code / Spec Kit setup into
                                                         .lockflight/adopt/plan.md (read only)
           workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,

@@ -11,8 +11,8 @@ user to run them in a separate terminal window (not with `!` in Claude Code: tha
 
 Which engine command to run:
 
-- **Until `init` has linked the project**, `<lockflight>` is `~/.lockflight/bin/lockflight` when that file exists (installed
-  from source by `scripts/dev-install.sh`, which works whatever SDK the project's `global.json` pins), otherwise
+- **Until `init` has linked the project**, `<lockflight>` is `~/.lockflight/bin/lockflight` when that file exists (the user
+  install, from a package or from source by `scripts/dev-install.sh`; it works whatever SDK the project's `global.json` pins), otherwise
   `dotnet lockflight`.
 - **Once `init` has linked it**, run every command as `.lockflight/bin/lockflight <command>` from the project root: it is the
   engine the hooks run, and it works whatever way Lockflight was installed. `dotnet lockflight` is only for CI and for
@@ -35,15 +35,17 @@ Check each of these, and stop with the exact install command if one is missing:
 - Standard profile: `uv` is installed and `python3 -c "import yaml"` works.
 
 If a `global.json` pins an SDK older than 10, `dotnet lockflight` cannot run there. Use `~/.lockflight/bin/lockflight` (and
-`.lockflight/bin/lockflight` once linked), or ask the user to run `scripts/dev-install.sh` from a Lockflight checkout.
+`.lockflight/bin/lockflight` once linked), or ask the user to install it for their user (Install from a package in the getting-started guide, or
+`scripts/dev-install.sh` from a Lockflight checkout).
 
 ## 2. Engine and plugin
 
 - **No `~/.lockflight/bin/lockflight` and no tool pin yet:**
   1. Run `dotnet new tool-manifest` if the repository has no `dotnet-tools.json` or `.config/dotnet-tools.json`.
   2. Run `dotnet tool install Lockflight.Cli --local --prerelease`.
-  3. If the package is not found (the private preview has no public feed), ask the user to install from source:
-     `scripts/dev-install.sh` in a Lockflight checkout. Never suggest storing a feed token in a NuGet config, and do not edit
+  3. If the package is not found (the private preview has no public feed), or a `global.json` pins an SDK older than 10, ask
+     the user to install the engine for their user: `cd ~ && dotnet tool install Lockflight.Cli --prerelease --tool-path
+     ~/.lockflight/bin` once the package is published, else `scripts/dev-install.sh` in a Lockflight checkout. Never suggest storing a feed token in a NuGet config, and do not edit
      `nuget.config`: it is protected.
 - **`~/.lockflight/bin/lockflight` exists and the project already pins a different dev version** (`doctor` reports the pin or
   link as behind, or the pin as not restorable): ask the user to run `~/.lockflight/bin/lockflight update` in the project

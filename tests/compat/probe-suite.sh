@@ -49,6 +49,13 @@ checkexp "not restored: approve expansion"   0 cli 1 "$(expansion "$proj" lockfl
 checkenv "env dir, no manifest: Write"     0 "$plain" "$(json "$plain" Write "$(fp "$plain/a")")"
 checkenv "env dir, not restored: Write"    2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 checkenv "env dir, not restored: Read"     0 "$proj"  "$(json "$proj" Read "$(fp "$proj/src/a.cs")")"
+cp "$proj/dotnet-tools.json" "$WORK/pin"
+for dev in "$version-x.dev.1" 9.9.9-dev.1; do
+  printf '{"version":1,"isRoot":true,"tools":{"lockflight.cli":{"version":"%s","commands":["lockflight"]}}}' "$dev" > "$proj/dotnet-tools.json"
+  check "not restored, dev pin $dev: Write" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
+  if grep -q 'lockflight update' "$WORK/err"; then pass=$((pass+1)); echo "not restored, dev pin: names update: ok"; else fail=$((fail+1)); echo "not restored, dev pin: names update: FAIL ($(head -c 400 "$WORK/err"))"; fi
+done
+mv "$WORK/pin" "$proj/dotnet-tools.json"
 
 mkdir -p "$proj/.lockflight/bin"; case "$ENGINE" in *.exe) cp "$ENGINE" "$proj/.lockflight/bin/lockflight.exe" ;; *) cp "$ENGINE" "$proj/.lockflight/bin/lockflight" ;; esac
 # A blocked call cannot tell "the guard said no" from "the engine failed", so an engine that cannot run on its own (e.g. a
@@ -113,6 +120,13 @@ check "pin mismatch: Write blocked"       2 "$proj"  "$(json "$proj" Write "$(fp
 check "pin mismatch: Read allowed"        0 "$proj"  "$(json "$proj" Read "$(fp "$proj/src/a.cs")")"
 check "pin mismatch: restore+link allowed" 0 "$proj" "$(json "$proj" Bash "\"command\":\"dotnet tool restore && dotnet lockflight link\"")"
 check "pin mismatch: other Bash blocked"  2 "$proj"  "$(json "$proj" Bash "\"command\":\"dotnet build\"")"
+# A plugin that needs a newer engine than the project runs tells the person at session start.
+mkdir -p "$WORK/plugin/bin" && cp "$SHIM" "$WORK/plugin/bin/" && printf '999.0.0\n' > "$WORK/plugin/min-engine-version"
+if printf '%s' "$(json "$proj" Read "$(fp "$proj/src/a.cs")")" | "$WORK/plugin/bin/lockflight-hook" session-start 2>/dev/null | grep -q 'needs engine 999.0.0'; then
+  pass=$((pass+1)); echo "plugin needs newer engine: session notice: ok"
+else
+  fail=$((fail+1)); echo "plugin needs newer engine: session notice: FAIL"
+fi
 sed 's/"9.9.9"/"9.9.9-dev.1"/' "$proj/dotnet-tools.json" > "$WORK/t" && mv "$WORK/t" "$proj/dotnet-tools.json"
 check "dev pin mismatch: Write blocked"   2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 if grep -q 'lockflight update' "$WORK/err"; then pass=$((pass+1)); echo "dev pin mismatch: names update: ok"; else fail=$((fail+1)); echo "dev pin mismatch: names update: FAIL ($(head -c 400 "$WORK/err"))"; fi

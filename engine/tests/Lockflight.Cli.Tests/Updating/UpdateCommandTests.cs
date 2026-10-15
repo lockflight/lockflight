@@ -12,12 +12,71 @@ public sealed class UpdateCommandTests : IDisposable
     private readonly DirectoryInfo home = Directory.CreateTempSubdirectory("lockflight-home-");
 
     [Fact]
-    public async Task WithoutAnInstallFromSourceItSaysWhatToDoInstead()
+    public async Task WithoutACheckoutUpdateInstallsFromTheFeedAndHandsTheProjectToTheNewEngine()
     {
-        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["update"], "", root.FullName, Home());
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        FakeToolFeed feed = new("0.2.0-alpha.5");
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["update", "--source", "/feeds/local"], feed);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("Installed Lockflight 0.2.0-alpha.5", output, StringComparison.Ordinal);
+        Assert.Equal("0.2.0-alpha.5", UserInstall.InstalledVersion(home.FullName));
+        (string fileName, IReadOnlyList<string> arguments, string workingDirectory) = feed.Calls[^1];
+        Assert.Equal(UserInstall.Engine(home.FullName), fileName);
+        Assert.Equal(["update", "--project"], arguments);
+        Assert.Equal(root.FullName, workingDirectory);
+    }
+
+    [Fact]
+    public async Task AFeedThatCannotBeReadFailsWithTheReasonAndLeavesTheProjectAlone()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        FakeToolFeed feed = new("0.2.0-alpha.5") { Fails = true };
+
+        (ExitCode exitCode, _, string error) = await RunAsync(["update"], feed);
+
+        Assert.Equal(OperatingSystem.IsWindows() ? ExitCode.Config : ExitCode.Error, exitCode);
+        Assert.DoesNotContain(feed.Calls, call => call.Arguments.Contains("--project"));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Contains("NU1101", error, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task AnInstallFromSourceDoesNotTakeAFeed()
+    {
+        string checkout = Directory.CreateTempSubdirectory("lockflight-checkout-").FullName;
+        Directory.CreateDirectory(UserInstall.Directory(home.FullName));
+        File.WriteAllText(Path.Combine(UserInstall.Directory(home.FullName), "source"), checkout);
+        FakeToolFeed feed = new("0.2.0-alpha.5");
+
+        (ExitCode exitCode, _, string error) = await RunAsync(["update", "--source", "/feeds/local"], feed);
+
+        Directory.Delete(checkout);
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("delete ~/.lockflight/source", error, StringComparison.Ordinal);
+        Assert.Empty(feed.Calls);
+    }
+
+    [Theory]
+    [InlineData("--source")]
+    [InlineData("--feed")]
+    public async Task AnUnknownOrIncompleteOptionIsRefused(string option)
+    {
+        FakeToolFeed feed = new("0.2.0-alpha.5");
+
+        (ExitCode exitCode, _, string error) = await RunAsync(["update", option], feed);
 
         Assert.Equal(ExitCode.Config, exitCode);
-        Assert.Contains("dotnet tool update", error, StringComparison.Ordinal);
+        Assert.Contains("--source <feed>", error, StringComparison.Ordinal);
+        Assert.Empty(feed.Calls);
     }
 
     [Fact]
@@ -67,6 +126,20 @@ public sealed class UpdateCommandTests : IDisposable
 
         Assert.Equal("0.2.0-dev.20261015000000", UserInstall.InstalledVersion(home.FullName));
         Assert.Null(UserInstall.InstalledVersion(root.FullName));
+    }
+
+    private async Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string[] args, FakeToolFeed feed)
+    {
+        using StringWriter output = new();
+        using StringWriter error = new();
+        CliContext context = new(new StringReader(string.Empty), output, error, root.FullName, TimeProvider.System)
+        {
+            Environment = EnvironmentReader.Of(Home()),
+            Processes = feed.RunAsync,
+        };
+
+        ExitCode exitCode = await CliApplication.RunAsync(args, context, TestContext.Current.CancellationToken);
+        return (exitCode, output.ToString().Trim(), error.ToString().Trim());
     }
 
     private Dictionary<string, string> Home() => new() { [EnvironmentVariables.Home] = home.FullName };

@@ -21,16 +21,33 @@ re-pins) in a separate terminal window: not with `!` in Claude Code, where `upda
 
 ## `dotnet lockflight` fails: the pinned version is not found
 
-`doctor` reports **pin restorable** as FAIL: the project pins a development build (`0.2.0-dev.…`, from `scripts/dev-install.sh`)
+`doctor` reports **pin restorable** as FAIL: the project pins a development build (`0.2.0-alpha.4.dev.…`, or `0.2.0-dev.…` from older installs; from `scripts/dev-install.sh`)
 that is neither in this machine's local feed (`~/.lockflight/feed`) nor in the NuGet tools cache, so `dotnet tool restore` and
 `dotnet lockflight` cannot get it. Typically the pin came from a teammate's install, or from an older install whose packages were
 cleaned up. The hooks are not affected while the linked engine is there, and the agent runs `.lockflight/bin/lockflight`, not
 `dotnet lockflight`.
 
 Fix: run `~/.lockflight/bin/lockflight update` in the project, in a separate terminal window, not with `!` in Claude Code (a `!` command runs inside the session and is refused). It re-pins the project to your installed engine and
-links it; commit `dotnet-tools.json`. Without an install from source, run `scripts/dev-install.sh` in a Lockflight checkout
-first. When doctor only warns that the version is in the local feed, `dotnet tool restore --add-source ~/.lockflight/feed`
+links it; commit `dotnet-tools.json`. Without a user install, install the engine first ([from a package or from
+source](getting-started.md)). When doctor only warns that the version is in the local feed, `dotnet tool restore --add-source ~/.lockflight/feed`
 restores it.
+
+## `doctor` reports a development pin, or the plugin needs a newer engine
+
+**development pin** (a warning): the project pins a development build, and a release at or above the version that build
+followed is installed. Development builds are on no package feed, so teammates and CI cannot restore them. Run
+`~/.lockflight/bin/lockflight update` in the project, in a separate terminal window: it re-pins the project to the newest
+release and links it; commit `dotnet-tools.json`.
+
+**plugin engine** FAIL, or a session-start message "The Lockflight plugin needs engine X or newer": the plugin updated from its
+marketplace, and the engine the project pins is older than the plugin's `min-engine-version`. Run the same `update`.
+
+## `lockflight update` fails to install the package
+
+`update` runs `dotnet tool install Lockflight.Cli` from `~/.lockflight`, so it needs the .NET 10 SDK on `PATH` and access to the
+NuGet sources (nuget.org by default). Behind a mirror, pass it: `~/.lockflight/bin/lockflight update --source <feed URL>`; a
+folder of `.nupkg` files works too. A failed install leaves the installed engine and the project unchanged. An engine installed
+from source updates from its checkout instead and refuses `--source`; delete `~/.lockflight/source` to switch to packages.
 
 ## Every write is blocked: "the project is in lockdown"
 

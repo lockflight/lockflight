@@ -146,6 +146,31 @@ public sealed class HookRobustnessTests : IDisposable
     }
 
     [Fact]
+    public async Task APluginThatNeedsANewerEngineTellsThePersonAtSessionStart()
+    {
+        Dictionary<string, string> environment = new() { [EnvironmentVariables.PluginMinimumEngine] = "99.0.0" };
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName, environment);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        string notice = JsonDocument.Parse(output).RootElement.GetProperty("systemMessage").GetString()!;
+        Assert.Contains("needs engine 99.0.0 or newer", notice, StringComparison.Ordinal);
+        Assert.Contains("lockflight update", notice, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("0.0.0")]
+    [InlineData("not a version")]
+    public async Task APluginSatisfiedByTheEngineAddsNoNotice(string minimum)
+    {
+        Dictionary<string, string> environment = new() { [EnvironmentVariables.PluginMinimumEngine] = minimum };
+
+        (_, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName, environment);
+
+        Assert.False(JsonDocument.Parse(output).RootElement.TryGetProperty("systemMessage", out _));
+    }
+
+    [Fact]
     public async Task AHumanOnlyCommandIsRefusedWhenTheInjectedEnvironmentSaysAgent()
     {
         Dictionary<string, string> environment = new() { [EnvironmentVariables.ClaudeCode] = "1" };

@@ -8,9 +8,40 @@ evidence. This page takes you from nothing to a first green gate.
 `uv` (for Spec Kit), Python 3 with PyYAML, xUnit for red/green and trace — v3 (Microsoft.Testing.Platform) or v2 (VSTest);
 the test gate runs any VSTest or MTP test project.
 
+## Install from a package
+
+> Available once the `Lockflight.Cli` packages are published on nuget.org. Until then, install from source (below).
+
+Install the engine for your user, then the plugin:
+
+```sh
+cd ~                                   # outside any project: a global.json there could pick an SDK older than 10
+dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin
+~/.lockflight/bin/lockflight version
+claude plugin marketplace add lockflight/lockflight
+claude plugin install lockflight@lockflight --scope user
+```
+
+Then set up your project as below (`~/.lockflight/bin/lockflight init`, `adopt`, `doctor`).
+
+- **Why `--tool-path` and not `dotnet tool install --local` in the project:** the engine package is built for each platform,
+  and only the .NET 10 SDK can install such a package. In a repository whose `global.json` pins an older SDK, a local tool
+  install or `dotnet tool restore` fails. Installed into `~/.lockflight/bin` from your home directory, the engine is a native
+  binary that runs whatever SDK the project pins. The project still pins the engine in `dotnet-tools.json`: CI and teammates
+  with SDK 10 restore it from nuget.org.
+- **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. It installs the newest
+  engine from nuget.org into `~/.lockflight/tools/<version>` (from `~/.lockflight`, outside any project), points
+  `~/.lockflight/bin/lockflight` at it, then re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it
+  lists. An engine installed as a prerelease follows prereleases. `--source <feed>` replaces the NuGet sources (a mirror, or a
+  folder of packages). The plugin updates from its marketplace; `claude plugin update lockflight@lockflight` updates it now.
+- **Plugin and engine versions:** the plugin names the oldest engine it works with (`min-engine-version` in the plugin). When
+  the plugin has updated past the engine a project pins, Claude Code tells you at session start and `doctor` reports
+  **plugin engine** as FAIL; `update` fixes both.
+
 ## Install from source (no feed, no token)
 
-For the preview: build the engine from a checkout of this repository and install it for your user.
+For contributors, and for the preview until the packages are published: build the engine from a checkout of this repository
+and install it for your user.
 
 ```sh
 git clone https://github.com/lockflight/lockflight && cd lockflight
@@ -40,14 +71,18 @@ Commit in the shell, and in each service repository after `workspace sync`. Star
 - **Why `~/.lockflight/bin/lockflight` instead of `dotnet lockflight`:** the installed engine is a native binary, so it runs
   in projects whose `global.json` pins an older SDK. In such a project `dotnet lockflight` cannot run, because only SDK 10
   understands the package format.
+- **Development versions** are numbered after the last release, so they sort above it and below the next one:
+  `0.2.0-alpha.4.dev.<commit time>` after `0.2.0-alpha.4`, `0.2.1-0.dev.<commit time>` after `0.2.0`. Moving a project from a
+  development build to the next release is an upgrade; `doctor` reports **development pin** once a release at or above the
+  build's base is installed, and `update` moves the project to it.
 - **Tool pin:** `init` pins the dev version, which exists only in your local feed. A teammate runs the same script to get it.
   `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
   root, as the skills do; `doctor` reports a pin that cannot be restored on this machine.
 - **Human decisions** (`approve`, `baseline`, `redgreen reset`, `adopt apply|undo`, `update`) are yours: run them in a separate
   terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
   approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`).
-- **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. It pulls your checkout, reinstalls the engine and the
-  plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
+- **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. An install from source
+  (the checkout recorded in `~/.lockflight/source`) pulls your checkout, reinstalls the engine and the plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
   commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at
   session start.
 - **No token on disk:** the preview needs no package-feed token. Do not add the GitHub Packages feed to your NuGet
@@ -59,7 +94,8 @@ Commit in the shell, and in each service repository after `workspace sync`. Star
 
 1. In Claude Code: `/plugin marketplace add lockflight/lockflight`, then `/plugin install lockflight@lockflight`.
    The engine package is not on a public feed yet: during the preview, install the engine from source as above (the
-   init skill then uses `~/.lockflight/bin/lockflight`). The steps below are for when the package is published.
+   init skill then uses `~/.lockflight/bin/lockflight`). The steps below are for when the package is published; in a
+   repository whose `global.json` pins an SDK older than 10, install from a package as above instead.
 2. In your repository, ask Claude: *"Set up Lockflight"* (the `lockflight:init` skill). It runs:
    ```
    dotnet new tool-manifest            # when the repo has none (SDK 10 writes dotnet-tools.json at the repo root)
