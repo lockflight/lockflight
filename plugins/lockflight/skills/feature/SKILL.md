@@ -1,0 +1,38 @@
+---
+name: feature
+description: Take a feature through Lockflight's gated lifecycle — Spec Kit specify/clarify, plan, tasks, then test-first implementation in red/green cycles, trace and gates. Use when the user asks to build, implement or add a feature or user story in a Lockflight project with the standard profile.
+---
+
+# Lockflight feature lifecycle
+
+The engine judges every step; you never declare a step done while its check fails. Human gates are the user's decision: you
+stop and ask, you never approve on the user's behalf.
+
+1. **Specify.** Run `/speckit-specify` with the user's request (Spec Kit 1.1.3 creates `specs/<NNN-slug>/spec.md`, numbered
+   `001`, `002`, …). Requirements are lines `- **FR-001**: …`; each user story has `**Given** … **When** … **Then** …` scenarios. Resolve open
+   points with `/speckit-clarify`. Replace every template placeholder (`[FEATURE NAME]`, `[Brief Title]`, "System MUST
+   [specific capability …]") and delete unused example lines. Then run `dotnet lockflight phase check specify` until it passes.
+2. **Human gate — spec.** Ask the user to review `spec.md` and approve it with `/lockflight:approve spec`. Wait.
+3. **Plan and tasks.** Run `/speckit-plan`, then `/speckit-tasks`. Every story task cites its requirements `(FR-001)`; within a
+   story the stub declaration comes first, then the test tasks, then the implementation. Tests are mandatory here, whatever
+   the stock `/speckit-tasks` text says (the Lockflight preset appends these rules to it). Run
+   `dotnet lockflight phase check tasks` until it passes.
+4. **Human gate — tasks.** Ask the user to approve with `/lockflight:approve tasks`. Wait.
+5. **Start.** `dotnet lockflight redgreen start` records the test inventory (once per feature) and runs the suite once. If it
+   warns that tests already fail, tell the user: they decide whether to run `dotnet lockflight baseline tests` in their own
+   terminal and merge that baseline in its own pull request first.
+6. **For each user story, one red/green cycle:**
+   1. Declare the members the tests need with bodies `throw new NotImplementedException();`.
+   2. Write the story's xUnit v3 tests, each tagged `[Trait("Requirement", "FR-001")]`, asserting the specified behaviour.
+   3. `dotnet lockflight redgreen red`. Every new test must fail inside production code (RED_STUB or RED_ASSERT). If the red is
+      rejected, fix the tests — never weaken an assertion to make a red "work".
+   4. The test projects are now locked. Implement in production code until `dotnet lockflight redgreen green` passes. If a
+      test itself turns out wrong, stop and ask the user (only they can unlock with `lockflight redgreen reset`).
+   5. If `red` or `green` refuses because an approval is stale (spec.md, plan.md or tasks.md changed after approval), show the
+      user what changed and ask them to approve again in their own terminal. Wait.
+7. **Verify.** `dotnet lockflight trace` (every requirement covered by a test that went red, then green) and
+   `dotnet lockflight gate run --profile pr --base <base branch>`. Put the trace table and the gate summary into the PR body.
+8. **Deliver.** Open the PR; merging is always the user's decision.
+
+If the project has no xUnit v3 tests, `redgreen` reports NOT-EARNED: say so, follow the steps without red/green, and rely on the
+gates.

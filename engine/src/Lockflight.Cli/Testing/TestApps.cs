@@ -1,0 +1,90 @@
+using System.Text.Json;
+using Lockflight.Cli.Processes;
+
+namespace Lockflight.Cli.Testing;
+
+/// <summary>
+/// Finds the test applications red/green and trace can drive under a root after a build: xUnit v3 applications
+/// (<c>IsTestingPlatformApplication</c>, <c>xunit.v3.core.dll</c> in the output) and xUnit v2 test projects on VSTest
+/// (<c>IsTestProject</c>, <c>xunit.core.dll</c> in the output).
+/// </summary>
+internal static class TestApps
+{
+    /// <param name="preferredFramework">For multi-targeted test projects: the framework to run (<c>gates.test.framework</c>); else the newest one.</param>
+    public static async Task<IReadOnlyList<TestApp>> FindAsync(string root, string? preferredFramework, CancellationToken cancellationToken)
+    {
+        List<TestApp> apps = [];
+        foreach (string project in Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Where(path => !IsBuildOutput(root, path)).Order(StringComparer.Ordinal))
+        {
+            ProcessResult properties = await ProcessRunner.RunAsync(
+                "dotnet", ["msbuild", project, "-getProperty:IsTestingPlatformApplication", "-getProperty:IsTestProject", "-getProperty:TargetPath", "-getProperty:TargetFrameworks"], root, cancellationToken);
+            if (properties.ExitCode != 0 || Parse(properties.Output) is not (true, string targetPath, string frameworks))
+            {
+                continue;
+            }
+
+            // A multi-targeted project has no TargetPath of its own; ask again for one framework.
+            if (targetPath.Length == 0 && ChooseFramework(frameworks, preferredFramework) is string framework)
+            {
+                ProcessResult single = await ProcessRunner.RunAsync(
+                    "dotnet", ["msbuild", project, $"-p:TargetFramework={framework}", "-getProperty:IsTestingPlatformApplication", "-getProperty:IsTestProject", "-getProperty:TargetPath", "-getProperty:TargetFrameworks"], root, cancellationToken);
+                targetPath = single.ExitCode == 0 && Parse(single.Output) is (true, string path, _) ? path : string.Empty;
+            }
+
+            if (targetPath.Length == 0)
+            {
+                continue;
+            }
+
+            string output = Path.GetDirectoryName(targetPath)!;
+            if (File.Exists(Path.Combine(output, "xunit.v3.core.dll")))
+            {
+                apps.Add(new TestApp(Path.GetDirectoryName(project)!, targetPath));
+            }
+            else if (File.Exists(Path.Combine(output, "xunit.core.dll")))
+            {
+                apps.Add(new TestApp(Path.GetDirectoryName(project)!, targetPath, RunnerMode.VSTest));
+            }
+        }
+
+        return apps;
+    }
+
+    private static (bool IsTestApp, string TargetPath, string Frameworks)? Parse(string output)
+    {
+        int start = output.IndexOf('{', StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(output[start..]);
+        JsonElement properties = document.RootElement.GetProperty("Properties");
+        bool isTestApp = string.Equals(properties.GetProperty("IsTestingPlatformApplication").GetString(), "true", StringComparison.OrdinalIgnoreCase)
+            || (properties.TryGetProperty("IsTestProject", out JsonElement testProject) && string.Equals(testProject.GetString(), "true", StringComparison.OrdinalIgnoreCase));
+        return (isTestApp, properties.GetProperty("TargetPath").GetString() ?? string.Empty, properties.GetProperty("TargetFrameworks").GetString() ?? string.Empty);
+    }
+
+    /// <summary>The preferred framework when the project targets it, else the newest <c>netN.M</c> (the SDK's own runtime is the likeliest to be installed).</summary>
+    public static string? ChooseFramework(string frameworks, string? preferred)
+    {
+        string[] targets = frameworks.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (preferred is not null && targets.Contains(preferred, StringComparer.OrdinalIgnoreCase))
+        {
+            return preferred;
+        }
+
+        return targets
+            .Select(target => (Target: target, Version: Version.TryParse(target.StartsWith("net", StringComparison.OrdinalIgnoreCase) ? target[3..].Split('-')[0] : string.Empty, out Version? version) ? version : null))
+            .Where(candidate => candidate.Version is not null && candidate.Version.Major >= 5)
+            .OrderByDescending(candidate => candidate.Version)
+            .Select(candidate => candidate.Target)
+            .FirstOrDefault();
+    }
+
+    private static bool IsBuildOutput(string root, string path)
+    {
+        string[] segments = Path.GetRelativePath(root, path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return segments.Any(segment => segment is "bin" or "obj" or "node_modules" || segment.StartsWith('.'));
+    }
+}

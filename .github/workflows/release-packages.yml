@@ -1,0 +1,81 @@
+# Builds the Lockflight.Cli tool packages (pointer + one Native AOT package per RID + framework-dependent "any") and, only when
+# explicitly asked, pushes them to the GitHub Packages feed. Manual dispatch only; versions are never re-published.
+name: release-packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version, e.g. 0.1.0-alpha.3 (never reuse one)"
+        required: true
+      publish:
+        description: "Push to GitHub Packages (requires maintainer approval)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  rid:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: macos-latest, rid: osx-arm64 }
+          - { os: ubuntu-latest, rid: linux-x64 }
+          - { os: ubuntu-24.04-arm, rid: linux-arm64 }
+          - { os: windows-latest, rid: win-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+      - name: Pack ${{ matrix.rid }}
+        working-directory: engine
+        run: dotnet pack src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o ../packages -p:Version=${{ inputs.version }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-${{ matrix.rid }}
+          path: packages/*.nupkg
+
+  pointer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+      - name: Pack pointer and any
+        working-directory: engine
+        run: |
+          dotnet pack src/Lockflight.Cli -c Release -o ../packages -p:Version=${{ inputs.version }}
+          dotnet pack src/Lockflight.Cli -c Release -r any -o ../packages -p:Version=${{ inputs.version }} -p:PublishAot=false
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-pointer
+          path: packages/*.nupkg
+
+  publish:
+    if: ${{ inputs.publish }}
+    needs: [rid, pointer]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: packages
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Push RID packages first, pointer last
+        run: |
+          feed="https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          for package in packages/Lockflight.Cli.*.${{ inputs.version }}.nupkg; do
+            dotnet nuget push "$package" --source "$feed" --api-key "${{ secrets.GITHUB_TOKEN }}"
+          done
+          dotnet nuget push "packages/Lockflight.Cli.${{ inputs.version }}.nupkg" --source "$feed" --api-key "${{ secrets.GITHUB_TOKEN }}"

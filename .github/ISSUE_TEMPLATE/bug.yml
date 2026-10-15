@@ -1,0 +1,35 @@
+name: Bug report
+description: Something Lockflight did wrong, or a control that let something through.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead. Paste the verdict or the block message.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The smallest steps or command line. Leave out private code and secrets.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Lockflight version
+      description: Output of `lockflight version`.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, shell (Git Bash, PowerShell, zsh…), .NET SDK, Claude Code version.
+  - type: markdown
+    attributes:
+      value: >-
+        Found a way around a protected path or a gate that a person could abuse? Please report it privately, as described in
+        [SECURITY.md](https://github.com/lockflight/lockflight/blob/main/SECURITY.md), not here.

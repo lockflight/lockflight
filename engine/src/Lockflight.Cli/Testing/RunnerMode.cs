@@ -1,0 +1,17 @@
+namespace Lockflight.Cli.Testing;
+
+/// <summary>How a test application is listed and run: xUnit v3 natively or through MTP options (projects that set <c>UseMicrosoftTestingPlatformRunner</c> accept only MTP options), or xUnit v2 through VSTest.</summary>
+internal enum RunnerMode
+{
+    /// <summary>Not probed yet.</summary>
+    Unknown = 0,
+
+    /// <summary>xUnit's in-process console runner: <c>-list</c>, <c>-method</c>, <c>-result-xml</c>.</summary>
+    Native = 1,
+
+    /// <summary>VSTest (xUnit v2): tests listed from assembly metadata, run with <c>dotnet test &lt;dll&gt; --filter</c>, results from TRX.</summary>
+    VSTest = 3,
+
+    /// <summary>Microsoft.Testing.Platform with xUnit's extension options: <c>--xunit-list</c>, <c>--filter-method</c>, <c>--report-xunit-xml</c>.</summary>
+    Mtp = 2,
+}

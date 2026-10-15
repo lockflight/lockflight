@@ -1,0 +1,7 @@
+# Every change needs the maintainer's review once a ruleset requires code-owner review on main.
+*                     @bohdan-ivaniichuk
+
+# Policy, CI and release surface: listed separately so a future team can narrow the rest.
+/.github/             @bohdan-ivaniichuk
+/engine/              @bohdan-ivaniichuk
+/plugins/             @bohdan-ivaniichuk

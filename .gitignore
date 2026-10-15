@@ -1,0 +1,35 @@
+# Lockflight local state (per developer)
+.lockflight/local/
+.lockflight/state/
+.lockflight/ledger/
+
+# Claude Code per-user settings and instructions
+.claude/settings.local.json
+CLAUDE.local.md
+
+# .NET build output (anchored: a plugin's bin/ directory must stay tracked)
+/engine/**/bin/
+/engine/**/obj/
+/samples/**/bin/
+/samples/**/obj/
+artifacts/
+TestResults/
+*.user
+.vs/
+
+# Node
+node_modules/
+
+# OS / editor noise
+.DS_Store
+*.log
+.idea/
+
+# Plugin eval run reports
+plugins/lockflight/evals/results/
+
+# Local results of the Windows kit
+/tests/compat/results-*/
+
+# Claude Code agent worktrees
+.claude/worktrees/

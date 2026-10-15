@@ -1,0 +1,10 @@
+# Normalize line endings; scripts executed by POSIX shells must stay LF even on Windows clones.
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.png binary
+*.nupkg binary
+*.tsv text eol=lf

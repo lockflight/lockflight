@@ -1,0 +1,16 @@
+name: Idea or request
+description: Something Lockflight should do, or do differently.
+labels: [idea]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+      description: Your idea, if you have one. Alternatives you considered are welcome too.

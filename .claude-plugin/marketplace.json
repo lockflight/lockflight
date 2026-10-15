@@ -1,0 +1,15 @@
+{
+  "name": "lockflight",
+  "description": "Lockflight: gated, spec-driven delivery framework for Claude Code agents (.NET-first).",
+  "owner": {
+    "name": "Bohdan Ivaniichuk",
+    "url": "https://github.com/bohdan-ivaniichuk"
+  },
+  "plugins": [
+    {
+      "name": "lockflight",
+      "source": "./plugins/lockflight",
+      "description": "Gated, spec-driven delivery for Claude Code agents (.NET-first): deterministic gates, protected-path guards, a Spec Kit lifecycle with approvals, red/green evidence and trace, and evidence-bound review."
+    }
+  ]
+}

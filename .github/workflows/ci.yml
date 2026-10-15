@@ -1,0 +1,120 @@
+# Lockflight CI: engine tests, Native AOT build and the LLM-free hook compatibility suite on Linux, Windows (Git Bash) and
+# macOS, plus plugin and marketplace validation and the public-tree check.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: "Also run on macOS"
+        type: boolean
+        default: true
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.macos) && '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]') }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+          # The workspace sample's orders service targets net8.0 (xUnit v2 on VSTest).
+          dotnet-version: 8.0.x
+      # The secrets-step tests run the real gitleaks; on the other runners they skip.
+      - name: Install gitleaks (pinned, checksum-verified)
+        if: runner.os == 'Linux'
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSLo "$RUNNER_TEMP/$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          echo "LOCKFLIGHT_GITLEAKS=$RUNNER_TEMP/gitleaks" >> "$GITHUB_ENV"
+      - name: Unit tests
+        working-directory: engine
+        run: dotnet test
+      - name: Native AOT publish
+        working-directory: engine
+        run: dotnet publish src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o ../out -nologo
+      - name: Hook compatibility suite
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" sh tests/compat/probe-suite.sh
+      - name: Lifecycle end to end (spec → approvals → red/green → trace)
+        shell: bash
+        run: |
+          git config --global user.email ci@example.com && git config --global user.name ci
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/e2e/lifecycle.sh "$RUNNER_TEMP/lifecycle"
+      - name: Lifecycle end to end on xUnit v2 (VSTest)
+        shell: bash
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/e2e/lifecycle-xunit2.sh "$RUNNER_TEMP/lifecycle-xunit2"
+      - name: Workspace gates end to end (units, VSTest and MTP, per-unit stop cache)
+        shell: bash
+        run: |
+          git config --global user.email ci@example.com && git config --global user.name ci
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" sh tests/workspace/gates.sh "$RUNNER_TEMP/workspace"
+          ENGINE="$engine" bash tests/workspace/lifecycle.sh "$RUNNER_TEMP/workspace-lifecycle"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lockflight-${{ matrix.rid }}
+          path: |
+            out/lockflight
+            out/lockflight.exe
+          if-no-files-found: error
+
+  plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install shellcheck (pinned, checksum-verified)
+        env:
+          SHELLCHECK_VERSION: 0.11.0
+          SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+        run: |
+          archive="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSLo "$RUNNER_TEMP/$archive" "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/$archive"
+          echo "$SHELLCHECK_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}" >> "$GITHUB_PATH"
+      # Warnings and errors fail the job; style-only notes do not.
+      - name: Shellcheck the hook shim and test scripts
+        run: |
+          shellcheck --version
+          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh
+      - name: No citations of records outside the repository
+        run: scripts/check-public-tree.sh
+      - run: npm install -g @anthropic-ai/claude-code
+      - name: Validate plugin and marketplace
+        run: |
+          claude plugin validate --strict plugins/lockflight
+          claude plugin validate --strict .

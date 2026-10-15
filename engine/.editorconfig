@@ -1,0 +1,44 @@
+# Engine overrides on top of the repository's .editorconfig: the code-style rules docs/engineering/code-style.md mandates are
+# warnings here, so the build (TreatWarningsAsErrors, EnforceCodeStyleInBuild) enforces them instead of review alone.
+
+[*.cs]
+# Rule 12: `var` only when the type is written on the right. IDE0008 (explicit type where it is not apparent) is enforced; IDE0007
+# (prefer `var` where it is) stays a suggestion, because the rule permits `var` there but does not require it, and Roslyn counts a
+# factory call such as `Stopwatch.StartNew()` as apparent where the rule does not.
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_for_built_in_types = false:warning
+csharp_style_var_elsewhere = false:warning
+dotnet_diagnostic.IDE0007.severity = suggestion
+dotnet_diagnostic.IDE0008.severity = warning
+
+# Rule 8: a constructor that only assigns dependencies is a primary constructor.
+csharp_style_prefer_primary_constructors = true:warning
+dotnet_diagnostic.IDE0290.severity = warning
+
+# Rule 8: no `_` prefix on fields. Constants and static readonly fields are PascalCase; every other private or internal field
+# (readonly or not, static or not) is camelCase. The more specific rules (with required modifiers) take precedence.
+dotnet_naming_rule.constant_fields_are_pascal_case.severity = warning
+dotnet_naming_rule.constant_fields_are_pascal_case.symbols = constant_fields
+dotnet_naming_rule.constant_fields_are_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.constant_fields.applicable_kinds = field
+dotnet_naming_symbols.constant_fields.applicable_accessibilities = *
+dotnet_naming_symbols.constant_fields.required_modifiers = const
+
+dotnet_naming_rule.static_readonly_fields_are_pascal_case.severity = warning
+dotnet_naming_rule.static_readonly_fields_are_pascal_case.symbols = static_readonly_fields
+dotnet_naming_rule.static_readonly_fields_are_pascal_case.style = pascal_case_style
+dotnet_naming_symbols.static_readonly_fields.applicable_kinds = field
+dotnet_naming_symbols.static_readonly_fields.applicable_accessibilities = *
+dotnet_naming_symbols.static_readonly_fields.required_modifiers = static, readonly
+
+dotnet_naming_rule.private_fields_are_camel_case.severity = warning
+dotnet_naming_rule.private_fields_are_camel_case.symbols = private_or_internal_fields
+dotnet_naming_rule.private_fields_are_camel_case.style = camel_case_style
+dotnet_naming_symbols.private_or_internal_fields.applicable_kinds = field
+dotnet_naming_symbols.private_or_internal_fields.applicable_accessibilities = private, internal
+
+dotnet_naming_style.camel_case_style.capitalization = camel_case
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
+# Rule 13: no unused usings (needs GenerateDocumentationFile, set in Directory.Build.props).
+dotnet_diagnostic.IDE0005.severity = warning

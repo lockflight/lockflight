@@ -1,0 +1,9 @@
+{
+  "name": "lockflight",
+  "version": "0.2.0-alpha.3",
+  "description": "Gated, spec-driven delivery for Claude Code agents (.NET-first): deterministic gates, protected-path guards, a Spec Kit lifecycle with approvals, red/green evidence and trace, and evidence-bound review.",
+  "author": { "name": "Bohdan Ivaniichuk" },
+  "repository": "https://github.com/lockflight/lockflight",
+  "license": "MIT",
+  "keywords": ["quality-gates", "spec-driven", "tdd", "dotnet", "spec-kit", "hooks", "code-review"]
+}

@@ -1,0 +1,31 @@
+# Weekly real-hook canary: a headless Claude Code session with the Lockflight plugin (Haiku, a few cents) must allow an ordinary
+# write and block a protected path and a Bash redirect into a protected file. Catches Claude Code hook-semantics changes.
+# Needs the repository secret CLAUDE_CODE_OAUTH_TOKEN (create it with `claude setup-token`).
+name: canary
+
+# The weekly schedule is paused until the canary token exists; run it on demand.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - run: npm install -g @anthropic-ai/claude-code
+      - name: Build the engine
+        working-directory: engine
+        run: dotnet publish src/Lockflight.Cli -c Release -r linux-x64 -o ../out -nologo
+      - name: Run the canary
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: ENGINE="$PWD/out/lockflight" sh tests/canary/run.sh haiku

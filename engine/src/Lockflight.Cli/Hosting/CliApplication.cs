@@ -1,0 +1,156 @@
+using Lockflight.Cli.Adoption;
+using Lockflight.Cli.Config;
+using Lockflight.Cli.Doctor;
+using Lockflight.Cli.Gates;
+using Lockflight.Cli.Gates.Baselines;
+using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Init;
+using Lockflight.Cli.Learning;
+using Lockflight.Cli.Lifecycle;
+using Lockflight.Cli.Lifecycle.Approvals;
+using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Linking;
+using Lockflight.Cli.Mascot;
+using Lockflight.Cli.Processes;
+using Lockflight.Cli.Review;
+using Lockflight.Cli.Updating;
+using Lockflight.Cli.Workspace;
+
+namespace Lockflight.Cli.Hosting;
+
+/// <summary>Parses the command line and dispatches to a command.</summary>
+internal static class CliApplication
+{
+    /// <summary>A command and its verb (<c>approve spec</c>, <c>redgreen reset</c>): what a refusal names.</summary>
+    private const int CommandWords = 2;
+
+    private static readonly string Usage = $"""
+        lockflight — gated delivery engine for Claude Code agents
+
+        Usage: lockflight <command> [options]   (in a project: dotnet lockflight <command> [options])
+
+        Setup
+          init [--profile lite|standard] [--no-link]    onboard: manifest, tool pin, settings, CI job, link
+          doctor                                        readiness report with fixes
+          statusline                                    Claude Code status line: Levi and the last verdict
+          update                                        you: pull, rebuild and reinstall Lockflight, re-pin this project
+          adopt plan                                    inventory an existing Claude Code / Spec Kit setup into
+                                                        .lockflight/adopt/plan.md (read only)
+          workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
+                                                        engine pin, baselines, workflow); --check reports drift
+          link                                          copy the pinned engine to .lockflight/bin/ for the hooks
+          version                                       print the engine version
+
+        Gates
+          gate run [--profile edit|stop|pr] [--path <dir>] [--unit <path>[,…]] [--base <ref>] [--result <file>]
+                                                        run the quality gates (default profile: stop; --base also
+                                                        scopes format and coverage to the branch's changes; at a
+                                                        workspace root, every changed unit or the --unit ones)
+          hook <event>                                  Claude Code hook decision, hook JSON on stdin; events:
+                                                        {string.Join(", ", HookEvents())}
+
+        Lifecycle (agent)
+          phase check specify|tasks [--feature <id>]    deterministic phase-exit checks
+          redgreen start|red|green|status [--feature <id>]
+                                                        test-first cycles: baseline, accepted red, green
+          trace [--feature <id>]                        requirement → red/green tests matrix
+          review [--feature <id>] [--base <ref>] [--model <name>] [--budget <usd>]
+                                                        review of record bound to evidence (main, sonnet, 1.00)
+          ledger retro [--days 30] [--min 2]            recurring incidents → suggested remedies
+
+        Human decisions (approve, redgreen reset, baseline and adopt apply|undo refuse to run inside a Claude Code session)
+          approve spec|tasks [--feature <id>] [--sign [--key <file>]]
+                                                        approve the feature's artifacts, optionally SSH-signed
+          redgreen reset [--feature <id>]               discard the feature's red/green evidence
+          baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories
+          adopt apply [--speckit-preset <dir>] [--skip-speckit]
+                                                        apply the reviewed adoption plan (backs up first)
+          adopt undo [--backup <id>] [--force]          revert what apply changed; files changed since are kept
+                                                        unless --force
+
+        CI
+          approve verify (--feature <id> | --base <ref>) [--allowed-signers <file>] [--require spec,tasks]
+                                                        check approval records, artifact hashes and signatures;
+                                                        exactly one of --feature or --base (never the active feature)
+          gate run --profile pr [--base <ref>] [--result <file>]
+                                                        stop steps plus policy, patch coverage, dependencies, secrets
+
+        Exit codes
+          0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)
+          1  FAIL
+          2  blocked: a hook decision, or a human-only command run by the agent
+          3  ERROR: the engine or a tool it ran broke; not a verdict about the code
+          4  configuration: invalid command line (unknown option, missing value), manifest or target
+          5  NOT-EARNED: nothing to judge (e.g. zero tests)
+
+        Any command with --help or -h prints this text.
+        """;
+
+    public static async Task<ExitCode> RunAsync(string[] args, CliContext context, CancellationToken cancellationToken)
+    {
+        if (args.Length == 0 || args.Any(arg => arg is "-h" or "--help"))
+        {
+            await context.Output.WriteLineAsync(Usage);
+            return args.Length == 0 ? ExitCode.Config : ExitCode.Pass;
+        }
+
+        if (HumanOnlyCommands.IsReserved(args) && HumanOnlyCommands.RunsUnderAgent(context.Environment))
+        {
+            await context.Error.WriteLineAsync(
+                $"lockflight: '{string.Join(' ', args.Take(CommandWords))}' records a human decision and does not run inside a Claude Code session; run it in your own terminal.");
+            // Exit 2, the verdict the PreToolUse guard gives the same command line: a refusal to the agent, not a failed check.
+            return ExitCode.HookBlock;
+        }
+
+        try
+        {
+            return args switch
+            {
+                ["version" or "--version"] => await PrintVersionAsync(context),
+                ["link"] => await new LinkCommand(context).RunAsync(cancellationToken),
+                ["init", .. string[] initOptions] => await new InitCommand(context).RunAsync(initOptions, cancellationToken),
+                ["doctor"] => await new DoctorCommand(context).RunAsync(cancellationToken),
+                ["statusline"] => await new StatusLineCommand(context).RunAsync(cancellationToken),
+                ["update", .. string[] updateOptions] => await new UpdateCommand(context).RunAsync(updateOptions, cancellationToken),
+                ["hook", string eventName] => await new HookCommand(context).RunAsync(HookEventNames.Parse(eventName), cancellationToken),
+                ["baseline", "build" or "tests" or "deps", .. string[] baselineOptions] => await new BaselineCommand(context).RunAsync(args[1], baselineOptions, cancellationToken),
+                ["gate", "run", .. string[] options] => await new GateCommand(context).RunAsync(options, cancellationToken),
+                ["phase", "check", string phase, .. string[] phaseOptions] => await new PhaseCommand(context).CheckAsync(phase, phaseOptions, cancellationToken),
+                ["redgreen", string verb, .. string[] redGreenOptions] => await new RedGreenCommand(context).RunAsync(verb, redGreenOptions, cancellationToken),
+                ["review", .. string[] reviewOptions] => await new ReviewCommand(context).RunAsync(reviewOptions, cancellationToken),
+                ["ledger", "retro", .. string[] retroOptions] => await new RetroCommand(context).RunAsync(retroOptions, cancellationToken),
+                ["trace", .. string[] traceOptions] => await new TraceCommand(context).RunAsync(traceOptions, cancellationToken),
+                ["approve", _, ..] => await new ApproveCommand(context).RunAsync(args[1..], cancellationToken),
+                ["workspace", "sync", .. string[] syncOptions] => await new WorkspaceSyncCommand(context).RunAsync(syncOptions, cancellationToken),
+                ["adopt", "plan" or "apply" or "undo", .. string[] adoptOptions] => await new AdoptCommand(context).RunAsync(args[1], adoptOptions, cancellationToken),
+                _ => await ReportUnknownAsync(args, context),
+            };
+        }
+        catch (ExecutableNotFoundException exception)
+        {
+            await context.Error.WriteLineAsync($"lockflight: {exception.Message}");
+            return ExitCode.Error;
+        }
+        catch (Exception exception)
+        {
+            // A crash must never look like success to the caller.
+            await context.Error.WriteLineAsync($"lockflight: internal error: {exception.Message}");
+            return ExitCode.Error;
+        }
+    }
+
+    private static IEnumerable<string> HookEvents() =>
+        Enum.GetValues<HookEvent>().Where(hookEvent => hookEvent != HookEvent.Unknown).Select(HookEventNames.ToName);
+
+    private static async Task<ExitCode> PrintVersionAsync(CliContext context)
+    {
+        await context.Output.WriteLineAsync(ToolPin.RunningVersion);
+        return ExitCode.Pass;
+    }
+
+    private static async Task<ExitCode> ReportUnknownAsync(string[] args, CliContext context)
+    {
+        await context.Error.WriteLineAsync($"lockflight: unknown command '{string.Join(' ', args)}'. Run 'lockflight --help'.");
+        return ExitCode.Config;
+    }
+}

@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Lockflight.Cli/Lockflight.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Lockflight.Cli.Tests/Lockflight.Cli.Tests.csproj" />
+  </Folder>
+</Solution>

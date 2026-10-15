@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>lockflight</AssemblyName>
+    <RootNamespace>Lockflight.Cli</RootNamespace>
+    <Version>0.0.1</Version>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <StripSymbols>true</StripSymbols>
+    <!-- LibraryImport source generator (Windows short-name expansion) needs unsafe blocks. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <!-- Packaging as a RID-specific .NET tool: a pointer package plus one Native AOT package per RID, and a
+       framework-dependent "any" fallback for platforms without a RID package. Versions are never re-published. -->
+  <PropertyGroup>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>lockflight</ToolCommandName>
+    <PackageId>Lockflight.Cli</PackageId>
+    <Authors>Bohdan Ivaniichuk</Authors>
+    <Description>Lockflight engine for Claude Code agents on .NET projects: deterministic quality gates (format, build, test, patch coverage, vulnerable dependencies, secrets), protected paths enforced by Claude Code hooks, and a spec-driven lifecycle with hash-bound approvals, red/green test-first evidence, requirement trace and an evidence-bound review of record.</Description>
+    <Copyright>Copyright (c) 2026 Bohdan Ivaniichuk</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/lockflight/lockflight</PackageProjectUrl>
+    <PackageTags>claude-code;quality-gates;dotnet-tool;tdd;spec-driven;hooks</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/lockflight/lockflight</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <ToolPackageRuntimeIdentifiers>osx-arm64;linux-x64;linux-arm64;win-x64;any</ToolPackageRuntimeIdentifiers>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <!-- Released tool packages ship no debug symbols (a 12 MB dSYM per RID otherwise). -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Lockflight.Cli.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../../README.md" Pack="true" PackagePath="/" Visible="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+  </ItemGroup>
+</Project>

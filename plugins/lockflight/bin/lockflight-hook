@@ -1,0 +1,96 @@
+#!/bin/sh
+# Lockflight plugin hook shim (POSIX sh; Git Bash on Windows). States:
+#   1. no lockflight.yaml above the project directory  -> no-op (never block unrelated projects)
+#   2. .lockflight/lockdown present and no engine       -> only reads allowed (tighten-only lockdown)
+#   3. linked engine present                            -> run it (fast path, ~5 ms)
+#   4. engine not restored/linked                       -> recovery: reads and the exact restore/link command only
+LOCKFLIGHT_PLUGIN_API=1
+export LOCKFLIGHT_PLUGIN_API
+event="$1"
+# Every process costs ~10-20 ms under Git Bash, so the fast path (CLAUDE_PROJECT_DIR set, engine linked) starts none: stdin
+# goes straight to the engine and the root search uses parameter expansion only. The JSON is read only when it is needed.
+input=""
+
+# json_string <path>: the string at a top-level key ("cwd") or one level down ("tool_input.command"), unescaped. Tracks
+# nesting and strings, so a key nested elsewhere ({"x":{"tool_name":"Read"}}) or inside a string value never matches.
+json_string() {
+  printf '%s' "$input" | tr '\n\r' '  ' | awk -v want="$1" '{
+    s = $0; n = length(s); depth = 0; instr = 0; buf = ""; iskey = 0
+    for (i = 1; i <= n; i++) {
+      c = substr(s, i, 1)
+      if (instr) {
+        if (c == "\\") {
+          i++; e = substr(s, i, 1)
+          if (e == "n") buf = buf "\n"; else if (e == "t") buf = buf "\t"; else if (e == "u") buf = buf "\\u"; else buf = buf e
+          continue
+        }
+        if (c == "\"") {
+          instr = 0
+          if (iskey) { key[depth] = buf; continue }
+          if (kind[depth] != "o") continue
+          path = key[1]; for (d = 2; d <= depth; d++) path = path "." key[d]
+          if (path == want) { printf "%s", buf; exit }
+          continue
+        }
+        buf = buf c; continue
+      }
+      if (c == "\"") { instr = 1; buf = ""; iskey = (kind[depth] == "o" && expectkey[depth]); continue }
+      if (c == "{") { depth++; kind[depth] = "o"; expectkey[depth] = 1; key[depth] = ""; continue }
+      if (c == "[") { depth++; kind[depth] = "a"; expectkey[depth] = 0; continue }
+      if (c == "}" || c == "]") { depth--; continue }
+      if (c == ":") { expectkey[depth] = 0; continue }
+      if (c == "," && kind[depth] == "o") expectkey[depth] = 1
+    }
+  }'
+}
+
+dir="${CLAUDE_PROJECT_DIR:-}"
+if [ -z "$dir" ]; then
+  input=$(cat)
+  dir=$(json_string cwd)
+fi
+[ -n "$dir" ] || dir="$PWD"
+
+# Walks up with either separator, so Windows paths ("C:\Users\x", which Git Bash file tests accept) need no cygpath.
+root=""
+while [ -n "$dir" ] && [ "$dir" != "." ]; do
+  if [ -f "$dir/lockflight.yaml" ]; then root="$dir"; break; fi
+  parent="${dir%[/\\]*}"
+  [ "$parent" != "$dir" ] || break
+  dir="$parent"
+done
+[ -n "$root" ] || exit 0
+
+engine="$root/.lockflight/bin/lockflight"
+[ -f "$engine.exe" ] && engine="$engine.exe"
+if [ -x "$engine" ]; then
+  # Not `printf | exec`: in a pipeline exec only replaces the subshell and the script would fall through.
+  if [ -n "$input" ]; then printf '%s' "$input" | "$engine" hook "$event"; else "$engine" hook "$event"; fi
+  status=$?
+  # Fail closed: a crash or any exit other than allow (0) / block (2) must not let a tool call through.
+  if [ "$event" = "pre-tool-use" ] && [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
+    echo "lockflight: the engine failed (exit $status), so the tool call is blocked. Run: dotnet lockflight doctor" >&2
+    exit 2
+  fi
+  exit "$status"
+fi
+
+[ "$event" = "pre-tool-use" ] || exit 0
+[ -n "$input" ] || input=$(cat)
+tool=$(json_string tool_name)
+# Read-only tools and recovery commands: keep in sync with Hooks/ReadOnlyTools.cs and Hooks/RecoveryCommands.cs.
+case "$tool" in
+  Read|Grep|Glob|LS) exit 0 ;;
+esac
+if [ -f "$root/.lockflight/lockdown" ]; then
+  echo "lockflight: the project is in lockdown (.lockflight/lockdown exists); only reading is allowed until a human removes it." >&2
+  exit 2
+fi
+if [ "$tool" = "Bash" ]; then
+  command=$(json_string tool_input.command)
+  case "$command" in
+    "dotnet tool restore"|"dotnet tool restore && dotnet lockflight link"|"dotnet lockflight link") exit 0 ;;
+  esac
+fi
+echo "lockflight: engine not installed in this project (pinned in dotnet-tools.json). Run exactly: dotnet tool restore && dotnet lockflight link" >&2
+exit 2
