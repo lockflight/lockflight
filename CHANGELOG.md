@@ -5,7 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-## [0.2.0-alpha.3] — 2026-10-16
+### Fixed
+- `phase check tasks` names each misplaced task with its line and why it counted as implementation, and says how to mark test
+  and stub tasks.
+- `phase check tasks` recognises frontend and test-file tasks ("Spec for …", `*.spec.ts`, `*.test.tsx`, `*Tests.cs`, "Cover …
+  with tests"), stubs worded "skeleton", "declare signatures" or `NotImplementedException`, and FR ids anywhere on a task line.
+
+## [0.2.0-alpha.3] — 2026-10-15
 
 The first public release. Earlier versions were private previews; this entry summarises what Lockflight does today.
 
