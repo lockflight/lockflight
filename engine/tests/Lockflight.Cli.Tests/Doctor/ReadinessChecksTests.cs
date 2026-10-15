@@ -171,6 +171,47 @@ public sealed class ReadinessChecksTests : IDisposable
         Assert.Null(ReadinessChecks.CheckPinRestorable(root.FullName, Path.Combine(root.FullName, "home"), nugetPackages: null));
     }
 
+    [Theory]
+    [InlineData("0.2.0-alpha.4.dev.20261015101143", "0.2.0-alpha.4")]
+    [InlineData("0.2.0-alpha.4.dev.20261015101143", "0.2.0-alpha.5")]
+    [InlineData(DevelopmentVersion, "0.2.0-alpha.4")]
+    public void ADevelopmentPinWithAReleaseInstalledIsMovedToTheRelease(string pinned, string installed)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        PinEngine(pinned);
+        string home = HomeWithEngineLinkedTo(installed);
+
+        DoctorCheck check = ReadinessChecks.CheckDevelopmentPin(root.FullName, home, nugetPackages: null)!;
+
+        Assert.Equal("development pin", check.Name);
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains($"release {installed} is installed", check.Detail, StringComparison.Ordinal);
+        Assert.Contains("~/.lockflight/bin/lockflight update", check.Fix, StringComparison.Ordinal);
+        Assert.Contains("separate terminal window", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("0.2.0-alpha.3")]
+    [InlineData("0.2.0-alpha.5.dev.20261016000000")]
+    public void ADevelopmentPinWithNoReleaseAtItsBaseInstalledIsCheckedForRestoreOnly(string installed)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        PinEngine("0.2.0-alpha.4.dev.20261015101143");
+        string home = HomeWithEngineLinkedTo(installed);
+
+        DoctorCheck check = ReadinessChecks.CheckDevelopmentPin(root.FullName, home, nugetPackages: null)!;
+
+        Assert.Equal("pin restorable", check.Name);
+    }
+
     [Fact]
     public void WithoutAPinThereIsNoRestoreCheck() =>
         Assert.Null(ReadinessChecks.CheckPinRestorable(root.FullName, Path.Combine(root.FullName, "home"), nugetPackages: null));
@@ -192,6 +233,15 @@ public sealed class ReadinessChecksTests : IDisposable
 
     private void PinEngine(string version) =>
         Write("dotnet-tools.json", $$"""{ "version": 1, "isRoot": true, "tools": { "lockflight.cli": { "version": "{{version}}", "commands": ["lockflight"] } } }""");
+
+    private string HomeWithEngineLinkedTo(string version)
+    {
+        string home = Path.Combine(root.FullName, "home");
+        Write($"home/.lockflight/tools/{version}/lockflight", string.Empty);
+        Directory.CreateDirectory(Path.Combine(home, ".lockflight", "bin"));
+        File.CreateSymbolicLink(Path.Combine(home, ".lockflight", "bin", "lockflight"), Path.Combine(home, ".lockflight", "tools", version, "lockflight"));
+        return home;
+    }
 
     private string HomeWithUserInstall()
     {

@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- `lockflight update` installs the newest engine from a package feed when Lockflight was not installed from source
+  (`--source <feed>` to override); it works whatever SDK a project's `global.json` pins.
+- The plugin names the oldest engine it supports; session start and `doctor` report a project engine that is older.
+
+### Changed
+- Development builds are numbered after the last release (`0.2.0-alpha.4.dev.<stamp>`), so moving a project to the next
+  release is an upgrade; `doctor` suggests `update` for a project still pinned to a development build.
+
+### Fixed
+- The session-start notice about a newer installed engine compared the platform folder name instead of the version.
+
 ## [0.2.0-alpha.4] — 2026-10-15
 
 ### Added

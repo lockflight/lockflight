@@ -7,6 +7,12 @@
 LOCKFLIGHT_PLUGIN_API=1
 export LOCKFLIGHT_PLUGIN_API
 event="$1"
+# At session start the engine reports a project engine older than this plugin works with (min-engine-version, a released
+# version). `read` is a shell builtin, so this starts no process.
+if [ "$event" = "session-start" ] && [ -f "${0%/*}/../min-engine-version" ]; then
+  IFS= read -r LOCKFLIGHT_PLUGIN_MIN_ENGINE < "${0%/*}/../min-engine-version" || true
+  export LOCKFLIGHT_PLUGIN_MIN_ENGINE
+fi
 # Every process costs ~10-20 ms under Git Bash, so the fast path (CLAUDE_PROJECT_DIR set, engine linked) starts none: stdin
 # goes straight to the engine and the root search uses parameter expansion only. The JSON is read only when it is needed.
 input=""
@@ -92,7 +98,14 @@ if [ "$tool" = "Bash" ]; then
     "dotnet tool restore"|"dotnet tool restore && dotnet lockflight link"|"dotnet lockflight link") exit 0 ;;
   esac
 fi
-if grep -rqs -e '-dev\.' "$root/.config/dotnet-tools.json" "$root/dotnet-tools.json"; then
+# A development build carries a "dev" prerelease identifier: 0.2.0-alpha.4.dev.<stamp>, 0.2.1-0.dev.<stamp> (0.2.0-dev.<stamp>
+# before). Keep in sync with Config/EngineVersion.cs. Each manifest is read on its own: BSD grep exits 2 for a missing file
+# even when another one matches.
+development=false
+for manifest in "$root/.config/dotnet-tools.json" "$root/dotnet-tools.json"; do
+  if [ -f "$manifest" ] && grep -Eq -e '"[0-9]+\.[0-9]+\.[0-9]+-([0-9A-Za-z-]+\.)*dev\.' "$manifest"; then development=true; fi
+done
+if [ "$development" = true ]; then
   echo "lockflight: engine not linked in this project, and the pin is a development build that no package feed has. Ask the user to run ~/.lockflight/bin/lockflight update in a separate terminal window (not with ! in Claude Code: that runs inside the session and is refused)." >&2
   exit 2
 fi

@@ -18,6 +18,12 @@ internal static class EnvironmentVariables
     /// <summary>The hook API version the plugin shim speaks; unset for direct invocations.</summary>
     public const string PluginApi = "LOCKFLIGHT_PLUGIN_API";
 
+    /// <summary>
+    /// The oldest engine the plugin works with, read by the shim from the plugin's <c>min-engine-version</c> file at session start;
+    /// unset otherwise.
+    /// </summary>
+    public const string PluginMinimumEngine = "LOCKFLIGHT_PLUGIN_MIN_ENGINE";
+
     /// <summary>Set to <c>1</c> by Claude Code in every shell the agent starts.</summary>
     public const string ClaudeCode = "CLAUDECODE";
 

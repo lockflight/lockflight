@@ -33,7 +33,18 @@ if [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no 2>/dev/null)" 
 else
   stamp=$(date -u +%Y%m%d%H%M%S)
 fi
-version="0.2.0-dev.$stamp"
+# A development build is numbered after the last release (the plugin's version, raised at each release) so that it sorts
+# above that release and below the next one, and moving a project to the next release is an upgrade:
+#   after the prerelease 0.2.0-alpha.4: 0.2.0-alpha.4.dev.<stamp>   (below 0.2.0-alpha.5, 0.2.0-beta.1 and 0.2.0)
+#   after the release 0.2.0:            0.2.1-0.dev.<stamp>         (below any 0.2.1 prerelease, 0.2.1 and 0.3.0)
+released=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$REPO/plugins/lockflight/.claude-plugin/plugin.json" | head -n 1)
+case "$released" in
+  [0-9]*.[0-9]*.[0-9]*-*) version="$released.dev.$stamp" ;;
+  [0-9]*.[0-9]*.[0-9]*)
+    major=${released%%.*}; rest=${released#*.}; minor=${rest%%.*}; patch=${rest#*.}
+    version="$major.$minor.$((patch + 1))-0.dev.$stamp" ;;
+  *) echo "cannot read the released version from plugins/lockflight/.claude-plugin/plugin.json" >&2; exit 1 ;;
+esac
 feed="$HOME_DIR/feed"
 tools="$HOME_DIR/tools/$version"
 mkdir -p "$feed" "$HOME_DIR/bin"

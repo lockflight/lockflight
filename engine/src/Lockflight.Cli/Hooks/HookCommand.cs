@@ -78,7 +78,7 @@ internal sealed class HookCommand(CliContext context)
 
         if (hookEvent == HookEvent.SessionStart)
         {
-            await context.Output.WriteLineAsync(SessionBanner.ToHookOutput(manifest, ProjectDirectory(input), UpdateNotice()));
+            await context.Output.WriteLineAsync(SessionBanner.ToHookOutput(manifest, ProjectDirectory(input), SessionNotice()));
         }
 
         return await ReportAsync(decision, hookEvent, manifest.Root, input, cancellationToken);
@@ -168,15 +168,28 @@ internal sealed class HookCommand(CliContext context)
 
         string reason = pin.Status == ToolPinStatus.Unreadable
             ? $"lockflight: the engine pin cannot be read: {pin.Problem}. Fix dotnet-tools.json (a protected file: a human edit), then run exactly: {RecoveryCommands.RestoreAndLink}"
-            : pin.Version!.Contains("-dev.", StringComparison.Ordinal)
+            : EngineVersion.IsDevelopmentBuild(pin.Version!)
                 ? $"lockflight: running engine {ToolPin.RunningVersion} but the project pins the development build {pin.Version}, which no package feed has. Ask the user to run ~/.lockflight/bin/lockflight update {HumanOnlyCommands.WhereToRun}."
                 : $"lockflight: running engine {ToolPin.RunningVersion} but the project pins {pin.Version}. Run exactly: {RecoveryCommands.RestoreAndLink}";
         return HookDecision.Block("stale-engine", reason);
     }
 
+    /// <summary>For the person, at session start: what to update, or null when nothing is behind.</summary>
+    private string? SessionNotice()
+    {
+        string[] notices = [.. new[] { PluginNotice(), UpdateNotice() }.OfType<string>()];
+        return notices.Length == 0 ? null : string.Join(" ", notices);
+    }
+
+    /// <summary>The plugin updated from its marketplace past what this project's engine supports.</summary>
+    private string? PluginNotice() =>
+        PluginHandshake.EngineTooOld(context.Environment, ToolPin.RunningVersion) is string minimum
+            ? $"The Lockflight plugin needs engine {minimum} or newer; this project runs {ToolPin.RunningVersion}. Run {EngineCommand.UserInstall} update in the project {HumanOnlyCommands.WhereToRun}."
+            : null;
+
     /// <summary>
-    /// For the person, at session start: a newer engine is installed than the one this project runs (after an install from source
-    /// in another project, or a pull). Null when they match or there is no install from source.
+    /// For the person, at session start: a newer engine is installed than the one this project runs (after an update in another
+    /// project). Null when they match or there is no user install.
     /// </summary>
     private string? UpdateNotice() =>
         context.Environment.HomeDirectory() is string home && UserInstall.InstalledVersion(home) is string installed

@@ -25,9 +25,7 @@ internal static class ReadinessChecks
     private const string Bash = "bash";
     private const string Python = "python3";
     private const string PinRestoreCheck = "pin restorable";
-
-    /// <summary>The prerelease label <c>scripts/dev-install.sh</c> gives the versions it builds; they are on no package feed.</summary>
-    private const string DevelopmentLabel = "-dev.";
+    private const string DevelopmentPinCheck = "development pin";
 
     public static Task<IReadOnlyList<DoctorCheck>> RunAsync(string root, CancellationToken cancellationToken) =>
         RunAsync(root, userHome: null, nugetPackages: null, TimeProvider.System, cancellationToken);
@@ -41,12 +39,18 @@ internal static class ReadinessChecks
     public static async Task<IReadOnlyList<DoctorCheck>> RunAsync(string root, string? userHome, string? nugetPackages, TimeProvider time, CancellationToken cancellationToken)
     {
         List<DoctorCheck> checks = [CheckManifest(root), CheckPin(root)];
-        if (CheckPinRestorable(root, userHome, nugetPackages) is DoctorCheck restorable)
+        if (CheckDevelopmentPin(root, userHome, nugetPackages) is DoctorCheck developmentPin)
         {
-            checks.Add(restorable);
+            checks.Add(developmentPin);
         }
 
-        checks.AddRange([await CheckLinkAsync(root, cancellationToken), CheckGitIgnore(root), CheckClaudeSettings(root)]);
+        checks.Add(await CheckLinkAsync(root, cancellationToken));
+        if (PluginEngineCheck.Check(root, userHome) is DoctorCheck pluginEngine)
+        {
+            checks.Add(pluginEngine);
+        }
+
+        checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root)]);
         if (OperatingSystem.IsWindows())
         {
             checks.Add(await CheckGitBashAsync(root, Bash, cancellationToken));
@@ -92,6 +96,27 @@ internal static class ReadinessChecks
     };
 
     /// <summary>
+    /// For a project pinned to a development build: when a release at or above the build's base is installed, the project should
+    /// move to it (a development build is on no package feed, so a teammate or CI cannot restore it); otherwise whether the build
+    /// can be restored on this machine (<see cref="CheckPinRestorable"/>). Null when the project pins no development build.
+    /// </summary>
+    public static DoctorCheck? CheckDevelopmentPin(string root, string? userHome, string? nugetPackages)
+    {
+        if (ToolPin.ReadPin(root) is { Status: ToolPinStatus.Pinned, Version: string pinned }
+            && EngineVersion.Parse(pinned) is { IsDevelopment: true } development
+            && userHome is not null && UserInstall.InstalledVersion(userHome) is string installed
+            && EngineVersion.Parse(installed) is { IsDevelopment: false } release
+            && release.CompareTo(development.DevelopmentBase()) >= 0)
+        {
+            return new(DevelopmentPinCheck, CheckStatus.Warn,
+                $"the project pins the development build {pinned}, which no package feed has, and the release {installed} is installed",
+                $"a person runs `{EngineCommand.UserInstall} update` in the project {HumanOnlyCommands.WhereToRun}: it re-pins the project to the newest release and links it; then commit dotnet-tools.json");
+        }
+
+        return CheckPinRestorable(root, userHome, nugetPackages);
+    }
+
+    /// <summary>
     /// Whether <c>dotnet tool restore</c> can get the pinned engine without the network: a development build is on no package feed,
     /// so it restores only from the NuGet tools cache, or from the local feed of an install from source when that feed is passed
     /// as a source. Null when the project pins no engine or a release version, which restores from a package feed (doctor never
@@ -99,7 +124,7 @@ internal static class ReadinessChecks
     /// </summary>
     public static DoctorCheck? CheckPinRestorable(string root, string? userHome, string? nugetPackages)
     {
-        if (ToolPin.ReadPin(root) is not { Status: ToolPinStatus.Pinned, Version: string pinned } || !IsDevelopment(pinned))
+        if (ToolPin.ReadPin(root) is not { Status: ToolPinStatus.Pinned, Version: string pinned } || !EngineVersion.IsDevelopmentBuild(pinned))
         {
             return null;
         }
@@ -125,16 +150,14 @@ internal static class ReadinessChecks
             $"development build {pinned} is in neither the local feed (~/.lockflight/feed) nor the tools cache: `dotnet tool restore` cannot get it, so `dotnet lockflight` and a fresh link fail",
             installedFromSource
                 ? $"a person runs `{EngineCommand.UserInstall} update` in the project {HumanOnlyCommands.WhereToRun}: it re-pins the project to the installed engine and links it; then commit dotnet-tools.json"
-                : $"install the engine from source (scripts/dev-install.sh in a Lockflight checkout), then a person runs `{EngineCommand.UserInstall} update` in the project {HumanOnlyCommands.WhereToRun}");
+                : $"install the engine (from a package, or from source with scripts/dev-install.sh in a Lockflight checkout), then a person runs `{EngineCommand.UserInstall} update` in the project {HumanOnlyCommands.WhereToRun}");
     }
-
-    private static bool IsDevelopment(string version) => version.Contains(DevelopmentLabel, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The fix for a pin or link that does not match this engine: a user-level install or a development pin (on no feed) re-pins the
     /// project to the installed engine with <c>init</c>; a release pin restores and links.
     /// </summary>
-    private static string Relink(string? pinned) => EngineCommand.IsUserInstall || (pinned is not null && IsDevelopment(pinned))
+    private static string Relink(string? pinned) => EngineCommand.IsUserInstall || (pinned is not null && EngineVersion.IsDevelopmentBuild(pinned))
         ? $"{EngineCommand.UserInstall} init (re-pins the project to the installed engine and links it; then commit dotnet-tools.json). A person's step: the tool pin is protected"
         : RestoreAndLink;
 

@@ -29,7 +29,10 @@ than a fix, please open an issue first, because the design still moves.
 - **Changelog:** add a line under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) for anything a user notices.
   [git-cliff](https://git-cliff.org) drafts release notes from the commits ([cliff.toml](cliff.toml)).
 - **Versions** follow [Semantic Versioning](https://semver.org/); releases are tagged `vX.Y.Z[-alpha.N]`. The plugin and the
-  engine share one version.
+  engine share one version. The plugin's version in `plugin.json` is the last release: `scripts/dev-install.sh` numbers
+  development builds after it (`0.2.0-alpha.4.dev.<commit time>`, or `0.2.1-0.dev.<commit time>` after a release `0.2.0`) so
+  they sort between that release and the next. `plugins/lockflight/min-engine-version` names the oldest released engine the
+  plugin works with; raise it in the change that makes the plugin depend on something newer.
 
 ## Build and test
 
