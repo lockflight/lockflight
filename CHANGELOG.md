@@ -15,6 +15,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   release is an upgrade; `doctor` suggests `update` for a project still pinned to a development build.
 
 ### Fixed
+- Text from the project (file names, test names, spec lines, ledger fields) can no longer send escape sequences to your
+  terminal; control characters are shown visibly.
+- `lockflight propose` refuses names with control characters, files over 8 MB, and a proposals directory that is a symbolic
+  link, and handles file names starting with `-`.
+- `/lockflight:approve` refuses a tampered or misplaced waiting-code file, a clock that went back, and a `--feature` given as
+  a path, and refuses instead of passing the command to the agent when the engine fails.
 - The session-start notice about a newer installed engine compared the platform folder name instead of the version.
 
 ## [0.2.0-alpha.4] — 2026-10-15
