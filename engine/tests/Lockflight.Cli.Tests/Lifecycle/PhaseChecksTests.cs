@@ -74,6 +74,49 @@ public sealed class PhaseChecksTests : IDisposable
     }
 
     [Fact]
+    public void AMisorderedStoryNamesEachTaskItsLineAndWhy()
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        File.WriteAllText(Feature.SpecPath, Spec);
+        File.WriteAllText(Feature.TasksPath, """
+            ### Implementation for User Story 1
+            - [ ] T010 [US1] (FR-001) Skeleton of PriceCalculator in src/Shop.Api/PriceCalculator.cs
+            - [ ] T011 [US1] (FR-001) Shipping cost in src/Shop.Api/PriceCalculator.cs
+            - [ ] T012 [US1] (FR-002) Spec for the shipping badge in web/src/Badge.spec.ts
+            - [ ] T013 [US1] (FR-002) Badge component in web/src/Badge.tsx
+            - [ ] T020 [US2] (FR-002) Weight limits in src/Shop.Api/Limits.cs
+            """);
+
+        PhaseCheckItem item = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), []).Single(check => check.Name == "tasks.tests-first");
+
+        Assert.False(item.Passed);
+        Assert.Contains("T011 line 3: implementation (no test heading, no test verb, no test file", item.Detail, StringComparison.Ordinal);
+        Assert.Contains("T012 (line 4) of US1", item.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("T010", item.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("T013", item.Detail, StringComparison.Ordinal);
+        Assert.Contains("US2 has no test task", item.Detail, StringComparison.Ordinal);
+        Assert.Contains("### Tests for", item.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FrontendSpecsAndRequirementsAtTheEndOfTheLinePassTheTasksPhase()
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        File.WriteAllText(Feature.SpecPath, Spec);
+        File.WriteAllText(Feature.TasksPath, """
+            - [ ] T010 [US1] Declare the public signatures of the cart store in web/src/cart/store.ts (FR-001)
+            - [ ] T011 [US1] Spec for the cart total in web/src/cart/total.spec.ts (FR-001, FR-002)
+            - [ ] T012 [US1] Cart total in web/src/cart/total.ts, covers FR-001 and FR-002
+            """);
+
+        Dictionary<string, PhaseCheckItem> items = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), []).ToDictionary(item => item.Name);
+
+        Assert.True(items["tasks.cover-requirements"].Passed, items["tasks.cover-requirements"].Detail);
+        Assert.True(items["tasks.cite-requirements"].Passed, items["tasks.cite-requirements"].Detail);
+        Assert.True(items["tasks.tests-first"].Passed, items["tasks.tests-first"].Detail);
+    }
+
+    [Fact]
     public void AUnitTagMustNameAUnitOfTheWorkspace()
     {
         Directory.CreateDirectory(Feature.SpecDirectory);

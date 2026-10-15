@@ -9,7 +9,7 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests (Lockflight)**: Tests are MANDATORY and written FIRST. For every user story, test tasks precede implementation tasks; the tests must fail (red) before implementation starts. Every task line cites the requirement IDs it serves, e.g. `(FR-001, FR-003)`.
+**Tests (Lockflight)**: Tests are MANDATORY and written FIRST. For every user story, test tasks precede implementation tasks; the tests must fail (red) before implementation starts. Every task line cites the requirement IDs it serves, e.g. `(FR-001, FR-003)`. Put test tasks under a `### Tests for User Story N` heading (or start them with "Write tests …" / "Spec for …", or name the test file such as `*.spec.ts` or `*Tests.cs`) and say "stub" in the stub task, so `phase check tasks` sees each task's role.
 
 **Red/green (Lockflight, .NET)**: when a story adds public members, its first task declares them as stubs whose bodies are `throw new NotImplementedException();`. Test tasks then write xUnit v3 tests tagged `[Trait("Requirement", "FR-001")]` against the stubs; `dotnet lockflight redgreen red` must accept the red before implementation tasks start, and `dotnet lockflight redgreen green` closes the story.
 
