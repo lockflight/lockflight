@@ -70,7 +70,8 @@ internal sealed class HookCommand(CliContext context)
 
         HookDecision decision = hookEvent switch
         {
-            HookEvent.PreToolUse => await new ProtectedPathGuard(context.Error, context.Environment).DecideAsync(input, manifest),
+            HookEvent.PreToolUse => ApprovalCommandRelay.Decide(input)
+                ?? await new ProtectedPathGuard(context.Error, context.Environment).DecideAsync(input, manifest),
             HookEvent.Stop => await StopGate.DecideAsync(manifest, context.Time, cancellationToken),
             _ => HookDecision.Allow,
         };
