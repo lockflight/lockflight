@@ -73,7 +73,7 @@ public sealed class InitCommandTests : IDisposable
     {
         File.WriteAllText(
             Path.Combine(projectRoot.FullName, "dotnet-tools.json"),
-            """{ "version": 1, "isRoot": true, "tools": { "Lockflight.Cli": { "version": "0.0.1-dev.1", "commands": ["lockflight"] } } }""");
+            """{ "version": 1, "isRoot": true, "tools": { "Lockflight.Cli": { "version": "0.0.0-dev.1", "commands": ["lockflight"] } } }""");
 
         (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
 

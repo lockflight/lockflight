@@ -20,6 +20,10 @@ REPLACEMENTS = [
     ("(OPTIONAL - only if tests requested)", "(MANDATORY — write first, ensure they FAIL)"),
 ]
 
+# Spec Kit is MIT-licensed: the derived template keeps the attribution (THIRD-PARTY-NOTICES.md has the full text).
+NOTICE = "<!-- Derived from the Spec Kit tasks template, Copyright GitHub, Inc., MIT License (https://github.com/github/spec-kit). -->\n"
+FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
+
 TASK_IN_STORY = re.compile(r"^(- \[ \] T\d{3} (?:\[P\] )?\[US\d+\] )(?!\(FR-)", re.MULTILINE)
 
 
@@ -32,6 +36,10 @@ def main() -> None:
     text, count = TASK_IN_STORY.subn(r"\1(FR-xxx) ", text)
     if count == 0:
         sys.exit("no story task lines found in the stock template")
+    front_matter = FRONT_MATTER.match(text)
+    if front_matter is None:
+        sys.exit("no front matter found in the stock template")
+    text = text[: front_matter.end()] + "\n" + NOTICE + text[front_matter.end():]
     sys.stdout.write(text)
 
 

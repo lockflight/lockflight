@@ -3,6 +3,8 @@
 description: "Task list template for feature implementation"
 ---
 
+<!-- Derived from the Spec Kit tasks template, Copyright GitHub, Inc., MIT License (https://github.com/github/spec-kit). -->
+
 # Tasks: [FEATURE NAME]
 
 **Input**: Design documents from `/specs/[###-feature-name]/`

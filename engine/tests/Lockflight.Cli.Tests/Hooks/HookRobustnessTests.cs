@@ -159,7 +159,7 @@ public sealed class HookRobustnessTests : IDisposable
     }
 
     [Theory]
-    [InlineData("0.0.0")]
+    [InlineData("0.0.0-alpha")]
     [InlineData("not a version")]
     public async Task APluginSatisfiedByTheEngineAddsNoNotice(string minimum)
     {
