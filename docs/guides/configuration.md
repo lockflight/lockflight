@@ -86,6 +86,8 @@ decides it: by the nearest `global.json`'s `test.runner`.
 
 Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform) and xUnit v2 on VSTest.
 
+- **xUnit v3 runs:** natively, through the in-process runner the test assembly references; its version picks the report switch
+  (`-xml` up to 3.x, `-result-xml` from 4.0), so both lines work.
 - **xUnit v2 listing:** tests and their `Requirement` traits are read from the built assemblies' metadata, because VSTest's
   listing has neither.
 - **xUnit v2 runs:** tests run with `dotnet test <dll> --filter`, and failures are read from the TRX. An assertion failure in a test

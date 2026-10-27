@@ -6,7 +6,7 @@ internal enum RunnerMode
     /// <summary>Not probed yet.</summary>
     Unknown = 0,
 
-    /// <summary>xUnit's in-process console runner: <c>-list</c>, <c>-method</c>, <c>-result-xml</c>.</summary>
+    /// <summary>xUnit's in-process console runner: <c>-list</c>, <c>-method</c>, <c>-result-xml</c> (<c>-xml</c> before 4.0).</summary>
     Native = 1,
 
     /// <summary>VSTest (xUnit v2): tests listed from assembly metadata, run with <c>dotnet test &lt;dll&gt; --filter</c>, results from TRX.</summary>
