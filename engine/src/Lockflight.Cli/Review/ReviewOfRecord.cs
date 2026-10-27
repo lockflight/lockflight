@@ -4,7 +4,8 @@ using Lockflight.Cli.Config;
 namespace Lockflight.Cli.Review;
 
 /// <summary>
-/// Whether a run counts as the review of record: only with the manifest's (or the default) model and budget, against a base whose
+/// Whether a run counts as the review of record: only when the reviewer was shown the whole diff, with the manifest's (or the
+/// default) model and budget, against a base whose
 /// commit is the merge base of HEAD and the target branch (so a recent commit on the branch cannot narrow the diff, and an outdated
 /// base cannot widen it). Any other run is recorded too, with the reasons it is not of record, so a re-roll with a
 /// cheaper model or an old base is visible rather than quietly replacing the review.
@@ -12,10 +13,16 @@ namespace Lockflight.Cli.Review;
 internal static class ReviewOfRecord
 {
     private const int ShortCommit = 7;
+    private const int MaxNamedFiles = 3;
 
-    public static IReadOnlyList<string> Reasons(ReviewSettings settings, string model, decimal budgetUsd, ReviewBase reviewBase)
+    public static IReadOnlyList<string> Reasons(ReviewSettings settings, string model, decimal budgetUsd, ReviewBase reviewBase, ReviewDiff diff)
     {
         List<string> reasons = [];
+        if (!diff.IsComplete)
+        {
+            reasons.Add(Incomplete(diff));
+        }
+
         if (!string.Equals(model, settings.Model, StringComparison.Ordinal))
         {
             reasons.Add($"model {model} is not the review model {settings.Model} (review.model)");
@@ -37,6 +44,16 @@ internal static class ReviewOfRecord
         }
 
         return reasons;
+    }
+
+    /// <summary>Why a run whose reviewer was not shown the whole diff is not of record, and what to do instead.</summary>
+    public static string Incomplete(ReviewDiff diff)
+    {
+        string named = string.Join(", ", diff.NotShown.Take(MaxNamedFiles));
+        string more = diff.NotShown.Count > MaxNamedFiles ? $" and {diff.NotShown.Count - MaxNamedFiles} more" : string.Empty;
+        return $"the diff ({diff.Length} characters) is larger than the {diff.Limit} the reviewer is shown, so the reviewer did not see the whole change "
+            + $"({diff.NotShown.Count} of {diff.Files} changed files not shown in full: {named}{more}): split the change into smaller pull requests "
+            + "and review each; a review against a later commit of this branch (--base <commit>) checks only the commits after it and is not of record";
     }
 
     public static string Usd(decimal amount) => amount.ToString("0.00", CultureInfo.InvariantCulture);
