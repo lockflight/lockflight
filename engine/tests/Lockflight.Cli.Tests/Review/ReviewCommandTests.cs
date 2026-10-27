@@ -191,6 +191,26 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task AnEarlierReproductionIsKeptWhenTheFindingIsRaisedWithANewOne()
+    {
+        await ProjectAsync();
+        claude.Answers(
+                """{"severity":"major","file":"src/Orders.cs","line":3,"title":"Discount ignored","evidence":"x","reproduction":"[Fact]\npublic void First() => Assert.Equal(90m, 100m);"}""")
+            .Answers(
+                """{"severity":"major","file":"src/Orders.cs","line":3,"title":"Discount ignored","evidence":"x","reproduction":"[Fact]\npublic void Second() => Assert.True(true);"}""");
+
+        await RunAsync(["review"]);
+        time.Advance(TimeSpan.FromMinutes(5));
+        await RunAsync(["review"]);
+
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(RunFiles().Order(StringComparer.Ordinal).Last()));
+        JsonElement finding = Assert.Single(evidence.RootElement.GetProperty("findings").EnumerateArray().ToArray());
+        Assert.Contains("Second", finding.GetProperty("reproduction").GetString(), StringComparison.Ordinal);
+        string earlier = Assert.Single(finding.GetProperty("earlierReproductions").EnumerateArray().Select(item => item.GetString()!).ToArray());
+        Assert.Contains("First", earlier, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AReproductionThatCannotRunLeavesTheFindingUnverified()
     {
         await ProjectAsync();
