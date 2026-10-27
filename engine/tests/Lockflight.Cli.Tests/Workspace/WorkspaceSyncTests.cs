@@ -1,6 +1,7 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
+using Lockflight.Cli.Paths;
 using Lockflight.Cli.Processes;
 using Lockflight.Cli.Workspace;
 
@@ -34,12 +35,37 @@ public sealed class WorkspaceSyncTests : IDisposable
     [InlineData("services/**/db/**", "**/db/**")]
     [InlineData("**/appsettings.Local.json", "**/appsettings.Local.json")]
     [InlineData("services/orders", "**")]
-    [InlineData("services/billing/**", null)]
-    [InlineData("web/*/dist/**", null)]
-    [InlineData("secrets/**", null)]
-    public void ShellGlobsAreRebasedWhenTheyCanMatchInsideTheUnit(string glob, string? expected)
+    [InlineData("services/**", "**")]
+    [InlineData("services/**.cs", "**.cs")]
+    [InlineData("services/ord**/db/**", "**/db/**")]
+    [InlineData("services/**orders/*.cs", "**orders/*.cs", "*.cs")]
+    [InlineData("services/**/orders/*.cs", "**/orders/*.cs", "*.cs")]
+    [InlineData("services/billing/**")]
+    [InlineData("web/*/dist/**")]
+    [InlineData("secrets/**")]
+    public void ShellGlobsAreRebasedWhenTheyCanMatchInsideTheUnit(string glob, params string[] expected)
     {
         Assert.Equal(expected, UnitPolicy.Rebase(glob, "services/orders"));
+    }
+
+    [Theory]
+    [InlineData("services/**")]
+    [InlineData("services/**.cs")]
+    [InlineData("services/ord**/db/**")]
+    [InlineData("services/**orders/*.cs")]
+    [InlineData("services/**/orders/*.cs")]
+    [InlineData("services/**/db/**")]
+    [InlineData("**/appsettings.Local.json")]
+    [InlineData("services/*/Migrations/**")]
+    [InlineData("s*/o?ders/**/*.json")]
+    public void ARebasedGlobProtectsEveryPathInTheUnitTheShellsGlobProtects(string glob)
+    {
+        string[] paths = ["a.cs", "src/a.cs", "orders/a.cs", "src/orders/a.cs", "db/x.sql", "src/db/x.sql", "Migrations/1.cs", "appsettings.Local.json", "src/appsettings.Local.json", "config/a.json", "a/b/c.json"];
+        IReadOnlyList<string> rebased = UnitPolicy.Rebase(glob, "services/orders");
+
+        string[] lost = [.. paths.Where(path => PathRules.Matches(glob, $"services/orders/{path}") && !rebased.Any(unitGlob => PathRules.Matches(unitGlob, path)))];
+
+        Assert.Empty(lost);
     }
 
     [Fact]
@@ -73,7 +99,9 @@ public sealed class WorkspaceSyncTests : IDisposable
         (ExitCode editedWorkflow, string editedOutput, _) = await TestConsole.RunAsync(["workspace", "sync", "--check"], string.Empty, shell.FullName);
         Assert.Equal(ExitCode.Fail, editedWorkflow);
         Assert.Contains("CI workflow differs from the generated one", editedOutput, StringComparison.Ordinal);
-        await TestConsole.RunAsync(["workspace", "sync"], string.Empty, shell.FullName);
+        (_, string rewriteOutput, _) = await TestConsole.RunAsync(["workspace", "sync"], string.Empty, shell.FullName);
+        Assert.Contains("CI workflow rewritten: it differed from the generated one", rewriteOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("continue-on-error", File.ReadAllText(Path.Combine(Orders, Templates.WorkflowPath)), StringComparison.Ordinal);
         Assert.Equal(ExitCode.Fail, drifted);
         Assert.Contains("DRIFT    services/orders (lockflight.unit.yaml)", driftOutput, StringComparison.Ordinal);
 
