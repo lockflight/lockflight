@@ -17,6 +17,11 @@ internal static class ReviewEvidence
     private const string Schema = "lockflight.review/v2";
     private const string FirstSchema = "lockflight.review/v1";
     private const string BeforeTheRules = "recorded before review-of-record rules existed";
+    private const string WithoutRecordStatus = "the run file does not say whether it is the review of record";
+    private const string WithoutBase = "the run file records no base";
+
+    /// <summary>The length of the time part of a run id after its last dash (<c>yyyyMMdd-HHmmss</c>).</summary>
+    private const int TimeLength = 6;
 
     public static string DirectoryOf(string recordDirectory) => Path.Combine(recordDirectory, DirectoryName);
 
@@ -105,7 +110,11 @@ internal static class ReviewEvidence
         return path;
     }
 
-    /// <summary>The feature's review history; unreadable run files are skipped.</summary>
+    /// <summary>
+    /// The feature's review history. Runs are replayed in the order they were recorded (their time, then the number a run id gets
+    /// when several start in the same second), not by file name. A run file this engine cannot read (not JSON, no time, no
+    /// findings) is skipped and named in <see cref="ReviewHistory.Unreadable"/>; a file of another schema is not a run.
+    /// </summary>
     public static ReviewHistory Load(string recordDirectory)
     {
         string directory = DirectoryOf(recordDirectory);
@@ -114,23 +123,35 @@ internal static class ReviewEvidence
             return ReviewHistory.Empty;
         }
 
-        List<ReviewRunSummary> runs = [];
-        Dictionary<string, TrackedFinding> open = new(StringComparer.Ordinal);
-        Dictionary<string, TrackedFinding> fixedFindings = new(StringComparer.Ordinal);
+        List<string> unreadable = [];
+        List<StoredRun> stored = [];
         foreach (string file in Directory.EnumerateFiles(directory, "*.json").Order(StringComparer.Ordinal))
         {
+            string name = Path.GetFileName(file);
             try
             {
                 using JsonDocument document = JsonDocument.Parse(File.ReadAllText(file));
-                if (ReadRun(document.RootElement, Path.GetFileNameWithoutExtension(file), open, fixedFindings) is ReviewRunSummary run)
+                if (Stored(document.RootElement.Clone(), Path.GetFileNameWithoutExtension(file), out string? problem) is StoredRun run)
                 {
-                    runs.Add(run);
+                    stored.Add(run);
+                }
+                else if (problem is not null)
+                {
+                    unreadable.Add($"{DirectoryName}/{name}: {problem}; the run is ignored");
                 }
             }
-            catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException)
+            catch (JsonException exception)
             {
-                // Not a run this engine wrote: it neither opens nor closes anything.
+                unreadable.Add($"{DirectoryName}/{name}: not valid JSON ({exception.Message}); the run is ignored");
             }
+        }
+
+        List<ReviewRunSummary> runs = [];
+        Dictionary<string, TrackedFinding> open = new(StringComparer.Ordinal);
+        Dictionary<string, TrackedFinding> fixedFindings = new(StringComparer.Ordinal);
+        foreach (StoredRun run in stored.OrderBy(run => run.At).ThenBy(run => run.Sequence).ThenBy(run => run.Id, StringComparer.Ordinal))
+        {
+            runs.Add(ReadRun(run, open, fixedFindings));
         }
 
         IReadOnlyList<FindingDismissal> dismissals = FindingDismissals.Read(recordDirectory);
@@ -139,37 +160,61 @@ internal static class ReviewEvidence
             open.Remove(dismissal.FindingId);
         }
 
-        return new ReviewHistory(runs, [.. open.Values.OrderBy(tracked => tracked.Finding.Severity)], [.. fixedFindings.Values], dismissals);
+        return new ReviewHistory(runs, [.. open.Values.OrderBy(tracked => tracked.Finding.Severity)], [.. fixedFindings.Values], dismissals) { Unreadable = unreadable };
     }
 
-    private static ReviewRunSummary? ReadRun(
-        JsonElement root, string runId, Dictionary<string, TrackedFinding> open, Dictionary<string, TrackedFinding> fixedFindings)
+    /// <summary>The run a file holds; null with the reason when it is unreadable, or with none when it is not a run file at all.</summary>
+    private static StoredRun? Stored(JsonElement root, string id, out string? problem)
     {
-        string schema = Text(root, "schema");
+        problem = null;
+        string schema = root.ValueKind == JsonValueKind.Object ? Text(root, "schema") : string.Empty;
         if (schema is not (Schema or FirstSchema))
         {
             return null;
         }
 
-        DateTimeOffset at = DateTimeOffset.Parse(Text(root, "at"), CultureInfo.InvariantCulture);
-        decimal cost = Number(root, schema == Schema ? "estimatedCostUsd" : "costUsd");
-        if (schema == FirstSchema)
+        if (!DateTimeOffset.TryParse(Text(root, "at"), CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTimeOffset at))
         {
-            return new ReviewRunSummary(runId, at, Text(root, "model"), new ReviewBase(Text(root, "base"), null, string.Empty, null), [BeforeTheRules], cost);
+            problem = "missing or unreadable 'at'";
+            return null;
         }
 
-        foreach (JsonElement element in root.GetProperty("findings").EnumerateArray())
+        if (schema == Schema && !(root.TryGetProperty("findings", out JsonElement findings) && findings.ValueKind == JsonValueKind.Array))
         {
-            ReviewFinding finding = ReadFinding(element);
+            problem = "missing 'findings'";
+            return null;
+        }
+
+        return new StoredRun(id, at, Sequence(id), schema, root);
+    }
+
+    /// <summary>A run id is the time, with <c>-2</c>, <c>-3</c>… when that id was taken (<see cref="NewRunId"/>).</summary>
+    private static int Sequence(string id)
+    {
+        int dash = id.LastIndexOf('-');
+        return dash > 0 && id.Length - dash - 1 != TimeLength && int.TryParse(id.AsSpan(dash + 1), NumberStyles.None, CultureInfo.InvariantCulture, out int sequence) ? sequence : 1;
+    }
+
+    private static ReviewRunSummary ReadRun(StoredRun run, Dictionary<string, TrackedFinding> open, Dictionary<string, TrackedFinding> fixedFindings)
+    {
+        JsonElement root = run.Root;
+        decimal cost = Number(root, run.Schema == Schema ? "estimatedCostUsd" : "costUsd");
+        if (run.Schema == FirstSchema)
+        {
+            return new ReviewRunSummary(run.Id, run.At, Text(root, "model"), new ReviewBase(Text(root, "base"), null, string.Empty, null), [BeforeTheRules], cost);
+        }
+
+        foreach (ReviewFinding finding in root.GetProperty("findings").EnumerateArray().Where(element => element.ValueKind == JsonValueKind.Object).Select(ReadFinding))
+        {
             switch (finding.State)
             {
                 case FindingState.Open:
-                    string firstRun = open.TryGetValue(finding.Id, out TrackedFinding? earlier) ? earlier.FirstRun : runId;
-                    open[finding.Id] = new TrackedFinding(finding, firstRun, runId);
+                    string firstRun = open.TryGetValue(finding.Id, out TrackedFinding? earlier) ? earlier.FirstRun : run.Id;
+                    open[finding.Id] = new TrackedFinding(finding, firstRun, run.Id);
                     fixedFindings.Remove(finding.Id);
                     break;
                 case FindingState.Fixed:
-                    fixedFindings[finding.Id] = new TrackedFinding(finding, open.Remove(finding.Id, out TrackedFinding? opened) ? opened.FirstRun : runId, runId);
+                    fixedFindings[finding.Id] = new TrackedFinding(finding, open.Remove(finding.Id, out TrackedFinding? opened) ? opened.FirstRun : run.Id, run.Id);
                     break;
                 case FindingState.Dismissed:
                     open.Remove(finding.Id);
@@ -177,10 +222,19 @@ internal static class ReviewEvidence
             }
         }
 
-        JsonElement reviewBase = root.GetProperty("base");
-        string[] notOfRecord = [.. root.GetProperty("notOfRecord").EnumerateArray().Select(reason => reason.GetString() ?? string.Empty)];
-        ReviewBase recordedBase = new(Text(reviewBase, "ref"), OptionalText(reviewBase, "commit"), Text(reviewBase, "target"), OptionalText(reviewBase, "mergeBase"));
-        return new ReviewRunSummary(runId, at, Text(root, "model"), recordedBase, notOfRecord, cost);
+        bool hasBase = root.TryGetProperty("base", out JsonElement reviewBase) && reviewBase.ValueKind == JsonValueKind.Object;
+        ReviewBase recordedBase = hasBase
+            ? new(Text(reviewBase, "ref"), OptionalText(reviewBase, "commit"), Text(reviewBase, "target"), OptionalText(reviewBase, "mergeBase"))
+            : new(string.Empty, null, string.Empty, null);
+        List<string> notOfRecord = root.TryGetProperty("notOfRecord", out JsonElement reasons) && reasons.ValueKind == JsonValueKind.Array
+            ? [.. reasons.EnumerateArray().Select(reason => reason.ValueKind == JsonValueKind.String ? reason.GetString() ?? string.Empty : reason.ToString())]
+            : [WithoutRecordStatus];
+        if (!hasBase)
+        {
+            notOfRecord.Add(WithoutBase);
+        }
+
+        return new ReviewRunSummary(run.Id, run.At, Text(root, "model"), recordedBase, notOfRecord, cost);
     }
 
     private static ReviewFinding ReadFinding(JsonElement element) =>
