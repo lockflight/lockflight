@@ -105,12 +105,14 @@ relative path could be anywhere, including a protected file, so relative writes 
 
 ## The engine package is not found
 
-During the private preview, `Lockflight.Cli` is served from a private GitHub Packages feed. You need a `nuget.config` that
-points at the feed and a token with `read:packages`:
+The `Lockflight.Cli` packages are not on nuget.org yet, so `dotnet tool install Lockflight.Cli` finds nothing. Until they are
+published, [install from source](getting-started.md#install-from-source-no-feed-no-token) with `scripts/dev-install.sh`: it
+packs the engine into a local feed (`~/.lockflight/feed`) and needs no package feed and no token. [Install from a
+package](getting-started.md#install-from-a-package) works once the packages are published.
 
-```sh
-gh auth refresh -s read:packages
-```
+A project set up from a source install pins a development build that only your machine's local feed has. `doctor` reports
+that pin: **pin restorable** FAIL when this machine cannot restore it ([fix](#dotnet-lockflight-fails-the-pinned-version-is-not-found)),
+or a **development pin** warning once a release is installed ([fix](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine)).
 
 ## A gate says NOT-EARNED
 
@@ -121,7 +123,7 @@ The gate could not judge, and NOT-EARNED is never a pass. The line under the ste
 - the test run reported no test count;
 - gitleaks is not installed (set `LOCKFLIGHT_GITLEAKS` or put it on `PATH`);
 - `claude` is not on `PATH` for `review`;
-- red/green found no xUnit v3 test application;
+- red/green found no xUnit test project (xUnit v3, or xUnit v2 on VSTest; other test frameworks get the gates only);
 - `format` could not list the changed lines (with `--base`, a shallow checkout: use `fetch-depth: 0`).
 
 A step that says **N/A** did not apply (for example `coverage.patch` without `gates.coverage.collector`). It is neither a pass
@@ -171,10 +173,18 @@ command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approv
 
 ## Uninstall
 
-1. `/plugin uninstall lockflight@lockflight` in Claude Code.
-2. `dotnet tool uninstall Lockflight.Cli`.
-3. Remove `lockflight.yaml`, `.lockflight/`, `.github/workflows/lockflight-gates.yml` and the Lockflight entries in
-   `.claude/settings.json` and `.gitignore`.
+1. In each project, if you ran `adopt apply`, run `.lockflight/bin/lockflight adopt undo` first, in a separate terminal window,
+   to revert what it changed.
+2. In each project, remove what `init` added: `lockflight.yaml`, `.lockflight/`, the tool pin (the `lockflight.cli` entry
+   in `dotnet-tools.json` or `.config/dotnet-tools.json`; `dotnet tool uninstall Lockflight.Cli` removes it),
+   `.github/workflows/lockflight-gates.yml`, the Lockflight marketplace and plugin entries in `.claude/settings.json`, and the
+   Lockflight blocks in `.gitignore` and (standard profile) `.gitattributes`. The `<!-- lockflight:begin -->` …
+   `<!-- lockflight:end -->` block in `CLAUDE.md` can go too.
+3. In Claude Code, `/plugin uninstall lockflight@lockflight`, and `/plugin uninstall lockflight-crew@lockflight` if you
+   installed the crew. Then remove the marketplace: `/plugin marketplace remove lockflight`.
+4. Remove the user install: `rm -rf ~/.lockflight`. A package install and an install from source share this layout
+   (`~/.lockflight/bin/lockflight` pointing at `~/.lockflight/tools/<version>`); a source install also keeps its local feed
+   (`~/.lockflight/feed`) and the path of its checkout (`~/.lockflight/source`) there.
 
 ## Next
 

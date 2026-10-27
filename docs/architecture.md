@@ -168,7 +168,7 @@ No line names a person: who approved a phase is kept in the approval record, not
 
 | On your machine (guardrails) | Outside the agent's reach (boundaries) |
 |---|---|
-| The guard, the Stop gate, red/green evidence, trace, the review of record, local approvals | CI running the pinned engine with the base branch's policy as a required check; signed approvals verified in CI; merge by a person |
+| The guard, the Stop gate, red/green evidence, trace, the review of record, local approvals | CI running the pinned engine with the base branch's policy as a required check; signed approvals verified in CI; merge by a person, when the agent has its own identity (otherwise it can merge with your token) |
 
 The in-session controls make the right path the easy one and catch accidents early. The pull request is where the verdict
 counts.

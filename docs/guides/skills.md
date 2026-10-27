@@ -18,8 +18,8 @@ The plugin adds these skills to Claude Code. Claude picks them from what you ask
 | `review` | "review this before the PR" | Runs the review of record and handles confirmed, unverified and not-reproduced findings |
 | `retro` | "what keeps going wrong?" | Runs `ledger retro` and walks through the suggested remedies |
 
-The plugin also installs three hooks: `SessionStart` (a short banner), `PreToolUse` (the guard) and `Stop` (the stop gate,
-when `stop.gate: true`).
+The plugin also installs four hooks: `SessionStart` (a short banner), `PreToolUse` (the guard), `UserPromptExpansion`
+(records `/lockflight:approve` when you type it) and `Stop` (the stop gate, when `stop.gate: true`).
 
 ## The crew (optional)
 
