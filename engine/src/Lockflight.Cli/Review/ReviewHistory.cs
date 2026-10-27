@@ -6,6 +6,9 @@ internal sealed record ReviewHistory(
 {
     public static ReviewHistory Empty { get; } = new([], [], [], []);
 
+    /// <summary>Run files that could not be read, each with its path under the feature's record directory and why; they count for nothing.</summary>
+    public IReadOnlyList<string> Unreadable { get; init; } = [];
+
     public bool IsOpen(string id) => Open.Any(tracked => tracked.Finding.Id == id);
 
     public bool IsDismissed(string id) => Dismissed.Any(dismissal => dismissal.FindingId == id);

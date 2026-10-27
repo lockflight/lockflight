@@ -242,6 +242,68 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task RunsAreReplayedInTheOrderTheyWereRecorded()
+    {
+        await ProjectAsync();
+        Directory.CreateDirectory(ReviewsDirectory());
+        WriteRun("20261027-090000", "2026-10-27T09:00:00.1000000+00:00", "open");
+        WriteRun("20261027-090000-2", "2026-10-27T09:00:00.5000000+00:00", "fixed");
+
+        (_, string status, _) = await RunAsync(["review", "status"]);
+
+        Assert.Contains("Open findings (0)", status, StringComparison.Ordinal);
+        Assert.Contains("Fixed (1)", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RunsRecordedAtTheSameTimeAreReplayedByTheirNumber()
+    {
+        await ProjectAsync();
+        Directory.CreateDirectory(ReviewsDirectory());
+        const string at = "2026-10-27T09:00:00.0000000+00:00";
+        WriteRun("20261027-090000", at, "open");
+        WriteRun("20261027-090000-2", at, "fixed");
+        WriteRun("20261027-090000-10", at, "open");
+
+        (_, string status, _) = await RunAsync(["review", "status"]);
+
+        Assert.Contains("Open findings (1)", status, StringComparison.Ordinal);
+        Assert.Contains("open since run 20261027-090000-10", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARunFileWithoutFindingsIsReportedAndSkipped()
+    {
+        await ProjectAsync();
+        Directory.CreateDirectory(ReviewsDirectory());
+        File.WriteAllText(
+            Path.Combine(ReviewsDirectory(), "20261027-090000.json"),
+            """{"schema":"lockflight.review/v2","at":"2026-10-27T09:00:00.0000000+00:00","model":"opus","base":{"ref":"main"},"notOfRecord":[]}""");
+
+        (ExitCode exitCode, string status, _) = await RunAsync(["review", "status"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("20261027-090000.json", status, StringComparison.Ordinal);
+        Assert.Contains("'findings'", status, StringComparison.Ordinal);
+        Assert.Contains("0 review runs", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARunFileWithoutItsBaseIsReadButNotOfRecord()
+    {
+        await ProjectAsync();
+        Directory.CreateDirectory(ReviewsDirectory());
+        File.WriteAllText(
+            Path.Combine(ReviewsDirectory(), "20261027-090000.json"),
+            """{"schema":"lockflight.review/v2","at":"2026-10-27T09:00:00.0000000+00:00","model":"opus","findings":[]}""");
+
+        (ExitCode exitCode, string status, _) = await RunAsync(["review", "status"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("1 review run (0 of record)", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task MinorFindingsAreReportedAndNeverOpen()
     {
         await ProjectAsync();
@@ -395,6 +457,11 @@ public sealed class ReviewCommandTests : IDisposable
         await ProcessRunner.RunAsync("git", arguments, root.FullName, TestContext.Current.CancellationToken);
 
     private string ReviewsDirectory() => Path.Combine(root.FullName, ".lockflight", "features", Feature, "reviews");
+
+    private void WriteRun(string id, string at, string state) =>
+        File.WriteAllText(
+            Path.Combine(ReviewsDirectory(), id + ".json"),
+            $$"""{"schema":"lockflight.review/v2","at":"{{at}}","model":"opus","base":{"ref":"main","target":"main"},"notOfRecord":[],"findings":[{"id":"abc123abc123","severity":"major","outcome":"confirmed","state":"{{state}}","file":"src/Orders.cs","line":3,"title":"Discount ignored","evidence":"x"}]}""");
 
     private string[] RunFiles() => Directory.GetFiles(ReviewsDirectory(), "*.json");
 

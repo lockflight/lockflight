@@ -99,6 +99,11 @@ internal sealed class ReviewCommand(CliContext context)
         }
 
         ReviewHistory history = ReviewEvidence.Load(feature.RecordDirectory);
+        foreach (string problem in history.Unreadable)
+        {
+            await context.Error.WriteLineAsync($"lockflight: warning: {problem}; restore it from version control or delete it");
+        }
+
         IReadOnlyList<ReviewFinding> judged = await ConfirmFindingsAsync(manifest, feature, FindingLifecycle.Carry(outcome.Findings, history), cancellationToken);
         outcome = outcome with { Findings = FindingLifecycle.Resolve(judged, history) };
         ReviewRun run = new(

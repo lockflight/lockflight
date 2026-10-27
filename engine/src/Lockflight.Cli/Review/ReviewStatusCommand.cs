@@ -40,6 +40,15 @@ internal sealed class ReviewStatusCommand(CliContext context)
                 $"- {run.Id} {run.Model}, {ReviewSummary.Bases(run.Base)}, ${run.EstimatedCostUsd.ToString("0.000", CultureInfo.InvariantCulture)} (estimate), {record}");
         }
 
+        if (history.Unreadable.Count > 0)
+        {
+            await output.WriteLineAsync($"\nUnreadable run files ({history.Unreadable.Count}); restore them from version control or delete them:");
+            foreach (string problem in history.Unreadable)
+            {
+                await output.WriteLineAsync($"- {problem}");
+            }
+        }
+
         await output.WriteLineAsync($"\nOpen findings ({history.Open.Count}):");
         foreach (TrackedFinding tracked in history.Open)
         {
