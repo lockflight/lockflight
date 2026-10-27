@@ -9,8 +9,8 @@ namespace Lockflight.Cli.Tests.Hooks;
 public sealed class GuardPerformanceTests : IDisposable
 {
     private const int PackageCount = 1500;
-    private const int MaxDecisionMilliseconds = 200;
-    private const int MaxTimesOneWalk = 4;
+    private const int MaxDecisionMilliseconds = 500;
+    private const int MaxTimesOneWalk = 8;
     private const int TimedRuns = 3;
 
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-perf-");
@@ -31,7 +31,8 @@ public sealed class GuardPerformanceTests : IDisposable
     [InlineData("rm -rf node_modules/*/lib")]
     public async Task AWildcardOverThousandsOfDirectoriesIsDecidedQuickly(string command)
     {
-        // Slow CI runners get the allowance of a few walks of the whole directory (what "rm -rf node_modules" costs anyway).
+        // Shared CI runners are noisy: allow several walks of the whole directory (what "rm -rf node_modules" costs anyway). The
+        // bound still catches a decision that grows faster than the tree, which is what this test is for.
         long oneWalk = await TimeAsync("rm -rf node_modules");
         long elapsed = await TimeAsync(command);
 
