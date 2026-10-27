@@ -12,7 +12,8 @@ description: Run Lockflight's deterministic gates (format, build, tests; with --
    - **PASS** — every step passed over a non-empty scope.
    - **N/A** — no step applied to this run (for example `--profile edit` with no changed C# lines); exit 0. Say that nothing
      was judged rather than calling it a pass.
-   - **NOT-EARNED** — nothing was judged (for example zero tests ran). Treat it as a failure: say what is missing.
+   - **NOT-EARNED** — the gate could not judge (for example zero tests ran, or gitleaks is missing). It is not a pass, and
+     it does not say the code is wrong: say what is missing so the step can judge, and never call the task done.
    - **FAIL** — the code has a problem; show the failing step and its first error, then fix the code (never the tests or the
      gate configuration to make it pass).
    - **ERROR** — the tool or environment broke (missing runtime, toolchain, network). Explain the environment problem; do not

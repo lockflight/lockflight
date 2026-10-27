@@ -9,11 +9,11 @@ The plugin adds these skills to Claude Code. Claude picks them from what you ask
 
 | Skill | Ask for example | What it does |
 |---|---|---|
-| `init` | "set up Lockflight" | Installs and pins the engine, runs `init` (lite or standard), sets up Spec Kit and the preset for standard, runs `doctor` |
+| `init` | "set up Lockflight" | Uses the engine you installed (from source during the preview), sets up Spec Kit and the preset for a new standard project before `init`, runs `init` (lite or standard), adopts an existing setup, runs `doctor` |
 | `doctor` | "why is everything blocked?" | Runs `doctor` and explains each fix; handles recovery mode |
 | `status` | "what has Lockflight been doing?" | Readiness, lockdown, and recent blocks and verdicts from the ledger |
 | `gate` | "check the code", or before declaring a task done | Runs `gate run` and explains the verdict |
-| `feature` | "build feature X" | The standard lifecycle: specify → clarify → plan → tasks → red/green per story → trace → gates |
+| `feature` | "build feature X" | The standard lifecycle: specify → clarify → plan → tasks → red/green per story → trace → gates → review. In a lite project (no `.specify/`) it stops and offers the standard setup |
 | `approve` | **only you can invoke it**: `/lockflight:approve spec\|tasks` | Typed by you, the engine's hook shows you what would be approved with a one-time code, and records the approval when you type `/lockflight:approve spec <code>`. The agent then checks the recorded state with `approve verify` and continues; if nothing was recorded, it summarises what would be approved and tells you how to approve (here, or in a separate terminal window). The agent never sees or types the code. See [commands](commands.md#human-decisions). |
 | `review` | "review this before the PR" | Runs the review of record and handles confirmed, unverified and rejected findings; open ones stay open across runs until fixed or dismissed by you, and it checks them with `review status` |
 | `retro` | "what keeps going wrong?" | Runs `ledger retro` and walks through the suggested remedies |
