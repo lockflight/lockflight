@@ -21,7 +21,9 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - run: npm install -g @anthropic-ai/claude-code
+      # The canary checks Lockflight against a known Claude Code version; ci.yml pins the same one. To test a new release, bump
+      # both together and run this workflow.
+      - run: npm install -g @anthropic-ai/claude-code@2.1.309
       - name: Build the engine
         working-directory: engine
         run: dotnet publish src/Lockflight.Cli -c Release -r linux-x64 -o ../out -nologo

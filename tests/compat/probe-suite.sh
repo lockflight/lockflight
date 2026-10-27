@@ -132,13 +132,14 @@ fi
 sed 's/"9.9.9"/"9.9.9-dev.1"/' "$proj/dotnet-tools.json" > "$WORK/t" && mv "$WORK/t" "$proj/dotnet-tools.json"
 check "dev pin mismatch: Write blocked"   2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 if grep -q 'lockflight update' "$WORK/err"; then pass=$((pass+1)); echo "dev pin mismatch: names update: ok"; else fail=$((fail+1)); echo "dev pin mismatch: names update: FAIL ($(head -c 400 "$WORK/err"))"; fi
+# An engine that crashes must block, never allow. On Windows the shim prefers lockflight.exe, so the stub there is a real .exe
+# (Git Bash's false.exe, exit 1); elsewhere a script exiting 3.
 case "$ENGINE" in
-  *.exe) ;;
-  *)
-    printf '#!/bin/sh\nexit 3\n' > "$proj/.lockflight/bin/lockflight"
-    check "crashing engine: tool call blocked" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
-    checkexp "crashing engine: approve blocked"  2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
-    checkexp "crashing engine: other slash command" 3 cli 1 "$(expansion "$proj" lockflight:status "")" ;;
+  *.exe) cp /usr/bin/false.exe "$proj/.lockflight/bin/lockflight.exe" || { echo "no /usr/bin/false.exe to stand in for a crashing engine"; exit 1; }; crash=1 ;;
+  *) printf '#!/bin/sh\nexit 3\n' > "$proj/.lockflight/bin/lockflight"; crash=3 ;;
 esac
+check "crashing engine: tool call blocked" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
+checkexp "crashing engine: approve blocked"  2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
+checkexp "crashing engine: other slash command" "$crash" cli 1 "$(expansion "$proj" lockflight:status "")"
 
 echo "passed=$pass failed=$fail"; rm -rf "$WORK"; [ "$fail" = 0 ]
