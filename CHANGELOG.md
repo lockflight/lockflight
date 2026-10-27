@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0-alpha.6] — 2026-10-27
+
 ### Added
 - `lockflight-crew`, an optional plugin in the same marketplace, with a test author agent: at the red step of
   `/lockflight:feature` it writes a story's failing tests against the declared stubs until `redgreen red` accepts them. The
@@ -35,7 +37,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   as well as v3, what to do while the engine package is not published (install from source; no feed token), and uninstall
   steps for both install modes, the crew plugin and the marketplace.
 
+- While the engine pin is a development build, `init` writes a CI workflow that runs by hand (`--ci pr` still available
+  with a warning), and the workflow installs the engine outside `global.json`, so SDK 8 and 9 projects work.
+- `doctor` warns when gitleaks is missing or Claude Code is older than 2.1.295; messages name `.lockflight/bin/lockflight`.
+- `adopt plan` ends with the exact `adopt apply` command, including the Spec Kit preset path.
+- The README and getting started describe the install that works today, the requirements (SDK-style .NET 8, 9, 10; macOS or
+  Linux; Claude Code 2.1.295 or later; gitleaks) and a short path for monorepos and existing setups.
+- The engine package carries a readme for nuget.org, an icon and third-party notices; the Spec Kit preset is pinned exactly.
+
 ### Fixed
+- Gates no longer report PASS when they judged nothing or missed a failure: a Microsoft.Testing.Platform run in which every
+  test is skipped is NOT-EARNED; a crashed, aborted or timed-out test host is ERROR or FAIL before the known-failing baseline
+  is applied; failed test names are read from coloured output in GitHub Actions.
+- In a workspace, the Stop gate and `gate run` judge a unit whose state changed since its last PASS, committed or not, with
+  committed shared build inputs in each unit's key; `--path`, baselines and a Stop target inside a unit use the unit's own
+  `build:`, framework and `stopFilter`. Coverage maps deterministic CI source paths (`/_/…`).
+- The shell guard reads nested shell command strings in every spelling (`bash -ce`, `sh -c --`, here-documents, `eval`,
+  positional parameters, `while read` loops); a command string it cannot see (`eval "$X"`, `curl … | sh`) is blocked. It
+  judges paths where the operating system opens them (`..` after a symbolic link, Unicode composed names, Windows `\\?\`
+  and UNC paths), binds `for` loop variables, treats hard links and `rsync --remove-source-files` as writes, and sees more
+  writers in POSIX shells and PowerShell.
+- A typed `/lockflight:approve` is never passed to the agent when the engine fails or is missing; a waiting code is
+  discarded after five wrong codes; the digest describes exactly the bytes the code binds.
+- `lockflight review` keeps an open finding's higher severity and re-runs every known reproduction before marking it fixed,
+  replays runs in recorded order, and runs the reviewer with explicit permission and sign-in flags.
+- `init` and `update` never lower the engine pin; `doctor` and `init` report an unreadable `.claude/settings.json` or tool
+  manifest with the fix instead of failing.
+- `adopt` installs a Spec Kit version that is not on PyPI from its GitHub tag and keeps a newer Spec Kit than the pinned
+  one (installing only the preset); it no longer writes through symbolic links, and `adopt undo` skips unfinished backups.
+- `link` copies only a native single-file engine, so platforms without their own package no longer end up with an engine
+  that cannot start; the `any` package is gone and macOS Intel (`osx-x64`) has its own.
+- The hook shim refuses an engine that is committed to the repository or owned by another user.
+- `phase check tasks` no longer counts "Make tests pass…" as a test task; `trace` with no requirements is NOT-EARNED.
 - `redgreen red` no longer accepts reds that never reach production code. An assertion counts as RED_ASSERT only when the test
   calls production code (else RED_NO_PRODUCTION); `Assert.Fail`, a throwing fixture or constructor and other test-framework
   failures are RED_IN_TEST; an exception other than the stub's, or one thrown by the runtime or a library, is RED_OTHER and
@@ -140,7 +173,8 @@ The first public release. Earlier versions were private previews; this entry sum
 - Levi, the pixel lock-keeper, in your terminal and, if you like, in Claude Code's status line (`lockflight statusline`). Only
   people see him.
 
-[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.5...HEAD
+[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.6...HEAD
+[0.2.0-alpha.6]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.5...v0.2.0-alpha.6
 [0.2.0-alpha.5]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.4...v0.2.0-alpha.5
 [0.2.0-alpha.4]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.3...v0.2.0-alpha.4
 [0.2.0-alpha.3]: https://github.com/lockflight/lockflight/releases/tag/v0.2.0-alpha.3
