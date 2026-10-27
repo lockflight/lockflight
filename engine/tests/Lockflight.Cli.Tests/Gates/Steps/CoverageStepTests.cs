@@ -29,5 +29,17 @@ public sealed class CoverageStepTests : IDisposable
         Assert.Equal(ExitCode.Pass, VerdictNames.ToExitCode(Verdict.NotApplicable));
     }
 
+    [Fact]
+    public void TheDeterministicSourceRootIsTheNearestRepositoryAboveTheTarget()
+    {
+        string unit = Path.Combine(projectRoot.FullName, "services", "orders");
+        Directory.CreateDirectory(Path.Combine(unit, ".git"));
+        Directory.CreateDirectory(Path.Combine(unit, "src"));
+        File.WriteAllText(Path.Combine(projectRoot.FullName, ".git"), "gitdir: elsewhere");
+
+        Assert.Equal(unit, CoverageStep.RepositoryRootOf(Path.Combine(unit, "src")));
+        Assert.Equal(projectRoot.FullName, CoverageStep.RepositoryRootOf(Path.Combine(projectRoot.FullName, "web")));
+    }
+
     public void Dispose() => projectRoot.Delete(recursive: true);
 }
