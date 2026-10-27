@@ -31,6 +31,8 @@ public sealed class AdoptCommandTests : IDisposable
         Assert.Contains("<!-- lockflight:begin -->", claudeMd, StringComparison.Ordinal);
         Assert.Contains("2 existing features marked", applyOutput, StringComparison.Ordinal);
         Assert.Contains("./.claude/hooks", settingsAfterApply, StringComparison.Ordinal);
+        Assert.Contains("Edit(/.claude/hooks/**)", settingsAfterApply, StringComparison.Ordinal);
+        Assert.Contains("Edit(/**/appsettings.Local.json)", settingsAfterApply, StringComparison.Ordinal);
         Assert.Contains("PreToolUse", settingsAfterApply, StringComparison.Ordinal);
         Assert.Equal(ExitCode.Pass, undo);
         Assert.Equal(before, Snapshot());

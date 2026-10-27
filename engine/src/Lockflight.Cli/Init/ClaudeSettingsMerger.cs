@@ -5,8 +5,8 @@ using Lockflight.Cli.Hosting;
 namespace Lockflight.Cli.Init;
 
 /// <summary>
-/// Adds the Lockflight marketplace, enables the plugin and adds the sandbox write denials for the protected paths
-/// (<see cref="SandboxSettings"/>) in a project's <c>.claude/settings.json</c>, keeping every other key
+/// Adds the Lockflight marketplace, enables the plugin and adds the <c>Edit</c> deny rules (<see cref="PermissionDenyRules"/>)
+/// and the sandbox write denials (<see cref="SandboxSettings"/>) for the protected paths in a project's <c>.claude/settings.json</c>, keeping every other key
 /// (a project-scope install alone writes only <c>enabledPlugins</c>, so teammates would never be offered the plugin). Settings it
 /// cannot merge into without losing something are left as they are, and <see cref="Problem"/> says why.
 /// </summary>
@@ -49,9 +49,9 @@ internal static class ClaudeSettingsMerger
             return $"has a \"{notAnObject}\" that is not an object";
         }
 
-        if (SandboxSettings.Problem(settings) is string sandboxProblem)
+        if ((SandboxSettings.Problem(settings) ?? PermissionDenyRules.Problem(settings)) is string listProblem)
         {
-            return sandboxProblem;
+            return listProblem;
         }
 
         return settings[EnabledPluginsKey]?[Templates.PluginId] is JsonNode plugin && plugin.GetValueKind() is not (JsonValueKind.True or JsonValueKind.False)
@@ -60,8 +60,9 @@ internal static class ClaudeSettingsMerger
     }
 
     /// <param name="existingJson">The settings file's text; null when there is none.</param>
+    /// <param name="denyRules">The <c>permissions.deny</c> rules to add (<see cref="PermissionDenyRules.For"/>).</param>
     /// <param name="denyWrite">The sandbox write denials to add (<see cref="SandboxSettings.DenyWrite"/>); null adds none.</param>
-    public static (string Json, bool Changed) Merge(string? existingJson, IReadOnlyList<string>? denyWrite)
+    public static (string Json, bool Changed) Merge(string? existingJson, IReadOnlyList<string> denyRules, IReadOnlyList<string>? denyWrite)
     {
         if (existingJson is not null && Problem(existingJson) is not null)
         {
@@ -88,6 +89,7 @@ internal static class ClaudeSettingsMerger
             changed = true;
         }
 
+        changed |= PermissionDenyRules.Merge(settings, denyRules);
         if (denyWrite is not null)
         {
             changed |= SandboxSettings.Merge(settings, denyWrite);
@@ -97,10 +99,10 @@ internal static class ClaudeSettingsMerger
     }
 
     /// <summary>
-    /// Only the sandbox write denials, for <c>adopt apply</c>, which leaves the plugin settings to <c>init</c>. A file that does not
-    /// exist is created; one that cannot be merged into is left as it is.
+    /// Only the protected-path lists, for <c>adopt apply</c>, which leaves the plugin settings to <c>init</c>: the deny rules, and the
+    /// sandbox write denials unless null. A file that does not exist is created; one that cannot be merged into is left as it is.
     /// </summary>
-    public static (string Json, bool Changed) MergeSandbox(string? existingJson, IReadOnlyList<string> denyWrite)
+    public static (string Json, bool Changed) MergeProtectedPaths(string? existingJson, IReadOnlyList<string> denyRules, IReadOnlyList<string>? denyWrite)
     {
         if (existingJson is not null && Problem(existingJson) is not null)
         {
@@ -108,7 +110,12 @@ internal static class ClaudeSettingsMerger
         }
 
         JsonObject settings = existingJson is null ? [] : JsonNode.Parse(existingJson)?.AsObject() ?? [];
-        bool changed = SandboxSettings.Merge(settings, denyWrite);
+        bool changed = PermissionDenyRules.Merge(settings, denyRules);
+        if (denyWrite is not null)
+        {
+            changed |= SandboxSettings.Merge(settings, denyWrite);
+        }
+
         return (JsonFiles.Format(settings), changed);
     }
 

@@ -5,7 +5,8 @@ around one.
 
 **On this page:** [Two kinds of control](#two-kinds-of-control) · [Every control, labelled](#every-control-labelled) ·
 [What the shell write detection sees](#what-the-shell-write-detection-sees) ·
-[The Claude Code sandbox](#the-claude-code-sandbox) · [Proposing a protected change](#proposing-a-protected-change) ·
+[The Claude Code sandbox](#the-claude-code-sandbox) · [Permission deny rules](#permission-deny-rules) ·
+[Proposing a protected change](#proposing-a-protected-change) ·
 [GitHub plan limits](#github-plan-limits) · [Every safeguard red at least once](#every-safeguard-red-at-least-once) ·
 [What this means in practice](#what-this-means-in-practice)
 
@@ -35,6 +36,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | In-session approval (`/lockflight:approve`, typed by you) | G | It works only in an interactive session, and binds the approval to the content the engine showed you. A prompt Claude Code starts by itself (a scheduled task, a loop, a message from another session) expands slash commands like a typed one, so the guard blocks any tool call that would queue `/lockflight:approve`; the code is shown in the session transcript, so it binds content, it is not a secret; a fifth wrong code discards it, and a typed `/lockflight:approve` is refused rather than passed on to the agent when the engine is missing or fails. It cannot stop a message sent from a session outside this project, or an agent that drives your terminal (tmux, AppleScript). The boundary is a presence-gated signature (`--sign`) verified in CI against signers from the base branch. |
 | Linked engine trust: the hook shim runs `.lockflight/bin/lockflight` only when it is not committed to the repository and, outside Windows, belongs to you | G | It stops a cloned project from shipping its own program as the engine, and a `lockflight.yaml` in a shared folder such as `/tmp` from running another user's binary. The shim does not compare the binary with the released package. A passed check is remembered in `.git` until the file changes, so committing the unchanged file afterwards goes unnoticed until the engine is linked again. Without `git` on the path the committed check is skipped. A project you trust can already run code through its own hooks, so this narrows one path; it is not a sandbox. |
 | Sandbox write denials for protected paths (`sandbox.filesystem.denyWrite`, listed by `init` and `adopt apply`) | G, stronger | While the Claude Code sandbox is on (macOS, Linux, WSL2), the operating system refuses a shell command's write to those paths, in every child process, however the command hides it. It is still your machine: the sandbox is off unless you or your organisation turn it on, Claude can retry a refused command outside the sandbox unless `allowUnsandboxedCommands` is `false`, the built-in Edit and Write tools are not sandboxed (the guard covers them), and native Windows has no sandbox. See [below](#the-claude-code-sandbox) |
+| Claude Code deny rules for protected paths (`permissions.deny`: `Edit(/lockflight.yaml)`, …, written by `init` and `adopt apply`) | G | A second layer for the built-in file tools: Claude Code refuses them there itself, before the guard runs and even if the plugin is not loaded. Claude Code also applies these rules to the file commands it recognises in Bash (`sed`, `tee`, redirections), but not to a command that writes without naming the file. They live in a settings file the agent cannot edit through these tools, but you, or a command run outside Claude Code, can |
 | Task completion gate (`TaskCompleted` hook, with `stop.gate: true`) | G | A task is marked completed only when the stop gate has passed for the current tree (the Stop gate's or a `gate run`'s cached PASS). It reads evidence and runs no build. Claude Code completes the task when the hook fails or times out (only exit 2 blocks), and it does not block twice on a tree the Stop gate already sent back in the session |
 | Stop gate at the end of a turn | G | the agent's own session; Claude Code caps continuations |
 | Test lock during a red cycle | G | applied by the guard (above); see the shell commands it recognises below |
@@ -232,6 +234,27 @@ Turning the sandbox on is a choice for you or your organisation:
 `lockflight doctor` shows the state: whether the list is there and covers the protected files that exist, and whether the
 sandbox is on in the managed, local, project or user settings. Even on, it is a guardrail: it runs on your machine with your
 credentials, a person can turn it off, and hooks, MCP servers and the built-in file tools run outside it.
+
+## Permission deny rules
+
+`init` and `adopt apply` add one `Edit` rule per protected path to `permissions.deny` in `.claude/settings.json`, merged into
+the team's rules without duplicates. Deny rules are evaluated before allow rules in every settings scope, so an allow rule
+cannot open a protected path again. An `Edit` rule covers every built-in tool that edits files (Claude Code never matches a
+`Write(path)` rule), and `/path` is relative to the session's working directory in project settings. Run `init` again to add
+rules for protected files created since.
+
+```json
+{ "permissions": { "deny": ["Edit(/**/Directory.Build.props)", "Edit(/.claude/settings.json)", "Edit(/.lockflight/bin/**)", "Edit(/lockflight.yaml)"] } }
+```
+
+- A pattern (`**/Directory.Build.props`, `.lockflight/features/*/approvals/**`) is written as it is. A plain path or a directory
+  only when it exists: Claude Code also adds `Edit` deny paths to the sandbox's write denials, and on Linux and WSL2 the sandbox
+  holds a denial on a missing file with an empty read-only placeholder while a command runs, which would break a build that reads
+  `global.json`.
+- For `.lockflight/` the rules name the linked engine, the baselines (once they exist) and the approvals, not the whole directory: when the
+  sandbox is on, commands the agent runs, such as `lockflight gate run`, write evidence and the ledger there.
+
+The guard still decides first and covers what the rules do not (shell commands, files created later).
 
 ## Proposing a protected change
 
