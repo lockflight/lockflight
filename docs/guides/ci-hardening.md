@@ -29,7 +29,13 @@ The agent works with your credentials, so CI is where an independent check happe
   nested `NuGet.config` files, `global.json` and `Directory.Packages.props`. A PR can change these, and the gates then build with the
   changed version. For example, a PR could set `<TreatWarningsAsErrors>false</TreatWarningsAsErrors>` in
   `Directory.Build.props`. `policy.protected` lists these files for review. **CODEOWNERS is what protects them.**
-- **Pinned tools.** gitleaks is downloaded at a fixed version and verified against its SHA-256 before use.
+- **Pinned tools.** gitleaks is downloaded at a fixed version and verified against its SHA-256 before use. The engine is the
+  version in the base branch's tool pin, installed with `dotnet tool install --tool-path` outside the repository and run as
+  `lockflight`: a `global.json` that pins SDK 8 or 9 cannot restore the engine package, so the workflow does not use
+  `dotnet tool restore`.
+- **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
+  engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass
+  `--ci pr`; see [CI during the preview](getting-started.md#ci-during-the-preview).
 - **`gate run --profile pr --base <base sha>`**, in this order:
   1. `policy.protected` — lists protected files the PR changes (never fails; the list goes to the job summary);
   2. `format` → `build` → `test` (with coverage when `gates.coverage.collector` is set);
@@ -107,7 +113,7 @@ The generated workflow does not check approvals. To make missing or stale approv
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           git show "$BASE:.github/allowed_signers" > "$RUNNER_TEMP/allowed_signers"
-          dotnet lockflight approve verify --base "$BASE" --allowed-signers "$RUNNER_TEMP/allowed_signers"
+          lockflight approve verify --base "$BASE" --allowed-signers "$RUNNER_TEMP/allowed_signers"
 ```
 
 `approve verify --base` checks every feature the PR touches (changed, renamed or deleted records count as touching it; feature
@@ -146,8 +152,8 @@ run in the shell, vendors into every .NET unit that is its own repository what i
 The workflow restores the policy, the pin, the baselines and the code-style config from the unit's base branch, as the
 single-repository workflow does. A pull request in the unit therefore cannot loosen what judges it.
 
-- **Engine install:** the workflow installs the engine with `dotnet tool install --tool-path` outside the repository, then runs
-  it directly. A `global.json` that pins SDK 8 cannot restore the engine package.
+- **Engine install:** as in the single-repository workflow, the engine is installed with `dotnet tool install --tool-path`
+  outside the repository and run directly. A `global.json` that pins SDK 8 cannot restore the engine package.
 - **Package sources:** `nuget.config` comes from the base branch, in this workflow and in the single-repository one. A pull
   request that adds a package source cannot make CI install an engine of its own choosing.
 - **Policy lookup:** the engine reads `lockflight.unit.yaml` only when no `lockflight.yaml` is found above. Inside the shell,

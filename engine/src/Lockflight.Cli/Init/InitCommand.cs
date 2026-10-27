@@ -19,7 +19,7 @@ internal sealed class InitCommand(CliContext context)
     {
         bool link = true;
         InitProfile profile = InitProfile.Lite;
-        CiTrigger ci = CiTrigger.PullRequest;
+        CiTrigger? requestedCi = null;
         for (int index = 0; index < options.Length; index++)
         {
             switch (options[index])
@@ -39,10 +39,12 @@ internal sealed class InitCommand(CliContext context)
                     return await RefuseAsync("--profile needs a value: lite or standard");
                 case "--ci" when index + 1 < options.Length:
                     string trigger = options[++index];
-                    if (!CiTriggerNames.TryParse(trigger, out ci))
+                    if (!CiTriggerNames.TryParse(trigger, out CiTrigger parsedCi))
                     {
                         return await RefuseAsync($"unknown CI trigger '{trigger}'; use pr, manual or none");
                     }
+
+                    requestedCi = parsedCi;
 
                     break;
                 case "--ci":
@@ -52,11 +54,14 @@ internal sealed class InitCommand(CliContext context)
             }
         }
 
-        return await InitializeAsync(link, profile, ci, cancellationToken);
+        return await InitializeAsync(link, profile, requestedCi, cancellationToken);
     }
 
-    private async Task<ExitCode> InitializeAsync(bool link, InitProfile profile, CiTrigger ci, CancellationToken cancellationToken)
+    private async Task<ExitCode> InitializeAsync(bool link, InitProfile profile, CiTrigger? requestedCi, CancellationToken cancellationToken)
     {
+        // The pin init writes is this engine's version: a newer pin is refused below and an older one is raised to it.
+        bool developmentPin = EngineVersion.IsDevelopmentBuild(ToolPin.RunningVersion);
+        CiTrigger ci = requestedCi ?? CiTriggerDefault.For(ToolPin.RunningVersion);
         string root = ProjectRoot();
         if (await PreflightProblemAsync(root, cancellationToken) is string problem)
         {
@@ -79,7 +84,7 @@ internal sealed class InitCommand(CliContext context)
         ];
         if (ci != CiTrigger.None)
         {
-            steps.Add(await WriteIfMissingAsync(root, Templates.WorkflowPath, Templates.Workflow(dotnetChannels, ci), cancellationToken));
+            steps.Add(await WriteIfMissingAsync(root, Templates.WorkflowPath, Templates.Workflow(dotnetChannels, ci, developmentPin), cancellationToken));
         }
 
         if (profile == InitProfile.Standard)
@@ -95,6 +100,10 @@ internal sealed class InitCommand(CliContext context)
         if (steps.SingleOrDefault(step => step.RelativePath == Templates.WorkflowPath) is InitStep workflow)
         {
             await ExplainDotnetChannelsAsync(workflow.Outcome, testFrameworks, dotnetChannels);
+            if (workflow.Outcome == FileOutcome.Created && developmentPin)
+            {
+                await ExplainPreviewCiAsync(ci);
+            }
         }
 
         await RecordAsync(root, steps, cancellationToken);
@@ -128,6 +137,12 @@ internal sealed class InitCommand(CliContext context)
             ? $"CI installs .NET {channels}: the test projects target {frameworks}, and tests need each runtime. Locally, gates.test.framework in {Manifest.FileName} picks one target when a runtime is missing."
             : $"Note: the test projects target {frameworks}; {Templates.WorkflowPath} already existed, so check that its setup-dotnet installs {channels}.");
     }
+
+    /// <summary>Says what a development pin means for the workflow just written: no package feed has the engine it installs.</summary>
+    private async Task ExplainPreviewCiAsync(CiTrigger ci) =>
+        await context.Output.WriteLineAsync(ci == CiTrigger.Manual
+            ? $"CI: {Templates.WorkflowPath} runs only when started by hand. This engine is a development build ({ToolPin.RunningVersion}) that no package feed has, so a job that installs it would fail on every pull request. Once the project pins a published release, switch the workflow to pull requests (its comment says how); --ci pr writes the pull-request trigger now."
+            : $"Note: {Templates.WorkflowPath} runs on every pull request, but this engine is a development build ({ToolPin.RunningVersion}) that no package feed has: the job fails at the engine install until the project pins a published release.");
 
     /// <summary>What init cannot merge into, checked before it writes anything so a refusal leaves the project as it was.</summary>
     private static async Task<string?> PreflightProblemAsync(string root, CancellationToken cancellationToken)
