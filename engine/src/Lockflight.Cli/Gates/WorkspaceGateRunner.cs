@@ -29,7 +29,12 @@ internal static class WorkspaceGateRunner
         List<(Unit Unit, UnitState State)> toRun = [];
         foreach ((Unit unit, UnitState state) in selected)
         {
-            if (judgesChangesOnly && !state.Dirty && (state.Fingerprint is null || !BuildsWithDotnet(manifest, unit)))
+            if (!Directory.Exists(Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar))))
+            {
+                // A unit that is not cloned here (another repository, or a CI checkout of the shell alone) has nothing to build.
+                await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "not present in this checkout: not built"));
+            }
+            else if (judgesChangesOnly && !state.Dirty && (state.Fingerprint is null || !BuildsWithDotnet(manifest, unit)))
             {
                 await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "no changes, not run"));
             }

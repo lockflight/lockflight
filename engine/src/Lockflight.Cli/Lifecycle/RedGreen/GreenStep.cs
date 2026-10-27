@@ -16,7 +16,7 @@ internal sealed class GreenStep(RedGreenSession session)
     {
         if (record?.OpenCycle is not RedGreenCycle open)
         {
-            return await session.FailAsync("no red cycle is open; run 'lockflight redgreen red' after writing failing tests", cancellationToken);
+            return await session.FailAsync($"no red cycle is open; run '{EngineCommand.Linked} redgreen red' after writing failing tests", cancellationToken);
         }
 
         if (session.UnapprovedArtifacts() is string unapproved)

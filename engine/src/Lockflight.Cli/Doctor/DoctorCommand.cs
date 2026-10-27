@@ -1,6 +1,7 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Mascot;
+using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Doctor;
 
@@ -11,7 +12,8 @@ internal sealed class DoctorCommand(CliContext context)
     {
         string root = ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory;
         IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(
-            root, context.Environment.HomeDirectory(), context.Environment.Get(EnvironmentVariables.NuGetPackages), context.Time, cancellationToken);
+            root, context.Environment.HomeDirectory(), context.Environment.Get(EnvironmentVariables.NuGetPackages),
+            Executables.Find("gitleaks", context.Environment.Get(EnvironmentVariables.Gitleaks)), context.Time, cancellationToken);
 
         foreach (DoctorCheck check in checks)
         {

@@ -98,6 +98,15 @@ call is blocked with that command. For a development pin, use the commands for a
 If the message says **"the engine pin cannot be read"**, `dotnet-tools.json` is malformed. It is protected, so fix it yourself,
 then run the restore command.
 
+## `doctor` warns about gitleaks or the Claude Code version
+
+- **gitleaks:** the `pr` profile's secrets step runs gitleaks from `PATH`, or from `LOCKFLIGHT_GITLEAKS`. Without it the step is
+  NOT-EARNED, not PASS, so a local `gate run --profile pr` cannot pass. Install [gitleaks](https://github.com/gitleaks/gitleaks)
+  or set `LOCKFLIGHT_GITLEAKS` to its path. The generated CI workflow downloads its own pinned copy.
+- **claude code:** the plugin's hooks rely on `onFailure: block`, which Claude Code honours from 2.1.295: before it, a guard
+  hook that times out lets the tool call through. Run `claude update`. `doctor` also warns when `claude --version` cannot be
+  read, for example when `claude` is not on the `PATH` of the shell you run doctor in.
+
 ## "lockflight: internal error" or "the engine failed (exit N)"
 
 The engine broke while deciding a hook. Hooks fail closed: a tool call is blocked, while Stop and SessionStart are allowed with
