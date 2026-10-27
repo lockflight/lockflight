@@ -16,6 +16,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   each, and diagrams of the hook flow, guardrails and boundaries, and the workspace shell sample.
 - `lockflight review` uses `opus` by default (it leads public coding benchmarks among Claude models) with a `3.00` budget;
   `--model` and `--budget` still override both.
+- The guides now match the engine: the four hooks the plugin installs, every human-only command, red/green on xUnit v2
+  as well as v3, what to do while the engine package is not published (install from source; no feed token), and uninstall
+  steps for both install modes, the crew plugin and the marketplace.
 
 ### Fixed
 - The shell guard treats a drive-relative value (`C:dir`, what an unquoted `C:\dir` becomes in Git Bash) as unknown, so
