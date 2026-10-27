@@ -10,44 +10,55 @@ namespace Lockflight.Cli.Testing;
 /// </summary>
 internal static class TestApps
 {
+    private static readonly string[] Properties =
+        ["-getProperty:IsTestingPlatformApplication", "-getProperty:IsTestProject", "-getProperty:TargetPath", "-getProperty:TargetFrameworks"];
+
+    /// <summary>
+    /// The projects are evaluated in parallel (<c>dotnet msbuild -getProperty</c> only evaluates; it builds nothing), within
+    /// <paramref name="timeLimit"/> for all of them together; a project whose evaluation fails or runs out of time is not a test application.
+    /// </summary>
     /// <param name="preferredFramework">For multi-targeted test projects: the framework to run (<c>gates.test.framework</c>); else the newest one.</param>
-    public static async Task<IReadOnlyList<TestApp>> FindAsync(string root, string? preferredFramework, CancellationToken cancellationToken)
+    public static async Task<IReadOnlyList<TestApp>> FindAsync(string root, string? preferredFramework, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
-        List<TestApp> apps = [];
-        foreach (string project in Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Where(path => !IsBuildOutput(root, path)).Order(StringComparer.Ordinal))
+        string[] projects = [.. Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Where(path => !IsBuildOutput(root, path)).Order(StringComparer.Ordinal)];
+        TestApp?[] apps = new TestApp?[projects.Length];
+        TimeBudget budget = new(timeLimit, TimeProvider.System);
+        ParallelOptions options = new() { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken };
+        await Parallel.ForEachAsync(
+            Enumerable.Range(0, projects.Length),
+            options,
+            async (index, token) => apps[index] = await FindOneAsync(root, projects[index], preferredFramework, budget, token));
+        return [.. apps.OfType<TestApp>()];
+    }
+
+    private static async Task<TestApp?> FindOneAsync(string root, string project, string? preferredFramework, TimeBudget budget, CancellationToken cancellationToken)
+    {
+        ProcessResult properties = await ProcessRunner.RunAsync("dotnet", ["msbuild", project, .. Properties], root, budget.Left, cancellationToken);
+        if (properties.ExitCode != 0 || Parse(properties.Output) is not (true, string targetPath, string frameworks))
         {
-            ProcessResult properties = await ProcessRunner.RunAsync(
-                "dotnet", ["msbuild", project, "-getProperty:IsTestingPlatformApplication", "-getProperty:IsTestProject", "-getProperty:TargetPath", "-getProperty:TargetFrameworks"], root, cancellationToken);
-            if (properties.ExitCode != 0 || Parse(properties.Output) is not (true, string targetPath, string frameworks))
-            {
-                continue;
-            }
-
-            // A multi-targeted project has no TargetPath of its own; ask again for one framework.
-            if (targetPath.Length == 0 && ChooseFramework(frameworks, preferredFramework) is string framework)
-            {
-                ProcessResult single = await ProcessRunner.RunAsync(
-                    "dotnet", ["msbuild", project, $"-p:TargetFramework={framework}", "-getProperty:IsTestingPlatformApplication", "-getProperty:IsTestProject", "-getProperty:TargetPath", "-getProperty:TargetFrameworks"], root, cancellationToken);
-                targetPath = single.ExitCode == 0 && Parse(single.Output) is (true, string path, _) ? path : string.Empty;
-            }
-
-            if (targetPath.Length == 0)
-            {
-                continue;
-            }
-
-            string output = Path.GetDirectoryName(targetPath)!;
-            if (File.Exists(Path.Combine(output, "xunit.v3.core.dll")))
-            {
-                apps.Add(new TestApp(Path.GetDirectoryName(project)!, targetPath));
-            }
-            else if (File.Exists(Path.Combine(output, "xunit.core.dll")))
-            {
-                apps.Add(new TestApp(Path.GetDirectoryName(project)!, targetPath, RunnerMode.VSTest));
-            }
+            return null;
         }
 
-        return apps;
+        // A multi-targeted project has no TargetPath of its own; ask again for one framework.
+        if (targetPath.Length == 0 && ChooseFramework(frameworks, preferredFramework) is string framework)
+        {
+            ProcessResult single = await ProcessRunner.RunAsync(
+                "dotnet", ["msbuild", project, $"-p:TargetFramework={framework}", .. Properties], root, budget.Left, cancellationToken);
+            targetPath = single.ExitCode == 0 && Parse(single.Output) is (true, string path, _) ? path : string.Empty;
+        }
+
+        if (targetPath.Length == 0)
+        {
+            return null;
+        }
+
+        string output = Path.GetDirectoryName(targetPath)!;
+        if (File.Exists(Path.Combine(output, "xunit.v3.core.dll")))
+        {
+            return new TestApp(Path.GetDirectoryName(project)!, targetPath);
+        }
+
+        return File.Exists(Path.Combine(output, "xunit.core.dll")) ? new TestApp(Path.GetDirectoryName(project)!, targetPath, RunnerMode.VSTest) : null;
     }
 
     private static (bool IsTestApp, string TargetPath, string Frameworks)? Parse(string output)

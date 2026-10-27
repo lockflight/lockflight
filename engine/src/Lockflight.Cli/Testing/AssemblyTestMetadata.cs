@@ -7,7 +7,7 @@ namespace Lockflight.Cli.Testing;
 
 /// <summary>
 /// The xUnit v2 tests of a built assembly, read from its metadata without loading it (AOT-safe): public methods of non-abstract
-/// classes — inherited ones from base classes in the same assembly too — whose attribute is <c>FactAttribute</c>,
+/// classes visible outside the assembly — inherited ones from base classes in the same assembly too — whose attribute is <c>FactAttribute</c>,
 /// <c>TheoryAttribute</c> or one derived by name (<c>SkippableFactAttribute</c>), with their <c>Skip</c> reason and
 /// <c>[Trait("Requirement", …)]</c> values. VSTest's own listing has neither assembly nor traits.
 /// </summary>
@@ -25,11 +25,10 @@ internal static class AssemblyTestMetadata
         foreach (TypeDefinitionHandle handle in reader.TypeDefinitions)
         {
             TypeDefinition type = reader.GetTypeDefinition(handle);
-            TypeAttributes visibility = type.Attributes & TypeAttributes.VisibilityMask;
             if ((type.Attributes & TypeAttributes.Abstract) != 0 || (type.Attributes & TypeAttributes.ClassSemanticsMask) == TypeAttributes.Interface
-                || visibility is not (TypeAttributes.Public or TypeAttributes.NestedPublic))
+                || !IsVisibleOutsideAssembly(reader, handle))
             {
-                // xUnit v2 runs public, non-abstract classes only.
+                // xUnit v2 runs public, non-abstract classes only (its discovery reads the assembly's exported types).
                 continue;
             }
 
@@ -56,6 +55,19 @@ internal static class AssemblyTestMetadata
         }
 
         return tests;
+    }
+
+    /// <summary>A public class, or a public class nested only in public classes: what <c>Assembly.GetExportedTypes</c> lists.</summary>
+    private static bool IsVisibleOutsideAssembly(MetadataReader reader, TypeDefinitionHandle handle)
+    {
+        TypeDefinition type = reader.GetTypeDefinition(handle);
+        TypeDefinitionHandle declaring = type.GetDeclaringType();
+        return (type.Attributes & TypeAttributes.VisibilityMask) switch
+        {
+            TypeAttributes.Public => true,
+            TypeAttributes.NestedPublic => !declaring.IsNil && IsVisibleOutsideAssembly(reader, declaring),
+            _ => false,
+        };
     }
 
     /// <summary>Whether a method is a test, its skip reason and its Requirement trait values.</summary>
