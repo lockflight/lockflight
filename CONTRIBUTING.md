@@ -1,7 +1,8 @@
 # Contributing
 
 Lockflight is in alpha and maintained by one person. Bug reports, ideas and pull requests are welcome. For anything bigger
-than a fix, please open an issue first, because the design still moves.
+than a fix, please open an issue first, because the design still moves. Everyone taking part follows the
+[code of conduct](CODE_OF_CONDUCT.md).
 
 **On this page:** [Ground rules](#ground-rules) · [Branches, commits and pull requests](#branches-commits-and-pull-requests) ·
 [Build and test](#build-and-test) · [Skill evals](#skill-evals) · [Repository map](#repository-map)

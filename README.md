@@ -123,8 +123,9 @@ Every control is labelled one or the other: [guardrails and boundaries](docs/gui
 ## Status
 
 **Alpha, in daily use on real projects.** The engine has over 900 unit tests; end-to-end suites cover the lifecycle and
-workspace shells on Linux, macOS and Windows, including attempts to get around the controls. A hook adds about 9 ms (p95) on
-macOS and 71 ms on Windows.
+workspace shells on Linux, macOS and Windows, including attempts to get around the controls. Hooks run the linked engine
+directly, without `dotnet`, so a hook call costs milliseconds; [`tests/compat/run-windows.ps1`](tests/compat/run-windows.ps1)
+measures it (p50 and p95 over 200 calls).
 
 **Docs:** [getting started](docs/guides/getting-started.md) · [commands](docs/guides/commands.md) ·
 [configuration](docs/guides/configuration.md) · [how it works](docs/architecture.md)
