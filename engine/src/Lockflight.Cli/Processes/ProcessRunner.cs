@@ -74,6 +74,9 @@ internal static class ProcessRunner
         startInfo.Environment["DOTNET_NOLOGO"] = "1";
         // Read-only git calls (status, diff) must not take index.lock and collide with the user's or the agent's own commit.
         startInfo.Environment["GIT_OPTIONAL_LOCKS"] = "0";
+        // Snapshot libraries (Verify and others built on DiffEngine) open the developer's diff tool on a failed comparison; a test run
+        // the engine starts (gates, red/green, reviews) must never pop windows on the person's screen.
+        startInfo.Environment["DiffEngine_Disabled"] = "true";
         return startInfo;
     }
 

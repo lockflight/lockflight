@@ -230,6 +230,10 @@ Evidence lives in `.lockflight/features/<feature>/` (approvals, `redgreen.json`,
 | `LOCKFLIGHT_DEBUG` | hooks print path-matching diagnostics to stderr |
 | `LOCKFLIGHT_HOOK_LOG` | append every raw hook payload to this file |
 
+The engine sets these for every tool it starts (builds, test runs, git): `MSBUILDDISABLENODEREUSE=1` (no MSBuild servers left
+behind), `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`, `GIT_OPTIONAL_LOCKS=0` (read-only git calls take no index lock) and
+`DiffEngine_Disabled=true` (a failed snapshot comparison in Verify or another DiffEngine-based library does not open a diff tool).
+
 ## Next
 
 - [Commands](commands.md): every command and option
