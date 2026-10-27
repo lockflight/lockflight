@@ -50,6 +50,14 @@ json_string() {
   }'
 }
 
+# approval_expansion: whether the payload is the expansion of a typed /lockflight:approve (any case). That one must never reach
+# the agent unchecked, so it is blocked whenever the engine cannot judge it.
+approval_expansion() {
+  [ "$event" = "user-prompt-expansion" ] || return 1
+  name=$(json_string command_name | tr '[:upper:]' '[:lower:]')
+  [ "$name" = "lockflight:approve" ]
+}
+
 dir="${CLAUDE_PROJECT_DIR:-}"
 if [ -z "$dir" ]; then
   input=$(cat)
@@ -70,21 +78,37 @@ done
 engine="$root/.lockflight/bin/lockflight"
 [ -f "$engine.exe" ] && engine="$engine.exe"
 if [ -x "$engine" ]; then
+  # A slash command's payload is read first, so a failed engine can still be told apart from a typed /lockflight:approve.
+  if [ "$event" = "user-prompt-expansion" ] && [ -z "$input" ]; then input=$(cat); fi
   # Not `printf | exec`: in a pipeline exec only replaces the subshell and the script would fall through.
   if [ -n "$input" ]; then printf '%s' "$input" | "$engine" hook "$event"; else "$engine" hook "$event"; fi
   status=$?
-  # Fail closed: a crash or any exit other than allow (0) / block (2) must not let a tool call through.
-  if [ "$event" = "pre-tool-use" ] && [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
-    echo "lockflight: the engine failed (exit $status), so the tool call is blocked. Run: dotnet lockflight doctor" >&2
-    exit 2
+  # Fail closed: a crash or any exit other than allow (0) / block (2) must not let a tool call or an approval through.
+  if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
+    if [ "$event" = "pre-tool-use" ]; then
+      echo "lockflight: the engine failed (exit $status), so the tool call is blocked. Run: dotnet lockflight doctor" >&2
+      exit 2
+    fi
+    if approval_expansion; then
+      echo "lockflight: the engine failed (exit $status), so nothing was approved. Run: dotnet lockflight doctor" >&2
+      exit 2
+    fi
   fi
   exit "$status"
 fi
 
+if [ "$event" = "user-prompt-expansion" ]; then
+  [ -n "$input" ] || input=$(cat)
+  if approval_expansion; then
+    echo "lockflight: engine not installed in this project, so nothing was approved. Run exactly: dotnet tool restore && dotnet lockflight link, then type the command again." >&2
+    exit 2
+  fi
+  exit 0
+fi
 [ "$event" = "pre-tool-use" ] || exit 0
 [ -n "$input" ] || input=$(cat)
 tool=$(json_string tool_name)
-# Read-only tools and recovery commands: keep in sync with Hooks/ReadOnlyTools.cs and Hooks/RecoveryCommands.cs.
+# Read-only tools and recovery commands: kept in sync with Hooks/ReadOnlyTools.cs and Hooks/RecoveryCommands.cs by ShimSyncTests.
 case "$tool" in
   Read|Grep|Glob|LS) exit 0 ;;
 esac
@@ -98,12 +122,12 @@ if [ "$tool" = "Bash" ]; then
     "dotnet tool restore"|"dotnet tool restore && dotnet lockflight link"|"dotnet lockflight link") exit 0 ;;
   esac
 fi
-# A development build carries a "dev" prerelease identifier: 0.2.0-alpha.4.dev.<stamp>, 0.2.1-0.dev.<stamp> (0.2.0-dev.<stamp>
-# before). Keep in sync with Config/EngineVersion.cs. Each manifest is read on its own: BSD grep exits 2 for a missing file
-# even when another one matches.
+# A development build carries a "dev" prerelease identifier (any case): 0.2.0-alpha.4.dev.<stamp>, 0.2.1-0.dev.<stamp>
+# (0.2.0-dev.<stamp> before). Kept in sync with Config/EngineVersion.cs by ShimSyncTests, like the lists above. Each manifest is
+# read on its own: BSD grep exits 2 for a missing file even when another one matches.
 development=false
 for manifest in "$root/.config/dotnet-tools.json" "$root/dotnet-tools.json"; do
-  if [ -f "$manifest" ] && grep -Eq -e '"[0-9]+\.[0-9]+\.[0-9]+-([0-9A-Za-z-]+\.)*dev\.' "$manifest"; then development=true; fi
+  if [ -f "$manifest" ] && grep -Eiq -e '"[0-9]+\.[0-9]+\.[0-9]+-([0-9A-Za-z-]+\.)*dev[.+"]' "$manifest"; then development=true; fi
 done
 if [ "$development" = true ]; then
   echo "lockflight: engine not linked in this project, and the pin is a development build that no package feed has. Ask the user to run ~/.lockflight/bin/lockflight update in a separate terminal window (not with ! in Claude Code: that runs inside the session and is refused)." >&2

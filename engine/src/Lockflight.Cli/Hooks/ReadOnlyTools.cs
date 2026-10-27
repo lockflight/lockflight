@@ -6,7 +6,7 @@ namespace Lockflight.Cli.Hooks;
 /// </summary>
 internal static class ReadOnlyTools
 {
-    private static readonly HashSet<string> Names = ["Read", "Grep", "Glob", "LS"];
+    public static IReadOnlySet<string> Names { get; } = new HashSet<string>(["Read", "Grep", "Glob", "LS"]);
 
     public static bool Allows(HookInput input) => input.ToolName is string toolName && Names.Contains(toolName);
 }

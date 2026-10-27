@@ -45,7 +45,9 @@ check "not restored: nested Read before"      2 "$proj" '{"x":{"tool_name":"Read
 check "not restored: restore in another key"  2 "$proj" '{"cwd":"'"$(winpath "$proj")"'","tool_name":"Bash","tool_input":{"command":"rm -rf src"},"y":{"command":"dotnet tool restore"}}'
 check "not restored: tool_name inside a string" 2 "$proj" '{"cwd":"'"$(winpath "$proj")"'","tool_name":"Bash","tool_input":{"description":"\"tool_name\":\"Read\"","command":"rm x"}}'
 checkexp "no manifest: approve expansion"     0 cli 1 "$(expansion "$plain" lockflight:approve spec)"
-checkexp "not restored: approve expansion"   0 cli 1 "$(expansion "$proj" lockflight:approve spec)"
+checkexp "not restored: approve expansion"   2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
+checkexp "not restored: approve, other case"  2 cli 1 "$(expansion "$proj" LockFlight:Approve spec)" "nothing was approved"
+checkexp "not restored: other slash command" 0 cli 1 "$(expansion "$proj" lockflight:status "")"
 checkenv "env dir, no manifest: Write"     0 "$plain" "$(json "$plain" Write "$(fp "$plain/a")")"
 checkenv "env dir, not restored: Write"    2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 checkenv "env dir, not restored: Read"     0 "$proj"  "$(json "$proj" Read "$(fp "$proj/src/a.cs")")"
@@ -134,7 +136,9 @@ case "$ENGINE" in
   *.exe) ;;
   *)
     printf '#!/bin/sh\nexit 3\n' > "$proj/.lockflight/bin/lockflight"
-    check "crashing engine: tool call blocked" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")" ;;
+    check "crashing engine: tool call blocked" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
+    checkexp "crashing engine: approve blocked"  2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
+    checkexp "crashing engine: other slash command" 3 cli 1 "$(expansion "$proj" lockflight:status "")" ;;
 esac
 
 echo "passed=$pass failed=$fail"; rm -rf "$WORK"; [ "$fail" = 0 ]

@@ -5,7 +5,8 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 /// <summary>
 /// What the engine shows a person before they approve in a session: the feature, each artifact with the start of its hash, what the
 /// artifacts hold (requirements and stories, or tasks), open clarifications, the current approval, and the line to type with the
-/// one-time code. The engine renders it from the files, so it does not depend on the agent's summary.
+/// one-time code. The engine renders it from the same bytes it hashed (<see cref="ArtifactSnapshot"/>), so it does not depend on the
+/// agent's summary, and a file rewritten while it renders cannot make the digest describe other content than the code binds.
 /// </summary>
 internal static class ApprovalDigest
 {
@@ -13,22 +14,25 @@ internal static class ApprovalDigest
     private const string ClarificationMarker = "[NEEDS CLARIFICATION";
 
     /// <param name="typedOptions">Options to repeat on the line to type (<c>--sign</c>, <c>--key file</c>); empty for none.</param>
-    public static string Render(Feature feature, ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> artifacts, ApprovalCheck current, string code, string typedOptions)
+    /// <param name="artifacts">The phase's artifacts as read once (<see cref="ApprovalStore.Snapshot"/>), its main one first.</param>
+    public static string Render(Feature feature, ApprovalPhase phase, IReadOnlyList<ArtifactSnapshot> artifacts, ApprovalCheck current, string code, string typedOptions)
     {
         string phaseName = ApprovalPhaseNames.ToName(phase);
         StringBuilder digest = new();
         digest.AppendLine($"lockflight: you are about to approve the {phaseName} of {feature.Id}. Review it (the engine read these files, the agent did not write this):");
-        foreach ((string name, string hash) in artifacts)
+        foreach (ArtifactSnapshot artifact in artifacts)
         {
-            digest.AppendLine($"  {name,-10} {(hash.Length > HashPrefixLength ? hash[..HashPrefixLength] : hash)}");
+            string hash = artifact.Hash;
+            digest.AppendLine($"  {artifact.Name,-10} {(hash.Length > HashPrefixLength ? hash[..HashPrefixLength] : hash)}");
         }
 
-        foreach (string line in phase == ApprovalPhase.Spec ? SpecLines(feature) : TasksLines(feature))
+        string main = artifacts[0].Text ?? string.Empty;
+        foreach (string line in phase == ApprovalPhase.Spec ? SpecLines(main) : TasksLines(main))
         {
             digest.AppendLine($"  {line}");
         }
 
-        digest.AppendLine($"  Open [NEEDS CLARIFICATION] markers: {Clarifications(feature, artifacts)}");
+        digest.AppendLine($"  Open [NEEDS CLARIFICATION] markers: {Clarifications(artifacts)}");
         digest.AppendLine($"  Current approval: {Describe(current)}");
         digest.AppendLine($"To approve exactly this content, type within {ApprovalCodes.Lifetime.TotalMinutes:0} minutes:");
         digest.AppendLine($"  /lockflight:approve {phaseName} {code}{typedOptions}");
@@ -36,9 +40,9 @@ internal static class ApprovalDigest
         return digest.ToString();
     }
 
-    private static IEnumerable<string> SpecLines(Feature feature)
+    private static IEnumerable<string> SpecLines(string text)
     {
-        SpecDocument spec = SpecDocument.Parse(File.ReadAllText(feature.SpecPath));
+        SpecDocument spec = SpecDocument.Parse(text);
         yield return spec.Requirements.Count == 0
             ? "Requirements: none found"
             : $"Requirements ({spec.Requirements.Count}): {string.Join(", ", spec.Requirements.Select(requirement => requirement.Id))}";
@@ -47,9 +51,9 @@ internal static class ApprovalDigest
             : $"User stories ({spec.Stories.Count}): {string.Join("; ", spec.Stories.Select(story => $"{story.Number} {story.Title}"))}";
     }
 
-    private static IEnumerable<string> TasksLines(Feature feature)
+    private static IEnumerable<string> TasksLines(string text)
     {
-        IReadOnlyList<TaskLine> tasks = TasksDocument.Parse(File.ReadAllText(feature.TasksPath));
+        IReadOnlyList<TaskLine> tasks = TasksDocument.Parse(text);
         int tests = tasks.Count(task => task.Role == TaskRole.Test);
         int stubs = tasks.Count(task => task.Role == TaskRole.Stub);
         int implementation = tasks.Count(task => task.Role == TaskRole.Implementation);
@@ -60,18 +64,18 @@ internal static class ApprovalDigest
         yield return covered.Length == 0 ? "Requirements covered: none named" : $"Requirements covered ({covered.Length}): {string.Join(", ", covered)}";
     }
 
-    private static string Clarifications(Feature feature, IReadOnlyList<(string Name, string Hash)> artifacts)
+    private static string Clarifications(IReadOnlyList<ArtifactSnapshot> artifacts)
     {
         List<string> found = [];
-        foreach ((string name, _) in artifacts)
+        foreach (ArtifactSnapshot artifact in artifacts)
         {
-            string path = Path.Combine(feature.SpecDirectory, name);
-            if (!File.Exists(path))
+            if (artifact.Text is not string text)
             {
                 continue;
             }
 
-            int[] lines = [.. File.ReadAllLines(path)
+            string name = artifact.Name;
+            int[] lines = [.. text.ReplaceLineEndings("\n").Split('\n')
                 .Select((line, index) => (line, number: index + 1))
                 .Where(entry => entry.line.Contains(ClarificationMarker, StringComparison.Ordinal))
                 .Select(entry => entry.number)];

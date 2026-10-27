@@ -14,12 +14,8 @@ internal sealed class ApprovalStore(Feature feature)
     public const string SignatureNamespace = "lockflight-approval";
 
     private const string Schema = "lockflight.approval/v1";
-    private const string Absent = "absent";
 
     public string RecordPath(ApprovalPhase phase) => Path.Combine(feature.RecordDirectory, "approvals", $"{ApprovalPhaseNames.ToName(phase)}.json");
-
-    public string Save(ApprovalPhase phase, string approvedBy, DateTimeOffset at, string engineVersion) =>
-        Save(phase, [.. CurrentHashes(phase)], approvedBy, at, engineVersion);
 
     /// <summary>Writes the record over <paramref name="artifacts"/> (the hashes the person approved) and drops an older signature.</summary>
     public string Save(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> artifacts, string approvedBy, DateTimeOffset at, string engineVersion)
@@ -32,7 +28,7 @@ internal sealed class ApprovalStore(Feature feature)
         return path;
     }
 
-    /// <summary>The approval record's content, for <see cref="Save(ApprovalPhase, IReadOnlyList{ValueTuple{string, string}}, string, DateTimeOffset, string)"/> or a file signed before it replaces the record.</summary>
+    /// <summary>The approval record's content, for <see cref="Save"/> or a file signed before it replaces the record.</summary>
     public JsonObject Render(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> artifacts, string approvedBy, DateTimeOffset at, string engineVersion)
     {
         JsonObject hashes = [];
@@ -57,7 +53,10 @@ internal sealed class ApprovalStore(Feature feature)
     /// Compares the record with the artifacts on disk. The record must name this feature and phase: a record copied from another
     /// feature (whose artifacts may hash the same) or saved as another phase approves nothing here.
     /// </summary>
-    public ApprovalCheck Check(ApprovalPhase phase)
+    public ApprovalCheck Check(ApprovalPhase phase) => Check(phase, [.. CurrentHashes(phase)]);
+
+    /// <summary>As <see cref="Check(ApprovalPhase)"/>, against hashes already taken (<paramref name="current"/>) instead of reading the files again.</summary>
+    public ApprovalCheck Check(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> current)
     {
         string path = RecordPath(phase);
         if (!File.Exists(path))
@@ -81,19 +80,23 @@ internal sealed class ApprovalStore(Feature feature)
             return Invalid(phase, $"it was recorded for phase '{Text(record["phase"]) ?? "(none)"}', not '{expectedPhase}'");
         }
 
-        string[] changed = [.. CurrentHashes(phase)
-            .Where(current => Text(approved[current.Name]) != current.Hash)
-            .Select(current => current.Name)];
+        string[] changed = [.. current
+            .Where(artifact => Text(approved[artifact.Name]) != artifact.Hash)
+            .Select(artifact => artifact.Name)];
         return new ApprovalCheck(phase, changed.Length == 0 ? ApprovalState.Valid : ApprovalState.Stale, Text(record["approvedBy"]), changed);
     }
 
     /// <summary>Each artifact the phase binds with the hash of its current content, or <c>absent</c> when it does not exist.</summary>
     public IEnumerable<(string Name, string Hash)> CurrentHashes(ApprovalPhase phase) =>
-        ApprovalPhaseNames.ArtifactsOf(phase).Select(name =>
+        Snapshot(phase).Select(artifact => (artifact.Name, artifact.Hash));
+
+    /// <summary>Each artifact the phase binds, read once, in the order <see cref="ApprovalPhaseNames.ArtifactsOf"/> names them.</summary>
+    public IReadOnlyList<ArtifactSnapshot> Snapshot(ApprovalPhase phase) =>
+        [.. ApprovalPhaseNames.ArtifactsOf(phase).Select(name =>
         {
             string path = Path.Combine(feature.SpecDirectory, name);
-            return (name, File.Exists(path) ? ArtifactHash.Of(path) : Absent);
-        });
+            return new ArtifactSnapshot(name, File.Exists(path) ? File.ReadAllBytes(path) : null);
+        })];
 
     private static ApprovalCheck Invalid(ApprovalPhase phase, string problem) => new(phase, ApprovalState.Invalid, null, [], problem);
 

@@ -8,8 +8,8 @@ internal static class RecoveryCommands
 {
     public const string RestoreAndLink = "dotnet tool restore && dotnet lockflight link";
 
-    private static readonly HashSet<string> Allowed = ["dotnet tool restore", RestoreAndLink, "dotnet lockflight link"];
+    public static IReadOnlySet<string> Commands { get; } = new HashSet<string>(["dotnet tool restore", RestoreAndLink, "dotnet lockflight link"]);
 
     public static bool Allows(HookInput input) =>
-        input.ToolName == "Bash" && input.Command is string command && Allowed.Contains(command.Trim());
+        input.ToolName == "Bash" && input.Command is string command && Commands.Contains(command.Trim());
 }

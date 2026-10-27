@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -609,7 +611,72 @@ public sealed class SessionApprovalTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task AfterFiveWrongCodesTheShownCodeIsDiscarded()
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+        for (int attempt = 1; attempt < 5; attempt++)
+        {
+            (_, _, string wrong) = await TypeAsync("spec aaaaaa");
+            Assert.Contains("not the code shown", wrong, StringComparison.Ordinal);
+        }
+
+        (ExitCode fifthExit, _, string fifth) = await TypeAsync("spec aaaaaa");
+        (ExitCode rightExit, _, string afterwards) = await TypeAsync($"spec {Code}");
+
+        Assert.Equal(ExitCode.HookBlock, fifthExit);
+        Assert.Contains("5 wrong codes", fifth, StringComparison.Ordinal);
+        Assert.False(File.Exists(WaitingCodePath("spec")));
+        Assert.Equal(ExitCode.HookBlock, rightExit);
+        Assert.Contains("no approval code is waiting", afterwards, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
+    public async Task AnEngineErrorBeforeTheApprovalStepBlocksInsteadOfPassingTheCommandOn()
+    {
+        await CreateProjectAsync();
+
+        (ExitCode exitCode, string output, string error) = await TypeAsync("spec", new FailingEnvironment(AttendedSession));
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Empty(output);
+        Assert.Contains("nothing was approved", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnEngineErrorForAnotherSlashCommandDoesNotBlockIt()
+    {
+        await CreateProjectAsync();
+
+        (ExitCode exitCode, _, _) = await TypeAsync("x", new FailingEnvironment(AttendedSession), commandName: "lockflight:status");
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(root);
+
+    /// <summary>An environment whose every read past the session markers fails, as an engine fault outside the approval would.</summary>
+    private sealed class FailingEnvironment(IReadOnlyDictionary<string, string> session) : IReadOnlyDictionary<string, string>
+    {
+        public int Count => session.Count;
+
+        public IEnumerable<string> Keys => session.Keys;
+
+        public IEnumerable<string> Values => session.Values;
+
+        public string this[string key] => TryGetValue(key, out string? value) ? value : throw new KeyNotFoundException(key);
+
+        public bool ContainsKey(string key) => TryGetValue(key, out _);
+
+        public bool TryGetValue(string key, [MaybeNullWhen(false)] out string value) =>
+            session.TryGetValue(key, out value) ? true : throw new InvalidOperationException($"environment unavailable ({key})");
+
+        public IEnumerator<KeyValuePair<string, string>> GetEnumerator() => session.GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    }
 
     private async Task CreateProjectAsync()
     {
