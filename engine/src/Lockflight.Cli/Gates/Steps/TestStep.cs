@@ -133,7 +133,8 @@ internal static partial class TestStep
         IReadOnlyList<string> coverageArguments = run.Profile == GateProfile.PullRequest ? CoverageStep.TestArguments(run.Settings.Coverage.Collector, TestRunnerKind.MicrosoftTestingPlatform) : [];
         arguments.AddRange(coverageArguments);
 
-        ProcessResult testRun = await ProcessRunner.RunAsync("dotnet", arguments, run.Target, run.TimeLeft(), cancellationToken);
+        ProcessResult coloured = await ProcessRunner.RunAsync("dotnet", arguments, run.Target, run.TimeLeft(), cancellationToken);
+        ProcessResult testRun = coloured with { Output = AnsiEscapes.Strip(coloured.Output), Error = AnsiEscapes.Strip(coloured.Error) };
         int? testsTotal = SumOf(TestsTotalPattern(), testRun.Output);
         IReadOnlyList<string> failedTests = FailedTests.Find(testRun.Output);
         if (StepHealth.Unhealthy(Name, testRun, run) is GateStep unhealthy)
