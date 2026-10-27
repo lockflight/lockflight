@@ -23,8 +23,8 @@ independent.
    - **reported** (minor/nit findings are not reproduced) — fix when cheap, otherwise list them in the PR body.
 
    A confirmed or unverified blocker/major finding is **open** and stays open in every later review, also when that review
-   does not raise it again ("carried from an earlier run"). It closes only when a later review re-runs its reproduction and it
-   passes (**fixed**), or when the user dismisses it. Re-running the review is never a way to make a finding go away.
+   does not raise it again ("carried from an earlier run") or raises it again at a lower severity. It closes only when a
+   later review re-runs its reproduction and it passes (**fixed**), or when the user dismisses it. Re-running the review is never a way to make a finding go away.
 4. Never say a finding is fixed or closed from your own reading: run `.lockflight/bin/lockflight review status` and report what it
    says. If the user thinks a finding is not a defect, ask them to run
    `.lockflight/bin/lockflight review dismiss <id> --reason "<why>"` themselves, in a separate terminal window (not with `!` in
