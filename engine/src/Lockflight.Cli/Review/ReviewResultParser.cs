@@ -4,8 +4,9 @@ using System.Text.Json;
 namespace Lockflight.Cli.Review;
 
 /// <summary>
-/// Reads <c>claude -p --output-format json --json-schema …</c> output. The schema-validated object arrives as the <c>result</c>
-/// string, so it is parsed a second time.
+/// Reads <c>claude -p --output-format json --json-schema …</c> output. The schema-validated object arrives in
+/// <c>structured_output</c>; older Claude Code versions put it in the <c>result</c> string instead, which is then parsed a second
+/// time. A run that ends without valid structured output has neither, and fails as not JSON.
 /// </summary>
 internal static class ReviewResultParser
 {

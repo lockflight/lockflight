@@ -127,19 +127,26 @@ internal sealed class ReviewCommand(CliContext context)
         return version.ExitCode == 0 && version.Output.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries) is [string first, ..] ? first : null;
     }
 
-    /// <summary>Runs a read-only <c>claude -p</c> with the review schema; the prompt goes through stdin.</summary>
+    /// <summary>
+    /// Runs a read-only <c>claude -p</c> with the review schema; the prompt goes through stdin. Every mode is passed explicitly, so
+    /// a change of Claude Code's defaults for <c>-p</c> does not change the reviewer: <c>--restricted</c> ignores user, project and
+    /// local settings (no hooks, no plugins), <c>--strict-mcp-config</c> skips MCP servers, <c>--tools</c> leaves only file reads,
+    /// and <c>--permission-mode dontAsk</c> denies anything that would ask. Bare mode (<c>--bare</c>) is chosen only when an API key
+    /// is set, because it never reads a subscription sign-in.
+    /// </summary>
     private async Task<ProcessResult> AskReviewerAsync(
         Manifest manifest, string claude, string model, string budget, string prompt, CancellationToken cancellationToken)
     {
         // Not an argument: a diff easily exceeds Windows' 32 K command line and Linux's 128 KiB per-argument limit.
         string promptFile = Path.Combine(Path.GetTempPath(), $"lockflight-review-{Guid.CreateVersion7()}.md");
+        string[] signIn = string.IsNullOrWhiteSpace(context.Environment.Get(EnvironmentVariables.AnthropicApiKey)) ? [] : ["--bare"];
         try
         {
             await File.WriteAllTextAsync(promptFile, prompt, cancellationToken);
             return await context.Claude(
                 claude,
-                ["-p", "--restricted", "--strict-mcp-config", "--tools", "Read,Grep,Glob", "--model", model, "--json-schema", ReviewPrompt.Schema,
-                 "--output-format", "json", "--no-session-persistence", "--max-budget-usd", budget],
+                [.. signIn, "-p", "--restricted", "--strict-mcp-config", "--tools", "Read,Grep,Glob", "--permission-mode", "dontAsk",
+                 "--model", model, "--json-schema", ReviewPrompt.Schema, "--output-format", "json", "--no-session-persistence", "--max-budget-usd", budget],
                 manifest.Root,
                 TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds),
                 promptFile,

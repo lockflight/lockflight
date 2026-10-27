@@ -63,6 +63,42 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task TheReviewerRunsReadOnlyAndDeniesEveryPermissionPrompt()
+    {
+        await ProjectAsync();
+        claude.Answers();
+
+        await RunAsync(["review"]);
+
+        IReadOnlyList<string> call = claude.Calls.Single(arguments => arguments.Contains("-p"));
+        Assert.Contains("--restricted", call);
+        Assert.Equal("Read,Grep,Glob", call[call.ToList().IndexOf("--tools") + 1]);
+        Assert.Equal("dontAsk", call[call.ToList().IndexOf("--permission-mode") + 1]);
+    }
+
+    [Fact]
+    public async Task WithAnApiKeyTheReviewerRunsBare()
+    {
+        await ProjectAsync();
+        claude.Answers();
+
+        await RunAsync(["review"], apiKey: "sk-ant-test");
+
+        Assert.Contains("--bare", claude.Calls.Single(arguments => arguments.Contains("-p")));
+    }
+
+    [Fact]
+    public async Task WithoutAnApiKeyTheReviewerKeepsTheSubscriptionSignIn()
+    {
+        await ProjectAsync();
+        claude.Answers();
+
+        await RunAsync(["review"], apiKey: " ");
+
+        Assert.DoesNotContain("--bare", claude.Calls.Single(arguments => arguments.Contains("-p")));
+    }
+
+    [Fact]
     public async Task ACleanRunWithAnotherModelIsRecordedButNotOfRecord()
     {
         await ProjectAsync();
@@ -398,12 +434,17 @@ public sealed class ReviewCommandTests : IDisposable
 
     private string[] RunFiles() => Directory.GetFiles(ReviewsDirectory(), "*.json");
 
-    private async Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string[] args, bool agent = false)
+    private async Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string[] args, bool agent = false, string? apiKey = null)
     {
         Dictionary<string, string> environment = new() { [EnvironmentVariables.Path] = tools.FullName };
         if (agent)
         {
             environment[EnvironmentVariables.ClaudeCode] = "1";
+        }
+
+        if (apiKey is not null)
+        {
+            environment[EnvironmentVariables.AnthropicApiKey] = apiKey;
         }
 
         using StringWriter output = new();

@@ -63,6 +63,12 @@ review:                         # what the review of record runs with (both opti
 recent commit on the branch, which would review only part of the change. The base defaults to the target. A run with `--model`, `--budget` or an outdated base is still recorded, says why it is not of record, and
 exits NOT-EARNED when it finds nothing.
 
+**How the reviewer runs.** `lockflight review` starts `claude -p` with every mode set explicitly, so a change of Claude Code's
+defaults does not change the reviewer: no user, project or local settings (so no hooks and no plugins), no MCP servers, only the
+Read, Grep and Glob tools, and the `dontAsk` permission mode, which denies anything that would ask. When `ANTHROPIC_API_KEY` is set
+it also runs in bare mode (`--bare`), which uses only that key; without it the reviewer uses your Claude Code sign-in
+(subscription).
+
 **Test platforms.** The test step runs whichever platform `dotnet test` uses in the target directory, decided as the SDK
 decides it: by the nearest `global.json`'s `test.runner`.
 
