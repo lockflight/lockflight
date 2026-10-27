@@ -31,7 +31,7 @@ Every arm uses the same session model and the same per-run budget. What the agen
 | red accepted (red N) | `redgreen status` shows the cycle `RED (test projects locked)`; N is the position of the first `redgreen:red:accepted` among the ledger's red events |
 | compile reds, other rejections | ledger `redgreen:red:COMPILE_RED` and `redgreen:red:rejected` events |
 | rejection kinds | the kinds named in each `redgreen:red:rejected` event (`RED_IN_TEST`, `GREEN_BEFORE`, …), and the compile reds |
-| accepted RED_OTHER | tests of the accepted cycle classed `RED_OTHER`: accepted with a flag, since an exception other than the stub's says less |
+| accepted RED_OTHER | tests of the accepted cycle classed `RED_OTHER`; red/green now rejects that class, so only runs of older engines show any |
 | FRs traced, untagged tests | the spec's requirements named by a `Requirement` trait of an accepted test, of all the spec's requirements; accepted tests with no such trait |
 | test-author rounds | Agent tool calls naming the test author in the main session (0 in the plain arm) |
 | status after test author | whether the main session's next tool call after each round was `redgreen status` (`first`), came later (`late`) or never followed the last round (`no`); `-` without a round |

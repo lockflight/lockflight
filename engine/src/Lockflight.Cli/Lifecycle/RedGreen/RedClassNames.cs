@@ -12,6 +12,7 @@ internal static class RedClassNames
         RedClass.GreenBefore => "GREEN_BEFORE",
         RedClass.Skipped => "SKIPPED",
         RedClass.Flaky => "FLAKY",
+        RedClass.RedNoProduction => "RED_NO_PRODUCTION",
         _ => throw new ArgumentOutOfRangeException(nameof(redClass), redClass, null),
     };
 
@@ -20,5 +21,5 @@ internal static class RedClassNames
             ? parsed
             : throw new FormatException($"unknown red class '{name}'");
 
-    public static bool IsAccepted(RedClass redClass) => redClass is RedClass.RedStub or RedClass.RedAssert or RedClass.RedOther;
+    public static bool IsAccepted(RedClass redClass) => redClass is RedClass.RedStub or RedClass.RedAssert;
 }

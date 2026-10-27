@@ -36,6 +36,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   steps for both install modes, the crew plugin and the marketplace.
 
 ### Fixed
+- `redgreen red` no longer accepts reds that never reach production code. An assertion counts as RED_ASSERT only when the test
+  calls production code (else RED_NO_PRODUCTION); `Assert.Fail`, a throwing fixture or constructor and other test-framework
+  failures are RED_IN_TEST; an exception other than the stub's, or one thrown by the runtime or a library, is RED_OTHER and
+  is now rejected. Each rejected class is printed with what to change.
 - `lockflight review` no longer passes when a blocker/major finding has a reproduction but the tests do not build: the
   finding is unverified (NOT-EARNED).
 - The crew test author stops before `redgreen red` when a stub is missing, instead of getting a red of only part of the

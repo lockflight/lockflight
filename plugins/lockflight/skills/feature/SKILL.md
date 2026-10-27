@@ -30,7 +30,7 @@ is the engine the hooks run, and it works whatever way Lockflight was installed.
 6. **For each user story, one red/green cycle:**
    1. Declare the members the tests need with bodies `throw new NotImplementedException();`.
    2. Write the story's xUnit v3 tests, each tagged `[Trait("Requirement", "FR-001")]`, asserting the specified behaviour.
-   3. `.lockflight/bin/lockflight redgreen red`. Every new test must fail inside production code (RED_STUB or RED_ASSERT). If
+   3. `.lockflight/bin/lockflight redgreen red`. Every new test must fail because of production code: the stub's `NotImplementedException` (RED_STUB) or an assertion in a test that calls the production code (RED_ASSERT). If
       the red is rejected, fix the tests — never weaken an assertion to make a red "work".
 
       **Optional test author.** If the agent type `lockflight-crew:test-author` is available (the `lockflight-crew` plugin
