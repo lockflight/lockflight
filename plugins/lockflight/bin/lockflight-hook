@@ -3,7 +3,7 @@
 #   1. no lockflight.yaml above the project directory  -> no-op (never block unrelated projects)
 #   2. .lockflight/lockdown present and no engine       -> only reads allowed (tighten-only lockdown)
 #   3. linked engine present                            -> run it (fast path, ~5 ms)
-#   4. engine not restored/linked                       -> recovery: reads and the exact restore/link command only
+#   4. engine not restored/linked, or not trusted       -> recovery: reads and the exact restore/link command only
 LOCKFLIGHT_PLUGIN_API=1
 export LOCKFLIGHT_PLUGIN_API
 event="$1"
@@ -77,7 +77,32 @@ done
 
 engine="$root/.lockflight/bin/lockflight"
 [ -f "$engine.exe" ] && engine="$engine.exe"
+# The engine runs on every hook, so it must be the copy `lockflight link` made for this user. Never a file committed to the
+# repository: a cloned project could ship any program under that name. Never one another user owns: a lockflight.yaml in a
+# shared folder such as /tmp would otherwise run their binary in every project below it. Ownership is not checked under Git
+# Bash, which reports every file as the current user's. Asking git costs a process (10-20 ms), so a passed check is
+# remembered in .git, which no commit can write, until the engine file changes.
+untrusted=""; untrusted_fix=""
 if [ -x "$engine" ]; then
+  # test -O and -nt are not in POSIX but dash, bash and BusyBox have them; OSTYPE is set by bash only (Git Bash: msys).
+  # shellcheck disable=SC3028,SC3067
+  case "${OSTYPE:-}" in
+    msys*|cygwin*) ;;
+    *) [ -O "$engine" ] || { untrusted="it belongs to another user"; untrusted_fix="check where it came from and delete it"; } ;;
+  esac
+  checked="$root/.git/lockflight-engine-checked"
+  # shellcheck disable=SC3013
+  if [ -z "$untrusted" ] && [ -e "$root/.git" ] && ! { [ -f "$checked" ] && ! [ "$engine" -nt "$checked" ]; }; then
+    if git -C "$root" ls-files --error-unmatch -- "${engine#"$root"/}" >/dev/null 2>&1; then
+      untrusted="it is committed to the repository"
+      untrusted_fix="remove it from the repository (git rm --cached, and add .lockflight/bin/ to .gitignore)"
+    elif [ -d "$root/.git" ]; then
+      : > "$checked" 2>/dev/null || true
+    fi
+  fi
+fi
+untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Ask the user to $untrusted_fix, then run: dotnet tool restore && dotnet lockflight link"
+if [ -x "$engine" ] && [ -z "$untrusted" ]; then
   # A slash command's payload is read first, so a failed engine can still be told apart from a typed /lockflight:approve.
   if [ "$event" = "user-prompt-expansion" ] && [ -z "$input" ]; then input=$(cat); fi
   # Not `printf | exec`: in a pipeline exec only replaces the subshell and the script would fall through.
@@ -100,6 +125,7 @@ fi
 if [ "$event" = "user-prompt-expansion" ]; then
   [ -n "$input" ] || input=$(cat)
   if approval_expansion; then
+    if [ -n "$untrusted" ]; then echo "$untrusted_message. Nothing was approved." >&2; exit 2; fi
     echo "lockflight: engine not installed in this project, so nothing was approved. Run exactly: dotnet tool restore && dotnet lockflight link, then type the command again." >&2
     exit 2
   fi
@@ -121,6 +147,10 @@ if [ "$tool" = "Bash" ]; then
   case "$command" in
     "dotnet tool restore"|"dotnet tool restore && dotnet lockflight link"|"dotnet lockflight link") exit 0 ;;
   esac
+fi
+if [ -n "$untrusted" ]; then
+  echo "$untrusted_message" >&2
+  exit 2
 fi
 # A development build carries a "dev" prerelease identifier (any case): 0.2.0-alpha.4.dev.<stamp>, 0.2.1-0.dev.<stamp>
 # (0.2.0-dev.<stamp> before). Kept in sync with Config/EngineVersion.cs by ShimSyncTests, like the lists above. Each manifest is

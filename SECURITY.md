@@ -24,4 +24,10 @@ Lockflight labels each control a **guardrail** or a **boundary**; see
   unnoticed. It is not in scope when it relies on a capability the page already lists as out of reach. Example: an agent
   deliberately writing through a script file.
 
+- **Opening a project runs its engine.** With the plugin enabled, every hook runs the engine linked into the project's
+  `.lockflight/bin/`, starting with `SessionStart`. The shim refuses an engine that is committed to the repository or, outside
+  Windows, owned by another user. It does not verify the binary against the released package. Treat opening an untrusted
+  project like running its build: the project's own `.claude/settings.json` hooks can run code too, once you trust the folder.
+  A way to make the shim run an engine it should refuse is in scope.
+
 Only the latest prerelease is supported during the preview.

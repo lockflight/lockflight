@@ -132,6 +132,24 @@ fi
 sed 's/"9.9.9"/"9.9.9-dev.1"/' "$proj/dotnet-tools.json" > "$WORK/t" && mv "$WORK/t" "$proj/dotnet-tools.json"
 check "dev pin mismatch: Write blocked"   2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 if grep -q 'lockflight update' "$WORK/err"; then pass=$((pass+1)); echo "dev pin mismatch: names update: ok"; else fail=$((fail+1)); echo "dev pin mismatch: names update: FAIL ($(head -c 400 "$WORK/err"))"; fi
+# An engine committed to the repository (a cloned project could ship any program there) is never run.
+cloned="$WORK/cloned"; mkdir -p "$cloned/.lockflight/bin" "$cloned/src"
+cp "$proj/lockflight.yaml" "$cloned/"
+printf '{"version":1,"isRoot":true,"tools":{"lockflight.cli":{"version":"%s","commands":["lockflight"]}}}' "$version" > "$cloned/dotnet-tools.json"
+committed="$cloned/.lockflight/bin/lockflight"; case "$ENGINE" in *.exe) committed="$committed.exe" ;; esac
+cp "$ENGINE" "$committed"
+git -C "$cloned" init -q && git -C "$cloned" add -f "${committed#"$cloned"/}"
+check "committed engine: Write blocked"     2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+if grep -q 'committed to the repository' "$WORK/err"; then pass=$((pass+1)); echo "committed engine: names the reason: ok"; else fail=$((fail+1)); echo "committed engine: names the reason: FAIL ($(head -c 400 "$WORK/err"))"; fi
+check "committed engine: Read allowed"      0 "$cloned" "$(json "$cloned" Read "$(fp "$cloned/src/a.cs")")"
+checkexp "committed engine: approve blocked" 2 cli 1 "$(expansion "$cloned" lockflight:approve spec)" "Nothing was approved"
+git -C "$cloned" rm -q --cached "${committed#"$cloned"/}"
+check "untracked engine: Write allowed"     0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+# A passed check is remembered until the engine file changes; an engine committed later is caught again.
+touch -t 200001010000 "$cloned/.git/lockflight-engine-checked"
+cp "$ENGINE" "$committed" && git -C "$cloned" add -f "${committed#"$cloned"/}"
+check "engine committed later: Write blocked" 2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+
 # An engine that crashes must block, never allow. On Windows the shim prefers lockflight.exe, so the stub there is a real .exe
 # (Git Bash's false.exe, exit 1); elsewhere a script exiting 3.
 case "$ENGINE" in

@@ -8,7 +8,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 
 | You see | Go to |
 |---|---|
-| Every tool call or every write is blocked | [engine not installed](#every-tool-call-is-blocked-engine-not-installed-in-this-project) · [lockdown](#every-write-is-blocked-the-project-is-in-lockdown) · [after editing `lockflight.yaml`](#writes-are-blocked-after-editing-lockflightyaml) · [engine and pin differ](#running-engine-x-but-the-project-pins-y) · [internal error](#lockflight-internal-error-or-the-engine-failed-exit-n) |
+| Every tool call or every write is blocked | [engine not installed](#every-tool-call-is-blocked-engine-not-installed-in-this-project) · [engine not run](#every-tool-call-is-blocked-the-engine-was-not-run) · [lockdown](#every-write-is-blocked-the-project-is-in-lockdown) · [after editing `lockflight.yaml`](#writes-are-blocked-after-editing-lockflightyaml) · [engine and pin differ](#running-engine-x-but-the-project-pins-y) · [internal error](#lockflight-internal-error-or-the-engine-failed-exit-n) |
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a shell command after `cd`](#a-shell-command-is-blocked-after-a-cd) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`NOT-EARNED`](#a-gate-says-not-earned) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
@@ -29,6 +29,22 @@ dotnet lockflight link
 With an install from source the pin is a development build that no package feed has, so these commands cannot restore it.
 Run `~/.lockflight/bin/lockflight link` yourself from the project root, or `~/.lockflight/bin/lockflight update` (which also
 re-pins) in a separate terminal window: not with `!` in Claude Code, where `update` is refused.
+
+## Every tool call is blocked: the engine "was not run"
+
+The shim found an engine at `.lockflight/bin/` but refused to run it, and is in recovery mode as above:
+
+- **"because it is committed to the repository":** a binary in git is whatever the last committer put there, so it is never
+  run. Remove it from the repository and ignore the folder, then link again:
+
+  ```sh
+  git rm --cached .lockflight/bin/lockflight    # .exe on Windows
+  echo ".lockflight/bin/" >> .gitignore
+  dotnet tool restore && dotnet lockflight link
+  ```
+
+- **"because it belongs to another user":** the `lockflight.yaml` the shim found is in a folder another account wrote (for
+  example `/tmp`). Check where it came from, delete it, and link the engine in your own project.
 
 ## `dotnet lockflight` fails: the pinned version is not found
 
