@@ -93,5 +93,36 @@ public sealed class TestStepTests
         Assert.Contains("no test failed", step.Detail, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ATestingPlatformRunWhereEveryTestWasSkippedIsNotEarnedThoughItExitsZero()
+    {
+        const string output = "skipped T.A.One (0ms)\nTest run summary: Zero tests ran\n  total: 2\n  failed: 0\n  succeeded: 0\n  skipped: 2\n";
+
+        GateStep step = TestStep.JudgeTestingPlatform(new ProcessResult(0, output, string.Empty, 0, TimedOut: false));
+
+        Assert.Equal(Verdict.NotEarned, step.Verdict);
+        Assert.Contains("skipped", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATestingPlatformRunWithOneModuleSkippedAndAnotherPassingPasses()
+    {
+        const string output = "Test run summary: Zero tests ran\n  total: 1\n  failed: 0\n  succeeded: 0\n  skipped: 1\n"
+            + "Test run summary: Passed!\n  total: 3\n  failed: 0\n  succeeded: 3\n  skipped: 0\n";
+
+        GateStep step = TestStep.JudgeTestingPlatform(new ProcessResult(0, output, string.Empty, 0, TimedOut: false));
+
+        Assert.Equal(Verdict.Pass, step.Verdict);
+        Assert.Equal("total 4", step.Detail);
+    }
+
+    [Fact]
+    public void ATestingPlatformRunWithASummaryWithoutCountsThatSaysZeroTestsRanIsNotEarned()
+    {
+        GateStep step = TestStep.JudgeTestingPlatform(new ProcessResult(0, "Test run summary: Zero tests ran\n  total: 2\n", string.Empty, 0, TimedOut: false));
+
+        Assert.Equal(Verdict.NotEarned, step.Verdict);
+    }
+
     private static ProcessResult Run(int exitCode) => new(exitCode, string.Empty, string.Empty, 0, TimedOut: false);
 }

@@ -135,18 +135,44 @@ internal static partial class TestStep
             return new TestStepOutcome(new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs, explanation), testsTotal, failedTests);
         }
 
-        Verdict verdict = Judge(testRun.ExitCode, testsTotal);
-        if (verdict == Verdict.Fail && failedTests.Count > 0)
+        GateStep step = JudgeTestingPlatform(testRun);
+        if (step.Verdict == Verdict.Fail && failedTests.Count > 0)
         {
             IReadOnlySet<string> known = new KnownFailingTests(run.ProjectRoot, run.UnitPath).Load();
             return new TestStepOutcome(JudgeAgainstBaseline(testRun, testsTotal, failedTests, known), testsTotal, failedTests);
         }
 
+        return new TestStepOutcome(step, testsTotal, failedTests);
+    }
+
+    /// <summary>
+    /// Microsoft.Testing.Platform's exit code read with its summary. Exit 0 proves something only when a test executed: a run whose
+    /// every test was skipped also exits 0 ("Zero tests ran"), so it is NOT-EARNED, like a run without a test count.
+    /// </summary>
+    public static GateStep JudgeTestingPlatform(ProcessResult testRun)
+    {
+        int? testsTotal = SumOf(TestsTotalPattern(), testRun.Output);
+        Verdict verdict = Judge(testRun.ExitCode, testsTotal);
+        if (verdict == Verdict.Pass && NothingExecuted(testRun.Output))
+        {
+            return new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs,
+                $"no tests ran (the runner's summary counts {testsTotal} tests and none executed: all skipped or not run)");
+        }
+
         string detail = verdict == Verdict.Error
             ? $"dotnet test exited {testRun.ExitCode}, which is not a test verdict"
             : testsTotal is null ? "no tests ran (no test project found, or the runner's summary was missing)" : $"total {testsTotal}";
-        return new TestStepOutcome(new GateStep(Name, testRun.ExitCode, verdict, testRun.DurationMs, detail), testsTotal, failedTests);
+        return new GateStep(Name, testRun.ExitCode, verdict, testRun.DurationMs, detail);
     }
+
+    /// <summary>
+    /// No test passed or failed: the succeeded and failed figures of every summary add up to zero, or, in a summary without them,
+    /// the runner said "Zero tests ran".
+    /// </summary>
+    private static bool NothingExecuted(string output) =>
+        SumOf(SucceededCountPattern(), output) is int succeeded
+            ? succeeded + (SumOf(FailedCountPattern(), output) ?? 0) == 0
+            : ZeroTestsRanPattern().IsMatch(output);
 
     /// <summary>
     /// A VSTest-style trait condition (<c>Category!=Integration</c>, <c>Category=Fast</c>) as xUnit v3's own options; null for
@@ -224,4 +250,10 @@ internal static partial class TestStep
 
     [GeneratedRegex(@"^\s*failed:\s*(\d+)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex FailedCountPattern();
+
+    [GeneratedRegex(@"^\s*succeeded:\s*(\d+)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
+    private static partial Regex SucceededCountPattern();
+
+    [GeneratedRegex(@"^Test run summary: Zero tests ran\b", RegexOptions.Multiline)]
+    private static partial Regex ZeroTestsRanPattern();
 }
