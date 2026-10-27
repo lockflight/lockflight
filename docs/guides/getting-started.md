@@ -35,6 +35,12 @@ scripts/dev-install.sh            # packs the engine into ~/.lockflight/feed, in
 
 Then set up your project: the [lite profile](#lite-profile-target-first-green-in-under-15-minutes) below.
 
+- **Plugin from the checkout:** the script adds the checkout itself as the `lockflight` marketplace (an existing one, such
+  as the GitHub marketplace, is pointed there), so the plugin and the engine come from the same commit. Claude Code reads the
+  plugin from the checkout's folder: a `git pull` reaches it at the next session start or `/reload-plugins`, and
+  `lockflight update` pulls it together with the engine. To go back to the published plugin, run
+  `claude plugin marketplace add lockflight/lockflight`.
+
 - **`lockflight` by name:** the script puts `~/.lockflight/bin` on your `PATH` for new terminals, with one line marked
   `# added by Lockflight: its engine on PATH` in your shell's startup file: `~/.zshrc` for zsh, `~/.bashrc` for bash (and
   `~/.bash_profile` on macOS), `~/.config/fish/conf.d/lockflight.fish` for fish, else `~/.profile`. It prints the file it

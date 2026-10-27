@@ -9,7 +9,7 @@ public sealed class PathAliasTests : IDisposable
     [Fact]
     public void AWriteThroughASymlinkedDirectoryStillMatchesTheProtectedTarget()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "secrets"));
         Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "innocent"), Path.Combine(projectRoot.FullName, "secrets"));
 
@@ -42,7 +42,7 @@ public sealed class PathAliasTests : IDisposable
     [InlineData("l/./../../secrets/key.txt", "secrets/**")]
     public void AParentSegmentAfterASymlinkGoesToTheParentOfItsTarget(string target, string expectedRule)
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".lockflight", "local"));
         Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "l"), Path.Combine(projectRoot.FullName, ".lockflight", "local"));
 
@@ -54,7 +54,7 @@ public sealed class PathAliasTests : IDisposable
     [Fact]
     public void AParentSegmentAfterASymlinkToADirectoryElsewhereLeavesTheProject()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         DirectoryInfo elsewhere = Directory.CreateTempSubdirectory("lockflight-elsewhere-");
         try
         {

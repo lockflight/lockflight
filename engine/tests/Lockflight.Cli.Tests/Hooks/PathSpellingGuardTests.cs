@@ -21,7 +21,7 @@ public sealed class PathSpellingGuardTests : IDisposable
     [InlineData("cp /tmp/x l/../../secrets/k")]
     public async Task AParentSegmentAfterASymlinkIsJudgedWhereItReallyLeads(string command)
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "l"), Path.Combine(projectRoot.FullName, ".lockflight", "local"));
 
         (ExitCode exitCode, _, _) = await RunAsync("Bash", command);
