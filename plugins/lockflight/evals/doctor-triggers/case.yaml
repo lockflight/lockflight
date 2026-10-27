@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: doctor-triggers
+description: "A question about whether Lockflight is set up correctly loads the doctor skill."
+tags: [trigger]
+context:
+  scaffold_script: scaffold.sh
