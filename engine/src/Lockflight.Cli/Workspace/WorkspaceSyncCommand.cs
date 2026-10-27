@@ -11,8 +11,9 @@ namespace Lockflight.Cli.Workspace;
 
 /// <summary>
 /// <c>lockflight workspace sync [--check]</c> (vendored policy): writes into every .NET unit that is its own repository what
-/// its CI needs to judge pull requests without the shell — <c>lockflight.unit.yaml</c>, the engine pin, the unit's baselines and,
-/// when missing, the CI workflow — all derived from the shell's protected policy, so running it never loosens anything.
+/// its CI needs to judge pull requests without the shell — <c>lockflight.unit.yaml</c>, the engine pin, the unit's baselines and
+/// the CI workflow (an edited workflow is rewritten) — all derived from the shell's protected policy, so running it never loosens
+/// anything.
 /// <c>--check</c> changes nothing and fails when a unit has drifted from the shell.
 /// </summary>
 internal sealed class WorkspaceSyncCommand(CliContext context)
@@ -102,7 +103,7 @@ internal sealed class WorkspaceSyncCommand(CliContext context)
         string expected = Templates.UnitWorkflow(DotnetChannels.For(frameworks));
         if (!File.Exists(workflow) || File.ReadAllText(workflow) != expected)
         {
-            changes.Add(File.Exists(workflow) ? "CI workflow differs from the generated one" : "CI workflow");
+            changes.Add(!File.Exists(workflow) ? "CI workflow" : check ? "CI workflow differs from the generated one" : "CI workflow rewritten: it differed from the generated one");
             if (!check)
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(workflow)!);

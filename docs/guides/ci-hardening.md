@@ -144,7 +144,7 @@ run in the shell, vendors into every .NET unit that is its own repository what i
 
 | File | What it is |
 |---|---|
-| `lockflight.unit.yaml` | The shell's policy for the unit, and the shell commit it came from. Every protected path that can match inside the unit is re-based (`services/*/Migrations/**` becomes `Migrations/**`, a `**` before the unit path is used up becomes `**/…`, which is wider, never narrower). It also carries the unit's `build:` file and test framework. |
+| `lockflight.unit.yaml` | The shell's policy for the unit, and the shell commit it came from. Every protected path that can match inside the unit is re-based, read as the guard reads it: `services/*/Migrations/**` becomes `Migrations/**`, and a `**` that can reach into the unit is kept, also inside a segment (`services/**.cs` becomes `**.cs`). A path can become more than one glob (`services/**/orders/*.cs` becomes `**/orders/*.cs` and `*.cs`); the result is wider, never narrower, than the shell's rule. It also carries the unit's `build:` file and test framework. |
 | `dotnet-tools.json` (or `.config/`) | The engine pin. |
 | `.lockflight/baselines/` | The unit's baselines, copied from the shell's `.lockflight/baselines/<unit>/`. |
 | `.github/workflows/lockflight-gates.yml` | Generated policy too: an edited copy is drift, and sync rewrites it. |
