@@ -16,12 +16,13 @@
 #   --total-budget-usd X   stop starting runs once the spend plus one run's cap would pass this (default 20)
 #   --out DIR              where runs and the report go (default: a new temporary directory)
 #   --report-only DIR      rebuild the report from an earlier --out directory without running anything
+#   --setup-only STORY DIR seed STORY into DIR (approved, red/green started) without a session, to check a new story
 # Needs: claude, dotnet (the sample's SDK), jq, git, perl.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 
-stories="" runs=2 arms="plain,crew" model="sonnet" run_budget="2.50" total_budget="20" out="" report_only=""
+stories="" runs=2 arms="plain,crew" model="sonnet" run_budget="2.50" total_budget="20" out="" report_only="" setup_only=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --stories) stories="$2"; shift 2 ;;
@@ -32,6 +33,7 @@ while [ $# -gt 0 ]; do
     --total-budget-usd) total_budget="$2"; shift 2 ;;
     --out) out="$2"; shift 2 ;;
     --report-only) report_only="$2"; shift 2 ;;
+    --setup-only) setup_only="$2"; setup_dir="$3"; shift 3 ;;
     *) echo "unknown option: $1" >&2; exit 4 ;;
   esac
 done
@@ -125,6 +127,9 @@ run_one() { # run_one <story dir> <arm> <n> <run dir>
   echo "$(( $(date +%s) - started ))" > "$dir/seconds"
   (cd "$w" && env -u CLAUDECODE .lockflight/bin/lockflight redgreen status > "$dir/status.txt" 2>&1)
   (cd "$w" && git status --porcelain --untracked-files=all -- src > "$dir/production-changes.txt")
+  (cd "$w" && git add -N -- src && git diff -- src > "$dir/production.diff")
+  cp "$w"/.lockflight/features/*/redgreen.json "$dir/redgreen.json" 2>/dev/null
+  cp "$w"/specs/*/spec.md "$dir/spec.md" 2>/dev/null
   cat "$w"/.lockflight/ledger/events-*.jsonl > "$dir/ledger.jsonl" 2>/dev/null
   local sid; sid="$(jq -r '.session_id // empty' "$dir/out.json" 2>/dev/null)"
   [ -n "$sid" ] && transcripts "$sid" "$dir"
@@ -135,7 +140,8 @@ run_one() { # run_one <story dir> <arm> <n> <run dir>
 # One row per run, from the files a run left.
 row() { # row <run dir>
   local dir="$1" slug arm n; read -r slug arm n < "$dir/run"
-  local reds accepted_at compile rejected kinds verdict cost seconds rounds prod blocked all out ta_all ta_model
+  local reds accepted_at compile rejected kinds verdict cost seconds rounds prod writes blocked all out ta_all ta_model
+  local other traced untagged status skill
   reds="$(jq -r 'select(.signature | startswith("redgreen:red:")) | .signature' "$dir/ledger.jsonl" 2>/dev/null)"
   accepted_at="$(printf '%s\n' "$reds" | grep -n 'redgreen:red:accepted' | head -n 1 | cut -d: -f1)"
   compile="$(printf '%s\n' "$reds" | grep -c 'COMPILE_RED')"
@@ -147,10 +153,37 @@ row() { # row <run dir>
   if grep -q 'RED (test projects locked)' "$dir/status.txt"; then verdict="accepted (red ${accepted_at:-?})"; else verdict="no"; fi
   cost="$(jq -r '.total_cost_usd // 0' "$dir/out.json" 2>/dev/null || echo 0)"
   seconds="$(cat "$dir/seconds")"
+  # Accepted tests: how many were RED_OTHER (accepted with a flag), which of the spec's requirements their traits name, and
+  # how many carry no Requirement trait. Runs recorded before these files were kept show "-".
+  other="-" traced="-" untagged="-"
+  if [ -f "$dir/redgreen.json" ] && [ -f "$dir/spec.md" ]; then
+    local frs; frs="$(grep -oE '^- \*\*FR-[0-9]+' "$dir/spec.md" | grep -oE 'FR-[0-9]+' | sort -u)"
+    other="$(jq '[.cycles[].tests[] | select(.red == "RED_OTHER")] | length' "$dir/redgreen.json")"
+    untagged="$(jq '[.cycles[].tests[] | select((.requirements | length) == 0)] | length' "$dir/redgreen.json")"
+    traced="$(jq -r '.cycles[].tests[].requirements[]' "$dir/redgreen.json" | sort -u | grep -cxF -f <(printf '%s\n' "$frs"))/$(printf '%s\n' "$frs" | grep -c .)"
+  fi
+  # The main session's tool calls in order, one per line: "Agent <subagent type>" or "Bash <command>" or the tool name.
+  local calls; calls="$(jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "tool_use")
+    | if .name == "Agent" then "Agent \(.input.subagent_type // "")" elif .name == "Bash" then "Bash \(.input.command // "" | gsub("\n"; " "))"
+      elif .name == "Skill" then "Skill \(.input.skill // "")" else .name end' "$dir/session.jsonl" 2>/dev/null)"
+  # Whether the main session loaded the feature skill, the text that asks for the checks.
+  if printf '%s\n' "$calls" | grep -q '^Skill .*feature'; then skill="yes"; else skill="no"; fi
   # Rounds: Agent calls naming the test author in the main session (the plain arm has none).
-  rounds="$(jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "tool_use" and .name == "Agent") | .input.subagent_type // ""' "$dir/session.jsonl" 2>/dev/null | grep -c 'test-author')"
+  rounds="$(printf '%s\n' "$calls" | grep -c '^Agent .*test-author')"
+  # After each test-author round the skill wants `redgreen status` as the very next call: "first" when it was every time,
+  # "late" when it came after other calls, "no" when it never followed the last round; "-" without a round.
+  status="-"
+  if [ "$rounds" -gt 0 ]; then
+    status="$(printf '%s\n' "$calls" | awk '
+      /^Agent .*test-author/ { pending = 1; next_is = 1; rounds++; next }
+      next_is { if ($0 ~ /^Bash .*redgreen status/) first++; next_is = 0 }
+      pending && /^Bash .*redgreen status/ { checked++; pending = 0 }
+      END { if (pending) print "no"; else if (first == rounds) print "first"; else print "late" }')"
+  fi
   prod="$(grep -c . "$dir/production-changes.txt")"
   local files=("$dir/session.jsonl"); [ -d "$dir/subagents" ] && files+=("$dir"/subagents/*.jsonl)
+  # Production writes: Write/Edit calls aimed at src/ by any agent, refused or not.
+  writes="$(cat "${files[@]}" 2>/dev/null | jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "tool_use" and (.name == "Write" or .name == "Edit" or .name == "MultiEdit")) | .input.file_path // ""' 2>/dev/null | grep -c '/src/')"
   read -r all out < <(tokens "${files[@]}")
   ta_all=0 ta_model="-"
   if [ -d "$dir/subagents" ]; then
@@ -159,32 +192,47 @@ row() { # row <run dir>
     ta_model="$(cat "$dir"/subagents/*.jsonl | jq -s -r "$ta"' | map(.message.model) | unique | join(",")')"
     [ -n "$ta_model" ] || ta_model="-"
   fi
-  printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
-    "$slug" "$arm" "$n" "$verdict" "$compile" "$rejected" "${kinds:--}" "$rounds" "$prod" "$blocked" "$seconds" "$all" "$ta_all" "$ta_model" "$(printf '%.2f' "$cost")"
+  printf '| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |\n' \
+    "$slug" "$arm" "$n" "$verdict" "$compile" "$rejected" "${kinds:--}" "$other" "$traced" "$untagged" "$rounds" "$status" "$skill" \
+    "$prod" "$writes" "$blocked" "$seconds" "$all" "$ta_all" "$ta_model" "$(printf '%.2f' "$cost")"
 }
 
 report() { # report <out dir>
   local o="$1" rows
   rows="$(for d in "$o"/runs/*/; do [ -f "$d/run" ] && row "${d%/}"; done)"
   {
-    echo "| story | arm | run | red accepted | compile reds | other rejections | rejection kinds | test-author rounds | production files changed | guard blocks | wall s | tokens (all) | test-author tokens | test-author model | cost USD |"
-    echo "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
+    echo "| story | arm | run | red accepted | compile reds | other rejections | rejection kinds | accepted RED_OTHER | FRs traced | untagged tests | test-author rounds | status after test author | skill loaded | production files changed | production writes | guard blocks | wall s | tokens (all) | test-author tokens | test-author model | cost USD |"
+    echo "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
     printf '%s\n' "$rows"
     echo
-    echo "| arm | runs | accepted on first red | accepted eventually | compile reds | other rejections | mean rounds | mean wall s | mean tokens | total cost USD | cost per accepted red USD |"
-    echo "|---|---|---|---|---|---|---|---|---|---|---|"
+    echo "| arm | runs | accepted on first red | accepted eventually | compile reds | RED_IN_TEST | GREEN_BEFORE | other kinds | accepted RED_OTHER tests | FRs traced | runs changing production | production writes | guard blocks | status not checked first | skill not loaded | mean wall s | mean tokens | total cost USD | cost per accepted red USD |"
+    echo "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"
     printf '%s\n' "$rows" | awk -F'|' '
+      function count(m) { sub(/.*×/, "", m); return m + 0 }
+      function kind(field, name) { return match(field, name "×[0-9]+") ? count(substr(field, RSTART, RLENGTH)) : 0 }
       { for (i = 2; i <= NF; i++) gsub(/^ +| +$/, "", $i) }
       NF > 10 { a = $3; if (!(a in n)) order[++k] = a; n[a]++; if ($5 ~ /^accepted/) ok[a]++; if ($5 ~ /red 1\)/) first[a]++
-        c[a] += $6; r[a] += $7; rd[a] += $9; s[a] += $12; t[a] += $13; usd[a] += $16 }
+        c[a] += $6; it[a] += kind($8, "RED_IN_TEST"); gb[a] += kind($8, "GREEN_BEFORE")
+        ok_kinds = kind($8, "RED_IN_TEST") + kind($8, "GREEN_BEFORE") + kind($8, "COMPILE_RED"); total = 0
+        tmp = $8; while (match(tmp, /×[0-9]+/)) { total += count(substr(tmp, RSTART, RLENGTH)); tmp = substr(tmp, RSTART + RLENGTH) }
+        ok2[a] += total - ok_kinds
+        if ($9 != "-") ro[a] += $9
+        if (split($10, f, "/") == 2) { tc[a] += f[1]; tt[a] += f[2] }
+        if ($13 == "no" || $13 == "late") sk[a]++; if ($14 == "no") nl[a]++
+        if ($15 + 0 > 0) pr[a]++; pw[a] += $16; gbk[a] += $17
+        s[a] += $18; t[a] += $19; usd[a] += $22 }
       END { for (i = 1; i <= k; i++) { a = order[i]
-        printf "| %s | %d | %d | %d | %d | %d | %.1f | %.0f | %.0f | %.2f | %s |\n", a, n[a], first[a], ok[a], c[a], r[a], rd[a] / n[a], s[a] / n[a], t[a] / n[a], usd[a], (ok[a] ? sprintf("%.3f", usd[a] / ok[a]) : "-") } }'
+        printf "| %s | %d | %d | %d | %d | %d | %d | %d | %d | %s | %d | %d | %d | %s | %d | %.0f | %.0f | %.2f | %s |\n", a, n[a], first[a], ok[a], c[a], it[a], gb[a], ok2[a], ro[a], (tt[a] ? tc[a] "/" tt[a] : "-"), pr[a], pw[a], gbk[a], (a ~ /^crew/ ? sk[a] + 0 : "-"), nl[a], s[a] / n[a], t[a] / n[a], usd[a], (ok[a] ? sprintf("%.3f", usd[a] / ok[a]) : "-") } }'
   } > "$o/report.md"
   cat "$o/report.md"
 }
 
 if [ -n "$report_only" ]; then report "$report_only"; exit 0; fi
 : "${ENGINE:?set ENGINE to a lockflight binary}"
+if [ -n "$setup_only" ]; then
+  setup_project "$HERE/stories/$setup_only" "$setup_dir" || { echo "setup failed, see $setup_dir.setup.log" >&2; exit 1; }
+  echo "seeded $setup_only in $setup_dir"; exit 0
+fi
 [ -n "$out" ] || out="$(mktemp -d "${TMPDIR:-/tmp}/lockflight-crew-bench.XXXXXX")"
 mkdir -p "$out/runs"
 [ -n "$stories" ] || stories="$(cd "$HERE/stories" && ls | paste -sd, -)"
