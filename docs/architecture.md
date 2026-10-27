@@ -46,7 +46,7 @@ see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
 
 ## The engine on every hook call
 
-The plugin registers four hooks: `SessionStart`, `PreToolUse`, `UserPromptExpansion` and `Stop`. Each runs a small shim,
+The plugin registers five hooks: `SessionStart`, `PreToolUse`, `UserPromptExpansion`, `TaskCompleted` and `Stop`. Each runs a small shim,
 [`lockflight-hook`](../plugins/lockflight/bin/lockflight-hook), which finds the project from `CLAUDE_PROJECT_DIR` and runs the
 engine linked into `.lockflight/bin/`. Running the binary directly keeps a hook at a few milliseconds.
 
@@ -102,6 +102,13 @@ judge new problems only. Patch coverage judges the changed lines against the bas
 The Stop gate runs the `stop` profile when the agent tries to end its turn. It is cached by a hash of its inputs, so an
 unchanged tree is not rebuilt, and its block message names the failing tests. In a workspace it builds and tests only the
 units that changed since their last PASS: uncommitted changes, a commit, or a shared build input outside every unit.
+`lockflight gate run` of the `stop` profile over the stop target caches its PASS the same way.
+
+With the Stop gate on, the `TaskCompleted` hook lets a task be marked completed only when that cache holds a PASS for the tree
+as it is now. It reads that evidence and never builds, so it answers within its 30 s timeout. When the Stop gate already sent
+the same tree back in this session, it does not block again: the agent is already fixing it, and the Stop gate judges the tree
+again before the turn ends. Like the Stop gate it is best effort. Claude Code lets the task complete when the hook fails or
+times out, because only exit 2 blocks.
 
 ## The lifecycle (standard profile)
 

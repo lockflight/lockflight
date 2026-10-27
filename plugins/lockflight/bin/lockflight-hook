@@ -105,6 +105,16 @@ untrusted_message="lockflight: the engine at $engine was not run because $untrus
 if [ -x "$engine" ] && [ -z "$untrusted" ]; then
   # A slash command's payload is read first, so a failed engine can still be told apart from a typed /lockflight:approve.
   if [ "$event" = "user-prompt-expansion" ] && [ -z "$input" ]; then input=$(cat); fi
+  # An engine older than this plugin does not know the TaskCompleted event and would block every task completion; its
+  # "does not know the hook event" refusal is let through instead (it prints nothing else for this event).
+  if [ "$event" = "task-completed" ]; then
+    [ -n "$input" ] || input=$(cat)
+    refusal=$(printf '%s' "$input" | "$engine" hook "$event" 2>&1 >/dev/null)
+    status=$?
+    case "$refusal" in *"does not know the hook event"*) exit 0 ;; esac
+    [ -z "$refusal" ] || printf '%s\n' "$refusal" >&2
+    exit "$status"
+  fi
   # Not `printf | exec`: in a pipeline exec only replaces the subshell and the script would fall through.
   if [ -n "$input" ]; then printf '%s' "$input" | "$engine" hook "$event"; else "$engine" hook "$event"; fi
   status=$?

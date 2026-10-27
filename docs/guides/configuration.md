@@ -24,7 +24,8 @@ protected:                      # extra globs the agent must not change (the bui
   - "db/migrations/**"
 
 stop:
-  gate: false                   # run the stop profile when the agent ends a turn
+  gate: false                   # run the stop profile when the agent ends a turn; also lets a task be marked
+                                #   completed only after the stop gate passed for the current changes
   target: .                     # directory the stop gate builds and tests
 
 gates:

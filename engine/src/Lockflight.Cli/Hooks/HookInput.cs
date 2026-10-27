@@ -20,6 +20,9 @@ internal sealed record HookInput(string? WorkingDirectory, string? ToolName, str
     /// <summary>What the person typed after the command (<c>command_args</c>).</summary>
     public string? CommandArguments { get; init; }
 
+    /// <summary>The title of the task being marked completed (<c>task_subject</c>); null for other events.</summary>
+    public string? TaskSubject { get; init; }
+
     /// <summary>Every string value inside <c>tool_input</c>, decoded, at any depth (for checks that look at the whole call).</summary>
     public IReadOnlyList<string> ToolInputStrings { get; init; } = [];
 
@@ -52,6 +55,7 @@ internal sealed record HookInput(string? WorkingDirectory, string? ToolName, str
                 CommandName = ReadString(root, "command_name"),
                 CommandSource = ReadString(root, "command_source"),
                 CommandArguments = ReadString(root, "command_args"),
+                TaskSubject = ReadString(root, "task_subject"),
                 ToolInputStrings = toolInputStrings,
             };
         }

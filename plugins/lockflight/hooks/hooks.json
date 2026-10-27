@@ -12,6 +12,9 @@
     "UserPromptExpansion": [
       { "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/lockflight-hook\" user-prompt-expansion", "timeout": 90 } ] }
     ],
+    "TaskCompleted": [
+      { "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/lockflight-hook\" task-completed", "timeout": 30 } ] }
+    ],
     "Stop": [
       { "hooks": [ { "type": "command", "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/lockflight-hook\" stop", "timeout": 600 } ] }
     ]

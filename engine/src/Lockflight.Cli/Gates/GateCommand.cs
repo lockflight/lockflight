@@ -60,6 +60,12 @@ internal sealed class GateCommand(CliContext context)
             return ExitCode.Config;
         }
 
+        // A run that judges what the Stop gate judges caches its PASS the same way, so a task can be completed after it and the
+        // Stop hook answers from the cache. The hash is taken before the run, as the Stop gate takes it.
+        bool judgesAsTheStopGate = manifest is not null && profile == GateProfile.Stop && units.Length == 0 && options.Value("--base") is null
+            && SameDirectory(target, Path.GetFullPath(manifest.StopTarget ?? ".", manifest.Root));
+        string? inputsHash = judgesAsTheStopGate ? await InputsHash.ComputeAsync(manifest!.Root, cancellationToken) : null;
+
         long started = context.Time.GetTimestamp();
         GateResult result = workspaceRun
             ? await WorkspaceGateRunner.RunAsync(manifest!, run, units, useCache: false, context.Output, cancellationToken)
@@ -78,6 +84,11 @@ internal sealed class GateCommand(CliContext context)
         {
             LedgerGateRun gateRun = new(GateTrigger.Command, durationMs, StopCacheResult.None);
             await new LedgerWriter(manifest.Root, context.Time).AppendAsync(GateRunEvents.Completed(result, gateRun), cancellationToken);
+        }
+
+        if (inputsHash is not null && VerdictNames.AllowsNextStep(result.Verdict))
+        {
+            await new StopGateCache(manifest!.Root, unitPath: null).RememberPassAsync(inputsHash, cancellationToken);
         }
 
         return VerdictNames.ToExitCode(result.Verdict);
