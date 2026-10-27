@@ -117,7 +117,12 @@ internal sealed class InitCommand(CliContext context)
         ExitCode linkResult = await new LinkCommand(rootContext).RunAsync(cancellationToken);
         if (linkResult == ExitCode.Pass)
         {
-            await context.Output.WriteLineAsync($"Next: commit these files, then run `{EngineCommand.Linked} doctor` from the project root.");
+            bool hasSpecKit = Directory.Exists(Path.Combine(root, ".specify"));
+            string? preset = profile == InitProfile.Standard && !hasSpecKit ? PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root) : null;
+            foreach (string line in InitNextSteps.For(profile, hasSpecKit, preset))
+            {
+                await context.Output.WriteLineAsync(line);
+            }
         }
 
         return linkResult;

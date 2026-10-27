@@ -39,7 +39,8 @@ internal static class PluginEngineCheck
             : new(Name, CheckStatus.Pass, $"the plugin needs engine {minimum} or newer; the project pins {engine}", null);
     }
 
-    private static string? InstallPath(string root, string userHome)
+    /// <summary>The installed plugin's directory: the install for <paramref name="root"/> when there is one, else the user-scope install; null when none is recorded.</summary>
+    public static string? InstallPath(string root, string userHome)
     {
         string record = Path.Combine(userHome, ".claude", "plugins", "installed_plugins.json");
         try

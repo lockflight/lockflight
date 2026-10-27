@@ -4,25 +4,67 @@ Lockflight runs deterministic checks around a Claude Code agent working in a .NE
 at the end of a turn and in CI, and — in the standard profile — a spec-driven lifecycle with human approvals and red/green
 evidence. This page takes you from nothing to a first green gate.
 
-**On this page:** [Requirements](#requirements) · [Install from a package](#install-from-a-package) ·
-[Install from source](#install-from-source-no-feed-no-token) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
-[Standard profile](#standard-profile) · [CI during the preview](#ci-during-the-preview) ·
+**On this page:** [Requirements](#requirements) · [Install from source](#install-from-source-no-feed-no-token) ·
+[Install from a package](#install-from-a-package) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
+[An existing setup](#a-repository-with-an-existing-claude-code-or-spec-kit-setup) · [Monorepos](#monorepos) ·
+[Workspace shells](#workspace-shells) · [Standard profile](#standard-profile) · [CI during the preview](#ci-during-the-preview) ·
 [Levi and the status line](#levi-and-the-status-line)
 
 ## Requirements
 
 | For | You need |
 |---|---|
-| Every project | .NET SDK 10+, git, Claude Code ≥ 2.1.295 |
-| Windows | Git Bash (the hook shim runs in it) |
-| The standard profile | `uv` (for Spec Kit), Python 3 with PyYAML, xUnit for red/green and trace — v3 (Microsoft.Testing.Platform) or v2 (VSTest) |
+| Your machine | macOS (Apple silicon or Intel) or Linux (x64 or arm64). **Windows has no install path yet:** `scripts/dev-install.sh` refuses it and no package is published. |
+| The engine | The .NET 10 SDK, plus the SDK your project needs (the engine runs whatever SDK the project's `global.json` pins). git. |
+| Claude Code | 2.1.295 or newer: from that version a guard hook that times out blocks the tool call. `doctor` checks it. |
+| Your project | SDK-style .NET 8, 9 or 10. .NET Framework projects are not supported. |
+| Tests | xUnit v3 (Microsoft.Testing.Platform): everything. xUnit v2 (VSTest): supported, red/green and trace included. NUnit and MSTest: the gates only, no red/green or trace yet. |
+| The `pr` profile's secrets step | [gitleaks](https://github.com/gitleaks/gitleaks) on `PATH` (or `LOCKFLIGHT_GITLEAKS`); without it the step is NOT-EARNED. The generated CI workflow downloads its own. |
+| The standard profile | `uv` (for Spec Kit) and Python 3 with PyYAML. |
 
-The test gate runs any VSTest or MTP test project.
+## Install from source (no feed, no token)
+
+This is the install that works today: build the engine from a checkout of this repository and install it for your user.
+
+```sh
+git clone https://github.com/lockflight/lockflight && cd lockflight
+scripts/dev-install.sh            # packs the engine into ~/.lockflight/feed, installs ~/.lockflight/bin/lockflight,
+                                  # and installs the plugin at user scope
+```
+
+Then set up your project: the [lite profile](#lite-profile-target-first-green-in-under-15-minutes) below.
+
+- **Why user scope:** Claude Code loads project settings only from the directory where a session starts. With the plugin at
+  user scope, the guard also runs when you start Claude inside a child repository of a workspace shell. Your own project hooks
+  in the shell's `.claude/settings.json` still load only from the shell root.
+- **Why `.lockflight/bin/lockflight` instead of `dotnet lockflight`:** `init` links the engine into the project
+  (`.lockflight/bin/`, git-ignored). It is the binary the hooks run, a native one, so it runs in projects whose `global.json`
+  pins an older SDK. In such a project `dotnet lockflight` cannot run, because only SDK 10 understands the package format.
+  Before a project is set up, run the user install, `~/.lockflight/bin/lockflight`.
+- **Development versions** are numbered after the last release, so they sort above it and below the next one:
+  `0.2.0-alpha.4.dev.<commit time>` after `0.2.0-alpha.4`, `0.2.1-0.dev.<commit time>` after `0.2.0`. Moving a project from a
+  development build to the next release is an upgrade; `doctor` reports **development pin** once a release at or above the
+  build's base is installed, and `update` moves the project to it.
+- **Tool pin:** `init` pins the dev version, which exists only in your local feed. A teammate runs the same script to get it.
+  `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
+  root, as the skills do; `doctor` reports a pin that cannot be restored on this machine. No package feed has it either, so
+  CI cannot install it yet.
+- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply|undo`, `update`) are yours: run them in a separate
+  terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
+  approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`).
+- **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. An install from source
+  (the checkout recorded in `~/.lockflight/source`) pulls your checkout, reinstalls the engine and the plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
+  commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at
+  session start.
+- **No token on disk:** the install from source needs no package-feed token. Do not add a package feed with a stored token
+  to your NuGet config: any tool or agent that reads the file can print it, and a second package source without a source
+  mapping makes `dotnet restore` warn NU1507 in every project with central package management (an error under
+  `TreatWarningsAsErrors`).
 
 ## Install from a package
 
 > [!NOTE]
-> Available once the `Lockflight.Cli` packages are published on nuget.org. Until then, [install from source](#install-from-source-no-feed-no-token).
+> Once the `Lockflight.Cli` packages are published on nuget.org. Until then, [install from source](#install-from-source-no-feed-no-token).
 
 Install the engine for your user, then the plugin:
 
@@ -34,7 +76,7 @@ claude plugin marketplace add lockflight/lockflight
 claude plugin install lockflight@lockflight --scope user
 ```
 
-Then set up your project as below (`~/.lockflight/bin/lockflight init`, `adopt`, `doctor`).
+Then set up your project as below.
 
 - **Why `--tool-path` and not `dotnet tool install --local` in the project:** the engine package is built for each platform,
   and only the .NET 10 SDK can install such a package. In a repository whose `global.json` pins an older SDK, a local tool
@@ -50,75 +92,32 @@ Then set up your project as below (`~/.lockflight/bin/lockflight init`, `adopt`,
   the plugin has updated past the engine a project pins, Claude Code tells you at session start and `doctor` reports
   **plugin engine** as FAIL; `update` fixes both.
 
-## Install from source (no feed, no token)
-
-For contributors, and for the preview until the packages are published: build the engine from a checkout of this repository
-and install it for your user.
-
-```sh
-git clone https://github.com/lockflight/lockflight && cd lockflight
-scripts/dev-install.sh            # packs the engine into ~/.lockflight/feed, installs ~/.lockflight/bin/lockflight,
-                                  # and installs the plugin at user scope
-```
-
-Then, in Claude Code at your project's root (the workspace shell root, or the repository root), ask *"Set up Lockflight"*. The
-`lockflight:init` skill walks through the rest and stops where a step is yours. By hand it is:
-
-```sh
-cd /path/to/your/project
-~/.lockflight/bin/lockflight init --profile standard   # in a shell: lists the units, ignores the child repositories
-~/.lockflight/bin/lockflight adopt plan                # review .lockflight/adopt/plan.md
-~/.lockflight/bin/lockflight adopt apply --speckit-preset /path/to/lockflight/plugins/lockflight/speckit-preset
-                                                       # you, in a separate terminal window (not with `!` in
-                                                       # Claude Code); backs up first, `adopt undo` reverts it
-~/.lockflight/bin/lockflight workspace sync            # a shell: each service repository gets its CI policy
-~/.lockflight/bin/lockflight doctor
-```
-
-Commit in the shell, and in each service repository after `workspace sync`. Start Claude Code at the shell root.
-
-- **Why user scope:** Claude Code loads project settings only from the directory where a session starts. With the plugin at
-  user scope, the guard also runs when you start Claude inside a child repository of a workspace shell. Your own project hooks
-  in the shell's `.claude/settings.json` still load only from the shell root.
-- **Why `~/.lockflight/bin/lockflight` instead of `dotnet lockflight`:** the installed engine is a native binary, so it runs
-  in projects whose `global.json` pins an older SDK. In such a project `dotnet lockflight` cannot run, because only SDK 10
-  understands the package format.
-- **Development versions** are numbered after the last release, so they sort above it and below the next one:
-  `0.2.0-alpha.4.dev.<commit time>` after `0.2.0-alpha.4`, `0.2.1-0.dev.<commit time>` after `0.2.0`. Moving a project from a
-  development build to the next release is an upgrade; `doctor` reports **development pin** once a release at or above the
-  build's base is installed, and `update` moves the project to it.
-- **Tool pin:** `init` pins the dev version, which exists only in your local feed. A teammate runs the same script to get it.
-  `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
-  root, as the skills do; `doctor` reports a pin that cannot be restored on this machine.
-- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply|undo`, `update`) are yours: run them in a separate
-  terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
-  approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`).
-- **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. An install from source
-  (the checkout recorded in `~/.lockflight/source`) pulls your checkout, reinstalls the engine and the plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
-  commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at
-  session start.
-- **No token on disk:** the preview needs no package-feed token. Do not add the GitHub Packages feed to your NuGet
-  config with a stored token: any tool or agent that reads the file can print it, and a second package source without a
-  source mapping makes `dotnet restore` warn NU1507 in every project with central package management (an error under
-  `TreatWarningsAsErrors`).
-
 ## Lite profile (target: first green in under 15 minutes)
 
-1. In Claude Code: `/plugin marketplace add lockflight/lockflight`, then `/plugin install lockflight@lockflight`.
-   The engine package is not on a public feed yet: during the preview, install the engine from source as above (the
-   init skill then uses `~/.lockflight/bin/lockflight`). The steps below are for when the package is published; in a
-   repository whose `global.json` pins an SDK older than 10, install from a package as above instead.
-2. In your repository, ask Claude: *"Set up Lockflight"* (the `lockflight:init` skill). It runs:
+The lite profile gives you the guard and the gates, without the lifecycle.
+
+1. At your repository's root, in a terminal:
    ```sh
-   dotnet new tool-manifest            # when the repo has none (SDK 10 writes dotnet-tools.json at the repo root)
-   dotnet tool install Lockflight.Cli --local --prerelease
-   dotnet lockflight init              # manifest, tool pin, .gitignore, .claude/settings.json, CI workflow, linked engine
-   .lockflight/bin/lockflight doctor   # the linked engine, the way the agent runs every command from here on
+   cd /path/to/your/repo
+   ~/.lockflight/bin/lockflight init      # the user install: the project has no engine of its own yet
+   .lockflight/bin/lockflight doctor      # the linked engine, the way the agent runs every command from here on
    ```
-   `init` pins the engine in the repository's existing tool manifest: `dotnet-tools.json` at the root, or an older
-   `.config/dotnet-tools.json` when that is the only one. When the test projects target several .NET versions
-   (`net8.0;net10.0`), the generated workflow installs each of them and `init` says so.
-3. Commit the new files. From now on:
+   Or ask Claude Code, started at the root: *"Set up Lockflight"*. The `lockflight:init` skill runs the same steps and stops
+   where a step is yours.
+
+   `init` writes, and lists what it wrote:
+   - `lockflight.yaml`, the manifest (the Stop gate starts off);
+   - the tool pin, in the repository's existing tool manifest (`dotnet-tools.json` at the root, or an older
+     `.config/dotnet-tools.json`), else a new `dotnet-tools.json`;
+   - `.gitignore` entries for Lockflight's local state;
+   - `.claude/settings.json`: the Lockflight marketplace and plugin, enabled for the project. Your settings are kept; the file
+     is written back as indented JSON;
+   - `.github/workflows/lockflight-gates.yml`, the CI job. It installs every .NET version the test projects target, and `init`
+     says so when there are several. `--ci manual` writes a job that runs only when started by hand, `--ci none` none;
+   - the linked engine in `.lockflight/bin/` (git-ignored), which the hooks run.
+
+   It merges into files that exist and never overwrites them. Running it again changes nothing.
+2. Commit the new files, and start Claude Code at the repository root. From now on:
    - the guard blocks agent edits to protected files (`lockflight.yaml`, the tool pin, `.lockflight/`, Claude settings,
      `Directory.Build.*`, `Directory.Packages.props`, `global.json`, `NuGet.config`, code-style and analyzer config
      (`.editorconfig`, `.globalconfig`, rulesets, `stylecop.json`, `BannedSymbols.txt`), gitleaks config, the gates workflow;
@@ -128,6 +127,55 @@ Commit in the shell, and in each service repository after `workspace sync`. Star
    - the Stop gate is **off**; turn it on (`stop.gate: true`) once you know how long build + tests take. It gets at most
      540 s per turn (below the plugin's 600 s Stop hook timeout), whatever `gates.timeoutSeconds` says. Once it is on,
      `ledger retro` shows how many Stop gates ran, how many the cache of the last PASS answered, and their time in all.
+
+## A repository with an existing Claude Code or Spec Kit setup
+
+`adopt` is only for a repository that already has its own Claude Code setup (hooks, skills, agents, a `CLAUDE.md`) or Spec
+Kit. A new user on a plain repository does not need it. After `init`:
+
+```sh
+.lockflight/bin/lockflight adopt plan     # read only: writes .lockflight/adopt/plan.md
+```
+
+The plan lists what is kept, what becomes protected, what is flagged, and ends with the exact `adopt apply` line to paste:
+`cd` to the project root, the engine, and — when the plan upgrades Spec Kit — `--speckit-preset` with the preset's absolute
+path on this machine, or `--skip-speckit` to leave Spec Kit as it is. Run that line yourself, in a separate terminal window
+(not with `!` in Claude Code). It needs a clean working tree, backs up first, and `adopt undo` reverts it. Commit what it
+changed.
+
+## Monorepos
+
+One repository with several services, each with its own solution: `init` at the root lists the child directories that build
+on their own (a solution, or a `package.json`) as `units` in `lockflight.yaml`. A root that builds by itself (a solution at
+the root) stays one unit.
+
+At the root, `gate run` judges every unit changed since its last PASS, committed or not, and a unit that never passed. A clean
+tree after a PASS judges nothing: every unit is N/A (`unchanged since its last PASS`), which is not a green. To judge a unit
+anyway:
+
+```sh
+.lockflight/bin/lockflight gate run --profile pr --unit services/api                 # every step for that unit
+.lockflight/bin/lockflight gate run --profile pr --base origin/main                  # every unit; the branch's changes count
+```
+
+The `pr` profile judges every selected unit whatever the cache says, and `--base` makes format, coverage and secrets look at
+the branch's changes since the merge base.
+
+## Workspace shells
+
+A workspace shell is a directory whose service repositories are cloned beneath it. Run the same steps at the shell root:
+
+```sh
+cd /path/to/your/shell
+~/.lockflight/bin/lockflight init --profile standard   # lists the units, ignores the child repositories
+~/.lockflight/bin/lockflight workspace sync            # each service repository gets its CI policy
+~/.lockflight/bin/lockflight doctor
+```
+
+Commit in the shell, and in each service repository after `workspace sync`. Start Claude Code at the shell root. With an
+existing setup in the shell, run `adopt plan` and the `adopt apply` line it gives before `workspace sync` (see
+[above](#a-repository-with-an-existing-claude-code-or-spec-kit-setup)). [CI hardening](ci-hardening.md#workspace-shells-unit-repositories)
+describes the unit repositories' CI.
 
 ## Standard profile
 
@@ -139,16 +187,20 @@ hold the keys to the two approvals.
   <img src="../assets/lock-flight-light.svg" alt="The lifecycle as a canal lock flight: spec and tasks, each approved by you; red, where new tests fail first; green, where they pass with nothing deleted; trace, where every requirement has a test; review, where findings need a failing test; and the pull request, with the same checks in CI." width="100%">
 </picture>
 
-1. `dotnet lockflight init --profile standard`, then (the init skill does this with you):
+1. `~/.lockflight/bin/lockflight init --profile standard` at the repository root, then set up Spec Kit with the Lockflight
+   preset (the init skill does this with you, and `init` prints these lines with the preset's path filled in):
    ```sh
    uvx --from specify-cli==1.1.3 specify init --here --force --integration claude --script sh
    uvx --from specify-cli==1.1.3 specify preset add --dev <plugin>/speckit-preset
    ```
    `--force` lets Spec Kit initialise a non-empty repository without asking (it merges into existing files). Where Claude Code
    is not on `PATH` (CI, containers), add `--ignore-agent-tools`. `<plugin>` is the installed plugin's directory (under
-   `~/.claude/plugins/cache/lockflight/lockflight/<version>/`); the init skill fills it in for you. The preset replaces Spec
-   Kit's tasks template and appends Lockflight's rules to `/speckit-tasks`; `doctor` checks that it is installed.
-   Spec Kit 1.1.3 numbers features sequentially: `specs/001-<slug>/`.
+   `~/.claude/plugins/cache/lockflight/lockflight/<version>/`), or `plugins/lockflight` in your Lockflight checkout; `init`
+   and the init skill fill it in for you. The preset replaces Spec Kit's tasks template and appends Lockflight's rules to
+   `/speckit-tasks`; `doctor` checks that it is installed. Spec Kit 1.1.3 numbers features sequentially: `specs/001-<slug>/`.
+   A repository that already has Spec Kit does not run `specify init` again (it would overwrite customised files): run
+   [`adopt plan`](#a-repository-with-an-existing-claude-code-or-spec-kit-setup) and the `adopt apply` line it gives, which
+   adds the preset. Then commit, and run `.lockflight/bin/lockflight doctor`.
    Before the first feature, accept the tests that already fail: run `.lockflight/bin/lockflight baseline tests` yourself, in
    a separate terminal window, and merge
    that baseline in its own pull request first (CI takes baselines from the base branch, so one committed with a feature is

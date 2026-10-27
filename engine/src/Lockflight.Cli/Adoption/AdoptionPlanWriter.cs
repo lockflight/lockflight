@@ -13,11 +13,13 @@ internal static class AdoptionPlanWriter
 {
     public const string FingerprintFile = "plan.sha256";
 
-    public static void Write(AdoptionPlan plan)
+    /// <param name="applyLine">The <c>adopt apply</c> command line to paste, from <see cref="AdoptApplyLine"/>.</param>
+    /// <param name="applyNote">What to say under it (<see cref="AdoptApplyLine.Note"/>); null for nothing.</param>
+    public static void Write(AdoptionPlan plan, string applyLine, string? applyNote)
     {
         string directory = Path.Combine(plan.Root, AdoptionPlan.RelativeDirectory);
         Directory.CreateDirectory(directory);
-        File.WriteAllText(Path.Combine(directory, AdoptionPlan.MarkdownFile), Markdown(plan));
+        File.WriteAllText(Path.Combine(directory, AdoptionPlan.MarkdownFile), Markdown(plan, applyLine, applyNote));
         File.WriteAllText(Path.Combine(directory, FingerprintFile), Fingerprint(plan) + "\n");
     }
 
@@ -48,13 +50,18 @@ internal static class AdoptionPlanWriter
         return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
     }
 
-    public static string Markdown(AdoptionPlan plan)
+    public static string Markdown(AdoptionPlan plan, string applyLine, string? applyNote)
     {
         StringBuilder text = new();
         text.AppendLine("# Lockflight adoption plan").AppendLine()
-            .AppendLine($"Made {plan.At:yyyy-MM-dd HH:mm} UTC for `{plan.Root}`. Review it, then run `{EngineCommand.Name} adopt apply` from the")
-            .AppendLine($"project root {HumanOnlyCommands.WhereToRun}.")
-            .AppendLine("It backs up first; `adopt undo` restores. Nothing is replaced automatically: the team's own hooks, skills and agents")
+            .AppendLine($"Made {plan.At:yyyy-MM-dd HH:mm} UTC for `{plan.Root}`. Review it, then run this {HumanOnlyCommands.WhereToRun}:")
+            .AppendLine().AppendLine("```sh").AppendLine(applyLine).AppendLine("```").AppendLine();
+        if (applyNote is not null)
+        {
+            text.AppendLine(applyNote).AppendLine();
+        }
+
+        text.AppendLine("It backs up first; `adopt undo` restores. Nothing is replaced automatically: the team's own hooks, skills and agents")
             .AppendLine("stay, and become protected from the agent.").AppendLine();
         foreach (IGrouping<AdoptionArea, AdoptionItem> area in plan.Items.GroupBy(item => item.Area).OrderBy(group => group.Key))
         {

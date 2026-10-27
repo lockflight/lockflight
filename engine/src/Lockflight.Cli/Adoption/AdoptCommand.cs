@@ -2,6 +2,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
+using Lockflight.Cli.Linking;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Adoption;
@@ -49,13 +50,24 @@ internal sealed class AdoptCommand(CliContext context)
     private async Task<ExitCode> PlanAsync(Manifest manifest)
     {
         AdoptionPlan plan = Inventory(manifest);
-        AdoptionPlanWriter.Write(plan);
+        bool upgradesSpecKit = plan.Items.Any(item => item is { Area: AdoptionArea.SpecKit, Action: AdoptionAction.Upgrade });
+        string? preset = upgradesSpecKit ? PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), manifest.Root) : null;
+        string engine = File.Exists(LinkCommand.BinaryPath(manifest.Root)) ? EngineCommand.Linked : EngineCommand.Name;
+        string applyLine = AdoptApplyLine.For(manifest.Root, engine, upgradesSpecKit, preset);
+        string? applyNote = AdoptApplyLine.Note(upgradesSpecKit, preset);
+        AdoptionPlanWriter.Write(plan, applyLine, applyNote);
         foreach (IGrouping<AdoptionAction, AdoptionItem> action in plan.Items.GroupBy(item => item.Action).OrderBy(group => group.Key))
         {
             await context.Output.WriteLineAsync($"{action.Key.ToString().ToLowerInvariant(),-8} {action.Count()}");
         }
 
-        await context.Output.WriteLineAsync($"Plan: {AdoptionPlan.RelativeDirectory}/{AdoptionPlan.MarkdownFile}. Review it, then run '{EngineCommand.Name} adopt apply' from the project root {HumanOnlyCommands.WhereToRun}.");
+        await context.Output.WriteLineAsync($"Plan: {AdoptionPlan.RelativeDirectory}/{AdoptionPlan.MarkdownFile}. Review it, then run this {HumanOnlyCommands.WhereToRun}:");
+        await context.Output.WriteLineAsync($"  {applyLine}");
+        if (applyNote is not null)
+        {
+            await context.Output.WriteLineAsync(applyNote);
+        }
+
         return ExitCode.Pass;
     }
 
