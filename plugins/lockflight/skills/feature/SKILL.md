@@ -32,6 +32,16 @@ is the engine the hooks run, and it works whatever way Lockflight was installed.
    2. Write the story's xUnit v3 tests, each tagged `[Trait("Requirement", "FR-001")]`, asserting the specified behaviour.
    3. `.lockflight/bin/lockflight redgreen red`. Every new test must fail inside production code (RED_STUB or RED_ASSERT). If
       the red is rejected, fix the tests — never weaken an assertion to make a red "work".
+
+      **Optional test author.** If the agent type `lockflight-crew:test-author` is available (the `lockflight-crew` plugin
+      is installed), delegate steps 2–3 for this story to it instead: the Agent tool with
+      `subagent_type: "lockflight-crew:test-author"` and a prompt naming the feature directory and the story (for example
+      `specs/001-shipping`, `US1`). It is an aid, not a judge: whatever it reports, run
+      `.lockflight/bin/lockflight redgreen status` yourself and go on only if a cycle for this story is now
+      `RED (test projects locked)`. A rejected red, a stop at its turn limit, or a report that it was blocked is a failed
+      round; start a fresh one with the engine's last output in the prompt, at most two rounds in all. After two failed
+      rounds, stop and give the user the last verdict and what the test author reported. Without that plugin, write the
+      tests yourself as above.
    4. The test projects are now locked. Implement in production code until `.lockflight/bin/lockflight redgreen green` passes.
       If a test itself turns out wrong, stop and ask the user: only they can unlock, with
       `.lockflight/bin/lockflight redgreen reset` run in a separate terminal window (not with `!` in Claude Code: that runs

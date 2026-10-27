@@ -10,6 +10,11 @@
       "name": "lockflight",
       "source": "./plugins/lockflight",
       "description": "Gated, spec-driven delivery for Claude Code agents (.NET-first): deterministic gates, protected-path guards, a Spec Kit lifecycle with approvals, red/green evidence and trace, and evidence-bound review."
+    },
+    {
+      "name": "lockflight-crew",
+      "source": "./plugins/lockflight-crew",
+      "description": "Optional agents for the Lockflight lifecycle: a test author that writes a story's failing tests until `redgreen red` accepts them. An aid; the gates still judge."
     }
   ]
 }

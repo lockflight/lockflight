@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+- `lockflight-crew`, an optional plugin in the same marketplace, with a test author agent: at the red step of
+  `/lockflight:feature` it writes a story's failing tests against the declared stubs until `redgreen red` accepts them. The
+  skill checks the recorded red itself and hands over to you after two failed rounds; without the plugin nothing changes.
+- A benchmark of the test author against a plain agent on seeded stories (`tests/benchmark/crew/`).
+
 ### Changed
 - `lockflight review` uses `opus` by default (it leads public coding benchmarks among Claude models) with a `3.00` budget;
   `--model` and `--budget` still override both.

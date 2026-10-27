@@ -117,4 +117,5 @@ jobs:
       - name: Validate plugin and marketplace
         run: |
           claude plugin validate --strict plugins/lockflight
+          claude plugin validate --strict plugins/lockflight-crew
           claude plugin validate --strict .

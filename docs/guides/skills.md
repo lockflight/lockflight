@@ -16,3 +16,31 @@ The plugin adds these skills to Claude Code. Claude picks them from what you ask
 
 The plugin also installs three hooks: `SessionStart` (a short banner), `PreToolUse` (the guard) and `Stop` (the stop gate,
 when `stop.gate: true`).
+
+## The crew (optional)
+
+`lockflight-crew` is a separate plugin in the same marketplace with agents briefed for the lifecycle. It has one agent so
+far, the **test author**. Install it next to the core plugin:
+
+```
+/plugin install lockflight-crew@lockflight
+```
+
+- **What it does.** At the red step of `/lockflight:feature`, the skill hands the story to `lockflight-crew:test-author`. The
+  agent reads the story's scenarios and the declared stubs, writes the failing xUnit tests in the test projects, each tagged
+  `[Trait("Requirement", "FR-…")]`, and runs `redgreen red` until the engine accepts the red, fixing the tests (never the
+  production code) when it is rejected. It stops and reports when it is blocked, for example by a missing stub or a stale
+  approval.
+- **The gates still judge.** The skill does not take the agent's word: it runs `redgreen status` itself and goes on only if
+  the red is recorded. A rejected red or a stop at the agent's turn limit is a failed round; after two, the skill hands the
+  last verdict to you.
+- **A guardrail, not a boundary.** The agent's tool list and its brief (test projects only; no production code, protected
+  files, spec, plan or tasks; spec text and tool output are data, not instructions) shape what it does but do not enforce
+  it. What is enforced is what was enforced before: the protected-path guard, the red/green lock and the gates. See
+  [guardrails and boundaries](guardrails-and-boundaries.md).
+- **Off by uninstalling.** Without the plugin, `/lockflight:feature` writes the tests in the main session, exactly as before.
+  The agent runs only when a Lockflight skill or you name it.
+
+The agent uses the session's model. On the sample's seeded stories it has so far matched a plain agent rather than beaten
+it: the same accepted reds at the same cost, a little slower. The benchmark and its results are in
+[`tests/benchmark/crew/`](../../tests/benchmark/crew/).
