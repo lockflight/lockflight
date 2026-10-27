@@ -89,6 +89,8 @@ Never approve for them.
       window (not with `!` in Claude Code: that runs inside the session and is refused). Its output names the file it
       unlocks. Then change only what the amend allows, run `.lockflight/bin/lockflight redgreen red` (the amended test must
       fail in production code again), and go on to green. Discarding the whole cycle is `redgreen reset`, also theirs.
+      **If a test written in this cycle turns out wrong after red, ask the user for an amend of that test. Never change
+      production code just to satisfy a wrong test, and `baseline` does not excuse this cycle's tests.**
    5. If `red` or `green` refuses because an approval is stale (spec.md, plan.md or tasks.md changed after approval), show the
       user what changed and ask them to approve again (see Approvals). Wait.
 7. **Verify.** `.lockflight/bin/lockflight trace` (every requirement covered by a test that went red, then green) and
