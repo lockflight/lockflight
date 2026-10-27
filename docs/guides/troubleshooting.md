@@ -10,7 +10,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 |---|---|
 | Every tool call or every write is blocked | [engine not installed](#every-tool-call-is-blocked-engine-not-installed-in-this-project) · [engine not run](#every-tool-call-is-blocked-the-engine-was-not-run) · [lockdown](#every-write-is-blocked-the-project-is-in-lockdown) · [after editing `lockflight.yaml`](#writes-are-blocked-after-editing-lockflightyaml) · [engine and pin differ](#running-engine-x-but-the-project-pins-y) · [internal error](#lockflight-internal-error-or-the-engine-failed-exit-n) |
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a shell command after `cd`](#a-shell-command-is-blocked-after-a-cd) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
-| Install and versions | [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
+| Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --canaries` reports MISSED or BROKEN](#doctor---canaries-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
 | Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) |
 
@@ -45,6 +45,14 @@ The shim found an engine at `.lockflight/bin/` but refused to run it, and is in 
 
 - **"because it belongs to another user":** the `lockflight.yaml` the shim found is in a folder another account wrote (for
   example `/tmp`). Check where it came from, delete it, and link the engine in your own project.
+
+## A fresh clone does not offer the Lockflight plugin
+
+The repository's `.claude/settings.json` names the Lockflight marketplace, but Claude Code reads that entry
+(`extraKnownMarketplaces`) only after you trust the folder. Start Claude Code at the repository root and accept the trust
+dialog; it then offers the marketplace and the plugin. A `claude -p` run in a folder that was never trusted ignores the entry
+without a message, so trust the folder once interactively, or install the plugin for your user
+(`claude plugin marketplace add lockflight/lockflight`, then `claude plugin install lockflight@lockflight --scope user`).
 
 ## `dotnet lockflight` fails: the pinned version is not found
 

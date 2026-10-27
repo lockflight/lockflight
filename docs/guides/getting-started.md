@@ -148,7 +148,9 @@ The lite profile gives you the guard and the gates, without the lifecycle.
      `.config/dotnet-tools.json`), else a new `dotnet-tools.json`;
    - `.gitignore` entries for Lockflight's local state;
    - `.claude/settings.json`: the Lockflight marketplace and plugin, enabled for the project. Your settings are kept; the file
-     is written back as indented JSON;
+     is written back as indented JSON. Claude Code reads the marketplace entry (`extraKnownMarketplaces`) only after the folder
+     is trusted: a teammate who clones the repository gets the marketplace once they accept the trust dialog, and a `claude -p`
+     run in a folder nobody trusted ignores it without a message;
    - `.github/workflows/lockflight-gates.yml`, the CI job. It installs every .NET version the test projects target, and `init`
      says so when there are several. `--ci manual` writes a job that runs only when started by hand, `--ci none` none;
    - the linked engine in `.lockflight/bin/` (git-ignored), which the hooks run.
@@ -304,7 +306,9 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
   }
   ```
 
-  Outside a Lockflight project it prints nothing.
+  Outside a Lockflight project it prints nothing. Where managed settings set `allowManagedHooksOnly`, Claude Code reads
+  `statusLine` only from the managed file, so the line has to go there (see
+  [team policy in managed settings](guardrails-and-boundaries.md#team-policy-in-managed-settings)).
 
   To keep a status line of your own, call `lockflight statusline` from your script with the same stdin and place its two
   lines next to yours. If your script runs `git status`, prefix it with `GIT_OPTIONAL_LOCKS=0`: a status line runs after

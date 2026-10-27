@@ -64,13 +64,15 @@ shellcheck -S warning plugins/lockflight/bin/lockflight-hook tests/*/*.sh       
 
 ### Skill evals
 
-The plugin evals run real Claude Code sessions, so they are not part of CI. Every case has the same shape: `case.yaml`
-(name, description, tags, an optional `scaffold.sh` fixture), `prompt.md` (the user's request, turn limit and tools) and
-`graders/*.md`. There are trigger cases (a skill loads for its own requests and not for unrelated ones) and boundary cases
-(the agent hands a human decision to the person, proposes a protected change instead of writing it). Run them with Bash and
-the write tools allowed — several cases only mean something when the agent can try a command and be refused — and with
-`--scaffold`, which runs each case's fixture script. The fixtures that need an engine use a small stand-in that gives the
-real engine's guard decisions and messages for what the case exercises.
+The plugin evals run real Claude Code sessions, so they are not part of CI: they need a Claude login, and the repository holds
+no Claude Code token. Run the suite that covers a skill you changed before you open its pull request; the maintainer runs all
+three before every release ([releasing](docs/engineering/releasing.md#checks-before-a-release)). Every case has the same shape:
+`case.yaml` (name, description, tags, an optional `scaffold.sh` fixture), `prompt.md` (the user's request, turn limit and tools)
+and `graders/*.md`. There are trigger cases (a skill loads for its own requests and not for unrelated ones) and boundary cases
+(the agent hands a human decision to the person, proposes a protected change instead of writing it). Run them with Bash and the
+write tools allowed — several cases only mean something when the agent can try a command and be refused — and with `--scaffold`,
+which runs each case's fixture script. The fixtures that need an engine use a small stand-in that gives the real engine's guard
+decisions and messages for what the case exercises.
 
 ```sh
 claude plugin eval plugins/lockflight --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish

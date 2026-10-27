@@ -67,10 +67,13 @@ The contract with Claude Code: a block is **exit 2 with the reason on stderr**; 
 `PreToolUse` is registered with `onFailure: "block"`, so a guard that cannot start blocks rather than allows. Claude Code does
 not offer that for `Stop`, which is why the Stop gate is best effort and CI is the definition of done.
 
-`UserPromptExpansion` fires when the person's typed prompt expands a slash command, never for the agent's own skill calls. The
-engine ignores every command except `/lockflight:approve`, which it handles only in an interactive, attended session: it shows
-the person (on stderr with exit 2, which the agent does not see) what would be approved with a one-time code, and records the
-approval when the person types that code while the files are unchanged.
+`UserPromptExpansion` fires when a prompt expands a slash command, never for the agent's own skill calls. Claude Code's
+documentation says it runs for a user-typed command, but a live probe showed it also fires, with the same payload, for a prompt
+that a `CronCreate` task queued; the approve relay in the guard (see [guardrails and
+boundaries](guides/guardrails-and-boundaries.md#every-control-labelled)) exists for that case, and the probe is repeated before
+each Lockflight release. The engine ignores every command except `/lockflight:approve`, which it handles only in an interactive,
+attended session: it shows the person (on stderr with exit 2, which the agent does not see) what would be approved with a
+one-time code, and records the approval when the person types that code while the files are unchanged.
 
 ## The guard
 
