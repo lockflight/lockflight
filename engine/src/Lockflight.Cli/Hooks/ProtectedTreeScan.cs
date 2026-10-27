@@ -173,9 +173,11 @@ internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules
 
     private static bool MatchesAny(Regex?[] names, ReadOnlySpan<char> fileName)
     {
+        // A name stored decomposed (NFD) is compared in the composed form the patterns have.
+        ReadOnlySpan<char> composed = UnicodeNormalization.MayChange(fileName) ? UnicodeNormalization.Compose(fileName.ToString()) : fileName;
         foreach (Regex? name in names)
         {
-            if (name is not null && name.IsMatch(fileName))
+            if (name is not null && name.IsMatch(composed))
             {
                 return true;
             }

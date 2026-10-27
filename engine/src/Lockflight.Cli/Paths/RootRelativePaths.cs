@@ -8,6 +8,8 @@ namespace Lockflight.Cli.Paths;
 /// </summary>
 internal sealed class RootRelativePaths(string root)
 {
+    private const string ParentSegment = "..";
+
     private readonly Dictionary<string, string> canonicalByAbsolute = new(StringComparer.Ordinal);
     private string? canonicalRoot;
 
@@ -37,7 +39,7 @@ internal sealed class RootRelativePaths(string root)
 
     private static string CanonicalInput(string path, string workingDirectory)
     {
-        string absolute = PathRules.ToAbsolute(path, workingDirectory);
+        string absolute = PathRules.ToAbsoluteKeepingParents(path, workingDirectory);
         return OperatingSystem.IsWindows() ? WindowsPaths.ToWin32Target(WindowsPaths.ExpandShortNames(absolute)) : absolute;
     }
 
@@ -46,6 +48,12 @@ internal sealed class RootRelativePaths(string root)
         if (canonicalByAbsolute.TryGetValue(absolute, out string? cached))
         {
             return cached;
+        }
+
+        if (absolute.Split('/').Contains(ParentSegment))
+        {
+            // A ".." depends on where the links before it lead: the path is resolved in full, not from its parent's real path.
+            return canonicalByAbsolute[absolute] = PathRules.Canonicalize(absolute, baseDirectory: null);
         }
 
         int lastSeparator = absolute.LastIndexOf('/');

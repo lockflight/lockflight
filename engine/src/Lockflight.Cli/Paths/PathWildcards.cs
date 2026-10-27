@@ -36,7 +36,7 @@ internal static class PathWildcards
                 else if (Directory.Exists(directory))
                 {
                     next.AddRange(Directory.EnumerateFileSystemEntries(directory)
-                        .Where(entry => Path.GetFileName(entry) is string name && pattern.IsMatch(name) && (!name.StartsWith('.') || segment.StartsWith('.'))));
+                        .Where(entry => Path.GetFileName(entry) is string name && pattern.IsMatch(UnicodeNormalization.Compose(name)) && (!name.StartsWith('.') || segment.StartsWith('.'))));
                 }
 
                 if (next.Count > maxMatches)
