@@ -17,7 +17,7 @@ internal sealed class CanaryProject(CanaryScratch scratch)
 
     private const string GitName = "Lockflight canary";
 
-    private const string GitEmail = "canary@example.invalid";
+    private const string GitEmail = "canary@example.com";
 
     private static readonly TimeSpan GitTimeLimit = TimeSpan.FromSeconds(60);
 
