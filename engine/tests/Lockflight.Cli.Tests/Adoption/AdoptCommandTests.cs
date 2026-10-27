@@ -64,6 +64,26 @@ public sealed class AdoptCommandTests : IDisposable
         Assert.Contains("clean working tree", dirtyError, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task UndoSkipsABackupOfAnApplyThatDidNotFinish()
+    {
+        await CreateSetupAsync();
+        Dictionary<string, string> before = Snapshot();
+        await TestConsole.RunAsync(["adopt", "plan"], string.Empty, root.FullName);
+        await TestConsole.RunAsync(["adopt", "apply", "--skip-speckit"], string.Empty, root.FullName);
+        string backups = Path.Combine(root.FullName, ".lockflight", "backup");
+        File.Copy(Directory.GetFiles(backups, "*.tar.gz").Single(), Path.Combine(backups, "99991231235959999.tar.gz"));
+
+        (ExitCode unfinished, _, string error) = await TestConsole.RunAsync(["adopt", "undo", "--backup", "99991231235959999"], string.Empty, root.FullName);
+        (ExitCode undo, string output, _) = await TestConsole.RunAsync(["adopt", "undo"], string.Empty, root.FullName);
+
+        Assert.Equal(ExitCode.Config, unfinished);
+        Assert.Contains("did not finish", error, StringComparison.Ordinal);
+        Assert.Equal(ExitCode.Pass, undo);
+        Assert.DoesNotContain("99991231235959999", output, StringComparison.Ordinal);
+        Assert.Equal(before, Snapshot());
+    }
+
     private async Task CreateSetupAsync()
     {
         Write(Manifest.FileName, "version: 1\nprotected: []\n");

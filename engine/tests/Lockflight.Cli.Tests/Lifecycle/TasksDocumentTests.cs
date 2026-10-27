@@ -63,6 +63,9 @@ public sealed class TasksDocumentTests
     [InlineData("Add the Contest entity in src/Shop.Api/Contest.cs")]
     [InlineData("Wire the testing page in web/src/pages/testing.ts")]
     [InlineData("Cover the edge cases in the calculator")]
+    [InlineData("Make tests pass for the shipping calculator")]
+    [InlineData("Run tests for the shipping calculator")]
+    [InlineData("Implement tests helpers in src/Shop.Api/Testing.cs")]
     public void OtherWordingIsImplementation(string description)
     {
         TaskLine task = Assert.Single(TasksDocument.Parse($"- [ ] T014 [US1] (FR-001) {description}"));

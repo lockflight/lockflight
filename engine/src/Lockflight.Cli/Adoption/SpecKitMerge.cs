@@ -8,7 +8,8 @@ namespace Lockflight.Cli.Adoption;
 /// and the pinned one — without overwriting the team's work: a file identical to the old stock is replaced by the new
 /// stock, a missing file is added, and a file that differs from the old stock (the constitution, an edited template or skill) is
 /// kept and reported. Spec Kit's own bookkeeping (install options, integration manifests, the workflow registry) differs on every
-/// install, so it always takes the new version. Files the team added and files the new version dropped are left alone.
+/// install, so it always takes the new version. Files the team added and files the new version dropped are left alone, and so is
+/// every file that is a symbolic link or lies in a linked folder: the backup does not follow links, so undo could not restore it.
 /// </summary>
 internal static class SpecKitMerge
 {
@@ -25,8 +26,15 @@ internal static class SpecKitMerge
         List<string> upgraded = [];
         List<string> added = [];
         List<string> customised = [];
+        List<string> linked = [];
         foreach (string relative in Files(newStock))
         {
+            if (SymbolicLinks.OnPath(root, relative) is not null)
+            {
+                linked.Add(relative);
+                continue;
+            }
+
             string target = Path.Combine(root, relative);
             byte[] fresh = File.ReadAllBytes(Path.Combine(newStock, relative));
             if (!File.Exists(target))
@@ -56,7 +64,7 @@ internal static class SpecKitMerge
             }
         }
 
-        return new SpecKitMergeResult(upgraded, added, customised);
+        return new SpecKitMergeResult(upgraded, added, customised) { Linked = linked };
     }
 
     /// <summary>

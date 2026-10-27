@@ -83,7 +83,9 @@ internal static partial class TasksDocument
     [GeneratedRegex(@"\bFR-\d{3,}\b")]
     private static partial Regex RequirementId();
 
-    [GeneratedRegex(@"^(\w+\s+)?(tests?|write tests?|add tests?|contract tests?|integration tests?|unit tests?)\b", RegexOptions.IgnoreCase)]
+    // One leading word may qualify the tests ("Vitest tests …"), but not a verb that runs or satisfies them ("Make tests pass …",
+    // "Run tests …"): those tasks write no test.
+    [GeneratedRegex(@"^(?!(make|run|rerun|execute|implement|fix|get|keep)\s)(\w+\s+)?(tests?|write tests?|add tests?|contract tests?|integration tests?|unit tests?)\b", RegexOptions.IgnoreCase)]
     private static partial Regex TestVerb();
 
     // "Spec" only as the first word (optionally after "Write"/"Add" or a test framework), so "Specify …" and "Update spec.md"
