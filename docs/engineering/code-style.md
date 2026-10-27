@@ -4,6 +4,9 @@ Rules for the engine (`engine/`) and the NuGet packages. Formatting is encoded i
 review (and, where possible, by analyzers later). A rule may be departed from only visibly — one line at the code or in the PR —
 never silently.
 
+**On this page:** [Structure](#structure) (1–6) · [Naming](#naming) (7–13) · [Behaviour](#behaviour) (14–22) ·
+[Tests](#tests) (23–24) · [Before pushing](#before-pushing)
+
 ## Structure
 
 1. **One type per file**, named after the type. Files are grouped in **feature folders** (`Hooks/`, `Gates/`, `Paths/`,
@@ -53,5 +56,11 @@ never silently.
 
 ## Before pushing
 
-Read the whole diff for defects (not the summary), re-read the task, fix, then run the tests and look at the result.
-Anything in the diff you cannot explain is not ready.
+> [!TIP]
+> Read the whole diff for defects (not the summary), re-read the task, fix, then run the tests and look at the result.
+> Anything in the diff you cannot explain is not ready.
+
+## Next
+
+- [Contributing](../../CONTRIBUTING.md): branches, commits and pull requests
+- [How it works](../architecture.md): the parts the rules apply to

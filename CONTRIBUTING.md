@@ -3,6 +3,9 @@
 Lockflight is in alpha and maintained by one person. Bug reports, ideas and pull requests are welcome. For anything bigger
 than a fix, please open an issue first, because the design still moves.
 
+**On this page:** [Ground rules](#ground-rules) · [Branches, commits and pull requests](#branches-commits-and-pull-requests) ·
+[Build and test](#build-and-test) · [Skill evals](#skill-evals) · [Repository map](#repository-map)
+
 ## Ground rules
 
 - **Read [how it works](docs/architecture.md) first** for the parts and the principles behind them.
@@ -11,7 +14,9 @@ than a fix, please open an issue first, because the design still moves.
 - **English** for everything committed.
 - **C# style:** [`docs/engineering/code-style.md`](docs/engineering/code-style.md). Feature folders, one type per file, `sealed`
   classes and `record` DTOs, injected time, and `CancellationToken` last.
-- **Security issues** go through [private reporting](SECURITY.md), not issues.
+
+> [!IMPORTANT]
+> **Security issues** go through [private reporting](SECURITY.md), not issues.
 
 ## Branches, commits and pull requests
 
@@ -80,9 +85,17 @@ request, run the same steps locally (on Linux use `-r linux-x64`):
 
 ## Repository map
 
-- [`engine/`](engine/) — the CLI and its unit tests
-- [`plugins/lockflight/`](plugins/lockflight/) — the Claude Code plugin and the Spec Kit preset
-- [`docs/`](docs/) — guides, the architecture overview and the code style
-- [`tests/`](tests/) — cross-component suites
-- [`samples/`](samples/) — fixtures the suites run on
-- [`scripts/`](scripts/) — install from source and asset generation
+| Directory | What it holds |
+|---|---|
+| [`engine/`](engine/) | the CLI and its unit tests |
+| [`plugins/lockflight/`](plugins/lockflight/) | the Claude Code plugin and the Spec Kit preset |
+| [`docs/`](docs/) | guides, the architecture overview and the code style |
+| [`tests/`](tests/) | cross-component suites |
+| [`samples/`](samples/) | fixtures the suites run on |
+| [`scripts/`](scripts/) | install from source and asset generation |
+
+## Next
+
+- [How it works](docs/architecture.md): the parts and the principles behind them
+- [Code style](docs/engineering/code-style.md): the rules for C#
+- [Tests](tests/README.md): what each cross-component suite checks
