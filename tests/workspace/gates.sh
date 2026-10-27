@@ -25,8 +25,10 @@ edit services/orders/global.json; expect "a unit's global.json is protected" '[ 
 edit .claude/hooks/contracts-guard.sh; expect "the team's own hook is protected" '[ $? -eq 2 ]'
 edit services/orders/src/Orders/Order.cs; expect "ordinary unit code is editable" '[ $? -eq 0 ]'
 
+"$ENGINE" gate run > "$WORK/fresh.txt" 2>&1
+expect "a unit never judged is judged once (both .NET units)" 'grep -q "services/orders: test: PASS" "$WORK/fresh.txt" && grep -q "services/billing: test: PASS" "$WORK/fresh.txt"'
 "$ENGINE" gate run > "$WORK/clean.txt" 2>&1
-expect "a clean workspace judges nothing" 'grep -q "Result: N/A" "$WORK/clean.txt"'
+expect "a clean workspace whose units passed judges nothing" 'grep -q "Result: N/A" "$WORK/clean.txt"'
 
 sed -i.bak 's/=> failedAttempts < MaxAttempts;/=> failedAttempts >= 0 \&\& failedAttempts < MaxAttempts;/' services/billing/src/Billing/ChargePolicy.cs && rm services/billing/src/Billing/ChargePolicy.cs.bak
 "$ENGINE" gate run > "$WORK/billing.txt" 2>&1
@@ -34,6 +36,21 @@ expect "only the changed unit is built and tested (MTP)" 'grep -q "services/bill
 
 stop; expect "the stop gate passes the changed unit" '[ $? -eq 0 ]'
 [ -f .lockflight/local/stop-pass-services-billing ]; expect "its PASS is cached per unit" '[ $? -eq 0 ]'
+
+# Committed changes are judged too: a unit's state is its HEAD plus its uncommitted changes, compared with its last PASS.
+git -C services/billing -c user.email=t@t -c user.name=t commit -qam "Guard negative attempts"
+stop; expect "a unit's commit is judged at the next stop, and passes" '[ $? -eq 0 ]'
+sed -i.bak 's/failedAttempts >= 0 \&\& failedAttempts < MaxAttempts;/failedAttempts > MaxAttempts;/' services/billing/src/Billing/ChargePolicy.cs && rm services/billing/src/Billing/ChargePolicy.cs.bak
+git -C services/billing -c user.email=t@t -c user.name=t commit -qam "Break the retry rule"
+stop; expect "a committed break in a unit blocks the stop" '[ $? -eq 2 ] && grep -q "services/billing: test=FAIL" "$WORK/stop.err"'
+git -C services/billing reset -q --hard HEAD~1
+"$ENGINE" gate run > "$WORK/reset.txt" 2>&1
+expect "back at its passed commit, the unit is not rerun" 'grep -q "services/billing: N/A" "$WORK/reset.txt" && grep -q "Result: N/A" "$WORK/reset.txt"'
+
+# A committed change to a shared build input outside every unit (the shell's Directory.Build.props) is judged in every unit.
+printf '<Project />\n' > Directory.Build.props && git add Directory.Build.props && git -c user.email=t@t -c user.name=t commit -qm "Shared props"
+"$ENGINE" gate run > "$WORK/shared.txt" 2>&1
+expect "a committed shared build input reruns every .NET unit" 'grep -q "services/orders: test: PASS" "$WORK/shared.txt" && grep -q "services/billing: test: PASS" "$WORK/shared.txt"'
 
 sed -i.bak 's/line.Quantity \* line.UnitPrice/line.Quantity * line.UnitPrice + 1/' services/orders/src/Orders/Order.cs && rm services/orders/src/Orders/Order.cs.bak
 stop; expect "a broken VSTest unit blocks the stop" '[ $? -eq 2 ]'

@@ -36,6 +36,38 @@ public sealed class SharedChangesTests : IDisposable
         Assert.NotEqual(sharedLibrary, withNewBuildFile);
     }
 
+    [Fact]
+    public async Task CommittedSharedBuildInputsAreFingerprintedButCommittedSpecsAndUnitFilesAreNot()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Write(Manifest.FileName, "version: 1\nunits:\n  - path: svc/a\n");
+        Write("libs/shared/Foo.cs", "class Foo {}\n");
+        Write("svc/a/A.cs", "class A {}\n");
+        Write("specs/001/spec.md", "spec\n");
+        await GitAsync(["init", "-q"]);
+        await CommitAsync("base");
+        Manifest manifest = ManifestLocator.Discover(root.FullName).Manifest!;
+
+        string before = await SharedChanges.CommittedFingerprintAsync(manifest, cancellationToken);
+        Write("specs/001/spec.md", "spec, edited\n");
+        Write("svc/a/A.cs", "class A { int x; }\n");
+        await CommitAsync("spec and unit");
+        string afterSpecAndUnit = await SharedChanges.CommittedFingerprintAsync(manifest, cancellationToken);
+        Write("Directory.Build.props", "<Project />\n");
+        await CommitAsync("shared props");
+        string afterProps = await SharedChanges.CommittedFingerprintAsync(manifest, cancellationToken);
+
+        Assert.Equal(before, afterSpecAndUnit);
+        Assert.NotEqual(before, afterProps);
+        Assert.Null(await SharedChanges.FingerprintAsync(manifest, cancellationToken));
+    }
+
+    private async Task CommitAsync(string message)
+    {
+        await GitAsync(["add", "."]);
+        await GitAsync(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", message]);
+    }
+
     private void Write(string relative, string text)
     {
         string path = Path.Combine(root.FullName, relative);

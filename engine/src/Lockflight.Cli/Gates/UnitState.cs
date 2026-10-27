@@ -6,9 +6,10 @@ using Lockflight.Cli.Processes;
 namespace Lockflight.Cli.Gates;
 
 /// <summary>
-/// The working-tree state of one unit of a workspace: whether it has uncommitted or new files, and a fingerprint of that
-/// state plus everything else its gate run depends on — the Stop gate's per-unit cache key. A unit that is its own repository is
-/// asked of its own git; a monorepo unit is the shell's git limited to its directory.
+/// The state of one unit of a workspace: whether it has uncommitted or new files, and a fingerprint of its committed and
+/// uncommitted state plus everything else its gate run depends on — the per-unit cache key a PASS is remembered under. A unit that
+/// is its own repository is asked of its own git (its HEAD); a monorepo unit is the shell's git limited to its directory (the
+/// directory's tree at HEAD, so a commit elsewhere in the repository leaves it unchanged).
 /// </summary>
 internal sealed record UnitState(bool Dirty, string? Fingerprint)
 {
@@ -22,6 +23,18 @@ internal sealed record UnitState(bool Dirty, string? Fingerprint)
         {
             // Not cloned, or not a repository with a commit: nothing to judge and nothing to cache.
             return new UnitState(Dirty: false, Fingerprint: null);
+        }
+
+        // A monorepo unit's committed state is its directory's tree, not the repository's HEAD that every commit moves.
+        if (!ownRepository)
+        {
+            ProcessResult tree = await ProcessRunner.RunAsync("git", ["ls-tree", "HEAD", "--", unit.Path], gitRoot, cancellationToken);
+            if (tree.ExitCode != 0)
+            {
+                return new UnitState(Dirty: true, Fingerprint: null);
+            }
+
+            head = tree.Output;
         }
 
         ProcessResult diff = await ProcessRunner.RunAsync("git", ["diff", "HEAD", "--binary", "--no-ext-diff", "--no-color", "--", .. pathspec], gitRoot, cancellationToken);

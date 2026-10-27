@@ -100,7 +100,7 @@ judge new problems only. Patch coverage judges the changed lines against the bas
 
 The Stop gate runs the `stop` profile when the agent tries to end its turn. It is cached by a hash of its inputs, so an
 unchanged tree is not rebuilt, and its block message names the failing tests. In a workspace it builds and tests only the
-units that changed.
+units that changed since their last PASS: uncommitted changes, a commit, or a shared build input outside every unit.
 
 ## The lifecycle (standard profile)
 

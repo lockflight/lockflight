@@ -6,10 +6,12 @@ namespace Lockflight.Cli.Gates;
 /// <summary>
 /// Runs a profile over a workspace's units. Checks that read the whole workspace's changes run once at the root —
 /// pr: <c>policy.protected</c>; every profile: format; pr: secrets last — and each .NET unit runs build, test and, in pr, patch
-/// coverage and dependencies in its own directory. The stop and edit profiles judge only units with changes — a change to shared
-/// build inputs outside every unit (<see cref="SharedChanges"/>) counts for all of them — and the stop profile skips a unit whose
-/// state matches its cached PASS. Separate repositories run in parallel, at most <see cref="MaxParallelUnits"/> at a time; units of
-/// one repository run one at a time (shared projects, shared obj/). All share the run's budget. A unit that cannot run is ERROR.
+/// coverage and dependencies in its own directory. The stop profile judges a unit whose state differs from its last PASS:
+/// uncommitted changes, a commit, a change to shared build inputs outside every unit (<see cref="SharedChanges"/>, committed or
+/// not), or no PASS yet. The Stop hook also skips a unit with uncommitted changes whose state matches its cached PASS; a
+/// <c>gate run</c> judges every unit with uncommitted changes. The edit profile runs format only. A stop-profile PASS of a unit
+/// is remembered for both. Separate repositories run in parallel, at most <see cref="MaxParallelUnits"/> at a time; units of one
+/// repository run one at a time (shared projects, shared obj/). All share the run's budget. A unit that cannot run is ERROR.
 /// The run's verdict is the worst verdict of any step.
 /// </summary>
 internal static class WorkspaceGateRunner
@@ -21,21 +23,13 @@ internal static class WorkspaceGateRunner
     {
         List<GateStep> steps = [];
         Progress report = new(progress);
-        // Shared build inputs outside every unit (a referenced libs/ folder, a root Directory.Build.props) belong to each unit's key.
-        string? shared = await SharedChanges.FingerprintAsync(manifest, cancellationToken);
-        string engineAndSettings = $"{InputsHash.EngineAndSettings(manifest.Root)}|shared:{shared}";
-        List<(Unit Unit, UnitState State)> selected = [];
-        foreach (Unit unit in manifest.Units.Where(unit => onlyUnits.Count == 0 || onlyUnits.Contains(unit.Path, StringComparer.OrdinalIgnoreCase)))
-        {
-            UnitState state = await UnitState.ReadAsync(manifest, unit, engineAndSettings, cancellationToken);
-            selected.Add((unit, shared is null ? state : state with { Dirty = true }));
-        }
+        IReadOnlyList<(Unit Unit, UnitState State)> selected = await ReadStatesAsync(manifest, onlyUnits, cancellationToken);
 
         bool judgesChangesOnly = root.Profile != GateProfile.PullRequest;
         List<(Unit Unit, UnitState State)> toRun = [];
         foreach ((Unit unit, UnitState state) in selected)
         {
-            if (judgesChangesOnly && !state.Dirty)
+            if (judgesChangesOnly && !state.Dirty && (state.Fingerprint is null || !BuildsWithDotnet(manifest, unit)))
             {
                 await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "no changes, not run"));
             }
@@ -43,12 +37,14 @@ internal static class WorkspaceGateRunner
             {
                 await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "not a .NET unit: guarded, not built"));
             }
-            else if (useCache && state.Fingerprint is string fingerprint && await new StopGateCache(manifest.Root, unit.Path).PassedWithAsync(fingerprint, cancellationToken))
+            else if (judgesChangesOnly && (useCache || !state.Dirty) && state.Fingerprint is string fingerprint
+                && await new StopGateCache(manifest.Root, unit.Path).PassedWithAsync(fingerprint, cancellationToken))
             {
                 await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "unchanged since its last PASS"));
             }
-            else
+            else if (root.Profile != GateProfile.Edit)
             {
+                // Uncommitted changes, a commit since the last PASS, a shared build input, or never judged: the unit is judged.
                 toRun.Add((unit, state));
             }
         }
@@ -58,8 +54,9 @@ internal static class WorkspaceGateRunner
             return Result(root, steps, testsTotal: null);
         }
 
+        // Format judges uncommitted changed lines, so it runs only when a unit or the shell has some; the edit profile ends there.
         bool anyChange = !judgesChangesOnly || selected.Any(entry => entry.State.Dirty);
-        if (anyChange && (!await report.AddAsync(steps, await FormatStep.RunAsync(root, cancellationToken)) || root.Profile == GateProfile.Edit))
+        if ((anyChange && !await report.AddAsync(steps, await FormatStep.RunAsync(root, cancellationToken))) || root.Profile == GateProfile.Edit)
         {
             return Result(root, steps, testsTotal: null);
         }
@@ -72,7 +69,7 @@ internal static class WorkspaceGateRunner
                 await report.AddAsync(steps, step);
             }
 
-            if (useCache && outcome.Steps.All(step => VerdictNames.AllowsNextStep(step.Verdict)) && outcome.State.Fingerprint is string fingerprint)
+            if (root.Profile == GateProfile.Stop && outcome.Steps.All(step => VerdictNames.AllowsNextStep(step.Verdict)) && outcome.State.Fingerprint is string fingerprint)
             {
                 await new StopGateCache(manifest.Root, outcome.Unit.Path).RememberPassAsync(fingerprint, cancellationToken);
             }
@@ -85,6 +82,26 @@ internal static class WorkspaceGateRunner
         }
 
         return Result(root, steps, testsTotal);
+    }
+
+    /// <summary>
+    /// Each selected unit's state, keyed with the engine, the settings and the shared build inputs outside every unit (a referenced
+    /// libs/ folder, a root Directory.Build.props), committed and uncommitted. Uncommitted shared changes make every unit changed.
+    /// </summary>
+    public static async Task<IReadOnlyList<(Unit Unit, UnitState State)>> ReadStatesAsync(
+        Manifest manifest, IReadOnlyCollection<string> onlyUnits, CancellationToken cancellationToken)
+    {
+        string? shared = await SharedChanges.FingerprintAsync(manifest, cancellationToken);
+        string committedShared = await SharedChanges.CommittedFingerprintAsync(manifest, cancellationToken);
+        string key = $"{InputsHash.EngineAndSettings(manifest.Root)}|shared:{committedShared}|{shared}";
+        List<(Unit Unit, UnitState State)> states = [];
+        foreach (Unit unit in manifest.Units.Where(unit => onlyUnits.Count == 0 || onlyUnits.Contains(unit.Path, StringComparer.OrdinalIgnoreCase)))
+        {
+            UnitState state = await UnitState.ReadAsync(manifest, unit, key, cancellationToken);
+            states.Add((unit, shared is null ? state : state with { Dirty = true }));
+        }
+
+        return states;
     }
 
     /// <summary>Whether the gates build a unit: <c>kind: dotnet</c>, or <c>auto</c> with a solution or project file in its directory.</summary>
