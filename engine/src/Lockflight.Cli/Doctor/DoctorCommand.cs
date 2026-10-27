@@ -1,3 +1,4 @@
+using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Mascot;
@@ -5,11 +6,30 @@ using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Doctor;
 
-/// <summary><c>lockflight doctor</c>: readiness report; exits <see cref="ExitCode.Fail"/> when any check fails.</summary>
+/// <summary>
+/// <c>lockflight doctor</c>: readiness report; exits <see cref="ExitCode.Fail"/> when any check fails. With <c>--canaries</c> (or
+/// <c>--canaries=full</c>) it runs the canary self-test instead (<see cref="CanarySuite"/>).
+/// </summary>
 internal sealed class DoctorCommand(CliContext context)
 {
-    public async Task<ExitCode> RunAsync(CancellationToken cancellationToken)
+    private const string CanariesFlag = "--canaries";
+
+    private const string FullCanariesFlag = "--canaries=full";
+
+    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
     {
+        if (await CommandOptions.ParseOrReportAsync("doctor", args, [], [CanariesFlag, FullCanariesFlag], context.Error, cancellationToken) is not CommandOptions options)
+        {
+            return ExitCode.Config;
+        }
+
+        if (options.Flag(CanariesFlag) || options.Flag(FullCanariesFlag))
+        {
+            CanaryMode mode = options.Flag(FullCanariesFlag) ? CanaryMode.Full : CanaryMode.Fast;
+            await context.Error.WriteLineAsync($"lockflight: planting canaries in a temporary scratch project{(mode == CanaryMode.Full ? " (full: builds and runs a generated project)" : string.Empty)}…");
+            return await CanarySuite.ReportAsync(await CanarySuite.RunAsync(mode, context.Time, cancellationToken), mode, context.Output);
+        }
+
         string root = ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory;
         IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(
             root, context.Environment.HomeDirectory(), context.Environment.Get(EnvironmentVariables.NuGetPackages),

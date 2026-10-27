@@ -31,7 +31,9 @@ internal static class CliApplication
           init [--profile lite|standard] [--ci pr|manual|none] [--no-link]
                                                         onboard: manifest, tool pin, settings, CI job, link; --ci:
                                                         the job runs on pull requests, only by hand, or is not written
-          doctor                                        readiness report with fixes
+          doctor [--canaries[=full]]                    readiness report with fixes; --canaries: plant a violation
+                                                        before every control in a scratch project and report each
+                                                        as caught or missed (=full also builds and runs one)
           statusline                                    Claude Code status line: Levi and the last verdict
           update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
                                                         package feed), re-pin this project
@@ -123,7 +125,7 @@ internal static class CliApplication
                 ["version" or "--version"] => await PrintVersionAsync(context),
                 ["link"] => await new LinkCommand(context).RunAsync(cancellationToken),
                 ["init", .. string[] initOptions] => await new InitCommand(context).RunAsync(initOptions, cancellationToken),
-                ["doctor"] => await new DoctorCommand(context).RunAsync(cancellationToken),
+                ["doctor", .. string[] doctorOptions] => await new DoctorCommand(context).RunAsync(doctorOptions, cancellationToken),
                 ["statusline"] => await new StatusLineCommand(context).RunAsync(cancellationToken),
                 ["update", .. string[] updateOptions] => await new UpdateCommand(context).RunAsync(updateOptions, cancellationToken),
                 ["hook", string eventName] => await new HookCommand(context).RunAsync(HookEventNames.Parse(eventName), cancellationToken),
