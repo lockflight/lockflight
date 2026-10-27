@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using System.Xml;
+using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Testing;
@@ -53,7 +54,9 @@ internal static partial class VSTestRunner
                     return null;
                 }
 
-                abnormalExitCode ??= !run.TimedOut && run.ExitCode is 0 or TestsFailed ? null : run.ExitCode;
+                // A crashed test host still exits 1, like failed tests: the TRX says the run did not complete.
+                bool completed = !run.TimedOut && run.ExitCode is (0 or TestsFailed) && TrxReports.Read([report]).Incomplete.Count == 0;
+                abnormalExitCode ??= completed ? null : run.ExitCode;
                 results.AddRange(Parse(app.AssemblyName, await File.ReadAllTextAsync(report, cancellationToken)));
             }
             finally
@@ -94,6 +97,8 @@ internal static partial class VSTestRunner
                 "Passed" => TestOutcome.Pass,
                 "Failed" => TestOutcome.Fail,
                 "NotExecuted" => TestOutcome.Skip,
+                // A test that timed out, was aborted or errored did not pass: it must never read as "not run", which nothing counts.
+                string abnormal when TrxOutcomes.IsAbnormal(abnormal) => TestOutcome.Fail,
                 _ => TestOutcome.NotRun,
             };
             string? message = outcome == TestOutcome.Fail ? result.GetElementsByTagName("Message").OfType<XmlElement>().FirstOrDefault()?.InnerText : null;

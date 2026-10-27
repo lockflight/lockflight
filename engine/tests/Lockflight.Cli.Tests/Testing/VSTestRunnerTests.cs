@@ -56,6 +56,25 @@ public sealed class VSTestRunnerTests
         Assert.Null(results[4].ExceptionType);
     }
 
+    [Theory]
+    [InlineData("Timeout")]
+    [InlineData("Aborted")]
+    [InlineData("Error")]
+    public void AResultThatTimedOutWasAbortedOrErroredIsAFailureNotATestThatDidNotRun(string outcome)
+    {
+        const string template = """
+            <TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+              <Results><UnitTestResult testId="t1" testName="App.Tests.CalcTests.Slow" outcome="OUTCOME" /></Results>
+              <TestDefinitions><UnitTest id="t1"><TestMethod className="App.Tests.CalcTests" name="Slow" /></UnitTest></TestDefinitions>
+            </TestRun>
+            """;
+
+        ExecutedTest result = Assert.Single(VSTestRunner.Parse("App.Tests", template.Replace("OUTCOME", outcome, StringComparison.Ordinal)));
+
+        Assert.Equal(TestOutcome.Fail, result.Outcome);
+        Assert.Null(result.ExceptionType);
+    }
+
     [Fact]
     public void FilterValuesEscapeVSTestsReservedCharacters()
     {

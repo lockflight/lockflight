@@ -17,11 +17,14 @@ internal static partial class FailedTests
     public static int CountFailures(string output) => FailedLine().Count(output);
 
     /// <summary>"3 failed: A, B, C" — at most <see cref="MaxListed"/> names, then a count of the rest.</summary>
-    public static string Describe(IReadOnlyList<string> names)
+    public static string Describe(IReadOnlyList<string> names) => Describe(names, "failed");
+
+    /// <summary>"3 &lt;what happened&gt;: A, B, C" — at most <see cref="MaxListed"/> names, then a count of the rest.</summary>
+    public static string Describe(IReadOnlyList<string> names, string happened)
     {
         IEnumerable<string> listed = names.Take(MaxListed);
         string more = names.Count > MaxListed ? $" and {names.Count - MaxListed} more" : string.Empty;
-        return $"{names.Count} failed: {string.Join(", ", listed)}{more}";
+        return $"{names.Count} {happened}: {string.Join(", ", listed)}{more}";
     }
 
     // MTP's result line exactly: at the start of the line (assertion messages and stack traces below it are indented), the word

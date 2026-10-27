@@ -72,6 +72,8 @@ internal static partial class TestStep
     /// <summary>
     /// VSTest's exit code says only "something failed" (1): the TRX counters decide. No executed test is NOT-EARNED (a filter or a
     /// solution without tests exits 0); a non-zero exit without a failed test means a project or test host broke, which is ERROR.
+    /// A run that did not complete (a crashed test host drops its results) is ERROR and a result that timed out, was aborted or
+    /// errored FAIL, both before the known-failing baseline: a baseline covers failures it can see, never results that are missing.
     /// </summary>
     public static GateStep JudgeVSTest(ProcessResult testRun, int reportCount, TrxSummary summary, Func<IReadOnlySet<string>> knownFailures)
     {
@@ -80,6 +82,18 @@ internal static partial class TestStep
             return testRun.ExitCode == 0
                 ? new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, "no tests ran (no test project found: dotnet test wrote no TRX report)")
                 : new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs, $"dotnet test exited {testRun.ExitCode} without writing a TRX report; run 'dotnet test' to see why");
+        }
+
+        if (summary.Incomplete.Count > 0)
+        {
+            return new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs,
+                $"a test run did not complete, so its results are missing ({string.Join("; ", summary.Incomplete)}); run 'dotnet test' to see why");
+        }
+
+        if (summary.AbnormalTests.Count > 0)
+        {
+            return new GateStep(Name, testRun.ExitCode, Verdict.Fail, testRun.DurationMs,
+                FailedTests.Describe(summary.AbnormalTests, "did not complete (timeout, aborted or error)"));
         }
 
         if (summary.Failed > 0)

@@ -69,6 +69,8 @@ decides it: by the nearest `global.json`'s `test.runner`.
 - **Microsoft.Testing.Platform (xUnit v3):** results are read from the console summary.
 - **VSTest (xUnit v2, NUnit, MSTest):** results are read from TRX reports written to `.lockflight/local/test-results/`.
   - A non-zero exit without a failed test is ERROR.
+  - A run that did not complete (a crashed or aborted test host drops its results) is ERROR, and a test that timed out, was
+    aborted or errored FAILs. Both are judged before the known-failing baseline, which covers only failures it can see.
 - **On both:** a run with no executed test is NOT-EARNED, never PASS. That includes a run in which every test was skipped, which
   Microsoft.Testing.Platform reports as "Zero tests ran" with exit code 0.
 
