@@ -24,6 +24,46 @@ public sealed class ReviewResultParserTests
         Assert.False(outcome.Findings[1].NeedsReproduction);
     }
 
+    [Fact]
+    public void TokensAreSummedOverEveryModelTheRunUsed()
+    {
+        const string output = """
+            {"type":"result","is_error":false,"duration_ms":1000,"total_cost_usd":0.5,
+             "usage":{"input_tokens":1,"output_tokens":1},
+             "modelUsage":{"claude-opus-5-5":{"inputTokens":100,"outputTokens":40,"cacheReadInputTokens":900,"cacheCreationInputTokens":50,"costUSD":0.4},
+                           "claude-haiku-4-5":{"inputTokens":10,"outputTokens":2,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"costUSD":0.1}},
+             "structured_output":{"verdict":"approve","summary":"Fine.","findings":[]}}
+            """;
+
+        ReviewUsage usage = ReviewResultParser.Parse(output).Usage;
+
+        Assert.Equal(new ReviewUsage(110, 42, 900, 50), usage);
+    }
+
+    [Fact]
+    public void TokensComeFromUsageWhenTheModelBreakdownIsMissing()
+    {
+        const string output = """
+            {"is_error":false,"usage":{"input_tokens":7,"output_tokens":3,"cache_read_input_tokens":20,"cache_creation_input_tokens":5},
+             "structured_output":{"verdict":"approve","summary":"Fine.","findings":[]}}
+            """;
+
+        Assert.Equal(new ReviewUsage(7, 3, 20, 5), ReviewResultParser.Parse(output).Usage);
+    }
+
+    [Fact]
+    public void EachFindingGetsTheIdOfItsDimensionPlaceAndClaim()
+    {
+        const string output = """
+            {"is_error":false,"structured_output":{"verdict":"request_changes","summary":"One.","findings":[
+              {"severity":"major","file":"src/A.cs","line":23,"title":"Boundary","evidence":"x"}]}}
+            """;
+
+        ReviewFinding finding = Assert.Single(ReviewResultParser.Parse(output).Findings);
+
+        Assert.Equal(FindingIds.Of(ReviewNames.GeneralDimension, "src/A.cs", 23, "Boundary"), finding.Id);
+    }
+
     [Theory]
     [InlineData("""{"is_error":true,"result":"Credit balance is too low","total_cost_usd":0}""", "claude reported an error")]
     [InlineData("Not logged in", "no JSON")]

@@ -13,4 +13,7 @@ internal sealed record LedgerRecord(DateTimeOffset At, string Type, string Signa
 
     /// <summary>A <see cref="StopCacheResultNames"/> spelling.</summary>
     public string? Cache { get; init; }
+
+    /// <summary>Whether a <c>review.completed</c> run is the review of record; null on other lines.</summary>
+    public bool? OfRecord { get; init; }
 }

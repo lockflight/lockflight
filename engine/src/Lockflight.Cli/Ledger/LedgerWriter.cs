@@ -74,6 +74,28 @@ internal sealed class LedgerWriter(string projectRoot, TimeProvider time)
                 writer.WriteString("channel", ApprovalChannelNames.ToName(approval.Channel));
             }
 
+            if (ledgerEvent.Review is LedgerReview review)
+            {
+                writer.WriteString("feature", review.Feature);
+                writer.WriteString("run", review.Run);
+                writer.WriteBoolean("ofRecord", review.OfRecord);
+                writer.WriteNumber("findings", review.Findings);
+                writer.WriteNumber("openConfirmed", review.OpenConfirmed);
+                writer.WriteNumber("openUnverified", review.OpenUnverified);
+                writer.WriteNumber("fixed", review.Fixed);
+                writer.WriteNumber("inputTokens", review.InputTokens);
+                writer.WriteNumber("outputTokens", review.OutputTokens);
+                writer.WriteNumber("costUsd", review.EstimatedCostUsd);
+            }
+
+            if (ledgerEvent.Finding is LedgerFinding finding)
+            {
+                writer.WriteString("feature", finding.Feature);
+                writer.WriteString("finding", finding.Id);
+                writer.WriteString("severity", finding.Severity);
+                writer.WriteString("dimension", finding.Dimension);
+            }
+
             writer.WriteEndObject();
         }
 

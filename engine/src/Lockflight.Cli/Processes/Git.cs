@@ -28,6 +28,20 @@ internal static class Git
         return head.ExitCode == 0 ? head.Output.Trim() : null;
     }
 
+    /// <summary>The commit <paramref name="reference"/> names (a branch, tag or commit); null when it names none.</summary>
+    public static async Task<string?> CommitOfAsync(string root, string reference, CancellationToken cancellationToken)
+    {
+        ProcessResult commit = await ProcessRunner.RunAsync(Executable, ["rev-parse", "--verify", "--quiet", "--end-of-options", $"{reference}^{{commit}}"], root, cancellationToken);
+        return commit.ExitCode == 0 && commit.Output.Trim() is { Length: > 0 } id ? id : null;
+    }
+
+    /// <summary>The newest commit both <paramref name="reference"/> and HEAD descend from; null when there is none or git fails.</summary>
+    public static async Task<string?> MergeBaseAsync(string root, string reference, CancellationToken cancellationToken)
+    {
+        ProcessResult mergeBase = await ProcessRunner.RunAsync(Executable, ["merge-base", "--end-of-options", reference, "HEAD"], root, cancellationToken);
+        return mergeBase.ExitCode == 0 && mergeBase.Output.Trim() is { Length: > 0 } id ? id : null;
+    }
+
     /// <summary>
     /// What uncommitted changes are compared with: <see cref="WorkingTree"/> (HEAD), or — before the first commit — git's empty
     /// tree, so every tracked file counts as added. Null when git cannot name either (not a repository).

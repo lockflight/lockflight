@@ -12,4 +12,7 @@ internal sealed record Manifest(string Root, IReadOnlyList<string> ProtectedGlob
     public const string UnitFileName = "lockflight.unit.yaml";
 
     public IReadOnlyList<Unit> Units { get; init; } = [];
+
+    /// <summary>What a review needs to be the review of record (<c>review:</c>); the defaults when the manifest has no such section.</summary>
+    public ReviewSettings Review { get; init; } = ReviewSettings.Default;
 }

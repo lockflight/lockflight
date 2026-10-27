@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
 
@@ -7,7 +9,7 @@ namespace Lockflight.Cli.Config;
 /// Strict, reflection-free reader of <c>lockflight.yaml</c> (YamlDotNet node tree; Native AOT safe). Unknown keys and
 /// wrong types are errors with a line and column, never silently ignored.
 /// </summary>
-internal sealed class ManifestParser(string root, string path)
+internal sealed partial class ManifestParser(string root, string path)
 {
     private const int SupportedVersion = 1;
 
@@ -42,6 +44,7 @@ internal sealed class ManifestParser(string root, string path)
         bool stopGate = false;
         string? stopTarget = null;
         GateSettings gates = GateSettings.Default;
+        ReviewSettings review = ReviewSettings.Default;
         List<Unit> units = [];
 
         foreach ((YamlNode keyNode, YamlNode valueNode) in rootNode.Children)
@@ -58,7 +61,8 @@ internal sealed class ManifestParser(string root, string path)
                 "stop" => ReadStop(valueNode, ref stopGate, ref stopTarget),
                 "gates" => ReadGates(valueNode, ref gates),
                 "units" => ReadUnits(valueNode, units),
-                _ => Error(keyNode.Start, $"unknown key '{key}' (known: version, protected, stop, gates, units)"),
+                "review" => ReadReview(valueNode, ref review),
+                _ => Error(keyNode.Start, $"unknown key '{key}' (known: version, protected, stop, gates, units, review)"),
             };
             if (error is not null)
             {
@@ -66,7 +70,7 @@ internal sealed class ManifestParser(string root, string path)
             }
         }
 
-        return ManifestLoadResult.Loaded(new Manifest(root, protectedGlobs, stopGate, stopTarget, gates) { Units = units });
+        return ManifestLoadResult.Loaded(new Manifest(root, protectedGlobs, stopGate, stopTarget, gates) { Units = units, Review = review });
     }
 
     private ManifestError? ReadVersion(YamlNode valueNode) =>
@@ -249,6 +253,44 @@ internal sealed class ManifestParser(string root, string path)
         return null;
     }
 
+    private ManifestError? ReadReview(YamlNode valueNode, ref ReviewSettings review)
+    {
+        if (valueNode is not YamlMappingNode section)
+        {
+            return Error(valueNode.Start, "'review' must be a mapping (known keys: model, maxUsd)");
+        }
+
+        ReviewSettings settings = review with { FromManifest = true };
+        foreach ((YamlNode keyNode, YamlNode value) in section.Children)
+        {
+            if (keyNode is not YamlScalarNode { Value: string key })
+            {
+                return NotAName(keyNode);
+            }
+
+            string? text = (value as YamlScalarNode)?.Value;
+            switch (key)
+            {
+                case "model" when text is not null && ModelName().IsMatch(text):
+                    settings = settings with { Model = text };
+                    break;
+                case "model":
+                    return Error(value.Start, "'review.model' must be a Claude Code model name such as opus or sonnet");
+                case "maxUsd" when decimal.TryParse(text, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out decimal budget)
+                    && budget is > 0 and <= ReviewSettings.MaxBudgetUsd:
+                    settings = settings with { BudgetUsd = budget };
+                    break;
+                case "maxUsd":
+                    return Error(value.Start, $"'review.maxUsd' must be an amount in US dollars above 0 and at most {ReviewSettings.MaxBudgetUsd}, such as 3.00");
+                default:
+                    return Error(keyNode.Start, $"unknown key 'review.{key}' (known: model, maxUsd)");
+            }
+        }
+
+        review = settings;
+        return null;
+    }
+
     private ManifestError? ReadUnits(YamlNode valueNode, List<Unit> units)
     {
         if (valueNode is not YamlSequenceNode sequence)
@@ -398,4 +440,7 @@ internal sealed class ManifestParser(string root, string path)
     private ManifestLoadResult Invalid(Mark mark, string message) => ManifestLoadResult.Invalid(Error(mark, message));
 
     private ManifestError Error(Mark mark, string message) => new(path, (int)mark.Line, (int)mark.Column, message);
+
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._\[\]-]*$")]
+    private static partial Regex ModelName();
 }

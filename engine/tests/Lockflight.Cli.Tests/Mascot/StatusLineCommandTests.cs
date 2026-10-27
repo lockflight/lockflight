@@ -30,6 +30,9 @@ public sealed class StatusLineCommandTests : IDisposable
     [InlineData("hook.blocked", "pre-tool-use:protected-path:**/.env", "protected-path:**/.env", "guard blocked **/.env")]
     [InlineData("hook.blocked", "stop:stop-gate", "stop-gate", "Stop gate FAIL")]
     [InlineData("gate.completed", "gate:pr:NOT-EARNED:test", "NOT-EARNED", "pr gate NOT-EARNED")]
+    [InlineData("review.completed", "review:changes", "001-orders: 1 open confirmed", "review FAIL")]
+    [InlineData("review.completed", "review:clean", "001-orders: clean", "review PASS")]
+    [InlineData("review.completed", "review:not-of-record", "001-orders: not of record", "review NOT-EARNED")]
     public async Task TheLastVerdictIsShown(string type, string signature, string summary, string expected)
     {
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
@@ -46,6 +49,8 @@ public sealed class StatusLineCommandTests : IDisposable
 
     [Theory]
     [InlineData("approval.recorded", "approve:spec", "001-orders spec approved")]
+    [InlineData("finding.dismissed", "finding:dismissed", "001-orders 0123456789ab dismissed")]
+    [InlineData("finding.fixed", "finding:fixed", "001-orders 0123456789ab fixed")]
     [InlineData("gate.completed", "gate:stop-unit:services/orders", "1250")]
     public async Task EventsThatAreNotVerdictsLeaveTheLastVerdictShown(string type, string signature, string summary)
     {

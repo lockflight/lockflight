@@ -45,6 +45,7 @@ internal static class LedgerReader
                 Trigger = Text(root, "trigger") is { Length: > 0 } trigger ? trigger : null,
                 DurationMs = root.TryGetProperty("durationMs", out JsonElement duration) && duration.ValueKind == JsonValueKind.Number && duration.TryGetInt64(out long milliseconds) ? milliseconds : null,
                 Cache = Text(root, "cache") is { Length: > 0 } cache ? cache : null,
+                OfRecord = root.TryGetProperty("ofRecord", out JsonElement ofRecord) && ofRecord.ValueKind is JsonValueKind.True or JsonValueKind.False ? ofRecord.GetBoolean() : null,
             };
         }
         catch (JsonException)

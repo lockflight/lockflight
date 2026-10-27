@@ -40,18 +40,52 @@ internal static class ReviewResultParser
         ReviewFinding[] findings = body.TryGetProperty("findings", out JsonElement list) && list.ValueKind == JsonValueKind.Array
             ? [.. list.EnumerateArray().Select(ReadFinding)]
             : [];
-        return new ReviewOutcome(Text(body, "verdict"), Text(body, "summary"), findings, cost, duration, null);
+        return new ReviewOutcome(Text(body, "verdict"), Text(body, "summary"), findings, cost, duration, null) { Usage = ReadUsage(root) };
     }
 
-    private static ReviewFinding ReadFinding(JsonElement finding) => new(
-        ReviewNames.ParseSeverity(Text(finding, "severity")),
-        Text(finding, "file"),
-        finding.TryGetProperty("line", out JsonElement line) && line.TryGetInt32(out int number) ? number : 0,
-        Text(finding, "requirement") is { Length: > 0 } requirement ? requirement : null,
-        Text(finding, "title"),
-        Text(finding, "evidence"),
-        Text(finding, "reproduction") is { Length: > 0 } reproduction && reproduction.Contains("[Fact", StringComparison.Ordinal) ? reproduction : null,
-        FindingStatus.Reported);
+    /// <summary>Tokens summed over <c>modelUsage</c> (every model the call used), else read from <c>usage</c>.</summary>
+    private static ReviewUsage ReadUsage(JsonElement root)
+    {
+        if (root.TryGetProperty("modelUsage", out JsonElement models) && models.ValueKind == JsonValueKind.Object)
+        {
+            JsonElement[] perModel = [.. models.EnumerateObject().Select(model => model.Value).Where(model => model.ValueKind == JsonValueKind.Object)];
+            if (perModel.Length > 0)
+            {
+                return new ReviewUsage(
+                    perModel.Sum(model => Count(model, "inputTokens")),
+                    perModel.Sum(model => Count(model, "outputTokens")),
+                    perModel.Sum(model => Count(model, "cacheReadInputTokens")),
+                    perModel.Sum(model => Count(model, "cacheCreationInputTokens")));
+            }
+        }
+
+        return root.TryGetProperty("usage", out JsonElement usage) && usage.ValueKind == JsonValueKind.Object
+            ? new ReviewUsage(
+                Count(usage, "input_tokens"), Count(usage, "output_tokens"), Count(usage, "cache_read_input_tokens"), Count(usage, "cache_creation_input_tokens"))
+            : ReviewUsage.Empty;
+    }
+
+    private static long Count(JsonElement element, string property) =>
+        element.TryGetProperty(property, out JsonElement value) && value.TryGetInt64(out long count) ? count : 0;
+
+    private static ReviewFinding ReadFinding(JsonElement finding)
+    {
+        string file = Text(finding, "file");
+        int line = finding.TryGetProperty("line", out JsonElement lineElement) && lineElement.TryGetInt32(out int number) ? number : 0;
+        string title = Text(finding, "title");
+        return new ReviewFinding(
+            ReviewNames.ParseSeverity(Text(finding, "severity")),
+            file,
+            line,
+            Text(finding, "requirement") is { Length: > 0 } requirement ? requirement : null,
+            title,
+            Text(finding, "evidence"),
+            Text(finding, "reproduction") is { Length: > 0 } reproduction && reproduction.Contains("[Fact", StringComparison.Ordinal) ? reproduction : null,
+            FindingOutcome.Reported)
+        {
+            Id = FindingIds.Of(ReviewNames.GeneralDimension, file, line, title),
+        };
+    }
 
     private static ReviewOutcome Failed(string error) => new(string.Empty, string.Empty, [], 0m, 0, error);
 
