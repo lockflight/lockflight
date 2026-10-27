@@ -93,6 +93,7 @@ public sealed class VSTestRunnerTests
         Assert.Equal(["FR-900"], traced.Requirements);
         Assert.Equal("kept off", Assert.Single(tests, test => test.Method == nameof(Sample.Skipped)).SkipReason);
         Assert.DoesNotContain(tests, test => test.Method == nameof(Hidden.InAnInternalClass));
+        Assert.DoesNotContain(tests, test => test.Method == nameof(Hidden.Exposed.InAPublicClassInsideAnInternalOne));
     }
 
     // A non-public test class on purpose: the metadata reader must not list what xUnit would not run.
@@ -102,6 +103,13 @@ public sealed class VSTestRunnerTests
     {
         [Fact]
         public void InAnInternalClass() => Assert.True(true);
+
+        /// <summary>Public, but nested in a class that is not: invisible outside the assembly, so xUnit v2 does not run it either.</summary>
+        public sealed class Exposed
+        {
+            [Fact]
+            public void InAPublicClassInsideAnInternalOne() => Assert.True(true);
+        }
     }
 #pragma warning restore xUnit1000
 

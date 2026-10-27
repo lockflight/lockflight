@@ -28,12 +28,10 @@ internal static partial class VSTestRunner
         List<ExecutedTest> results = [];
         int? abnormalExitCode = null;
         IEnumerable<string[]> batches = methodFilters is null ? [[]] : methodFilters.Chunk(MethodsPerBatch);
-        System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
+        TimeBudget budget = new(timeLimit, TimeProvider.System);
         foreach (string[] batch in batches)
         {
-            // The batches share the time limit: a long list of methods cannot multiply it.
-            TimeSpan left = timeLimit == Timeout.InfiniteTimeSpan ? timeLimit : timeLimit - elapsed.Elapsed;
-            if (left <= TimeSpan.Zero)
+            if (budget.IsSpent)
             {
                 return null;
             }
@@ -47,7 +45,7 @@ internal static partial class VSTestRunner
                     arguments.AddRange(["--filter", string.Join('|', batch.Select(method => $"FullyQualifiedName={Escape(method)}"))]);
                 }
 
-                ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, workingDirectory, left, cancellationToken);
+                ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, workingDirectory, budget.Left, cancellationToken);
                 string report = Path.Combine(directory.FullName, "results.trx");
                 if (!File.Exists(report))
                 {

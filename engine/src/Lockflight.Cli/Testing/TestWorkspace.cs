@@ -33,7 +33,7 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
                 return build.Combined;
             }
 
-            apps.AddRange(await TestApps.FindAsync(target.Directory, target.PreferredFramework, cancellationToken));
+            apps.AddRange(await TestApps.FindAsync(target.Directory, target.PreferredFramework, timeLimit, cancellationToken));
         }
 
         Apps = apps;

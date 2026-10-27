@@ -24,6 +24,7 @@ internal static class NativeTestRunner
     /// <summary>
     /// Runs the given methods (all tests when <paramref name="methodFilters"/> is null); null when the runner produced no report. The
     /// first exit code that is not a test verdict is kept in the report, so a run that crashed half-way is not taken at its word.
+    /// The batches share <paramref name="timeLimit"/>; null too when it runs out before the last batch.
     /// </summary>
     public static async Task<TestRunReport?> RunAsync(
         TestApp app, IReadOnlyList<string>? methodFilters, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
@@ -36,8 +37,14 @@ internal static class NativeTestRunner
         List<ExecutedTest> results = [];
         int? abnormalExitCode = null;
         IEnumerable<string[]> batches = methodFilters is null ? [[]] : methodFilters.Chunk(MethodsPerBatch);
+        TimeBudget budget = new(timeLimit, TimeProvider.System);
         foreach (string[] batch in batches)
         {
+            if (budget.IsSpent)
+            {
+                return null;
+            }
+
             string report = Path.Combine(Path.GetTempPath(), $"lockflight-tests-{Guid.CreateVersion7()}.xml");
             try
             {
@@ -50,7 +57,7 @@ internal static class NativeTestRunner
                     arguments.AddRange([app.Mode == RunnerMode.Mtp ? "--filter-method" : "-method", method]);
                 }
 
-                ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, workingDirectory, timeLimit, cancellationToken);
+                ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, workingDirectory, budget.Left, cancellationToken);
                 if (!File.Exists(report))
                 {
                     return null;
