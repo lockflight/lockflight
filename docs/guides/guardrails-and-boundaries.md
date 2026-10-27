@@ -6,6 +6,7 @@ around one.
 **On this page:** [Two kinds of control](#two-kinds-of-control) · [Every control, labelled](#every-control-labelled) ·
 [What the shell write detection sees](#what-the-shell-write-detection-sees) ·
 [The Claude Code sandbox](#the-claude-code-sandbox) · [Permission deny rules](#permission-deny-rules) ·
+[Team policy in managed settings](#team-policy-in-managed-settings) ·
 [Proposing a protected change](#proposing-a-protected-change) ·
 [GitHub plan limits](#github-plan-limits) · [Every safeguard red at least once](#every-safeguard-red-at-least-once) ·
 [What this means in practice](#what-this-means-in-practice)
@@ -33,7 +34,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 |---|---|---|
 | PreToolUse guard on protected paths (Edit/Write, Bash and PowerShell write detection) | G | best-effort parsing of shell commands; a script file or an interpreter can hide a write |
 | Human-only commands refused inside Claude Code (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply\|undo`, `update`) | G | detected via `CLAUDECODE=1` and command tokens, also inside the nested command strings the guard reads (`bash -c`, `eval`, a here-document fed to `sh`); the variable can be unset |
-| In-session approval (`/lockflight:approve`, typed by you) | G | It works only in an interactive session, and binds the approval to the content the engine showed you. A prompt Claude Code starts by itself (a scheduled task, a loop, a message from another session) expands slash commands like a typed one, so the guard blocks any tool call that would queue `/lockflight:approve`; the code is shown in the session transcript, so it binds content, it is not a secret; a fifth wrong code discards it, and a typed `/lockflight:approve` is refused rather than passed on to the agent when the engine is missing or fails. It cannot stop a message sent from a session outside this project, or an agent that drives your terminal (tmux, AppleScript). The boundary is a presence-gated signature (`--sign`) verified in CI against signers from the base branch. |
+| In-session approval (`/lockflight:approve`, typed by you) | G | It works only in an interactive session, and binds the approval to the content the engine showed you. A prompt Claude Code starts by itself (a scheduled task, a loop, a message from another session) expands slash commands like a typed one: Claude Code's documentation says `UserPromptExpansion` runs for user-typed commands, but a live probe saw it fire for a prompt a `CronCreate` task queued, so this is re-probed before every release. The guard therefore blocks any tool call other than a file read or write whose input mentions `/lockflight:approve` (a Bash command, a scheduled task, a message, a subagent prompt); the code is shown in the session transcript, so it binds content, it is not a secret; a fifth wrong code discards it, and a typed `/lockflight:approve` is refused rather than passed on to the agent when the engine is missing or fails. It cannot stop a message sent from a session outside this project, or an agent that drives your terminal (tmux, AppleScript). The boundary is a presence-gated signature (`--sign`) verified in CI against signers from the base branch. |
 | Linked engine trust: the hook shim runs `.lockflight/bin/lockflight` only when it is not committed to the repository and, outside Windows, belongs to you | G | It stops a cloned project from shipping its own program as the engine, and a `lockflight.yaml` in a shared folder such as `/tmp` from running another user's binary. The shim does not compare the binary with the released package. A passed check is remembered in `.git` until the file changes, so committing the unchanged file afterwards goes unnoticed until the engine is linked again. Without `git` on the path the committed check is skipped. A project you trust can already run code through its own hooks, so this narrows one path; it is not a sandbox. |
 | Sandbox write denials for protected paths (`sandbox.filesystem.denyWrite`, listed by `init` and `adopt apply`) | G, stronger | While the Claude Code sandbox is on (macOS, Linux, WSL2), the operating system refuses a shell command's write to those paths, in every child process, however the command hides it. It is still your machine: the sandbox is off unless you or your organisation turn it on, Claude can retry a refused command outside the sandbox unless `allowUnsandboxedCommands` is `false`, the built-in Edit and Write tools are not sandboxed (the guard covers them), and native Windows has no sandbox. See [below](#the-claude-code-sandbox) |
 | Claude Code deny rules for protected paths (`permissions.deny`: `Edit(/lockflight.yaml)`, …, written by `init` and `adopt apply`) | G | A second layer for the built-in file tools: Claude Code refuses them there itself, before the guard runs and even if the plugin is not loaded. Claude Code also applies these rules to the file commands it recognises in Bash (`sed`, `tee`, redirections), but not to a command that writes without naming the file. They live in a settings file the agent cannot edit through these tools, but you, or a command run outside Claude Code, can |
@@ -218,7 +219,8 @@ Turning the sandbox on is a choice for you or your organisation:
   `allowUnsandboxedCommands: false` makes Claude Code ignore the `dangerouslyDisableSandbox` retry, so a refused command stays
   refused, and makes the sandbox admin-required: Claude Code then ignores a repository's settings that loosen it, the
   `allowWrite` entries above included, so the managed file carries them. The project's `denyWrite` still applies.
-  `failIfUnavailable: true` refuses to start Claude Code where the sandbox cannot run, which includes native Windows.
+  `failIfUnavailable: true` refuses to start Claude Code where the sandbox cannot run, which includes native Windows. The same
+  managed file can also carry the [team policy keys](#team-policy-in-managed-settings) below.
 
   ```json
   {
@@ -256,6 +258,40 @@ rules for protected files created since.
   sandbox is on, commands the agent runs, such as `lockflight gate run`, write evidence and the ledger there.
 
 The guard still decides first and covers what the rules do not (shell commands, files created later).
+
+## Team policy in managed settings
+
+Three Claude Code settings let an organisation make the Lockflight setup harder to step around on its machines. They are
+read only from [managed settings](https://code.claude.com/docs/en/settings.md#settings-files-and-who-they-affect) (the same
+`managed-settings.json` as the sandbox above, MDM or server-managed settings), and Claude Code enforces them: nothing in user,
+project or local settings or in `--settings` overrides a managed key. They remain **guardrails** (G) in the sense of this page:
+they shape what Claude Code loads on that machine, a person with administrator rights can change or remove the managed file,
+and a commit made outside Claude Code never meets them. CI stays the definition of done.
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "lockflight": { "source": { "source": "github", "repo": "lockflight/lockflight" } }
+  },
+  "enabledPlugins": { "lockflight@lockflight": true },
+  "allowManagedHooksOnly": true,
+  "allowManagedPermissionRulesOnly": true,
+  "permissions": {
+    "deny": ["Edit(**/lockflight.yaml)", "Edit(**/.lockflight/bin/**)", "Edit(**/.claude/settings.json)", "Edit(**/.claude/settings.local.json)"]
+  },
+  "strictPluginOnlyCustomization": ["hooks", "agents", "mcp"]
+}
+```
+
+| Key | What it adds for a team | What to know first |
+|---|---|---|
+| `enabledPlugins` (managed) | Force-enables the plugin: a person or a repository cannot turn Lockflight off with a local `false`. | A plugin set to `false` here is blocked at every scope instead. |
+| `allowManagedHooksOnly` | Only managed hooks and the hooks of plugins that managed `enabledPlugins` force-enables run (matched on the full `lockflight@lockflight` id). Hooks from user, project and local settings, from other plugins and from agent frontmatter stop, so a hook that an agent or a repository adds never runs. | **Without the `enabledPlugins` line it turns the Lockflight guard off**, because the plugin's hooks are then blocked too. Claude Code also reads `statusLine` only from managed settings, so Levi's status line in `~/.claude/settings.json` stops showing until the managed file carries it, and `/goal` cannot run. |
+| `allowManagedPermissionRulesOnly` | Managed permission rules become the only ones: allow rules in a repository's or a user's settings no longer widen what the agent may do, and "don't ask again" answers are not saved. | Claude Code then ignores the `Edit` deny rules that `init` writes into `.claude/settings.json` ([permission deny rules](#permission-deny-rules)), so the managed file must carry its own. A managed rule cannot name each project's paths, so use patterns relative to the working directory, as above; the guard still decides first either way. |
+| `strictPluginOnlyCustomization` | Skills, agents, hooks and MCP servers can come only from plugins and managed settings: an agent that writes a hook or an MCP server into user or project settings gets nothing loaded. | `true` or `"skills"` also stops `.claude/skills/`, where Spec Kit installs its `/speckit-*` skills, so the standard profile's lifecycle no longer loads. Lock `hooks`, `agents` and `mcp` only, unless the team installs Spec Kit another way. |
+
+Check the result in a Lockflight project: `/status` names the managed source on its `Setting sources` line, the Lockflight
+banner still appears at session start (the plugin's hooks run), and an agent edit of `lockflight.yaml` is still refused.
 
 ## Proposing a protected change
 

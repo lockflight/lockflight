@@ -43,6 +43,25 @@ On nuget.org (signed in as `NUGET_USER`):
 2. Optional, recommended: **reserve the ID prefix** `Lockflight.` (request it from the nuget.org support page), so other
    accounts cannot publish `Lockflight.*` packages.
 
+## Checks before a release
+
+Three checks start real Claude Code sessions, which need a Claude login. The repository holds no Claude Code token, so CI
+cannot run them; a maintainer runs them on the release candidate on `main` before the release pull request, and notes the
+Claude Code version and the results in it:
+
+1. **The plugin evals**, all three suites, as [CONTRIBUTING](../../CONTRIBUTING.md#skill-evals) shows
+   (`claude plugin eval plugins/lockflight …`, `plugins/lockflight-crew …` and `plugins …`). Read every failing case: a skill
+   that regressed blocks the release until it is fixed.
+2. **The real-hook canary** on an engine built from the same commit:
+   `dotnet publish engine/src/Lockflight.Cli -c Release -r <rid> -o out`, then
+   `ENGINE="$PWD/out/lockflight" sh tests/canary/run.sh haiku`, which must print only `ok` lines. The `canary` workflow runs
+   the same script by manual dispatch once the repository has a `CLAUDE_CODE_OAUTH_TOKEN` secret.
+3. **The prompt-expansion probe.** In a scratch project, load a throwaway plugin with a command of its own and a
+   `UserPromptExpansion` hook that logs what it receives, have the agent queue that command with `CronCreate`, and see
+   whether the hook fires for the queued prompt. Claude Code's documentation says the event is for typed commands; while it
+   still fires for queued ones, the approve relay must stay (see
+   [the approval row](../guides/guardrails-and-boundaries.md#every-control-labelled)).
+
 ## Cutting a release
 
 1. Raise the version in both `plugin.json` files (and `plugins/lockflight/min-engine-version` when the plugin needs the new
