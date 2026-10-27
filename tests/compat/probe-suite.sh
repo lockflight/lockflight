@@ -57,6 +57,9 @@ checkexp "no manifest: approve expansion"     0 cli 1 "$(expansion "$plain" lock
 checkexp "not restored: approve expansion"   2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
 checkexp "not restored: approve, other case"  2 cli 1 "$(expansion "$proj" LockFlight:Approve spec)" "nothing was approved"
 checkexp "not restored: other slash command" 0 cli 1 "$(expansion "$proj" lockflight:status "")"
+checkexp "not restored: baseline expansion"   2 cli 1 "$(expansion "$proj" lockflight:baseline tests)" "nothing was accepted"
+checkexp "not restored: reset expansion"      2 cli 1 "$(expansion "$proj" lockflight:reset "")" "nothing was reset"
+checkexp "not restored: amend, other case"    2 cli 1 "$(expansion "$proj" LockFlight:Amend "A.B --reason x")" "nothing was amended"
 checkenv "env dir, no manifest: Write"     0 "$plain" "$(json "$plain" Write "$(fp "$plain/a")")"
 checkenv "env dir, not restored: Write"    2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 checkenv "env dir, not restored: Read"     0 "$proj"  "$(json "$proj" Read "$(fp "$proj/src/a.cs")")"
@@ -94,6 +97,14 @@ checkexp "linked: approve, headless refused"    2 sdk-cli 0 "$(expansion "$proj"
 checkexp "linked: approve, unattended refused"  2 cli 0 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
 checkexp "linked: approve, attended shows code" 2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "/lockflight:approve spec "
 checkexp "linked: approve, wrong code refused"  2 cli 1 "$(expansion "$proj" lockflight:approve "spec zzzzzz")" "not the code shown"
+checkexp "linked: approve alone, code waiting"  2 cli 1 "$(expansion "$proj" lockflight:approve "")" "Step 2 of 2 — type: /lockflight:approve spec"
+checkexp "linked: baseline, headless refused"   2 sdk-cli 0 "$(expansion "$proj" lockflight:baseline build)" "nothing was accepted"
+checkexp "linked: baseline, unknown kind"       2 cli 1 "$(expansion "$proj" lockflight:baseline everything)" "lockflight baseline build|tests|deps"
+checkexp "linked: reset, unattended refused"    2 cli 0 "$(expansion "$proj" lockflight:reset "")" "nothing was reset"
+checkexp "linked: reset, no evidence"           2 cli 1 "$(expansion "$proj" lockflight:reset "")" "no red/green evidence to discard"
+checkexp "linked: amend, headless refused"      2 sdk-cli 0 "$(expansion "$proj" lockflight:amend "A.B --reason x")" "nothing was amended"
+checkexp "linked: amend, no evidence"           2 cli 1 "$(expansion "$proj" lockflight:amend "A.B --reason x")" "no red/green evidence"
+check "linked: CronCreate with /lockflight:reset" 2 "$proj" "$(json "$proj" CronCreate "\"prompt\":\"/lockflight:reset k7m2qx\"")"
 check "linked: malformed JSON"            2 "$proj"  '{"cwd":"'"$proj"'","tool_name":'
 checktask "linked, stop gate off: task completed" 0 "$proj"
 # With the stop gate on, a task is completed only after the gate passed for the tree; nothing has passed here.
@@ -160,6 +171,7 @@ check "committed engine: Write blocked"     2 "$cloned" "$(json "$cloned" Write 
 if grep -q 'committed to the repository' "$WORK/err"; then pass=$((pass+1)); echo "committed engine: names the reason: ok"; else fail=$((fail+1)); echo "committed engine: names the reason: FAIL ($(head -c 400 "$WORK/err"))"; fi
 check "committed engine: Read allowed"      0 "$cloned" "$(json "$cloned" Read "$(fp "$cloned/src/a.cs")")"
 checkexp "committed engine: approve blocked" 2 cli 1 "$(expansion "$cloned" lockflight:approve spec)" "Nothing was approved"
+checkexp "committed engine: amend blocked"   2 cli 1 "$(expansion "$cloned" lockflight:amend "A.B --reason x")" "Nothing was amended"
 git -C "$cloned" rm -q --cached "${committed#"$cloned"/}"
 check "untracked engine: Write allowed"     0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 # A passed check is remembered until the engine file changes; an engine committed later is caught again.
@@ -176,6 +188,8 @@ esac
 check "crashing engine: tool call blocked" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 checktask "crashing engine: task not blocked" "$crash" "$proj"
 checkexp "crashing engine: approve blocked"  2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
+checkexp "crashing engine: baseline blocked" 2 cli 1 "$(expansion "$proj" lockflight:baseline build)" "nothing was accepted"
+checkexp "crashing engine: reset blocked"    2 cli 1 "$(expansion "$proj" lockflight:reset "")" "nothing was reset"
 checkexp "crashing engine: other slash command" "$crash" cli 1 "$(expansion "$proj" lockflight:status "")"
 
 # An engine older than the plugin refuses the event it does not know; that must not block every task completion.

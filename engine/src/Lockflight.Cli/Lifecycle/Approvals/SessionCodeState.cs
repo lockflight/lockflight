@@ -1,12 +1,12 @@
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
-/// <summary>What checking a typed approval code against the one waiting for the phase found.</summary>
-internal enum ApprovalCodeState
+/// <summary>What checking a typed session code against the one waiting for its command found.</summary>
+internal enum SessionCodeState
 {
     /// <summary>The code matches the waiting one, which has not expired.</summary>
     Matched = 1,
 
-    /// <summary>No code is waiting for this phase: none was shown, or it was already used.</summary>
+    /// <summary>No code is waiting for this command: none was shown, or it was already used.</summary>
     NoneWaiting = 2,
 
     /// <summary>The waiting code is older than its lifetime; it is discarded.</summary>

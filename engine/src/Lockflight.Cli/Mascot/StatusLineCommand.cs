@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 
@@ -10,7 +11,7 @@ namespace Lockflight.Cli.Mascot;
 /// <summary>
 /// <c>lockflight statusline</c>: Claude Code's status line command. Reads the session JSON on stdin, and in a Lockflight project
 /// prints Levi's face beside the last verdict from the local ledger (a Stop gate, a gate run, a review run or a guard block in the
-/// past day). Approvals, evidence, fixed or dismissed findings, configuration writes and per-unit Stop times are not verdicts and
+/// past day), or, while a code typed in the session waits for its second step, the line to type. Approvals, evidence, fixed or dismissed findings, configuration writes and per-unit Stop times are not verdicts and
 /// leave the last one shown.
 /// The status line is shown to the person only, never to the model. Outside a Lockflight project it prints nothing.
 /// </summary>
@@ -28,7 +29,9 @@ internal sealed class StatusLineCommand(CliContext context)
 
         DateTimeOffset now = context.Time.GetUtcNow();
         LedgerRecord? last = LedgerReader.Read(manifest.Root, now - Window).LastOrDefault(IsVerdict);
-        (MascotPose pose, string text) = last is null ? (MascotPose.OnDuty, "on duty") : Describe(last, now);
+        (MascotPose pose, string text) = SessionCommands.WaitingLine(manifest, context.Time, context.Random) is string waiting
+            ? (MascotPose.OnDuty, waiting)
+            : last is null ? (MascotPose.OnDuty, "on duty") : Describe(last, now);
         bool color = context.Environment.Get(EnvironmentVariables.NoColor) is null;
         if (!color)
         {

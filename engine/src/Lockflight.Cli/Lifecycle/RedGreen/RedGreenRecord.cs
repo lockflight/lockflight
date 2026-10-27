@@ -45,9 +45,12 @@ internal sealed record RedGreenRecord
 
     public static string PathFor(Feature feature) => Path.Combine(feature.RecordDirectory, FileName);
 
-    public static RedGreenRecord? Load(string path)
+    public static RedGreenRecord? Load(string path) => File.Exists(path) ? Parse(File.ReadAllText(path)) : null;
+
+    /// <summary>The record in <paramref name="text"/>; null when it holds no baseline. Throws like <see cref="Load"/> when it is not a record.</summary>
+    public static RedGreenRecord? Parse(string text)
     {
-        if (!File.Exists(path) || JsonNode.Parse(File.ReadAllText(path)) is not JsonObject root || root["baseline"] is not JsonObject baseline)
+        if (JsonNode.Parse(text) is not JsonObject root || root["baseline"] is not JsonObject baseline)
         {
             return null;
         }

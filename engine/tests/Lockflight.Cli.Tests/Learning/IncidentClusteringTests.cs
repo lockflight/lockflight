@@ -46,6 +46,20 @@ public sealed class IncidentClusteringTests
     }
 
     [Fact]
+    public void AnsweredSessionCommandsAreNotIncidentsAndRefusedOnesAre()
+    {
+        LedgerRecord[] records =
+        [
+            Record("session-command.answered", "user-prompt-expansion:session-approval:usage", "session-approval:usage"),
+            Record("session-command.answered", "user-prompt-expansion:session-approval:usage", "session-approval:usage"),
+            Record("session-command.answered", "user-prompt-expansion:session-reset:wrong-code", "session-reset:wrong-code"),
+            Record("hook.blocked", "user-prompt-expansion:session-approval:unattended", "session-approval:unattended"),
+        ];
+
+        Assert.Equal(["user-prompt-expansion:session-approval:unattended"], IncidentClustering.Cluster(records).Select(cluster => cluster.Fingerprint));
+    }
+
+    [Fact]
     public void StopUnitTimingsAndStopHookGateRunsAreNotIncidents()
     {
         LedgerRecord[] records =

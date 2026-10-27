@@ -36,7 +36,7 @@ public sealed class SessionApprovalTests : IDisposable
 
     private string RecordPath(string phase) => Path.Combine(root.FullName, ".lockflight", "features", FeatureId, "approvals", $"{phase}.json");
 
-    private string WaitingCodePath(string phase) => Path.Combine(root.FullName, ApprovalCodes.RelativeDirectory, $"{phase}.json");
+    private string WaitingCodePath(string phase) => Path.Combine(root.FullName, SessionCodes.RelativeDirectory, $"{phase}.json");
 
     [Fact]
     public async Task AnotherSlashCommandIsIgnoredWithoutAWord()
@@ -103,13 +103,14 @@ public sealed class SessionApprovalTests : IDisposable
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Empty(output);
-        Assert.Contains($"approve the spec of {FeatureId}", error, StringComparison.Ordinal);
+        Assert.StartsWith("Step 1 of 2 — nothing has been approved yet. Check the spec of 001-orders you are approving", error, StringComparison.Ordinal);
+        Assert.EndsWith(SessionCommandGate.NotAnError, error, StringComparison.Ordinal);
         Assert.Contains($"spec.md    {ArtifactHash.Of(SpecPath)[..12]}", error, StringComparison.Ordinal);
         Assert.Contains("Requirements (2): FR-001, FR-002", error, StringComparison.Ordinal);
         Assert.Contains("User stories (1): 1 Place an order", error, StringComparison.Ordinal);
         Assert.Contains("Open [NEEDS CLARIFICATION] markers: spec.md line 6", error, StringComparison.Ordinal);
         Assert.Contains("Current approval: none", error, StringComparison.Ordinal);
-        Assert.Contains($"/lockflight:approve spec {Code}", error, StringComparison.Ordinal);
+        Assert.Contains($"Type within 10 minutes: /lockflight:approve spec {Code}\n", error, StringComparison.Ordinal);
         string waiting = await File.ReadAllTextAsync(WaitingCodePath("spec"), TestContext.Current.CancellationToken);
         Assert.DoesNotContain(Code, waiting, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(ArtifactHash.Of(SpecPath), waiting, StringComparison.Ordinal);
@@ -143,7 +144,7 @@ public sealed class SessionApprovalTests : IDisposable
         Assert.Equal(ExitCode.Pass, exitCode);
         Assert.Empty(error);
         using JsonDocument hookOutput = JsonDocument.Parse(output);
-        Assert.Equal($"Approved spec of {FeatureId}: spec.md {ArtifactHash.Of(SpecPath)[..12]}", hookOutput.RootElement.GetProperty("systemMessage").GetString());
+        Assert.Equal($"Step 2 of 2 — approved: the spec of {FeatureId} (spec.md {ArtifactHash.Of(SpecPath)[..12]}).", hookOutput.RootElement.GetProperty("systemMessage").GetString());
         JsonElement specific = hookOutput.RootElement.GetProperty("hookSpecificOutput");
         Assert.Equal("UserPromptExpansion", specific.GetProperty("hookEventName").GetString());
         Assert.Contains($"approve verify --feature {FeatureId} --require spec", specific.GetProperty("additionalContext").GetString(), StringComparison.Ordinal);
@@ -184,7 +185,7 @@ public sealed class SessionApprovalTests : IDisposable
     {
         await CreateProjectAsync();
         await TypeAsync("spec");
-        time.Advance(ApprovalCodes.Lifetime);
+        time.Advance(SessionCodes.Lifetime);
 
         (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
 
@@ -310,7 +311,7 @@ public sealed class SessionApprovalTests : IDisposable
         (ExitCode exitCode, string output, _) = await TypeAsync($"spec {Code} --sign --key {key}");
 
         Assert.Equal(ExitCode.Pass, exitCode);
-        Assert.Contains("(signed)", output, StringComparison.Ordinal);
+        Assert.Contains(", signed.", output, StringComparison.Ordinal);
         Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(RecordPath("spec"))!, "*.unsigned*"));
         (ExitCode verifyExit, string verifyOutput, _) = await TestConsole.RunAsync(
             ["approve", "verify", "--feature", FeatureId, "--require", "spec", "--allowed-signers", signers], string.Empty, root.FullName);
@@ -338,16 +339,17 @@ public sealed class SessionApprovalTests : IDisposable
     }
 
     [Theory]
-    [InlineData("schema", "\"lockflight.session-approval/v0\"")]
-    [InlineData("phase", "\"tasks\"")]
-    [InlineData("feature", "\"../001-orders\"")]
-    [InlineData("feature", "\"specs/001-orders\"")]
-    [InlineData("feature", "\"..\"")]
-    [InlineData("feature", "42")]
+    [InlineData("schema", "\"lockflight.session-code/v0\"")]
+    [InlineData("command", "\"tasks\"")]
+    [InlineData("subject", "\"../001-orders\"")]
+    [InlineData("subject", "\"specs/001-orders\"")]
+    [InlineData("subject", "\"..\"")]
+    [InlineData("subject", "42")]
+    [InlineData("payload", "[1]")]
     [InlineData("salt", "\"not hex\"")]
     [InlineData("codeHash", "null")]
     [InlineData("expiresAt", "\"tomorrow\"")]
-    [InlineData("artifacts", "[\"spec.md\"]")]
+    [InlineData("bound", "[\"spec.md\"]")]
     public async Task AWaitingCodeWithABadFieldApprovesNothing(string field, string json)
     {
         await CreateProjectAsync();
@@ -409,12 +411,12 @@ public sealed class SessionApprovalTests : IDisposable
         await CreateProjectAsync();
         DirectoryInfo elsewhere = Directory.CreateDirectory(Path.Combine(root.FullName, "elsewhere"));
         Directory.CreateDirectory(Path.Combine(root.FullName, ".lockflight", "local"));
-        Directory.CreateSymbolicLink(Path.Combine(root.FullName, ApprovalCodes.RelativeDirectory), elsewhere.FullName);
+        Directory.CreateSymbolicLink(Path.Combine(root.FullName, SessionCodes.RelativeDirectory), elsewhere.FullName);
 
         (ExitCode exitCode, _, string error) = await TypeAsync("spec");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains($"{ApprovalCodes.RelativeDirectory} is a symbolic link", error, StringComparison.Ordinal);
+        Assert.Contains($"{SessionCodes.RelativeDirectory} is a symbolic link", error, StringComparison.Ordinal);
         Assert.Empty(elsewhere.GetFileSystemInfos());
     }
 
@@ -653,6 +655,50 @@ public sealed class SessionApprovalTests : IDisposable
         (ExitCode exitCode, _, _) = await TypeAsync("x", new FailingEnvironment(AttendedSession), commandName: "lockflight:status");
 
         Assert.Equal(ExitCode.Pass, exitCode);
+    }
+
+    [Fact]
+    public async Task TheCommandAloneWhileACodeWaitsSaysWhichLineToType()
+    {
+        await CreateProjectAsync();
+        await TypeAsync("spec");
+
+        (ExitCode exitCode, string output, string error) = await TypeAsync(string.Empty);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Empty(output);
+        Assert.Contains($"nothing was approved yet: a code is waiting for the spec of {FeatureId}, valid until 09:10 UTC", error, StringComparison.Ordinal);
+        Assert.Contains("Step 2 of 2 — type: /lockflight:approve spec <the code shown with it>", error, StringComparison.Ordinal);
+        Assert.DoesNotContain(Code, error, StringComparison.Ordinal);
+        Assert.True(File.Exists(WaitingCodePath("spec")));
+        (ExitCode stillWorks, _, _) = await TypeAsync($"spec {Code}");
+        Assert.Equal(ExitCode.Pass, stillWorks);
+    }
+
+    [Fact]
+    public async Task TheCommandAloneWithoutAWaitingCodeShowsTheUsageAndIsNotLedgeredAsABlock()
+    {
+        await CreateProjectAsync();
+
+        (ExitCode exitCode, _, string error) = await TypeAsync(string.Empty);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("type /lockflight:approve spec or /lockflight:approve tasks", error, StringComparison.Ordinal);
+        string ledger = string.Concat(Directory.GetFiles(Path.Combine(root.FullName, ".lockflight", "ledger")).Select(File.ReadAllText));
+        Assert.Contains("\"session-command.answered\"", ledger, StringComparison.Ordinal);
+        Assert.DoesNotContain("hook.blocked", ledger, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnUnattendedApprovalIsLedgeredAsABlock()
+    {
+        await CreateProjectAsync();
+
+        await TypeAsync("spec", new Dictionary<string, string> { [EnvironmentVariables.ClaudeCode] = "1" });
+
+        string ledger = string.Concat(Directory.GetFiles(Path.Combine(root.FullName, ".lockflight", "ledger")).Select(File.ReadAllText));
+        Assert.Contains("session-approval:unattended", ledger, StringComparison.Ordinal);
+        Assert.Contains("hook.blocked", ledger, StringComparison.Ordinal);
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(root);

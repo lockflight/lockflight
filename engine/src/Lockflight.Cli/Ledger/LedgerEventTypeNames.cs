@@ -12,6 +12,7 @@ internal static class LedgerEventTypeNames
     public const string ReviewCompleted = "review.completed";
     public const string FindingDismissed = "finding.dismissed";
     public const string FindingFixed = "finding.fixed";
+    public const string SessionCommandAnswered = "session-command.answered";
 
     public static string ToName(LedgerEventType type) => type switch
     {
@@ -24,6 +25,7 @@ internal static class LedgerEventTypeNames
         LedgerEventType.ReviewCompleted => ReviewCompleted,
         LedgerEventType.FindingDismissed => FindingDismissed,
         LedgerEventType.FindingFixed => FindingFixed,
+        LedgerEventType.SessionCommandAnswered => SessionCommandAnswered,
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown ledger event type."),
     };
 }

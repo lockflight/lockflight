@@ -29,4 +29,10 @@ internal enum LedgerEventType
 
     /// <summary>A review re-ran an open finding's reproduction and it passed.</summary>
     FindingFixed = 9,
+
+    /// <summary>
+    /// An in-session human command was answered without recording anything: a usage hint, a wrong, expired or used code, or
+    /// changed content. The person's own typing, not a block of the agent, so neither the status line nor the retro counts it.
+    /// </summary>
+    SessionCommandAnswered = 10,
 }

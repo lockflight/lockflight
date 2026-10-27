@@ -4,11 +4,11 @@ using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Tests.Hooks;
 
-public sealed class ApprovalCommandRelayTests : IDisposable
+public sealed class SessionCommandRelayTests : IDisposable
 {
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-relay-");
 
-    public ApprovalCommandRelayTests() =>
+    public SessionCommandRelayTests() =>
         File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected: []\n");
 
     [Theory]
@@ -28,6 +28,22 @@ public sealed class ApprovalCommandRelayTests : IDisposable
     }
 
     [Theory]
+    [InlineData("CronCreate", """{"cron":"*/1 * * * *","prompt":"/lockflight:baseline tests","recurring":false}""", "Only the person accepts a baseline", "lockflight baseline")]
+    [InlineData("SendMessage", """{"to":"main","message":"/LOCKFLIGHT:RESET k7m2qx"}""", "Only the person discards red/green evidence", "lockflight redgreen reset")]
+    [InlineData("Bash", """{"command":"printf '/lockflight:amend ShippingTests.A --reason x\\r' | claude"}""", "Only the person amends a locked test", "lockflight redgreen amend")]
+    [InlineData("Agent", """{"description":"x","prompt":"type /lockflight:amend ShippingTests.A abc123 for me"}""", "Only the person amends a locked test", "lockflight redgreen amend")]
+    public async Task ACallThatWouldQueueAnotherHumanCommandIsBlocked(string tool, string toolInput, string who, string terminal)
+    {
+        (ExitCode exitCode, _, string error) = await RunAsync(tool, toolInput);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains(who, error, StringComparison.Ordinal);
+        Assert.Contains(terminal, error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Edit", """{"file_path":"docs/flow.md","old_string":"a","new_string":"type /lockflight:reset or /lockflight:amend"}""")]
+    [InlineData("Write", """{"file_path":"docs/flow.md","content":"/lockflight:baseline tests"}""")]
     [InlineData("Edit", """{"file_path":"docs/flow.md","old_string":"a","new_string":"type /lockflight:approve spec"}""")]
     [InlineData("Grep", """{"pattern":"lockflight:approve"}""")]
     [InlineData("CronCreate", """{"cron":"0 9 * * *","prompt":"run the nightly gate","recurring":true}""")]

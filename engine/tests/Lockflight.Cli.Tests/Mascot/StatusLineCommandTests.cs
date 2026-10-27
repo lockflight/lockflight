@@ -1,5 +1,6 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Lifecycle.Approvals;
 
 namespace Lockflight.Cli.Tests.Mascot;
 
@@ -53,6 +54,8 @@ public sealed class StatusLineCommandTests : IDisposable
     [InlineData("finding.dismissed", "finding:dismissed", "001-orders 0123456789ab dismissed")]
     [InlineData("finding.fixed", "finding:fixed", "001-orders 0123456789ab fixed")]
     [InlineData("gate.completed", "gate:stop-unit:services/orders", "1250")]
+    [InlineData("session-command.answered", "user-prompt-expansion:session-approval:usage", "session-approval:usage")]
+    [InlineData("session-command.answered", "user-prompt-expansion:session-approval:wrong-code", "session-approval:wrong-code")]
     public async Task EventsThatAreNotVerdictsLeaveTheLastVerdictShown(string type, string signature, string summary)
     {
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
@@ -67,6 +70,29 @@ public sealed class StatusLineCommandTests : IDisposable
         (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
 
         Assert.Equal("Lockflight · stop gate PASS · 5m ago", output);
+    }
+
+    [Fact]
+    public async Task ACodeWaitingForItsSecondStepShowsTheLineToType()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        new SessionCodes(root.FullName, time, RandomSource.WithCodes("k7m2qx")).Issue("spec", "001-orders", [("spec.md", "abc")]);
+
+        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
+
+        Assert.Equal("Lockflight · approval waiting: type /lockflight:approve spec <code>", output);
+    }
+
+    [Fact]
+    public async Task AnExpiredCodeIsNotShown()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        new SessionCodes(root.FullName, time, RandomSource.WithCodes("k7m2qx")).Issue("spec", "001-orders", [("spec.md", "abc")]);
+        time.Advance(SessionCodes.Lifetime);
+
+        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
+
+        Assert.Equal("Lockflight · on duty", output);
     }
 
     [Fact]

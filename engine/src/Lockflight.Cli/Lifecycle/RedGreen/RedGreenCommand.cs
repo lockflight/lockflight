@@ -93,6 +93,13 @@ internal sealed class RedGreenCommand(CliContext context)
         };
     }
 
+    /// <summary>Deletes the feature's red/green evidence and ledgers it, whichever way the person reset it.</summary>
+    public static async Task DiscardAsync(RedGreenSession session, CancellationToken cancellationToken)
+    {
+        File.Delete(session.RecordPath);
+        await session.RecordAsync(LedgerSignatures.RedGreenReset, session.Feature.Id, cancellationToken);
+    }
+
     private async Task<ExitCode> StartAsync(RedGreenSession session, RedGreenRecord? record, CancellationToken cancellationToken)
     {
         if (record is not null)
@@ -201,8 +208,7 @@ internal sealed class RedGreenCommand(CliContext context)
             return ExitCode.Pass;
         }
 
-        File.Delete(session.RecordPath);
-        await session.RecordAsync(LedgerSignatures.RedGreenReset, feature, cancellationToken);
+        await DiscardAsync(session, cancellationToken);
         await context.Output.WriteLineAsync($"{feature}: red/green evidence discarded; the test projects are unlocked for this feature.");
         return ExitCode.Pass;
     }

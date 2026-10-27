@@ -12,13 +12,14 @@ namespace Lockflight.Cli.Hooks;
 /// <summary>
 /// <c>lockflight hook &lt;event&gt;</c> with the hook JSON on stdin. Outside a Lockflight project every event is a silent no-op,
 /// so an install never blocks unrelated work. Fails closed: an engine error blocks a tool call, and is reported but
-/// does not block the events that must never brick a session (Stop, SessionStart, …). A typed <c>/lockflight:approve</c> is never
-/// passed on to the agent after an error either.
+/// does not block the events that must never brick a session (Stop, SessionStart, …). A typed in-session human command
+/// (<c>/lockflight:approve</c>, <c>/lockflight:baseline</c>, <c>/lockflight:reset</c>, <c>/lockflight:amend</c>) is never passed on
+/// to the agent after an error either.
 /// </summary>
 internal sealed class HookCommand(CliContext context)
 {
-    /// <summary>Whether the event is the expansion of <c>/lockflight:approve</c>, as far as the payload was read before an error.</summary>
-    private bool expandsApproval;
+    /// <summary>The in-session human command the event expands, as far as the payload was read before an error; null for none.</summary>
+    private SessionCommandSpec? expanding;
 
     public async Task<ExitCode> RunAsync(HookEvent hookEvent, CancellationToken cancellationToken)
     {
@@ -28,9 +29,9 @@ internal sealed class HookCommand(CliContext context)
         }
         catch (Exception exception)
         {
-            if (expandsApproval)
+            if (expanding is SessionCommandSpec spec)
             {
-                await context.Error.WriteLineAsync($"lockflight: nothing was approved: internal error: {exception.Message}. Run lockflight approve {HumanOnlyCommands.WhereToRun}.");
+                await context.Error.WriteLineAsync(SessionCommands.InternalError(spec, exception.Message));
                 return ExitCode.HookBlock;
             }
 
@@ -43,19 +44,23 @@ internal sealed class HookCommand(CliContext context)
     private async Task<ExitCode> DecideAndReportAsync(HookEvent hookEvent, CancellationToken cancellationToken)
     {
         string rawInput = await context.Input.ReadToEndAsync(cancellationToken);
-        // Until the payload is parsed, any mention of the command counts: an error then must not hand it to the agent.
-        expandsApproval = hookEvent == HookEvent.UserPromptExpansion && rawInput.Contains(SessionApproval.CommandName, StringComparison.OrdinalIgnoreCase);
+        // Until the payload is parsed, any mention of a command counts: an error then must not hand it to the agent.
+        expanding = hookEvent == HookEvent.UserPromptExpansion ? SessionCommands.MentionedIn(rawInput) : null;
         await new HookPayloadLog(context.Time, context.Environment, context.Error).AppendAsync(hookEvent, rawInput, cancellationToken);
 
         HookInput? input = HookInput.Parse(rawInput);
-        expandsApproval &= input is null || SessionApproval.Handles(input);
+        if (expanding is not null && input is not null)
+        {
+            expanding = SessionCommands.Of(input);
+        }
+
         if (input is null)
         {
             return await ReportAsync(HookDecision.Block("invalid-hook-input", "lockflight: hook input is not valid JSON"), hookEvent, projectRoot: null, input: null, cancellationToken);
         }
 
-        // Every typed slash command expands through this hook; only the approval command is the engine's business.
-        if (hookEvent == HookEvent.UserPromptExpansion && !SessionApproval.Handles(input))
+        // Every typed slash command expands through this hook; only the in-session human commands are the engine's business.
+        if (hookEvent == HookEvent.UserPromptExpansion && SessionCommands.Of(input) is null)
         {
             return ExitCode.Pass;
         }
@@ -77,14 +82,14 @@ internal sealed class HookCommand(CliContext context)
             return await ReportAsync(precondition, hookEvent, manifest.Root, input, cancellationToken);
         }
 
-        if (hookEvent == HookEvent.UserPromptExpansion)
+        if (hookEvent == HookEvent.UserPromptExpansion && SessionCommands.Of(input) is SessionCommandSpec typed)
         {
-            return await ApproveInSessionAsync(input, manifest, cancellationToken);
+            return await DecideInSessionAsync(typed, input, manifest, cancellationToken);
         }
 
         HookDecision decision = hookEvent switch
         {
-            HookEvent.PreToolUse => ApprovalCommandRelay.Decide(input)
+            HookEvent.PreToolUse => SessionCommandRelay.Decide(input)
                 ?? await new ProtectedPathGuard(context.Error, context.Environment, new DirectoryReads()).DecideAsync(input, manifest),
             HookEvent.Stop => await StopGate.DecideAsync(manifest, input.SessionId, context.Time, cancellationToken),
             HookEvent.TaskCompleted => await TaskCompletedGate.DecideAsync(manifest, input, cancellationToken),
@@ -100,32 +105,36 @@ internal sealed class HookCommand(CliContext context)
     }
 
     /// <summary>
-    /// <c>/lockflight:approve</c>: a refusal or the digest goes to stderr with exit 2, which Claude Code shows the person and keeps
-    /// from the agent; a recorded approval lets the command run, with a confirmation for the person and a note for the agent.
+    /// An in-session human command: a refusal or the digest goes to stderr with exit 2, which Claude Code shows the person and keeps
+    /// from the agent; a recorded decision lets the command run, with a confirmation for the person and a note for the agent.
     /// </summary>
-    private async Task<ExitCode> ApproveInSessionAsync(HookInput input, Manifest manifest, CancellationToken cancellationToken)
+    private async Task<ExitCode> DecideInSessionAsync(SessionCommandSpec spec, HookInput input, Manifest manifest, CancellationToken cancellationToken)
     {
-        SessionApprovalResult result;
+        SessionCommandResult result;
         try
         {
-            result = await new SessionApproval(context, manifest).DecideAsync(input, cancellationToken);
+            result = await SessionCommands.DecideAsync(spec, input, context, manifest, cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // Failing open here would hand the command to the agent; nothing is recorded either way, so the person sees why.
-            result = SessionApprovalResult.Refused(
-                "session-approval:internal-error",
-                $"lockflight: nothing was approved: internal error: {exception.Message}. Run lockflight approve {HumanOnlyCommands.WhereToRun}.");
+            result = SessionCommandResult.Refused($"{spec.RefusalPrefix}:internal-error", SessionCommands.InternalError(spec, exception.Message));
         }
 
         switch (result.Outcome)
         {
-            case SessionApprovalOutcome.Refused:
+            case SessionCommandOutcome.Refused:
                 return await ReportAsync(HookDecision.Block(result.Code!, result.Message!), HookEvent.UserPromptExpansion, manifest.Root, input, cancellationToken);
-            case SessionApprovalOutcome.Shown:
+            case SessionCommandOutcome.Answered:
+                await context.Error.WriteLineAsync(result.Message);
+                await new LedgerWriter(manifest.Root, context.Time).AppendAsync(
+                    new LedgerEvent(LedgerEventType.SessionCommandAnswered, $"{HookEventNames.ToName(HookEvent.UserPromptExpansion)}:{result.Code}", result.Code!, null),
+                    cancellationToken);
+                return ExitCode.HookBlock;
+            case SessionCommandOutcome.Shown:
                 await context.Error.WriteLineAsync(result.Message);
                 return ExitCode.HookBlock;
-            case SessionApprovalOutcome.Recorded:
+            case SessionCommandOutcome.Recorded:
                 await context.Output.WriteLineAsync(ToExpansionOutput(result.Message!, result.AgentContext!));
                 return ExitCode.Pass;
             default:

@@ -57,7 +57,10 @@ Then set up your project: the [lite profile](#lite-profile-target-first-green-in
   CI cannot install it yet.
 - **Human decisions** (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo`, `update`) are yours: run them in a separate
   terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
-  approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`).
+  approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`), and a baseline, a reset or an
+  amend by typing `/lockflight:baseline`, `/lockflight:reset` or `/lockflight:amend`. Each takes two steps: the engine shows
+  you what would be recorded under "UserPromptExpansion operation blocked by hook" (not an error), starting with
+  `Step 1 of 2`, and ends with the line to type with its code.
 - **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. An install from source
   (the checkout recorded in `~/.lockflight/source`) pulls your checkout, reinstalls the engine and the plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
   commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at
@@ -255,6 +258,7 @@ hold the keys to the two approvals.
    | `/speckit-plan`, `/speckit-tasks` | agent | `lockflight phase check tasks` |
    | approve the tasks | **you**, the same way: `/lockflight:approve tasks`, or `.lockflight/bin/lockflight approve tasks [--sign]` | hash-bound record |
    | per story: stubs → tests → `redgreen red` → implement → `redgreen green` | agent | red must fail in production code; tests locked until green |
+   | a test turns out wrong during red | **you**: `/lockflight:amend <Class.Method> --reason <why>` in Claude Code, or `.lockflight/bin/lockflight redgreen amend` in a separate terminal window | the next `redgreen red` must fail in production code again |
    | `lockflight trace`, `lockflight review`, `gate run --profile pr` | agent | every requirement covered; review findings confirmed by reproductions |
    | PR and merge | **you** | CI runs the same gates with the base branch's policy |
 
@@ -296,7 +300,8 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
   Claude Code starts (it sets `CLAUDECODE`) get plain text, so the agent never pays tokens for him. `LOCKFLIGHT_MASCOT=0`
   turns him off.
 - **In Claude Code's status line** (optional). `lockflight statusline` prints his face and the last verdict from the local
-  ledger, for example `guard blocked **/.env · 2m ago`, `stop gate PASS · just now` or `Stop gate FAIL · just now`. The status line is shown to you only
+  ledger, for example `guard blocked **/.env · 2m ago`, `stop gate PASS · just now` or `Stop gate FAIL · just now`, or
+  `approval waiting: type /lockflight:approve spec <code>` while an in-session code waits for you. The status line is shown to you only
   and costs no tokens. A plugin cannot set it, so add it to your user settings (`~/.claude/settings.json`) yourself, unless
   you already have a status line you want to keep:
 
