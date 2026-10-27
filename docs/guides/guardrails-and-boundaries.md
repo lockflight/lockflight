@@ -6,7 +6,7 @@ around one.
 **On this page:** [Two kinds of control](#two-kinds-of-control) · [Every control, labelled](#every-control-labelled) ·
 [What the shell write detection sees](#what-the-shell-write-detection-sees) ·
 [Proposing a protected change](#proposing-a-protected-change) · [GitHub plan limits](#github-plan-limits) ·
-[What this means in practice](#what-this-means-in-practice)
+[Every safeguard red at least once](#every-safeguard-red-at-least-once) · [What this means in practice](#what-this-means-in-practice)
 
 ## Two kinds of control
 
@@ -176,6 +176,29 @@ nothing in the project, and the agent cannot apply the patch: `git apply` rewrit
 > On **GitHub Free, private repositories cannot require status checks**: the Lockflight workflow runs and reports, but a red
 > check does not block a merge — it is advisory. Use a public repository, GitHub Pro/Team, or treat the check as a manual merge
 > criterion.
+
+## Every safeguard red at least once
+
+A control that silently stopped working looks exactly like one that never had anything to catch. `lockflight doctor --canaries`
+plants a violation in front of each control and reports it as caught or missed, so every safeguard has been seen saying no:
+
+- the guard blocks an Edit of `lockflight.yaml`, a Bash redirect into `.lockflight/`, `bash -ce "rm lockflight.yaml"` and a hard
+  link to `lockflight.yaml`, and the approve relay blocks a CronCreate that would send `/lockflight:approve`;
+- every human-only command refuses with `CLAUDECODE=1`;
+- the test gate does not PASS a failing test, a run with every test skipped, or a run with no test, on Microsoft.Testing.Platform
+  and on VSTest;
+- red rejects a test that fails by `Assert.Fail`.
+
+Each guard canary has a harmless twin (an ordinary write, an ordinary redirect) that must be allowed, and the test gate and red
+canaries have one that must pass; when a twin is refused too the canary is **BROKEN**, because a control that refuses everything
+proves nothing. Everything happens in a temporary scratch project that is deleted afterwards, never in your project.
+`--canaries=full` also generates a small .NET project and runs the real test gate and a real red on it (it needs the .NET SDK
+and the xUnit packages). CI runs `--canaries=full` with the published engine on Linux, Windows and macOS.
+
+The canaries check the engine's decisions, not Claude Code's: whether Claude Code still calls the hooks is what the
+[real-hook canary](../../tests/README.md) checks. A caught canary shows that a control works on the planted case, not that
+nothing can get around it: the labels above still apply. Editing an existing hard link to a protected file is not caught by
+the guard (the guard sees paths, and hard links share none); CI with the base branch's policy catches the change.
 
 ## What this means in practice
 
