@@ -40,5 +40,13 @@ stop; expect "a broken VSTest unit blocks the stop" '[ $? -eq 2 ]'
 expect "the failing xUnit v2 test is named" 'grep -q "TotalIsTheSumOfQuantityTimesUnitPrice" "$WORK/stop.err"'
 expect "the unchanged-since-PASS unit is not rerun" 'grep -q "services/billing=N/A (unchanged since its last PASS)" "$WORK/stop.err"'
 
+# A second solution beside the unit's build: file makes a bare 'dotnet build' ambiguous (MSB1011): commands run for one unit
+# must build what the workspace run builds.
+cp services/orders/Orders.sln services/orders/Copy.sln
+"$ENGINE" gate run --path services/orders > "$WORK/path.txt" 2>&1
+expect "gate run --path <unit> builds the unit's build: file" 'grep -q "^build: PASS" "$WORK/path.txt"'
+env -u CLAUDECODE "$ENGINE" baseline build --path services/orders > "$WORK/baseline.txt" 2>&1
+expect "baseline build --path <unit> builds the unit's build: file" '[ $? -eq 0 ] && [ -f .lockflight/baselines/services/orders/build-diagnostics.json ]'
+
 echo "workspace gates: passed=$pass failed=$fail"
 [ "$fail" = 0 ]

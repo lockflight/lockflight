@@ -129,14 +129,8 @@ internal static class WorkspaceGateRunner
     private static async Task<UnitOutcome> RunUnitAsync(Manifest manifest, GateRunContext root, Unit unit, UnitState state, CancellationToken cancellationToken)
     {
         // The unit shares the run's deadline: its own context would start a fresh budget.
-        GateRunContext run = root with
-        {
-            Target = Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar)),
-            Settings = root.Settings with { TestFramework = unit.TestFramework ?? root.Settings.TestFramework },
-            UnitPath = unit.Path,
-            BuildFile = unit.Build,
-            StopFilter = unit.StopFilter,
-        };
+        string directory = Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar));
+        GateRunContext run = (root with { Target = directory }).ForUnit(unit, directory);
 
         List<GateStep> steps = [];
         GateStep build = await BuildStep.RunAsync(run, cancellationToken);
