@@ -3,7 +3,8 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>lockflight</AssemblyName>
     <RootNamespace>Lockflight.Cli</RootNamespace>
-    <Version>0.0.1</Version>
+    <!-- A local build is never a publishable version: release builds pass -p:Version. -->
+    <Version>0.0.0-local</Version>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
     <StripSymbols>true</StripSymbols>
@@ -22,11 +23,17 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/lockflight/lockflight</PackageProjectUrl>
     <PackageTags>claude-code;quality-gates;dotnet-tool;tdd;spec-driven;hooks</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReleaseNotes>https://github.com/lockflight/lockflight/blob/main/CHANGELOG.md</PackageReleaseNotes>
     <RepositoryUrl>https://github.com/lockflight/lockflight</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <ToolPackageRuntimeIdentifiers>osx-arm64;linux-x64;linux-arm64;win-x64;any</ToolPackageRuntimeIdentifiers>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <!-- Deterministic paths in CI builds, so a package's source paths do not name the runner's checkout. -->
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <!-- Released tool packages ship no debug symbols (a 12 MB dSYM per RID otherwise). -->
@@ -37,7 +44,9 @@
     <InternalsVisibleTo Include="Lockflight.Cli.Tests" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="../../../README.md" Pack="true" PackagePath="/" Visible="false" />
+    <None Include="../../PACKAGE.md" Pack="true" PackagePath="/" Visible="false" />
+    <None Include="../../../docs/assets/levi-avatar.png" Pack="true" PackagePath="/icon.png" Visible="false" />
+    <None Include="../../../THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" Visible="false" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="18.1.0" />

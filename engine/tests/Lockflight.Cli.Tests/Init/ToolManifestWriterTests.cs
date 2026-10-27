@@ -25,8 +25,8 @@ public sealed class ToolManifestWriterTests
     }
 
     [Theory]
-    [InlineData("""{"tools":{"lockflight.cli":{"version":"0.0.1-dev.1"}}}""")]
-    [InlineData("""{"tools":{"LOCKFLIGHT.CLI":{"version":"0.0.0"}}}""")]
+    [InlineData("""{"tools":{"lockflight.cli":{"version":"0.0.0-dev.1"}}}""")]
+    [InlineData("""{"tools":{"LOCKFLIGHT.CLI":{"version":"0.0.0-alpha"}}}""")]
     [InlineData("""{"tools":{}}""")]
     [InlineData("""{}""")]
     public void AnOlderOrMissingPinIsNotKept(string existing)
@@ -54,7 +54,7 @@ public sealed class ToolManifestWriterTests
     [Fact]
     public void AKeyInAnotherCaseIsUpdatedWithoutASecondEntry()
     {
-        (string json, _) = ToolManifestWriter.Pin("""{"tools":{"Lockflight.Cli":{"version":"0.0.0"},"other":{"version":"1.0.0"}}}""");
+        (string json, _) = ToolManifestWriter.Pin("""{"tools":{"Lockflight.Cli":{"version":"0.0.0-alpha"},"other":{"version":"1.0.0"}}}""");
 
         JsonObject tools = JsonNode.Parse(json)!["tools"]!.AsObject();
         Assert.Equal(["Lockflight.Cli", "other"], tools.Select(tool => tool.Key));
