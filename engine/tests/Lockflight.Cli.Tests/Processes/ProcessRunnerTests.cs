@@ -46,6 +46,16 @@ public sealed class ProcessRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task ToolsRunWithSnapshotDiffToolsDisabled()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Uses the POSIX sh command.");
+
+        ProcessResult result = await ProcessRunner.RunAsync("sh", ["-c", "echo \"$DiffEngine_Disabled\""], directory.FullName, TestContext.Current.CancellationToken);
+
+        Assert.Equal("true", result.Output.Trim());
+    }
+
+    [Fact]
     public async Task AMissingExecutableIsReportedAsNotOnPath()
     {
         ExecutableNotFoundException exception = await Assert.ThrowsAsync<ExecutableNotFoundException>(() =>
