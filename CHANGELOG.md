@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+- `lockflight review` uses `opus` by default (it leads public coding benchmarks among Claude models) with a `3.00` budget;
+  `--model` and `--budget` still override both.
+
 ### Fixed
 - The shell guard treats a drive-relative value (`C:dir`, what an unquoted `C:\dir` becomes in Git Bash) as unknown, so
   writes through it are judged as before.

@@ -165,7 +165,7 @@ branch's commits since the merge base, so `--base` also scopes `format` (and `co
 | `redgreen start\|red\|green\|status` | agent | red/green cycles; tests locked while red; `red`/`green` refuse while the spec or tasks approval is stale or missing |
 | `redgreen reset` | **human** | discard the feature's red/green evidence |
 | `trace [--feature id]` | agent | requirement → red-then-green tests matrix (Markdown) |
-| `review [--base ref] [--model sonnet] [--budget 1.00]` | agent | review of record (`claude -p`, read-only, schema) |
+| `review [--base ref] [--model opus] [--budget 3.00]` | agent | review of record (`claude -p`, read-only, schema) |
 | `ledger retro [--days 30] [--min 2]` | anyone | recurring incidents and suggested remedies |
 
 Evidence lives in `.lockflight/features/<feature>/` (approvals, `redgreen.json`, reviews) and is committed.
