@@ -77,8 +77,8 @@ internal sealed record EngineVersion(int Major, int Minor, int Patch, string Pre
             return (Prerelease.Length == 0).CompareTo(other.Prerelease.Length == 0);
         }
 
-        string[] mine = Identifiers();
-        string[] theirs = other.Identifiers();
+        string[] mine = OrderingIdentifiers();
+        string[] theirs = other.OrderingIdentifiers();
         for (int index = 0; index < Math.Min(mine.Length, theirs.Length); index++)
         {
             int identifier = CompareIdentifiers(mine[index], theirs[index]);
@@ -94,6 +94,19 @@ internal sealed record EngineVersion(int Major, int Minor, int Patch, string Pre
     public override string ToString() => Prerelease.Length == 0 ? $"{Major}.{Minor}.{Patch}" : $"{Major}.{Minor}.{Patch}-{Prerelease}";
 
     private string[] Identifiers() => Prerelease.Length == 0 ? [] : Prerelease.Split('.');
+
+    /// <summary>
+    /// The identifiers used for ordering. A development build of the older scheme (<c>0.2.0-dev.&lt;stamp&gt;</c>) was built before
+    /// any prerelease of its version, so it orders as if it followed the lowest prerelease (<c>0.2.0-0.dev.&lt;stamp&gt;</c>): below
+    /// <c>0.2.0-alpha.1</c>, where plain precedence would put <c>dev</c> above <c>alpha</c>.
+    /// </summary>
+    private string[] OrderingIdentifiers()
+    {
+        string[] identifiers = Identifiers();
+        return identifiers.Length > 0 && identifiers[0].Equals(DevelopmentIdentifier, StringComparison.OrdinalIgnoreCase)
+            ? [LowestPrerelease, .. identifiers]
+            : identifiers;
+    }
 
     /// <summary>Numeric identifiers compare as numbers (of any length, such as a timestamp) and sort below alphanumeric ones.</summary>
     private static int CompareIdentifiers(string left, string right)
