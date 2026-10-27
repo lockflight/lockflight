@@ -95,8 +95,9 @@ internal sealed class InitCommand(CliContext context)
             steps.Add(await TransformAsync(root, ".gitattributes", GitAttributesUpdater.Update, cancellationToken));
         }
 
-        // Last, so the sandbox write denials cover every protected file init has just written (the CI workflow included).
-        steps.Add(await TransformAsync(root, ClaudeSettingsMerger.RelativePath, existing => ClaudeSettingsMerger.Merge(existing, sandbox ? SandboxDenials(root) : null), cancellationToken));
+        // Last, so the deny rules and the sandbox write denials cover every protected file init has just written (the CI workflow included).
+        steps.Add(await TransformAsync(
+            root, ClaudeSettingsMerger.RelativePath, existing => ClaudeSettingsMerger.Merge(existing, DenyRules(root), sandbox ? SandboxDenials(root) : null), cancellationToken));
 
         foreach (InitStep step in steps)
         {
@@ -174,8 +175,13 @@ internal sealed class InitCommand(CliContext context)
     }
 
     /// <summary>The protected paths of the manifest just written (built-in, per unit and its own) as sandbox write denials.</summary>
-    private static IReadOnlyList<string> SandboxDenials(string root) =>
-        SandboxSettings.DenyWrite(root, ManifestLocator.Discover(root).Manifest is Manifest manifest ? DefaultProtectedPaths.For(manifest) : DefaultProtectedPaths.Globs);
+    private static IReadOnlyList<string> SandboxDenials(string root) => SandboxSettings.DenyWrite(root, ProtectedGlobs(root));
+
+    /// <summary>The same protected paths as <c>Edit</c> deny rules.</summary>
+    private static IReadOnlyList<string> DenyRules(string root) => PermissionDenyRules.For(root, ProtectedGlobs(root));
+
+    private static IReadOnlyList<string> ProtectedGlobs(string root) =>
+        ManifestLocator.Discover(root).Manifest is Manifest manifest ? DefaultProtectedPaths.For(manifest) : DefaultProtectedPaths.Globs;
 
     /// <summary>The nearest existing Lockflight project, else the current directory.</summary>
     private string ProjectRoot() =>

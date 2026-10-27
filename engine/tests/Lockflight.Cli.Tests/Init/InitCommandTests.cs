@@ -103,6 +103,7 @@ public sealed class InitCommandTests : IDisposable
     [InlineData("""{ "enabledPlugins": { "lockflight@lockflight": "yes" } }""")]
     [InlineData("""{ "enabledPlugins": [] }""")]
     [InlineData("""{ "sandbox": { "filesystem": { "denyWrite": "./lockflight.yaml" } } }""")]
+    [InlineData("""{ "permissions": { "deny": "Edit(/x)" } }""")]
     public async Task ClaudeSettingsInitCannotMergeIntoAreRefusedBeforeAnythingIsWritten(string settings)
     {
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".claude"));
@@ -244,6 +245,7 @@ public sealed class InitCommandTests : IDisposable
 
         JsonNode settings = JsonNode.Parse(File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json")))!;
         Assert.Equal("Read(./.env)", settings["permissions"]!["deny"]![0]!.GetValue<string>());
+        Assert.Contains("Edit(/lockflight.yaml)", settings["permissions"]!["deny"]!.AsArray().Select(rule => rule!.GetValue<string>()));
         Assert.True(settings["enabledPlugins"]!["lockflight@lockflight"]!.GetValue<bool>());
         string gitIgnore = File.ReadAllText(Path.Combine(projectRoot.FullName, ".gitignore"));
         Assert.StartsWith("bin/\nobj/\n", gitIgnore, StringComparison.Ordinal);
@@ -286,6 +288,18 @@ public sealed class InitCommandTests : IDisposable
 
         Assert.Contains("updated    .claude/settings.json", output, StringComparison.Ordinal);
         Assert.Contains("./Directory.Build.props", File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InitAgainAddsADenyRuleForAProtectedFileCreatedSince()
+    {
+        await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+        File.WriteAllText(Path.Combine(projectRoot.FullName, "global.json"), "{}");
+
+        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        Assert.Contains("updated    .claude/settings.json", output, StringComparison.Ordinal);
+        Assert.Contains("Edit(/global.json)", File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json")), StringComparison.Ordinal);
     }
 
     [Fact]

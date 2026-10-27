@@ -152,6 +152,9 @@ These always apply; `protected:` can add paths but never remove these.
 | `.gitleaks.toml`, `.gitleaksignore` | secret-scanning policy |
 | `.github/workflows/lockflight-gates.yml` | the CI job that judges pull requests |
 
+`init` and `adopt apply` also write an `Edit` deny rule for each protected path into `.claude/settings.json`, so Claude Code
+refuses its own file tools there: see [permission deny rules](guardrails-and-boundaries.md#permission-deny-rules).
+
 The protected paths that exist are also listed as Claude Code sandbox write denials in `.claude/settings.json`, where the
 operating system enforces them for shell commands while the sandbox is on: see
 [the Claude Code sandbox](guardrails-and-boundaries.md#the-claude-code-sandbox).
