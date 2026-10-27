@@ -54,6 +54,51 @@ public sealed class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task ANewerPinIsNeverLoweredAndNothingIsWritten()
+    {
+        const string tools = """{ "version": 1, "isRoot": true, "tools": { "lockflight.cli": { "version": "99.0.0", "commands": ["lockflight"] } } }""";
+        File.WriteAllText(Path.Combine(projectRoot.FullName, "dotnet-tools.json"), tools);
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("99.0.0", error, StringComparison.Ordinal);
+        Assert.Contains("newer", error, StringComparison.Ordinal);
+        Assert.Equal(tools, File.ReadAllText(Path.Combine(projectRoot.FullName, "dotnet-tools.json")));
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, Manifest.FileName)));
+    }
+
+    [Fact]
+    public async Task AnOlderPinUnderAnotherCaseIsUpdatedInPlace()
+    {
+        File.WriteAllText(
+            Path.Combine(projectRoot.FullName, "dotnet-tools.json"),
+            """{ "version": 1, "isRoot": true, "tools": { "Lockflight.Cli": { "version": "0.0.1-dev.1", "commands": ["lockflight"] } } }""");
+
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        JsonObject tools = JsonNode.Parse(File.ReadAllText(Path.Combine(projectRoot.FullName, "dotnet-tools.json")))!["tools"]!.AsObject();
+        KeyValuePair<string, JsonNode?> pin = Assert.Single(tools);
+        Assert.Equal("Lockflight.Cli", pin.Key);
+        Assert.Equal(ToolPin.RunningVersion, pin.Value!["version"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task APinThatIsNotAStringIsRefusedBeforeAnythingIsWritten()
+    {
+        File.WriteAllText(
+            Path.Combine(projectRoot.FullName, "dotnet-tools.json"), """{ "version": 1, "isRoot": true, "tools": { "lockflight.cli": { "version": 1 } } }""");
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("dotnet-tools.json", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("internal error", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, Manifest.FileName)));
+    }
+
+    [Fact]
     public async Task ASingleTargetKeepsTheEnginesChannelOnly()
     {
         await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
