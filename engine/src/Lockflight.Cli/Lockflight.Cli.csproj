@@ -10,8 +10,10 @@
     <!-- LibraryImport source generator (Windows short-name expansion) needs unsafe blocks. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
-  <!-- Packaging as a RID-specific .NET tool: a pointer package plus one Native AOT package per RID, and a
-       framework-dependent "any" fallback for platforms without a RID package. Versions are never re-published. -->
+  <!-- Packaging as a RID-specific .NET tool: a pointer package plus one Native AOT package per RID. There is no
+       framework-dependent "any" fallback: `lockflight link` copies the engine into the project as a single file, which only a
+       Native AOT build survives, so an unlisted platform gets a clear install error instead of a project that cannot link.
+       Versions are never re-published. -->
   <PropertyGroup>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>lockflight</ToolCommandName>
@@ -25,7 +27,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/lockflight/lockflight</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <ToolPackageRuntimeIdentifiers>osx-arm64;linux-x64;linux-arm64;win-x64;any</ToolPackageRuntimeIdentifiers>
+    <ToolPackageRuntimeIdentifiers>osx-arm64;osx-x64;linux-x64;linux-arm64;win-x64</ToolPackageRuntimeIdentifiers>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">

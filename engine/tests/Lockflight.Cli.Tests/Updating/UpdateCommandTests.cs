@@ -1,6 +1,7 @@
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Linking;
 using Lockflight.Cli.Updating;
 
 namespace Lockflight.Cli.Tests.Updating;
@@ -99,8 +100,11 @@ public sealed class UpdateCommandTests : IDisposable
             """);
         File.WriteAllText(Path.Combine(root.FullName, "CLAUDE.md"), $"# Team\n\n{ClaudeMdBlock.Begin}\nold\n{ClaudeMdBlock.End}\n");
 
-        (ExitCode first, string output, _) = await TestConsole.RunAsync(["update", "--project"], "", root.FullName, Home());
-        (_, string again, _) = await TestConsole.RunAsync(["update", "--project"], "", root.FullName, Home());
+        string engine = Path.Combine(home.FullName, "lockflight-native");
+        File.WriteAllText(engine, "native engine");
+
+        (ExitCode first, string output, _) = await ProjectUpdateAsync(new RunningEngine(engine, IsSingleFile: true));
+        (_, string again, _) = await ProjectUpdateAsync(new RunningEngine(engine, IsSingleFile: true));
 
         Assert.Equal(ExitCode.Pass, first);
         Assert.Equal(ToolPin.RunningVersion, ToolPin.ReadPinnedVersion(root.FullName));
@@ -153,6 +157,20 @@ public sealed class UpdateCommandTests : IDisposable
         };
 
         ExitCode exitCode = await CliApplication.RunAsync(args, context, TestContext.Current.CancellationToken);
+        return (exitCode, output.ToString().Trim(), error.ToString().Trim());
+    }
+
+    private async Task<(ExitCode ExitCode, string Output, string Error)> ProjectUpdateAsync(RunningEngine engine)
+    {
+        using StringWriter output = new();
+        using StringWriter error = new();
+        CliContext context = new(new StringReader(string.Empty), output, error, root.FullName, TimeProvider.System)
+        {
+            Environment = EnvironmentReader.Of(Home()),
+            Engine = engine,
+        };
+
+        ExitCode exitCode = await CliApplication.RunAsync(["update", "--project"], context, TestContext.Current.CancellationToken);
         return (exitCode, output.ToString().Trim(), error.ToString().Trim());
     }
 
