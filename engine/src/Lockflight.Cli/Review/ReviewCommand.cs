@@ -13,7 +13,8 @@ namespace Lockflight.Cli.Review;
 /// <summary>
 /// <c>lockflight review [--feature id] [--base ref] [--model name] [--budget usd]</c> — the review: the engine builds the prompt from
 /// the spec and the diff, runs a read-only <c>claude -p</c> with a JSON schema, confirms blocker/major findings by running their
-/// reproductions (and re-runs those of findings still open from earlier runs), and stores the run. A run counts as the review of
+/// reproductions (and re-runs those of findings still open from earlier runs; a new finding's reproduction that does not compile is
+/// sent back to the reviewer once, within the run's budget), and stores the run. A run counts as the review of
 /// record only with the manifest's model and budget against a base whose commit is the merge base of HEAD and the target branch
 /// (<c>review.target</c>, else <c>origin/HEAD</c>'s branch, else <c>main</c>; also the default base); others are recorded and say why not.
 /// Exit 1 when an open blocker/major finding is confirmed, 5 (NOT-EARNED) when one is unverified or the run is not of record, 0
@@ -87,7 +88,7 @@ internal sealed class ReviewCommand(CliContext context)
         DateTimeOffset started = context.Time.GetUtcNow();
         await context.Output.WriteLineAsync($"Reviewing {feature.Id} against {reviewBase.Ref} with {model} (budget ${ReviewOfRecord.Usd(budget)})…");
         string requirements = await File.ReadAllTextAsync(feature.SpecPath, cancellationToken);
-        string prompt = ReviewPrompt.Build(requirements, Truncated(diff));
+        string prompt = ReviewPrompt.Build(requirements, Truncated(diff), ReproductionContext.Build(manifest.Root, diff));
         string? claudeVersion = await ClaudeVersionAsync(manifest, claude, cancellationToken);
         ProcessResult reply = await AskReviewerAsync(manifest, claude, model, ReviewOfRecord.Usd(budget), prompt, cancellationToken);
         ReviewOutcome outcome = ReviewResultParser.Parse(reply.Output);
@@ -104,8 +105,25 @@ internal sealed class ReviewCommand(CliContext context)
             await context.Error.WriteLineAsync($"lockflight: warning: {problem}; restore it from version control or delete it");
         }
 
-        IReadOnlyList<ReviewFinding> judged = await ConfirmFindingsAsync(manifest, feature, FindingLifecycle.Carry(outcome.Findings, history), cancellationToken);
-        outcome = outcome with { Findings = FindingLifecycle.Resolve(judged, history) };
+        // Repairs of reproductions share the run's budget with the review itself.
+        ReproductionRepairer repairer = new(
+            async (repairPrompt, repairBudget, repairCancellation) => ReviewResultParser.Parse(
+                (await AskReviewerAsync(manifest, claude, model, ReviewOfRecord.Usd(repairBudget), repairPrompt, repairCancellation)).Output),
+            budget - outcome.CostUsd);
+        HashSet<string> repairable = [.. outcome.Findings.Select(finding => finding.Id).Where(id => !history.Open.Any(tracked => tracked.Finding.Id == id))];
+        IReadOnlyList<ReviewFinding> judged = await ConfirmFindingsAsync(manifest, feature, FindingLifecycle.Carry(outcome.Findings, history), repairer, repairable, cancellationToken);
+        outcome = outcome with
+        {
+            Findings = FindingLifecycle.Resolve(judged, history),
+            CostUsd = outcome.CostUsd + repairer.CostUsd,
+            DurationMs = outcome.DurationMs + repairer.DurationMs,
+            Usage = new ReviewUsage(
+                outcome.Usage.InputTokens + repairer.Usage.InputTokens,
+                outcome.Usage.OutputTokens + repairer.Usage.OutputTokens,
+                outcome.Usage.CacheReadInputTokens + repairer.Usage.CacheReadInputTokens,
+                outcome.Usage.CacheCreationInputTokens + repairer.Usage.CacheCreationInputTokens),
+            Repairs = new RepairSpend(repairer.Calls, repairer.CostUsd),
+        };
         ReviewRun run = new(
             ReviewEvidence.NewRunId(feature.RecordDirectory, started),
             started,
@@ -190,7 +208,8 @@ internal sealed class ReviewCommand(CliContext context)
     /// Runs the reproductions of blocker/major findings when there are any and the tests build and list; otherwise blocker/major
     /// findings stay unverified, because a finding nobody could check is not a pass.
     /// </summary>
-    private static async Task<IReadOnlyList<ReviewFinding>> ConfirmFindingsAsync(Manifest manifest, Feature feature, IReadOnlyList<ReviewFinding> findings, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<ReviewFinding>> ConfirmFindingsAsync(
+        Manifest manifest, Feature feature, IReadOnlyList<ReviewFinding> findings, ReproductionRepairer repairer, IReadOnlySet<string> repairable, CancellationToken cancellationToken)
     {
         IReadOnlyList<ReviewFinding> checks = FindingLifecycle.WithEarlierReproductions(findings);
         if (!checks.Any(Reproductions.IsRunnable))
@@ -201,7 +220,7 @@ internal sealed class ReviewCommand(CliContext context)
         TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
         TestWorkspace workspace = TestWorkspaces.For(manifest, feature);
         IReadOnlyList<ReviewFinding> judged = await workspace.BuildAsync(cancellationToken) is null && await workspace.ListAsync(cancellationToken) is not null && workspace.Apps.Count > 0
-            ? await Reproductions.ConfirmAsync(checks, workspace.Apps[0], manifest.Root, timeLimit, cancellationToken)
+            ? await Reproductions.ConfirmAsync(checks, workspace.Apps, manifest.Root, timeLimit, repairer, repairable, cancellationToken)
             : [.. checks.Select(Reproductions.Unjudged)];
         return FindingLifecycle.CombineReproductions(findings, judged);
     }

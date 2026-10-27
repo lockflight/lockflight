@@ -1,22 +1,24 @@
-using System.Text;
 using System.Text.RegularExpressions;
-using Lockflight.Cli.Processes;
 using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Review;
 
 /// <summary>
-/// Confirms blocker/major findings by running the reviewer's reproduction <c>[Fact]</c>s in a test project: a
-/// reproduction that compiles and fails confirms the finding, one that passes rejects it, anything else leaves it unverified. Each
-/// finding records what its reproduction did (<see cref="ReproductionResult"/>).
-/// The generated file is removed afterwards (a hard kill can leave it behind). Building and running the reproductions executes the
-/// project's own build logic and test fixtures — code the agent may have written — like any gate run.
+/// Confirms blocker/major findings by running the reviewer's reproduction <c>[Fact]</c>s: a reproduction that compiles and
+/// fails confirms the finding, one that passes rejects it, anything else leaves it unverified. Each reproduction is built in
+/// the test project nearest the cited file (<see cref="NearestTestProject"/>), in isolation from the developer's files and
+/// build output (<see cref="ReproductionBuild"/>). All reproductions of a project are built together; compiler errors name the
+/// reproduction they are in, so a broken one is set aside and the rest are built again, and a using directive the project's
+/// files have but the generated file cannot resolve is dropped. A new finding whose reproduction does not compile gets one
+/// repair: the reviewer sees the compiler errors and the signatures of the cited code and answers with a fixed reproduction.
+/// A repaired reproduction that fails confirms the finding and replaces the first one; one that passes leaves the finding
+/// unverified (<see cref="ReproductionResult.RepairedPassed"/>), because only the reviewer's first, unprompted test may reject
+/// a finding. Building and running reproductions executes the project's own build logic and test fixtures, like any gate run.
 /// </summary>
 internal static partial class Reproductions
 {
-    public const string Namespace = "Lockflight.Reproductions";
-
-    private const string FileName = "LockflightReproductions.g.cs";
+    private const int MaxUsingRepairs = 3;
+    private const int MaxSignatureCharacters = 6_000;
 
     /// <summary>
     /// The finding before its reproduction runs: blocker/major findings are unverified (<see cref="ReproductionResult.NotRun"/> when they
@@ -30,111 +32,213 @@ internal static partial class Reproductions
     public static bool IsRunnable(ReviewFinding finding) =>
         finding.NeedsReproduction && finding.Reproduction is string reproduction && MethodName(reproduction) is not null;
 
+    /// <param name="repairable">The ids of findings whose reproduction may be repaired: new findings, not ones open from earlier runs.</param>
     public static async Task<IReadOnlyList<ReviewFinding>> ConfirmAsync(
-        IReadOnlyList<ReviewFinding> findings, TestApp app, string root, TimeSpan timeLimit, CancellationToken cancellationToken)
+        IReadOnlyList<ReviewFinding> findings,
+        IReadOnlyList<TestApp> apps,
+        string root,
+        TimeSpan timeLimit,
+        ReproductionRepairer? repairer,
+        IReadOnlySet<string> repairable,
+        CancellationToken cancellationToken)
     {
         ReviewFinding[] judged = [.. findings.Select(Unjudged)];
-        (int Index, string Method)[] candidates = [.. judged
+        ReproductionCandidate[] candidates = [.. judged
             .Select((finding, index) => (finding, index))
             .Where(item => IsRunnable(item.finding))
-            .Select(item => (item.index, MethodName(item.finding.Reproduction!)!))];
-        if (candidates.Length == 0)
+            .Select(item => new ReproductionCandidate(item.index, MethodName(item.finding.Reproduction!)!, item.finding.Reproduction!))];
+        if (candidates.Length == 0 || apps.Count == 0)
         {
             return judged;
         }
 
-        string usings = Usings(app.ProjectDirectory);
-        // All reproductions in one build first; when that does not compile, each on its own so one bad snippet does not hide the rest.
-        IEnumerable<(int, string)[]> attempts = [candidates];
-        foreach ((int Index, string Method)[] batch in attempts.Concat(candidates.Length > 1 ? candidates.Select(candidate => new[] { candidate }) : []))
+        Dictionary<int, TestApp> chosen = candidates.ToDictionary(candidate => candidate.Index, candidate => NearestTestProject.Choose(apps, root, judged[candidate.Index].File));
+        foreach ((int index, ReproductionVerdict verdict) in await JudgeAsync(candidates, chosen, root, timeLimit, cancellationToken))
         {
-            if (batch.All(candidate => judged[candidate.Index].Reproduced != ReproductionResult.NotRun))
+            judged[index] = judged[index] with
             {
-                continue;
-            }
-
-            Dictionary<int, (FindingOutcome Outcome, ReproductionResult Result)>? results = await RunBatchAsync(judged, batch, usings, app, root, timeLimit, cancellationToken);
-            if (results is null)
-            {
-                if (batch.Length == 1)
+                Outcome = verdict.Result switch
                 {
-                    judged[batch[0].Index] = judged[batch[0].Index] with { Reproduced = ReproductionResult.DidNotCompile };
-                }
+                    ReproductionResult.Failed => FindingOutcome.Confirmed,
+                    ReproductionResult.Passed => FindingOutcome.Rejected,
+                    _ => FindingOutcome.Unverified,
+                },
+                Reproduced = verdict.Result,
+                ReproductionAttempts = 1,
+                CompileErrors = verdict.Errors is null ? [] : [verdict.Errors],
+            };
+        }
 
-                continue;
-            }
+        return repairer is null ? judged : await RepairAsync(judged, candidates, chosen, root, timeLimit, repairer, repairable, cancellationToken);
+    }
 
-            foreach ((int index, (FindingOutcome outcome, ReproductionResult result)) in results)
-            {
-                judged[index] = judged[index] with { Outcome = outcome, Reproduced = result };
-            }
+    public static string? MethodName(string reproduction) => TestMethod().Match(reproduction) is { Success: true } match ? match.Groups["name"].Value : null;
 
-            if (batch.Length == candidates.Length)
+    private static async Task<ReviewFinding[]> RepairAsync(
+        ReviewFinding[] judged,
+        ReproductionCandidate[] candidates,
+        Dictionary<int, TestApp> chosen,
+        string root,
+        TimeSpan timeLimit,
+        ReproductionRepairer repairer,
+        IReadOnlySet<string> repairable,
+        CancellationToken cancellationToken)
+    {
+        List<ReproductionCandidate> repaired = [];
+        foreach (ReproductionCandidate candidate in candidates.Where(candidate => judged[candidate.Index] is { Reproduced: ReproductionResult.DidNotCompile, Carried: false } finding
+            && repairable.Contains(finding.Id)))
+        {
+            ReproductionRepair repair = await repairer.RepairAsync(Request(judged[candidate.Index], chosen[candidate.Index], root), cancellationToken);
+            if (!repair.Asked)
             {
                 break;
             }
+
+            judged[candidate.Index] = judged[candidate.Index] with { ReproductionAttempts = 2 };
+            if (repair.Reproduction is string source)
+            {
+                repaired.Add(new ReproductionCandidate(candidate.Index, MethodName(source)!, source));
+            }
+        }
+
+        if (repaired.Count == 0)
+        {
+            return judged;
+        }
+
+        Dictionary<int, string> sources = repaired.ToDictionary(candidate => candidate.Index, candidate => candidate.Source);
+        foreach ((int index, ReproductionVerdict verdict) in await JudgeAsync(repaired, chosen, root, timeLimit, cancellationToken))
+        {
+            ReviewFinding finding = judged[index];
+            judged[index] = verdict.Result switch
+            {
+                ReproductionResult.Failed => finding with { Outcome = FindingOutcome.Confirmed, Reproduced = ReproductionResult.Failed, Reproduction = sources[index] },
+                ReproductionResult.Passed => finding with { Outcome = FindingOutcome.Unverified, Reproduced = ReproductionResult.RepairedPassed },
+                _ => finding with
+                {
+                    Outcome = FindingOutcome.Unverified,
+                    Reproduced = verdict.Result,
+                    CompileErrors = verdict.Errors is null ? finding.CompileErrors : [.. finding.CompileErrors, verdict.Errors],
+                },
+            };
         }
 
         return judged;
     }
 
-    private static async Task<Dictionary<int, (FindingOutcome Outcome, ReproductionResult Result)>?> RunBatchAsync(
-        ReviewFinding[] findings, (int Index, string Method)[] batch, string usings, TestApp app, string root, TimeSpan timeLimit, CancellationToken cancellationToken)
+    private static ReproductionRepairRequest Request(ReviewFinding finding, TestApp app, string root)
     {
-        string path = Path.Combine(app.ProjectDirectory, FileName);
-        StringBuilder source = new(usings);
-        source.AppendLine($"namespace {Namespace};").AppendLine();
-        foreach ((int index, _) in batch)
+        string? project = TestProjectProfiles.ProjectFile(app.ProjectDirectory, app.AssemblyName);
+        TestProjectProfile profile = project is null
+            ? new TestProjectProfile(app.AssemblyName, TestProjectProfiles.Relative(root, app.ProjectDirectory), "unknown", "xUnit", [], [], TestProjectProfiles.Usings(app.ProjectDirectory))
+            : TestProjectProfiles.Describe(project, root, app.Mode == RunnerMode.VSTest);
+        return new ReproductionRepairRequest(
+            finding, finding.CompileErrors.Count > 0 ? finding.CompileErrors[^1] : string.Empty, profile, CitedSignatures(finding.File, root), TestProjectProfiles.SampleTest(app.ProjectDirectory, root));
+    }
+
+    /// <summary>The signatures of the cited C# file; empty when it is not a C# file inside the repository.</summary>
+    private static string CitedSignatures(string file, string root)
+    {
+        string top = Path.GetFullPath(root);
+        string cited = Path.GetFullPath(Path.Combine(top, file.Replace('/', Path.DirectorySeparatorChar)));
+        bool inside = cited.StartsWith(top.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        return inside && cited.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(cited)
+            ? CSharpSignatures.Extract(File.ReadAllText(cited), MaxSignatureCharacters)
+            : string.Empty;
+    }
+
+    /// <summary>Builds and runs the candidates, each in its chosen test project; the verdict of every candidate by its index.</summary>
+    private static async Task<Dictionary<int, ReproductionVerdict>> JudgeAsync(
+        IReadOnlyList<ReproductionCandidate> candidates, Dictionary<int, TestApp> chosen, string root, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        Dictionary<int, ReproductionVerdict> verdicts = [];
+        foreach (IGrouping<TestApp, ReproductionCandidate> group in candidates.GroupBy(candidate => chosen[candidate.Index]))
         {
-            source.AppendLine($"public sealed class Finding{index + 1}").AppendLine("{").AppendLine(findings[index].Reproduction).AppendLine("}").AppendLine();
+            List<string> usings = [.. TestProjectProfiles.Usings(group.Key.ProjectDirectory)];
+            await JudgeInProjectAsync(group.Key, [.. group], usings, verdicts, root, timeLimit, cancellationToken);
         }
 
-        try
+        return verdicts;
+    }
+
+    private static async Task JudgeInProjectAsync(
+        TestApp app,
+        List<ReproductionCandidate> pending,
+        List<string> usings,
+        Dictionary<int, ReproductionVerdict> verdicts,
+        string root,
+        TimeSpan timeLimit,
+        CancellationToken cancellationToken)
+    {
+        int usingRepairs = 0;
+        string lastErrors = string.Empty;
+        for (int round = pending.Count + MaxUsingRepairs + 1; round > 0 && pending.Count > 0; round--)
         {
-            await File.WriteAllTextAsync(path, source.ToString(), cancellationToken);
-            ProcessResult build = await ProcessRunner.RunAsync(
-                "dotnet", ["build", app.ProjectDirectory, "--nologo", "--interactive", "false", "-p:TreatWarningsAsErrors=false"], root, timeLimit, cancellationToken);
-            if (build.ExitCode != 0)
+            ReproductionBuildResult build = await ReproductionBuild.RunAsync(app, pending, usings, root, timeLimit, cancellationToken);
+            if (build.Status != ReproductionBuildStatus.DidNotCompile)
             {
-                return null;
+                foreach (ReproductionCandidate candidate in pending)
+                {
+                    verdicts[candidate.Index] = new ReproductionVerdict(
+                        build.Status == ReproductionBuildStatus.Ran ? Judge(build.Results, ReproductionBuild.Key(app, candidate)) : ReproductionResult.NotRun, null);
+                }
+
+                return;
             }
 
-            string[] filters = [.. batch.Select(candidate => $"{Namespace}.Finding{candidate.Index + 1}.{candidate.Method}")];
-            IReadOnlyList<ExecutedTest>? results = (await NativeTestRunner.RunAsync(app, filters, root, timeLimit, cancellationToken))?.Results;
-            Dictionary<int, (FindingOutcome, ReproductionResult)> judged = [];
-            foreach ((int index, string method) in batch)
+            lastErrors = CompileErrors.Summary(build.Errors);
+            int[] unresolved = [.. build.Errors.Select(error => ReproductionBuild.UsingAt(error, usings.Count)).OfType<int>().Distinct().OrderDescending()];
+            if (unresolved.Length > 0 && usingRepairs++ < MaxUsingRepairs)
             {
-                ExecutedTest[] rows = [.. (results ?? []).Where(result => result.Key == $"{app.AssemblyName}:{Namespace}.Finding{index + 1}.{method}")];
-                judged[index] = rows.Length == 0 ? (FindingOutcome.Unverified, ReproductionResult.Inconclusive)
-                    : rows.Any(row => row.Outcome == TestOutcome.Fail) ? (FindingOutcome.Confirmed, ReproductionResult.Failed)
-                    : rows.All(row => row.Outcome == TestOutcome.Pass) ? (FindingOutcome.Rejected, ReproductionResult.Passed)
-                    : (FindingOutcome.Unverified, ReproductionResult.Inconclusive);
+                foreach (int index in unresolved)
+                {
+                    usings.RemoveAt(index);
+                }
+
+                continue;
             }
 
-            return judged;
+            ILookup<string, CompileError> byFile = build.Errors.ToLookup(error => error.File, StringComparer.OrdinalIgnoreCase);
+            ReproductionCandidate[] broken = [.. pending.Where(candidate => byFile.Contains(candidate.FileName))];
+            if (broken.Length > 0)
+            {
+                foreach (ReproductionCandidate candidate in broken)
+                {
+                    verdicts[candidate.Index] = new ReproductionVerdict(ReproductionResult.DidNotCompile, CompileErrors.Summary([.. byFile[candidate.FileName]]));
+                }
+
+                pending.RemoveAll(broken.Contains);
+                continue;
+            }
+
+            // Errors no reproduction is named in (a stray brace, a clash with the project's code): each on its own.
+            if (pending.Count > 1)
+            {
+                foreach (ReproductionCandidate candidate in pending)
+                {
+                    await JudgeInProjectAsync(app, [candidate], [.. usings], verdicts, root, timeLimit, cancellationToken);
+                }
+
+                return;
+            }
+
+            break;
         }
-        finally
+
+        foreach (ReproductionCandidate candidate in pending)
         {
-            File.Delete(path);
+            verdicts[candidate.Index] = new ReproductionVerdict(ReproductionResult.DidNotCompile, lastErrors);
         }
     }
 
-    private static string Usings(string projectDirectory)
+    private static ReproductionResult Judge(IReadOnlyList<ExecutedTest> results, string key)
     {
-        IEnumerable<string> lines = Directory.EnumerateFiles(projectDirectory, "*.cs", SearchOption.AllDirectories)
-            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                && !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                && !file.EndsWith(FileName, StringComparison.Ordinal))
-            .SelectMany(File.ReadLines)
-            .Select(line => line.Trim())
-            .Where(line => UsingDirective().IsMatch(line));
-        return string.Join('\n', lines.Append("using Xunit;").Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)) + "\n\n";
+        ExecutedTest[] rows = [.. results.Where(result => result.Key == key)];
+        return rows.Length == 0 ? ReproductionResult.Inconclusive
+            : rows.Any(row => row.Outcome == TestOutcome.Fail) ? ReproductionResult.Failed
+            : rows.All(row => row.Outcome == TestOutcome.Pass) ? ReproductionResult.Passed
+            : ReproductionResult.Inconclusive;
     }
-
-    public static string? MethodName(string reproduction) => TestMethod().Match(reproduction) is { Success: true } match ? match.Groups["name"].Value : null;
-
-    [GeneratedRegex(@"^using\s+(static\s+)?[\w.]+(\s*=\s*[\w.<>]+)?\s*;$")]
-    private static partial Regex UsingDirective();
 
     [GeneratedRegex(@"\b(?:void|Task)\s+(?<name>\w+)\s*\(")]
     private static partial Regex TestMethod();

@@ -18,7 +18,9 @@ independent.
 3. Read the findings. Each has an id, an outcome and, for blocker/major, a state:
    - **confirmed** — the reproduction fails on the current code: the defect is real. Fix it in production code, add the
      reproduction as a regression test in the next red/green cycle, and re-run the review.
-   - **unverified** — no usable reproduction: show it to the user and let them decide.
+   - **unverified** — no usable reproduction: show it to the user and let them decide. A reproduction that did not compile was
+     already sent back to the reviewer once with the compiler errors; the evidence file lists them under `compileErrors`.
+     `repaired-passed` means the repaired test passed, which does not count as a rejection.
    - **rejected** — the reproduction passes: tell the user.
    - **reported** (minor/nit findings are not reproduced) — fix when cheap, otherwise list them in the PR body.
 

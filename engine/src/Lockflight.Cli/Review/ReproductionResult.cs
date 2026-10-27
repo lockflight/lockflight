@@ -20,4 +20,10 @@ internal enum ReproductionResult
 
     /// <summary>The reproduction compiled but the run did not report it as passed or failed (skipped, or not found).</summary>
     Inconclusive = 6,
+
+    /// <summary>
+    /// The reproduction did not compile, and the reviewer's repair of it compiled and passed. The finding stays unverified: a test
+    /// rewritten to get past the compiler may have lost what it checked, so only a first reproduction can reject a finding.
+    /// </summary>
+    RepairedPassed = 7,
 }

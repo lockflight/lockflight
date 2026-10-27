@@ -59,6 +59,8 @@ internal static class ReviewEvidence
                 ["evidence"] = finding.Evidence,
                 ["reproduction"] = finding.Reproduction,
                 ["earlierReproductions"] = new JsonArray([.. finding.EarlierReproductions.Select(earlier => (JsonNode)JsonValue.Create(earlier))]),
+                ["reproductionAttempts"] = finding.ReproductionAttempts,
+                ["compileErrors"] = new JsonArray([.. finding.CompileErrors.Select(errors => (JsonNode)JsonValue.Create(errors))]),
             });
         }
 
@@ -97,6 +99,11 @@ internal static class ReviewEvidence
                 ["cacheCreationInputTokens"] = outcome.Usage.CacheCreationInputTokens,
             },
             ["estimatedCostUsd"] = outcome.CostUsd,
+            ["reproductionRepairs"] = new JsonObject
+            {
+                ["calls"] = outcome.Repairs.Calls,
+                ["estimatedCostUsd"] = outcome.Repairs.CostUsd,
+            },
             ["claudeDurationMs"] = outcome.DurationMs,
             ["wallTimeMs"] = run.WallTimeMs,
             ["ofRecord"] = run.OfRecord,

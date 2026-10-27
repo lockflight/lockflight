@@ -49,6 +49,7 @@ internal static class ReviewNames
         ReproductionResult.Passed => "passed",
         ReproductionResult.DidNotCompile => "did-not-compile",
         ReproductionResult.Inconclusive => "inconclusive",
+        ReproductionResult.RepairedPassed => "repaired-passed",
         _ => throw new ArgumentOutOfRangeException(nameof(result), result, null),
     };
 
