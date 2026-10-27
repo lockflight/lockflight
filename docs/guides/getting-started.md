@@ -4,13 +4,24 @@ Lockflight runs deterministic checks around a Claude Code agent working in a .NE
 at the end of a turn and in CI, and — in the standard profile — a spec-driven lifecycle with human approvals and red/green
 evidence. This page takes you from nothing to a first green gate.
 
-**Requirements:** .NET SDK 10+, git, Claude Code ≥ 2.1.295. Windows: Git Bash (the hook shim runs in it). Standard profile:
-`uv` (for Spec Kit), Python 3 with PyYAML, xUnit for red/green and trace — v3 (Microsoft.Testing.Platform) or v2 (VSTest);
-the test gate runs any VSTest or MTP test project.
+**On this page:** [Requirements](#requirements) · [Install from a package](#install-from-a-package) ·
+[Install from source](#install-from-source-no-feed-no-token) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
+[Standard profile](#standard-profile) · [Levi and the status line](#levi-and-the-status-line)
+
+## Requirements
+
+| For | You need |
+|---|---|
+| Every project | .NET SDK 10+, git, Claude Code ≥ 2.1.295 |
+| Windows | Git Bash (the hook shim runs in it) |
+| The standard profile | `uv` (for Spec Kit), Python 3 with PyYAML, xUnit for red/green and trace — v3 (Microsoft.Testing.Platform) or v2 (VSTest) |
+
+The test gate runs any VSTest or MTP test project.
 
 ## Install from a package
 
-> Available once the `Lockflight.Cli` packages are published on nuget.org. Until then, install from source (below).
+> [!NOTE]
+> Available once the `Lockflight.Cli` packages are published on nuget.org. Until then, [install from source](#install-from-source-no-feed-no-token).
 
 Install the engine for your user, then the plugin:
 
@@ -97,7 +108,7 @@ Commit in the shell, and in each service repository after `workspace sync`. Star
    init skill then uses `~/.lockflight/bin/lockflight`). The steps below are for when the package is published; in a
    repository whose `global.json` pins an SDK older than 10, install from a package as above instead.
 2. In your repository, ask Claude: *"Set up Lockflight"* (the `lockflight:init` skill). It runs:
-   ```
+   ```sh
    dotnet new tool-manifest            # when the repo has none (SDK 10 writes dotnet-tools.json at the repo root)
    dotnet tool install Lockflight.Cli --local --prerelease
    dotnet lockflight init              # manifest, tool pin, .gitignore, .claude/settings.json, CI workflow, linked engine
@@ -119,10 +130,16 @@ Commit in the shell, and in each service repository after `workspace sync`. Star
 
 ## Standard profile
 
-Everything above, plus the lifecycle:
+Everything above, plus the lifecycle. A change climbs it stage by stage, and each gate opens only when its check passes; you
+hold the keys to the two approvals.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/lock-flight-dark.svg">
+  <img src="../assets/lock-flight-light.svg" alt="The lifecycle as a canal lock flight: spec and tasks, each approved by you; red, where new tests fail first; green, where they pass with nothing deleted; trace, where every requirement has a test; review, where findings need a failing test; and the pull request, with the same checks in CI." width="100%">
+</picture>
 
 1. `dotnet lockflight init --profile standard`, then (the init skill does this with you):
-   ```
+   ```sh
    uvx --from specify-cli==1.1.3 specify init --here --force --integration claude --script sh
    uvx --from specify-cli==1.1.3 specify preset add --dev <plugin>/speckit-preset
    ```
@@ -160,6 +177,10 @@ Everything above, plus the lifecycle:
 
 Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
 
+| <img src="../assets/levi-pass.svg" alt="Levi raising a green flag" width="88"> | <img src="../assets/levi-not-earned.svg" alt="Levi with a question mark" width="88"> | <img src="../assets/levi-fail.svg" alt="Levi raising a red flag" width="88"> | <img src="../assets/levi-blocked.svg" alt="Levi behind a lowered barrier" width="88"> |
+|:---:|:---:|:---:|:---:|
+| `PASS` | `NOT-EARNED` | `FAIL` | guard block |
+
 - **In your terminal.** `doctor` and `gate run` draw him with the result: a green flag for `PASS`, a question for
   `NOT-EARNED`, a red flag for `FAIL`. He appears only when a person reads the output. Piped output, `NO_COLOR` and any shell
   Claude Code starts (it sets `CLAUDECODE`) get plain text, so the agent never pays tokens for him. `LOCKFLIGHT_MASCOT=0`
@@ -183,6 +204,6 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
 
 ## Next
 
-- [Configuration reference](configuration.md)
-- [Guardrails and boundaries](guardrails-and-boundaries.md) — what Lockflight can and cannot guarantee
-- [CI hardening](ci-hardening.md) — CODEOWNERS and required checks
+- [Configuration reference](configuration.md): `lockflight.yaml`, gate profiles and protected paths
+- [Guardrails and boundaries](guardrails-and-boundaries.md): what Lockflight can and cannot guarantee
+- [CI hardening](ci-hardening.md): CODEOWNERS and required checks

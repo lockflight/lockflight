@@ -3,6 +3,11 @@
 The agent works with your credentials, so CI is where an independent check happens. `lockflight init` writes
 `.github/workflows/lockflight-gates.yml`; this page explains what it does and what you add by hand.
 
+**On this page:** [What the generated workflow does](#what-the-generated-workflow-does) ·
+[CODEOWNERS for the protected paths](#what-you-add-codeowners-for-the-protected-paths) ·
+[Verify approvals in CI](#optional-verify-approvals-in-ci) · [Plan limits](#plan-limits) · [Locally](#locally) ·
+[Workspace shells](#workspace-shells-unit-repositories)
+
 ## What the generated workflow does
 
 - **Policy from the base branch.** On pull requests it restores exactly these from the base commit (a file the PR adds is
@@ -36,11 +41,13 @@ The agent works with your credentials, so CI is where an independent check happe
 
 Only the PR's own commits are scanned for secrets, so existing history in a brownfield repo does not block adoption.
 
-**Baselines go in their own pull request.** Because the workflow takes `.lockflight/baselines/` from the base branch, a
-baseline committed in a feature's pull request is discarded when that pull request is judged, by design. When a brownfield
-repository has tests that already fail (or warnings, or advisories) that a feature should not own, run
-`.lockflight/bin/lockflight baseline tests` (or `build`, `deps`) yourself in a separate terminal window, merge that baseline in a separate pull request first, then
-continue the feature. `redgreen start` warns when tests already fail before the feature changes anything.
+> [!IMPORTANT]
+> **Baselines go in their own pull request.** Because the workflow takes `.lockflight/baselines/` from the base branch, a
+> baseline committed in a feature's pull request is discarded when that pull request is judged, by design. When a brownfield
+> repository has tests that already fail (or warnings, or advisories) that a feature should not own, run
+> `.lockflight/bin/lockflight baseline tests` (or `build`, `deps`) yourself in a separate terminal window, merge that baseline
+> in a separate pull request first, then continue the feature. `redgreen start` warns when tests already fail before the
+> feature changes anything.
 
 **Multi-targeted test projects.** `init` reads the test projects' `TargetFramework(s)` and makes `setup-dotnet` install every
 .NET channel they need (for example `8.0.x` and `10.0.x`); a workflow that already existed is left alone, and `init` says what
@@ -79,8 +86,11 @@ stylecop.json                            @your-org/maintainers
 BannedSymbols.txt                        @your-org/maintainers
 ```
 
-Then make it binding: a branch ruleset (or classic branch protection) on `main` with **Require review from Code Owners** and
-**Require status checks: `gates`**.
+Then make it binding:
+
+1. Open a branch ruleset (or classic branch protection) on `main`.
+2. Turn on **Require review from Code Owners**.
+3. Turn on **Require status checks: `gates`**.
 
 ## Optional: verify approvals in CI
 
@@ -108,9 +118,10 @@ see [guardrails and boundaries](guardrails-and-boundaries.md).
 
 ## Plan limits
 
-On GitHub Free, rulesets and required checks are unavailable for private repositories: the workflow still runs and reports,
-but it is advisory — a red check does not block the merge. Use a public repository, GitHub Pro/Team, or treat the check as a
-manual merge criterion.
+> [!WARNING]
+> On GitHub Free, rulesets and required checks are unavailable for private repositories: the workflow still runs and reports,
+> but it is advisory — a red check does not block the merge. Use a public repository, GitHub Pro/Team, or treat the check as a
+> manual merge criterion.
 
 ## Locally
 
@@ -143,3 +154,9 @@ single-repository workflow does. A pull request in the unit therefore cannot loo
   files in each unit after a policy change.
 - **Boundary:** it is a boundary only where the unit's `lockflight-gates` check is required, and `lockflight.unit.yaml`, the pin
   and the workflow are routed to a human by CODEOWNERS in the unit repository. The guard also protects them in sessions.
+
+## Next
+
+- [Guardrails and boundaries](guardrails-and-boundaries.md): which controls are boundaries, and under what conditions
+- [Configuration reference](configuration.md#built-in-protected-paths): the built-in protected paths
+- [Commands](commands.md#ci): `approve verify` and `gate run` in CI

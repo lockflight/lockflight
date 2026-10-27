@@ -1,5 +1,7 @@
 # Glossary
 
+Short definitions of the terms the other pages use, in the order you are likely to meet them.
+
 | Term | Meaning |
 |---|---|
 | **Gate run** | One `lockflight gate run`: the steps of a profile, in order, ending in one verdict. |
@@ -23,3 +25,8 @@
 | **Human-only command** | `approve`, `baseline`, `redgreen reset`: refused inside a Claude Code session. |
 | **Ledger** | Local JSON-lines event log (blocks, verdicts, rejected reds, confirmed findings) that `ledger retro` clusters. It is not an audit log. |
 | **Lite / standard** | Onboarding profiles. Lite: guard and gates. Standard: adds Spec Kit and the lifecycle. |
+
+## Next
+
+- [How it works](../architecture.md): how these parts fit together
+- [Commands](commands.md): every command and its exit codes

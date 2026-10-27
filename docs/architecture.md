@@ -1,8 +1,14 @@
 # How Lockflight works
 
-Lockflight turns a delivery process into checks with exit codes. This page explains the parts and how they fit together. For
-what each command and setting does, see [commands](guides/commands.md) and [configuration](guides/configuration.md); for what
-each control can and cannot guarantee, see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
+Lockflight turns a delivery process into checks with exit codes. This page explains the parts and how they fit together, for
+anyone who wants to understand the design or change it. For what each command and setting does, see
+[commands](guides/commands.md) and [configuration](guides/configuration.md); for what each control can and cannot guarantee,
+see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
+
+**On this page:** [Principles](#principles) · [The parts](#the-parts) ·
+[The engine on every hook call](#the-engine-on-every-hook-call) · [The guard](#the-guard) · [Gates](#gates) ·
+[The lifecycle](#the-lifecycle-standard-profile) · [Topologies](#topologies) · [Adoption](#adoption) ·
+[The ledger](#the-ledger) · [Where the trust comes from](#where-the-trust-comes-from)
 
 ## Principles
 
@@ -21,7 +27,7 @@ each control can and cannot guarantee, see [guardrails and boundaries](guides/gu
 
 ## The parts
 
-```
+```text
  Claude Code session                 Your terminal                     CI (pull request)
  plugin: skills + hooks              human-only commands               generated workflow
         │                                   │                                 │
@@ -43,6 +49,11 @@ each control can and cannot guarantee, see [guardrails and boundaries](guides/gu
 The plugin registers four hooks: `SessionStart`, `PreToolUse`, `UserPromptExpansion` and `Stop`. Each runs a small shim,
 [`lockflight-hook`](../plugins/lockflight/bin/lockflight-hook), which finds the project from `CLAUDE_PROJECT_DIR` and runs the
 engine linked into `.lockflight/bin/`. Running the binary directly keeps a hook at a few milliseconds.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/hook-flow-dark.svg">
+  <img src="assets/hook-flow-light.svg" alt="A hook call. Claude Code runs the hook shim for SessionStart, PreToolUse, UserPromptExpansion and Stop; the shim finds the project from CLAUDE_PROJECT_DIR and runs the pinned engine in .lockflight/bin, which allows with exit 0 or blocks with exit 2 and the reason on stderr. Without lockflight.yaml the shim does nothing; with the engine missing or stale, or the configuration unreadable, it enters recovery mode." width="100%">
+</picture>
 
 The shim has three states:
 
@@ -93,7 +104,7 @@ units that changed.
 
 ## The lifecycle (standard profile)
 
-```
+```text
 spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ green ──▶ trace ──▶ review ──▶ pull request
 ```
 
@@ -150,9 +161,20 @@ No line names a person: who approved a phase is kept in the approval record, not
 
 ## Where the trust comes from
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/guardrails-boundaries-dark.svg">
+  <img src="assets/guardrails-boundaries-light.svg" alt="Guardrails run on your machine, with your credentials: the guard, the Stop gate, red/green evidence and the trace, the review of record, approvals recorded locally. Boundaries sit outside the agent's reach, past the pull request: CI with the base branch's policy as a required check, presence-gated signed approvals verified in CI, and merge when the agent has its own identity." width="100%">
+</picture>
+
 | On your machine (guardrails) | Outside the agent's reach (boundaries) |
 |---|---|
 | The guard, the Stop gate, red/green evidence, trace, the review of record, local approvals | CI running the pinned engine with the base branch's policy as a required check; signed approvals verified in CI; merge by a person |
 
 The in-session controls make the right path the easy one and catch accidents early. The pull request is where the verdict
 counts.
+
+## Next
+
+- [Guardrails and boundaries](guides/guardrails-and-boundaries.md): what each control can and cannot guarantee
+- [CI hardening](guides/ci-hardening.md): make the pull request the place where the verdict counts
+- [Getting started](guides/getting-started.md): set it up in a repository

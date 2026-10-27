@@ -1,7 +1,11 @@
 # Plugin skills
 
 The plugin adds these skills to Claude Code. Claude picks them from what you ask; you can also call them as
-`/lockflight:<name>`.
+`/lockflight:<name>`. This page lists what each one does, and what the optional crew plugin adds.
+
+**On this page:** [The skills](#the-skills) · [The crew (optional)](#the-crew-optional)
+
+## The skills
 
 | Skill | Ask for example | What it does |
 |---|---|---|
@@ -22,7 +26,7 @@ when `stop.gate: true`).
 `lockflight-crew` is a separate plugin in the same marketplace with agents briefed for the lifecycle. It has one agent so
 far, the **test author**. Install it next to the core plugin:
 
-```
+```text
 /plugin install lockflight-crew@lockflight
 ```
 
@@ -44,3 +48,9 @@ far, the **test author**. Install it next to the core plugin:
 The agent uses the session's model. On the sample's seeded stories it has so far matched a plain agent rather than beaten
 it: the same accepted reds at the same cost, a little slower. The benchmark and its results are in
 [`tests/benchmark/crew/`](../../tests/benchmark/crew/).
+
+## Next
+
+- [Getting started](getting-started.md): set up a project with the `init` skill
+- [Commands](commands.md): the engine commands the skills run
+- [Guardrails and boundaries](guardrails-and-boundaries.md): what each control can and cannot guarantee

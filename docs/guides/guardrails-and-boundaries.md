@@ -1,13 +1,31 @@
 # Guardrails and boundaries
 
+What Lockflight can and cannot guarantee, control by control. Read it before you rely on a control, and before you report a way
+around one.
+
+**On this page:** [Two kinds of control](#two-kinds-of-control) · [Every control, labelled](#every-control-labelled) ·
+[What the shell write detection sees](#what-the-shell-write-detection-sees) ·
+[Proposing a protected change](#proposing-a-protected-change) · [GitHub plan limits](#github-plan-limits) ·
+[What this means in practice](#what-this-means-in-practice)
+
+## Two kinds of control
+
 Lockflight separates two kinds of control and labels every feature with one of them:
 
 - A **guardrail (G)** prevents accidents and makes the right path the easy one. A determined agent — or a person — can get
   around it, because it runs on the same machine, with the same credentials, as the agent.
 - A **boundary (B)** holds even against a determined agent, because the decision is made somewhere the agent cannot reach.
 
-The agent in Claude Code runs with **your** credentials (your git, your `gh` token, your SSH agent). Anything you can do from
-that shell, it can do. That fixes what Lockflight can honestly promise.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/guardrails-boundaries-dark.svg">
+  <img src="../assets/guardrails-boundaries-light.svg" alt="Guardrails run on your machine, with your credentials: the guard, the Stop gate, red/green evidence and the trace, the review of record, approvals recorded locally. Boundaries sit outside the agent's reach, past the pull request: CI with the base branch's policy as a required check, presence-gated signed approvals verified in CI, and merge when the agent has its own identity." width="100%">
+</picture>
+
+> [!IMPORTANT]
+> The agent in Claude Code runs with **your** credentials (your git, your `gh` token, your SSH agent). Anything you can do from
+> that shell, it can do. That fixes what Lockflight can honestly promise.
+
+## Every control, labelled
 
 | Control | Label | Why |
 |---|---|---|
@@ -125,10 +143,18 @@ nothing in the project, and the agent cannot apply the patch: `git apply` rewrit
 
 ## GitHub plan limits
 
-On **GitHub Free, private repositories cannot require status checks**: the Lockflight workflow runs and reports, but a red check
-does not block a merge — it is advisory. Use a public repository, GitHub Pro/Team, or treat the check as a manual merge criterion.
+> [!WARNING]
+> On **GitHub Free, private repositories cannot require status checks**: the Lockflight workflow runs and reports, but a red
+> check does not block a merge — it is advisory. Use a public repository, GitHub Pro/Team, or treat the check as a manual merge
+> criterion.
 
 ## What this means in practice
 
 Lockflight makes a careful agent's work verifiable and a careless agent's mistakes visible early. It does not make a hostile
 agent safe on your machine. For that, run the agent in an isolated environment with its own identity and let CI with required checks be the gate.
+
+## Next
+
+- [CI hardening](ci-hardening.md): turn CI into the boundary with CODEOWNERS and required checks
+- [Troubleshooting](troubleshooting.md): when the guard blocks a command you expected to run
+- [Security policy](../../SECURITY.md): how to report a way around a control
