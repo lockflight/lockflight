@@ -16,6 +16,10 @@ public sealed class EngineVersionTests
     [InlineData("0.2.0-alpha", "0.2.0-alpha.1")]
     [InlineData("0.9.9", "0.10.0")]
     [InlineData("1.0.0-1", "1.0.0-alpha")]
+    [InlineData("0.2.0-dev.20261014223700", "0.2.0-alpha.1")]
+    [InlineData("0.2.0-dev.20261014223700", "0.2.0-alpha.6.dev.20261027205103")]
+    [InlineData("0.2.0-dev.20261014223700", "0.2.0-dev.20261015000000")]
+    [InlineData("0.1.9", "0.2.0-dev.20261014223700")]
     public void VersionsSortBySemanticVersioningPrecedence(string lower, string higher)
     {
         EngineVersion low = EngineVersion.Parse(lower)!;
@@ -26,12 +30,12 @@ public sealed class EngineVersionTests
     }
 
     [Fact]
-    public void ADevelopmentBuildSortsBelowTheNextReleaseUnlikeTheOldScheme()
+    public void DevelopmentBuildsOfBothSchemesSortBelowTheNextPrerelease()
     {
         EngineVersion release = EngineVersion.Parse("0.2.0-alpha.5")!;
 
         Assert.True(EngineVersion.Parse("0.2.0-alpha.4.dev.20261015101143")!.CompareTo(release) < 0);
-        Assert.True(EngineVersion.Parse("0.2.0-dev.20261015101143")!.CompareTo(release) > 0);
+        Assert.True(EngineVersion.Parse("0.2.0-dev.20261015101143")!.CompareTo(release) < 0);
     }
 
     [Theory]
