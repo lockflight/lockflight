@@ -8,7 +8,8 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 /// <c>lockflight redgreen red</c>: accepts the new tests of a cycle when they all fail in production code (RED_STUB, or RED_ASSERT
 /// in a test that calls production code), which opens the cycle and locks the test projects. A new test whose code asserts nothing
 /// is flagged assertion-free but not rejected: a test may verify by letting the production code throw (a guard clause, a
-/// validator), which a static reading of the test code cannot tell from a test that verifies nothing.
+/// validator), which a static reading of the test code cannot tell from a test that verifies nothing. While the open cycle has an
+/// amend waiting, a red re-checks only the amended tests instead (<see cref="RecheckAsync"/>).
 /// </summary>
 internal sealed class RedStep(RedGreenSession session)
 {
@@ -19,7 +20,7 @@ internal sealed class RedStep(RedGreenSession session)
             return await session.FailAsync($"no baseline; run '{EngineCommand.Linked} redgreen start' before writing the feature's tests", cancellationToken);
         }
 
-        if (record.OpenCycle is RedGreenCycle open)
+        if (record.OpenCycle is RedGreenCycle open && !open.OpenAmends.Any())
         {
             return await session.FailAsync($"cycle {open.Number} is still red; make it green ('{EngineCommand.Linked} redgreen green') before the next red", cancellationToken);
         }
@@ -45,6 +46,11 @@ internal sealed class RedStep(RedGreenSession session)
             return await session.BrokenAsync($"the test runner could not list the tests of {workspace.FailedApp}", cancellationToken);
         }
 
+        if (record.OpenCycle is RedGreenCycle amending)
+        {
+            return await RecheckAsync(record, amending, inventory, deadline, cancellationToken);
+        }
+
         if (await NewTestsAsync(record, inventory, cancellationToken) is not TestCase[] fresh)
         {
             return ExitCode.Fail;
@@ -58,24 +64,81 @@ internal sealed class RedStep(RedGreenSession session)
         return await JudgeAsync(record, inventory, fresh, results, deadline, cancellationToken);
     }
 
+    /// <summary>
+    /// The red after an amend: the amended tests must fail in production code again (RED_STUB or RED_ASSERT), with nothing lost or
+    /// added in the suite. Then their new classification replaces the old one and their files are locked again; the rest of the
+    /// cycle's evidence is kept. Otherwise the amend stays open, and its files writable.
+    /// </summary>
+    private async Task<ExitCode> RecheckAsync(
+        RedGreenRecord record, RedGreenCycle open, IReadOnlyList<TestCase> inventory, DateTimeOffset deadline, CancellationToken cancellationToken)
+    {
+        if (await SuiteProblemAsync(record, inventory, cancellationToken))
+        {
+            return ExitCode.Fail;
+        }
+
+        IReadOnlySet<string> known = record.KnownTests;
+        string[] added = [.. inventory.Where(test => !known.Contains(test.Key)).Select(test => test.MethodFilter).Order(StringComparer.Ordinal)];
+        if (added.Length > 0)
+        {
+            return await session.FailAsync(
+                $"new tests appeared while an amend is open: {string.Join(", ", added.Take(RedGreenSession.MaxTestsListed))}. A red after an amend re-checks only the amended tests; "
+                + "remove the new ones (the amended file is still writable) and add them in the next cycle",
+                cancellationToken);
+        }
+
+        HashSet<string> amendedKeys = [.. open.OpenAmends.Select(amend => amend.TestKey)];
+        TestCase[] amended = [.. inventory.Where(test => amendedKeys.Contains(test.Key))];
+        if (await session.Workspace.RunAsync(amended, cancellationToken) is not IReadOnlyList<ExecutedTest> results)
+        {
+            return await session.BrokenAsync($"the test runner produced no report for {session.Workspace.FailedApp}", cancellationToken);
+        }
+
+        (List<RedGreenTest> classified, _) = await ClassifyAsync(inventory, amended, results, deadline, cancellationToken);
+        foreach (RedGreenTest test in classified)
+        {
+            string mark = test.AssertionFree ? $" {RedGreenTest.AssertionFreeMark}" : string.Empty;
+            await session.Output.WriteLineAsync($"{RedClassNames.ToName(test.RedClass),-12} {test.MethodFilter} (amended){mark}");
+        }
+
+        await WarnAssertionFreeAsync(classified);
+        RedGreenTest[] rejected = [.. classified.Where(test => !RedClassNames.IsAccepted(test.RedClass))];
+        if (rejected.Length > 0)
+        {
+            await session.Output.WriteLineAsync(
+                $"Red rejected: {rejected.Length} of {classified.Count} amended tests do not fail in production code. The amend stays open and the file writable until they do.");
+            foreach (RedClass redClass in rejected.Select(test => test.RedClass).Distinct())
+            {
+                await session.Output.WriteLineAsync($"  {RedClassNames.ToName(redClass)}: {RedClassFixes.For(redClass)}.");
+            }
+
+            await session.RecordAsync(LedgerSignatures.RedRejected, $"{session.Feature.Id}: amended tests, {string.Join(",", rejected.Select(test => RedClassNames.ToName(test.RedClass)).Distinct())}", cancellationToken);
+            return ExitCode.Fail;
+        }
+
+        Dictionary<string, RedGreenTest> replaced = classified.ToDictionary(test => test.Key, StringComparer.Ordinal);
+        DateTimeOffset now = session.Context.Time.GetUtcNow();
+        RedGreenCycle rechecked = open with
+        {
+            Tests = [.. open.Tests.Select(test => replaced.GetValueOrDefault(test.Key) ?? test)],
+            Amends = [.. open.Amends.Select(amend => amend.IsOpen ? amend with { RecheckedAt = now } : amend)],
+        };
+        session.Save(record with { Cycles = [.. record.Cycles.Select(cycle => cycle.Number == open.Number ? rechecked : cycle)] });
+        await session.RecordAsync(LedgerSignatures.RedAmendRechecked, $"{session.Feature.Id}: cycle {open.Number}, {classified.Count} amended tests", cancellationToken);
+        await session.Output.WriteLineAsync(
+            $"Red accepted for the amended tests: cycle {open.Number} stays red and its test files are locked again until '{EngineCommand.Linked} redgreen green' passes.");
+        return ExitCode.Pass;
+    }
+
     /// <summary>The tests added since the baseline and earlier cycles; null — after saying why — when the suite lost or weakened tests, or nothing is new.</summary>
     private async Task<TestCase[]?> NewTestsAsync(RedGreenRecord record, IReadOnlyList<TestCase> inventory, CancellationToken cancellationToken)
     {
-        HashSet<string> current = [.. inventory.Select(test => test.Key)];
+        if (await SuiteProblemAsync(record, inventory, cancellationToken))
+        {
+            return null;
+        }
+
         IReadOnlySet<string> known = record.KnownTests;
-        string[] deleted = [.. known.Where(key => !current.Contains(key)).Order(StringComparer.Ordinal)];
-        if (deleted.Length > 0)
-        {
-            await session.FailAsync($"tests disappeared since the baseline: {string.Join(", ", deleted.Take(RedGreenSession.MaxTestsListed))}; restore them (deleting tests is not part of a red)", cancellationToken);
-            return null;
-        }
-
-        if (SuiteChecks.WeakenedKnownTests(record, inventory) is { Count: > 0 } weakened)
-        {
-            await session.FailAsync($"{string.Join("; ", weakened)}; restore them (a red adds tests, it does not switch existing ones off)", cancellationToken);
-            return null;
-        }
-
         TestCase[] fresh = [.. inventory.Where(test => !known.Contains(test.Key))];
         if (fresh.Length == 0)
         {
@@ -84,6 +147,26 @@ internal sealed class RedStep(RedGreenSession session)
         }
 
         return fresh;
+    }
+
+    /// <summary>Whether the suite lost or weakened tests since the baseline and earlier cycles; says why when it did.</summary>
+    private async Task<bool> SuiteProblemAsync(RedGreenRecord record, IReadOnlyList<TestCase> inventory, CancellationToken cancellationToken)
+    {
+        HashSet<string> current = [.. inventory.Select(test => test.Key)];
+        string[] deleted = [.. record.KnownTests.Where(key => !current.Contains(key)).Order(StringComparer.Ordinal)];
+        if (deleted.Length > 0)
+        {
+            await session.FailAsync($"tests disappeared since the baseline: {string.Join(", ", deleted.Take(RedGreenSession.MaxTestsListed))}; restore them (deleting tests is not part of a red)", cancellationToken);
+            return true;
+        }
+
+        if (SuiteChecks.WeakenedKnownTests(record, inventory) is { Count: > 0 } weakened)
+        {
+            await session.FailAsync($"{string.Join("; ", weakened)}; restore them (a red adds tests, it does not switch existing ones off)", cancellationToken);
+            return true;
+        }
+
+        return false;
     }
 
     private async Task<ExitCode> JudgeAsync(

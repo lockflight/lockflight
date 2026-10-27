@@ -7,7 +7,8 @@ namespace Lockflight.Cli.Hooks;
 
 /// <summary>
 /// PreToolUse guard: blocks file-editing tools, and shell commands that visibly write, when they target a protected path
-/// (built-in defaults plus the manifest's rules) or a test locked during a red cycle. A guardrail, not a boundary.
+/// (built-in defaults plus the manifest's rules) or a test locked during a red cycle, except the test files a person's amend made
+/// writable (named one by one; a command that rewrites a whole directory stays blocked). A guardrail, not a boundary.
 /// </summary>
 internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentReader environment, DirectoryReads reads)
 {
@@ -52,6 +53,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
         IReadOnlyList<string> globs = DefaultProtectedPaths.For(manifest);
         string workingDirectory = input.WorkingDirectory ?? manifest.Root;
         IReadOnlyList<(string Glob, string Reason)> testLocks = TestLock.LockedGlobs(manifest);
+        IReadOnlySet<string> amended = testLocks.Count == 0 ? new HashSet<string>() : TestLock.AmendedFiles(manifest);
         ShellWrites writes = TargetsOf(input);
 
         if (writes.Hidden is string hidden)
@@ -64,7 +66,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
         if (input.ToolName is string toolName && FileEditingTools.Contains(toolName))
         {
             // An editing tool's path is literal: no variables, no wildcards, no home.
-            return await FileDecisionAsync(new RootRelativePaths(manifest.Root), writes.Files, manifest, globs, testLocks, workingDirectory) ?? HookDecision.Allow;
+            return await FileDecisionAsync(new RootRelativePaths(manifest.Root), writes.Files, manifest, globs, testLocks, amended, workingDirectory) ?? HookDecision.Allow;
         }
 
         IEnumerable<(string Path, bool AsTree)> allTargets = writes.Files.Select(path => (path, false))
@@ -84,8 +86,8 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
 
         ProtectedTreeScan scan = new(manifest.Root, [.. globs, .. testLocks.Select(testLock => testLock.Glob)], reads);
         RootRelativePaths relatives = new(manifest.Root);
-        return TreeDecision(scan, relatives, trees, sourceTrees, globs, testLocks, workingDirectory)
-            ?? await FileDecisionAsync(relatives, [.. files, .. trees, .. sourceTrees], manifest, globs, testLocks, workingDirectory)
+        return TreeDecision(scan, relatives, trees, sourceTrees, globs, testLocks, amended, workingDirectory)
+            ?? await FileDecisionAsync(relatives, [.. files, .. trees, .. sourceTrees], manifest, globs, testLocks, amended, workingDirectory)
             ?? PartialTargetDecisions.Computed(writes.ComputedFiles, relatives, workingDirectory, globs, testLocks)
             ?? PartialTargetDecisions.NamePatterns(writes.PatternFiles, scan, manifest.Root, workingDirectory, globs, testLocks)
             ?? PartialTargetDecisions.Floating(writes, globs, testLocks)
@@ -157,7 +159,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
     /// </summary>
     private static HookDecision? TreeDecision(
         ProtectedTreeScan scan, RootRelativePaths relatives, IReadOnlyList<string> trees, IReadOnlyList<string> sourceTrees, IReadOnlyList<string> globs,
-        IReadOnlyList<(string Glob, string Reason)> testLocks, string workingDirectory)
+        IReadOnlyList<(string Glob, string Reason)> testLocks, IReadOnlySet<string> amended, string workingDirectory)
     {
         List<(string Tree, bool SourceOnly, string RelativeTree)> resolved = [];
         foreach ((string tree, bool sourceOnly) in trees.Select(tree => (tree, false)).Concat(sourceTrees.Select(tree => (tree, true))))
@@ -188,8 +190,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
 
         foreach ((string tree, bool sourceOnly, string relativeTree) in resolved)
         {
-
-            if (testLocks.FirstOrDefault(testLock => scan.CouldMatchUnder(relativeTree, testLock.Glob, sourceOnly: false)) is { Glob: not null } treeLock)
+            if (!IsAmended(amended, relativeTree) && testLocks.FirstOrDefault(testLock => scan.CouldMatchUnder(relativeTree, testLock.Glob, sourceOnly: false)) is { Glob: not null } treeLock)
             {
                 return HookDecision.Block(
                     $"tests-locked:{treeLock.Glob}",
@@ -221,7 +222,13 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
     }
 
     private async Task<HookDecision?> FileDecisionAsync(
-        RootRelativePaths relatives, IReadOnlyList<string> targets, Manifest manifest, IReadOnlyList<string> globs, IReadOnlyList<(string Glob, string Reason)> testLocks, string workingDirectory)
+        RootRelativePaths relatives,
+        IReadOnlyList<string> targets,
+        Manifest manifest,
+        IReadOnlyList<string> globs,
+        IReadOnlyList<(string Glob, string Reason)> testLocks,
+        IReadOnlySet<string> amended,
+        string workingDirectory)
     {
         foreach (string target in targets)
         {
@@ -247,16 +254,19 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
                     $"lockflight: '{target}' is protected by rule '{matchedGlob}'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.");
             }
 
-            if (relative is { Length: > 0 } && testLocks.FirstOrDefault(testLock => PathRules.Matches(testLock.Glob, relative)) is { Glob: string lockedGlob, Reason: string reason })
+            if (relative is { Length: > 0 } && !IsAmended(amended, relative) && testLocks.FirstOrDefault(testLock => PathRules.Matches(testLock.Glob, relative)) is { Glob: string lockedGlob, Reason: string reason })
             {
                 return HookDecision.Block(
                     $"tests-locked:{lockedGlob}",
-                    $"lockflight: '{target}' is a test file and tests are locked during {reason}: make the tests pass by changing production code, then run '{EngineCommand.Linked} redgreen green'. If a test itself is wrong, ask the user.");
+                    $"lockflight: '{target}' is a test file and tests are locked during {reason}: make the tests pass by changing production code, then run '{EngineCommand.Linked} redgreen green'. If a test itself is wrong, stop and {HumanOnlyCommands.AskTheUser("redgreen amend <test> --reason \"<why>\"")}; never change it another way.");
             }
         }
 
         return null;
     }
+
+    /// <summary>Whether the path names a test file an open amend made writable (exactly that file, not a directory above it).</summary>
+    private static bool IsAmended(IReadOnlySet<string> amended, string relative) => amended.Any(file => PathRules.Matches(file, relative));
 
     private async Task WriteDiagnosticsAsync(string filePath, string workingDirectory, Manifest manifest, string? matchedGlob)
     {

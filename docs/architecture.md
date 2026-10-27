@@ -137,7 +137,7 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
   reviewer. A blocker or major finding counts only when its reproduction test, which the engine compiles and runs, fails on the
   current code. Such a finding stays open across review runs until every reproduction it was given passes or a person dismisses it.
 
-Commands that record a human decision (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply|undo`,
+Commands that record a human decision (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo`,
 `update`) refuse to run inside a Claude Code session.
 
 ## Topologies

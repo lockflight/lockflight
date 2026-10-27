@@ -6,7 +6,8 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
 /// The red/green evidence of a feature in <c>.lockflight/features/&lt;id&gt;/redgreen.json</c> (protected; engine-written): the test
-/// inventory when implementation started (write-once, with the commit), the test project directories, and the cycles.
+/// inventory when implementation started (write-once, with the commit), the test project directories, and the cycles with the
+/// amends a person gave in them.
 /// </summary>
 internal sealed record RedGreenRecord
 {
@@ -35,6 +36,9 @@ internal sealed record RedGreenRecord
     public List<RedGreenCycle> Cycles { get; init; } = [];
 
     public RedGreenCycle? OpenCycle => Cycles.LastOrDefault(cycle => cycle.IsOpen);
+
+    /// <summary>Every amend a person gave, in cycle order.</summary>
+    public IEnumerable<RedGreenAmend> Amends => Cycles.SelectMany(cycle => cycle.Amends);
 
     /// <summary>Tests that are not new any more: the baseline plus every earlier cycle's tests.</summary>
     public IReadOnlySet<string> KnownTests => BaselineTests.Concat(Cycles.SelectMany(cycle => cycle.Tests).Select(test => test.Key)).ToHashSet(StringComparer.Ordinal);
@@ -83,13 +87,19 @@ internal sealed record RedGreenRecord
                 tests.Add((JsonNode)entry);
             }
 
-            cycles.Add((JsonNode)new JsonObject
+            JsonObject saved = new()
             {
                 ["number"] = cycle.Number,
                 ["redAt"] = cycle.RedAt.ToString("O", CultureInfo.InvariantCulture),
                 ["greenAt"] = cycle.GreenAt?.ToString("O", CultureInfo.InvariantCulture),
                 ["tests"] = tests,
-            });
+            };
+            if (cycle.Amends.Count > 0)
+            {
+                saved["amends"] = AmendsArray(cycle.Amends);
+            }
+
+            cycles.Add((JsonNode)saved);
         }
 
         JsonObject root = new()
@@ -110,6 +120,37 @@ internal sealed record RedGreenRecord
         JsonFiles.Write(path, root);
     }
 
+    private static JsonArray AmendsArray(IReadOnlyList<RedGreenAmend> amends)
+    {
+        JsonArray saved = [];
+        foreach (RedGreenAmend amend in amends)
+        {
+            saved.Add((JsonNode)new JsonObject
+            {
+                ["test"] = amend.TestKey,
+                ["method"] = amend.MethodFilter,
+                ["files"] = Array(amend.Files),
+                ["by"] = amend.By,
+                ["at"] = amend.At.ToString("O", CultureInfo.InvariantCulture),
+                ["reason"] = amend.Reason,
+                ["recheckedAt"] = amend.RecheckedAt?.ToString("O", CultureInfo.InvariantCulture),
+            });
+        }
+
+        return saved;
+    }
+
+    private static RedGreenAmend ReadAmend(JsonObject amend) => new(
+        amend["test"]?.GetValue<string>() ?? string.Empty,
+        amend["method"]?.GetValue<string>() ?? string.Empty,
+        Strings(amend["files"]),
+        amend["by"]?.GetValue<string>() ?? string.Empty,
+        DateTimeOffset.Parse(amend["at"]?.GetValue<string>() ?? "1970-01-01T00:00:00Z", CultureInfo.InvariantCulture),
+        amend["reason"]?.GetValue<string>() ?? string.Empty)
+    {
+        RecheckedAt = amend["recheckedAt"]?.GetValue<string>() is string rechecked ? DateTimeOffset.Parse(rechecked, CultureInfo.InvariantCulture) : null,
+    };
+
     private static RedGreenCycle ReadCycle(JsonObject cycle) => new(
         cycle["number"]?.GetValue<int>() ?? 0,
         DateTimeOffset.Parse(cycle["redAt"]?.GetValue<string>() ?? "1970-01-01T00:00:00Z", CultureInfo.InvariantCulture),
@@ -121,7 +162,10 @@ internal sealed record RedGreenRecord
             Strings(test["requirements"]))
         {
             AssertionFree = test["assertionFree"]?.GetValue<bool>() == true,
-        })]);
+        })])
+    {
+        Amends = [.. (cycle["amends"] as JsonArray ?? []).OfType<JsonObject>().Select(ReadAmend)],
+    };
 
     private static string[] Strings(JsonNode? node) =>
         node is JsonArray array ? [.. array.Select(item => item?.GetValue<string>() ?? string.Empty).Where(item => item.Length > 0)] : [];

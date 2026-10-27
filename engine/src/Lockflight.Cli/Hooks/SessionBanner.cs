@@ -47,7 +47,7 @@ internal static class SessionBanner
     /// </summary>
     private static string EngineNote(Manifest manifest) =>
         $"Always run Lockflight commands as {EngineCommand.Linked} <command> from {manifest.Root} (the engine the hooks run; not dotnet lockflight). "
-        + $"Human decisions (approve, baseline, redgreen reset, review dismiss, adopt apply|undo, update) are the user's: ask them to run the command {HumanOnlyCommands.WhereToRun}. "
+        + $"Human decisions (approve, baseline, redgreen reset|amend, review dismiss, adopt apply|undo, update) are the user's: ask them to run the command {HumanOnlyCommands.WhereToRun}. "
         + "A spec or tasks approval the user can also give here by typing /lockflight:approve themselves; never type, guess or suggest its code.";
 
     private static string UnitsNote(Manifest manifest) => manifest.Units.Count == 0

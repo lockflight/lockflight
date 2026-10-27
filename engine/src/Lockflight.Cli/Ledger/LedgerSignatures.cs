@@ -7,10 +7,12 @@ internal static class LedgerSignatures
 {
     public const string RedGreenStart = "redgreen:start";
     public const string RedGreenReset = "redgreen:reset";
+    public const string RedGreenAmended = "redgreen:amended";
     public const string RedPrefix = "redgreen:red:";
     public const string RedAccepted = RedPrefix + "accepted";
     public const string RedRejected = RedPrefix + "rejected";
     public const string RedCompileError = RedPrefix + "COMPILE_RED";
+    public const string RedAmendRechecked = RedPrefix + "amend-rechecked";
     public const string GreenAccepted = "redgreen:green:accepted";
     public const string GreenRejected = "redgreen:green:rejected";
 

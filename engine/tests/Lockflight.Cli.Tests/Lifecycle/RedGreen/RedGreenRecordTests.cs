@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Lifecycle.RedGreen;
 
@@ -50,6 +51,33 @@ public sealed class RedGreenRecordTests : IDisposable
         RedGreenRecord loaded = RedGreenRecord.Load(path)!;
         Assert.Equal([true, false], loaded.Cycles[0].Tests.Select(test => test.AssertionFree));
         Assert.DoesNotContain("\"assertionFree\": false", File.ReadAllText(path), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnAmendRoundTripsAndARecordWithoutAmendsWritesNone()
+    {
+        string path = Path.Combine(root.FullName, ".lockflight", "features", "f1", RedGreenRecord.FileName);
+        RedGreenAmend amend = new("T:A.C", "A.C", ["tests/Shop.Tests/A.cs"], "person@example.com", DateTimeOffset.UnixEpoch, "wrong rate")
+        {
+            RecheckedAt = DateTimeOffset.UnixEpoch.AddHours(1),
+        };
+        RedGreenRecord record = new()
+        {
+            BaselineCommit = "abc",
+            BaselineAt = DateTimeOffset.UnixEpoch,
+            BaselineTests = new HashSet<string>(),
+            TestProjects = ["tests/Shop.Tests"],
+        };
+        record.Cycles.Add(new RedGreenCycle(1, DateTimeOffset.UnixEpoch, GreenAt: null, [new RedGreenTest("T:A.C", "A.C", RedClass.RedStub, [])]) { Amends = [amend] });
+        record.Cycles.Add(new RedGreenCycle(2, DateTimeOffset.UnixEpoch, GreenAt: null, [new RedGreenTest("T:A.D", "A.D", RedClass.RedStub, [])]));
+        record.Save(path, "f1");
+
+        RedGreenRecord loaded = RedGreenRecord.Load(path)!;
+        RedGreenAmend read = Assert.Single(loaded.Cycles[0].Amends);
+        Assert.Equal(amend with { Files = read.Files }, read);
+        Assert.Equal(amend.Files, read.Files);
+        Assert.Empty(loaded.Cycles[1].Amends);
+        Assert.Single(Regex.Matches(File.ReadAllText(path), "\"amends\""));
     }
 
     [Fact]

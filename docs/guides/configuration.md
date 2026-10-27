@@ -222,6 +222,7 @@ branch's commits since the merge base, so `--base` also scopes `format` (and `co
 | `approve verify (--feature id \| --base ref) [--allowed-signers file] [--require spec,tasks]` | CI | verify records, hashes, signatures |
 | `redgreen start\|red\|green\|status` | agent | red/green cycles; tests locked while red; `red`/`green` refuse while the spec or tasks approval is stale or missing |
 | `redgreen reset` | **human** | discard the feature's red/green evidence |
+| `redgreen amend <test> --reason "…"` | **human** | let one test of the open red cycle change until the next red re-checks it |
 | `trace [--feature id]` | agent | requirement → red-then-green tests matrix (Markdown) |
 | `review [--base ref] [--model name] [--budget usd]` | agent | review (`claude -p`, read-only, schema); of record with the `review:` settings against the merge base of HEAD and the target |
 | `review status [--feature id]` | agent | review runs, open, fixed and dismissed findings, and the pull request summary (read only) |

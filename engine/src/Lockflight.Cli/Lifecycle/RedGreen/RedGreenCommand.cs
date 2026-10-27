@@ -10,23 +10,50 @@ using Lockflight.Cli.Testing;
 namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
-/// <c>lockflight redgreen start|red|green|status|reset [--feature id]</c> — the red/green protocol, in cycles:
-/// <c>start</c> records the test inventory once (needs the tasks approval); each <c>red</c> accepts the new tests of a cycle when
-/// they all fail for the right reason, which locks the test projects (<see cref="RedStep"/>); <c>green</c> closes the cycle when they
-/// pass with nothing deleted, skipped, made explicit or broken (<see cref="GreenStep"/>). <c>reset</c> (human-only) discards the
-/// evidence. A step whose tools cannot build, list or run the tests ends ERROR (exit 3), not FAIL. Runtime evidence and a guardrail,
+/// <c>lockflight redgreen start|red|green|status|reset [--feature id]</c> and <c>redgreen amend &lt;test&gt; --reason "…"</c> — the
+/// red/green protocol, in cycles: <c>start</c> records the test inventory once (needs the tasks approval); each <c>red</c> accepts the
+/// new tests of a cycle when they all fail for the right reason, which locks the test projects (<see cref="RedStep"/>); <c>green</c>
+/// closes the cycle when they pass with nothing deleted, skipped, made explicit or broken (<see cref="GreenStep"/>). <c>amend</c>
+/// (human-only) lets one test of the open cycle change until a red re-checks it (<see cref="AmendStep"/>); <c>reset</c> (human-only)
+/// discards the evidence. A step whose tools cannot build, list or run the tests ends ERROR (exit 3), not FAIL. Runtime evidence and a guardrail,
 /// not proof.
 /// </summary>
 internal sealed class RedGreenCommand(CliContext context)
 {
     private const string ResetVerb = "reset";
+    private const string AmendVerb = "amend";
 
     private static readonly string[] ValueOptions = ["--feature"];
+    private static readonly string[] AmendValueOptions = ["--feature", "--reason"];
 
     public async Task<ExitCode> RunAsync(string verb, string[] args, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync($"redgreen {verb}", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options
-            || await ManifestRequirement.LoadAsync(context, context.WorkingDirectory, cancellationToken) is not Manifest manifest)
+        string? test = null;
+        if (verb == AmendVerb)
+        {
+            if (args is not [string named, .. string[] rest] || named.StartsWith('-'))
+            {
+                await context.Error.WriteLineAsync($"lockflight redgreen amend: name the test to amend: {AmendStep.Usage}");
+                return ExitCode.Config;
+            }
+
+            (test, args) = (named, rest);
+        }
+
+        string[] valueOptions = verb == AmendVerb ? AmendValueOptions : ValueOptions;
+        if (await CommandOptions.ParseOrReportAsync($"redgreen {verb}", args, valueOptions, [], context.Error, cancellationToken) is not CommandOptions options)
+        {
+            return ExitCode.Config;
+        }
+
+        string? reason = options.Value("--reason")?.Trim();
+        if (verb == AmendVerb && reason is not { Length: > 0 })
+        {
+            await context.Error.WriteLineAsync($"lockflight redgreen amend: --reason is required: say why the test must change ({AmendStep.Usage})");
+            return ExitCode.Config;
+        }
+
+        if (await ManifestRequirement.LoadAsync(context, context.WorkingDirectory, cancellationToken) is not Manifest manifest)
         {
             return ExitCode.Config;
         }
@@ -57,6 +84,7 @@ internal sealed class RedGreenCommand(CliContext context)
             "red" => await new RedStep(session).RunAsync(record, cancellationToken),
             "green" => await new GreenStep(session).RunAsync(record, cancellationToken),
             "status" => await StatusAsync(feature, record),
+            AmendVerb => await new AmendStep(session).RunAsync(record, test!, reason!, cancellationToken),
             ResetVerb => await ResetAsync(session, record, cancellationToken),
             _ => await UnknownAsync(verb),
         };
@@ -149,7 +177,13 @@ internal sealed class RedGreenCommand(CliContext context)
         foreach (RedGreenCycle cycle in record.Cycles)
         {
             string state = cycle.IsOpen ? "RED (test projects locked)" : $"green at {cycle.GreenAt:u}";
-            await context.Output.WriteLineAsync($"cycle {cycle.Number}: {cycle.Tests.Count} tests, {state}");
+            string amended = cycle.OpenAmends.Any() ? $"; amended, writable until the next red: {string.Join(", ", cycle.OpenAmends.SelectMany(amend => amend.Files).Distinct())}" : string.Empty;
+            await context.Output.WriteLineAsync($"cycle {cycle.Number}: {cycle.Tests.Count} tests, {state}{amended}");
+        }
+
+        foreach (string line in RedGreenAmends.Lines(record))
+        {
+            await context.Output.WriteLineAsync($"amended: {line}");
         }
 
         return ExitCode.Pass;
@@ -172,7 +206,7 @@ internal sealed class RedGreenCommand(CliContext context)
 
     private async Task<ExitCode> UnknownAsync(string verb)
     {
-        await context.Error.WriteLineAsync($"lockflight: unknown redgreen step '{verb}'; use start, red, green, status or reset");
+        await context.Error.WriteLineAsync($"lockflight: unknown redgreen step '{verb}'; use start, red, green, status, amend or reset");
         return ExitCode.Config;
     }
 }
