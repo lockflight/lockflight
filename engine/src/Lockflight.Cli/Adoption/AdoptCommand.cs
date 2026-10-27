@@ -1,6 +1,7 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Init;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Processes;
@@ -22,7 +23,7 @@ internal sealed class AdoptCommand(CliContext context)
         (string[] values, string[] flags) = verb switch
         {
             "undo" => (["--backup"], ["--force"]),
-            "apply" => (["--speckit-preset"], ["--skip-speckit"]),
+            "apply" => (["--speckit-preset"], ["--skip-speckit", "--no-sandbox"]),
             _ => ((string[])[], (string[])[]),
         };
         if (await CommandOptions.ParseOrReportAsync($"adopt {verb}", args, values, flags, context.Error, cancellationToken) is not CommandOptions options)
@@ -143,6 +144,11 @@ internal sealed class AdoptCommand(CliContext context)
             return $"the edited manifest does not load ({error.Describe()})";
         }
 
+        if (!options.Flag("--no-sandbox"))
+        {
+            await AddSandboxDenialsAsync(manifest.Root, done, manual, cancellationToken);
+        }
+
         string claudeMd = Path.Combine(manifest.Root, "CLAUDE.md");
         string claudeText = File.Exists(claudeMd) ? await File.ReadAllTextAsync(claudeMd, cancellationToken) : string.Empty;
         if (!ClaudeMdBlock.IsCurrent(claudeText))
@@ -170,6 +176,33 @@ internal sealed class AdoptCommand(CliContext context)
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Merges the sandbox write denials for the protected paths, the ones apply just added included, into the project's Claude Code
+    /// settings. Settings that cannot be merged into are left as they are and the fix is listed.
+    /// </summary>
+    private static async Task AddSandboxDenialsAsync(string root, List<string> done, List<string> manual, CancellationToken cancellationToken)
+    {
+        string path = Path.Combine(root, ClaudeSettingsMerger.RelativePath);
+        string? existing = File.Exists(path) ? await File.ReadAllTextAsync(path, cancellationToken) : null;
+        if (ClaudeSettingsMerger.Problem(existing) is string problem)
+        {
+            manual.Add($"{ClaudeSettingsMerger.RelativePath} {problem}, so no sandbox write denials were added; fix it by hand and run {EngineCommand.Name} init");
+            return;
+        }
+
+        Manifest manifest = ManifestLocator.Discover(root).Manifest!;
+        IReadOnlyList<string> denyWrite = SandboxSettings.DenyWrite(root, DefaultProtectedPaths.For(manifest));
+        (string json, bool changed) = ClaudeSettingsMerger.MergeSandbox(existing, denyWrite);
+        if (!changed)
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, json, cancellationToken);
+        done.Add($"sandbox write denials for {denyWrite.Count} protected paths merged into {ClaudeSettingsMerger.RelativePath} (in force while the Claude Code sandbox is on)");
     }
 
     private async Task<ExitCode> UndoAsync(Manifest manifest, string? backup, bool force, CancellationToken cancellationToken)

@@ -171,6 +171,47 @@ public sealed class ReadinessChecksTests : IDisposable
     }
 
     [Fact]
+    public async Task SettingsWithoutSandboxWriteDenialsWarnWithTheFix()
+    {
+        Write(".claude/settings.json", "{}");
+
+        DoctorCheck check = await CheckAsync("sandbox");
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("init", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AProtectedFileMissingFromTheSandboxWriteDenialsIsNamed()
+    {
+        Write("global.json", "{}");
+        Write(".claude/settings.json", """{ "sandbox": { "filesystem": { "denyWrite": ["./.lockflight/bin"] } } }""");
+
+        DoctorCheck check = await CheckAsync("sandbox");
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("./global.json", check.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CompleteSandboxWriteDenialsSayWhetherTheSandboxIsOn()
+    {
+        Write(".claude/settings.json", """{ "sandbox": { "filesystem": { "denyWrite": ["./.lockflight/bin", "./.claude/settings.json", "./.claude/settings.local.json"] } } }""");
+        DoctorCheck off = await CheckAsync("sandbox");
+        Write(".claude/settings.local.json", """{ "sandbox": { "enabled": true } }""");
+
+        DoctorCheck on = await CheckAsync("sandbox");
+
+        Assert.Equal(CheckStatus.Pass, off.Status);
+        Assert.Equal(CheckStatus.Pass, on.Status);
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.StartsWith("off:", off.Detail, StringComparison.Ordinal);
+            Assert.StartsWith("on:", on.Detail, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task AToolManifestOfTheWrongShapeFailsWithItsFix()
     {
         Write("dotnet-tools.json", """{ "version": 1, "tools": [] }""");

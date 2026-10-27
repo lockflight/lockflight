@@ -5,7 +5,8 @@ using Lockflight.Cli.Hosting;
 namespace Lockflight.Cli.Init;
 
 /// <summary>
-/// Adds the Lockflight marketplace and enables the plugin in a project's <c>.claude/settings.json</c>, keeping every other key
+/// Adds the Lockflight marketplace, enables the plugin and adds the sandbox write denials for the protected paths
+/// (<see cref="SandboxSettings"/>) in a project's <c>.claude/settings.json</c>, keeping every other key
 /// (a project-scope install alone writes only <c>enabledPlugins</c>, so teammates would never be offered the plugin). Settings it
 /// cannot merge into without losing something are left as they are, and <see cref="Problem"/> says why.
 /// </summary>
@@ -18,8 +19,8 @@ internal static class ClaudeSettingsMerger
 
     /// <summary>
     /// Why the settings cannot be merged into: not strict JSON (comments and trailing commas would be lost when the file is
-    /// written back), a key the merge writes into holds something else than an object, or the plugin's entry is not true or
-    /// false. Null when <see cref="Merge"/> may write.
+    /// written back), a key the merge writes into holds something else than an object (or a list of paths), or the plugin's entry
+    /// is not true or false. Null when <see cref="Merge"/> may write.
     /// </summary>
     public static string? Problem(string? existingJson)
     {
@@ -48,12 +49,19 @@ internal static class ClaudeSettingsMerger
             return $"has a \"{notAnObject}\" that is not an object";
         }
 
+        if (SandboxSettings.Problem(settings) is string sandboxProblem)
+        {
+            return sandboxProblem;
+        }
+
         return settings[EnabledPluginsKey]?[Templates.PluginId] is JsonNode plugin && plugin.GetValueKind() is not (JsonValueKind.True or JsonValueKind.False)
             ? $"has an \"{EnabledPluginsKey}\" entry for {Templates.PluginId} that is not true or false"
             : null;
     }
 
-    public static (string Json, bool Changed) Merge(string? existingJson)
+    /// <param name="existingJson">The settings file's text; null when there is none.</param>
+    /// <param name="denyWrite">The sandbox write denials to add (<see cref="SandboxSettings.DenyWrite"/>); null adds none.</param>
+    public static (string Json, bool Changed) Merge(string? existingJson, IReadOnlyList<string>? denyWrite)
     {
         if (existingJson is not null && Problem(existingJson) is not null)
         {
@@ -80,6 +88,27 @@ internal static class ClaudeSettingsMerger
             changed = true;
         }
 
+        if (denyWrite is not null)
+        {
+            changed |= SandboxSettings.Merge(settings, denyWrite);
+        }
+
+        return (JsonFiles.Format(settings), changed);
+    }
+
+    /// <summary>
+    /// Only the sandbox write denials, for <c>adopt apply</c>, which leaves the plugin settings to <c>init</c>. A file that does not
+    /// exist is created; one that cannot be merged into is left as it is.
+    /// </summary>
+    public static (string Json, bool Changed) MergeSandbox(string? existingJson, IReadOnlyList<string> denyWrite)
+    {
+        if (existingJson is not null && Problem(existingJson) is not null)
+        {
+            return (existingJson, false);
+        }
+
+        JsonObject settings = existingJson is null ? [] : JsonNode.Parse(existingJson)?.AsObject() ?? [];
+        bool changed = SandboxSettings.Merge(settings, denyWrite);
         return (JsonFiles.Format(settings), changed);
     }
 
