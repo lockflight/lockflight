@@ -95,6 +95,55 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task ARecentCommitOnTheBranchAsTheBaseIsNotOfRecord()
+    {
+        await ProjectAsync();
+        await GitAsync("checkout", "-q", "-b", "feature");
+        await GitAsync("commit", "-q", "--allow-empty", "-m", "first feature commit");
+        await GitAsync("commit", "-q", "--allow-empty", "-m", "second feature commit");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review", "--base", "HEAD~1"]);
+
+        Assert.Equal(ExitCode.NotEarned, exitCode);
+        Assert.Contains("base HEAD~1", output, StringComparison.Ordinal);
+        Assert.Contains("is not the merge base of HEAD and the target main", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheTargetsMergeBaseOnAFeatureBranchIsOfRecord()
+    {
+        await ProjectAsync("version: 1\nreview:\n  target: main\n");
+        await GitAsync("checkout", "-q", "-b", "feature");
+        await GitAsync("commit", "-q", "--allow-empty", "-m", "feature commit");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("is the merge base of HEAD and main", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheDefaultTargetIsTheBranchOriginHeadPointsAt()
+    {
+        await ProjectAsync();
+        await GitAsync("update-ref", "refs/remotes/origin/main", "HEAD");
+        await GitAsync("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+        claude.Answers();
+
+        (ExitCode exitCode, _, _) = await RunAsync(["review"]);
+        (_, string status, _) = await RunAsync(["review", "status"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Assert.Equal("origin/main", evidence.RootElement.GetProperty("base").GetProperty("ref").GetString());
+        Assert.Equal("origin/main", evidence.RootElement.GetProperty("base").GetProperty("target").GetString());
+        Assert.Contains("base `origin/main`", status, StringComparison.Ordinal);
+        Assert.Contains("target `origin/main`, merge base `", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ABadBudgetIsAUsageError()
     {
         await ProjectAsync();

@@ -15,6 +15,7 @@ internal static class Git
     public const string WorkingTree = "HEAD";
 
     private const string Executable = "git";
+    private const string RemotesPrefix = "refs/remotes/";
 
     private static readonly string[] Unquoted = ["-c", "core.quotePath=false"];
 
@@ -33,6 +34,18 @@ internal static class Git
     {
         ProcessResult commit = await ProcessRunner.RunAsync(Executable, ["rev-parse", "--verify", "--quiet", "--end-of-options", $"{reference}^{{commit}}"], root, cancellationToken);
         return commit.ExitCode == 0 && commit.Output.Trim() is { Length: > 0 } id ? id : null;
+    }
+
+    /// <summary>
+    /// The repository's default branch as this clone knows it: the branch <c>origin/HEAD</c> points at (<c>origin/main</c>), else
+    /// <paramref name="fallback"/>.
+    /// </summary>
+    public static async Task<string> DefaultBranchAsync(string root, string fallback, CancellationToken cancellationToken)
+    {
+        ProcessResult head = await ProcessRunner.RunAsync(Executable, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], root, cancellationToken);
+        return head.ExitCode == 0 && head.Output.Trim() is { } reference && reference.StartsWith(RemotesPrefix, StringComparison.Ordinal)
+            ? reference[RemotesPrefix.Length..]
+            : fallback;
     }
 
     /// <summary>The newest commit both <paramref name="reference"/> and HEAD descend from; null when there is none or git fails.</summary>

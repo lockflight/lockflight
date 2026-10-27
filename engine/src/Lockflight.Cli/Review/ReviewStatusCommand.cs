@@ -36,7 +36,8 @@ internal sealed class ReviewStatusCommand(CliContext context)
         foreach (ReviewRunSummary run in history.Runs)
         {
             string record = run.OfRecord ? "of record" : $"not of record: {string.Join("; ", run.NotOfRecord)}";
-            await output.WriteLineAsync($"- {run.Id} {run.Model}, base {run.BaseRef}, ${run.EstimatedCostUsd.ToString("0.000", CultureInfo.InvariantCulture)} (estimate), {record}");
+            await output.WriteLineAsync(
+                $"- {run.Id} {run.Model}, {ReviewSummary.Bases(run.Base)}, ${run.EstimatedCostUsd.ToString("0.000", CultureInfo.InvariantCulture)} (estimate), {record}");
         }
 
         await output.WriteLineAsync($"\nOpen findings ({history.Open.Count}):");

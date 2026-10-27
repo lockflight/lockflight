@@ -14,14 +14,15 @@ namespace Lockflight.Cli.Review;
 /// <c>lockflight review [--feature id] [--base ref] [--model name] [--budget usd]</c> — the review: the engine builds the prompt from
 /// the spec and the diff, runs a read-only <c>claude -p</c> with a JSON schema, confirms blocker/major findings by running their
 /// reproductions (and re-runs those of findings still open from earlier runs), and stores the run. A run counts as the review of
-/// record only with the manifest's model and budget against a base that is the merge base; others are recorded and say why not.
+/// record only with the manifest's model and budget against a base whose commit is the merge base of HEAD and the target branch
+/// (<c>review.target</c>, else <c>origin/HEAD</c>'s branch, else <c>main</c>; also the default base); others are recorded and say why not.
 /// Exit 1 when an open blocker/major finding is confirmed, 5 (NOT-EARNED) when one is unverified or the run is not of record, 0
 /// otherwise. Advisory (guardrail): it runs with the developer's credentials and the agent can skip it.
 /// </summary>
 internal sealed class ReviewCommand(CliContext context)
 {
     private const int MaxDiffCharacters = 120_000;
-    private const string DefaultBase = "main";
+    private const string DefaultTarget = "main";
 
     private static readonly TimeSpan VersionTimeLimit = TimeSpan.FromSeconds(30);
     private static readonly string[] ValueOptions = ["--feature", "--base", "--model", "--budget"];
@@ -60,7 +61,8 @@ internal sealed class ReviewCommand(CliContext context)
             return ExitCode.NotEarned;
         }
 
-        string baseRef = options.Value("--base") ?? DefaultBase;
+        string target = manifest.Review.Target ?? await Git.DefaultBranchAsync(manifest.Root, DefaultTarget, cancellationToken);
+        string baseRef = options.Value("--base") ?? target;
         if (await CodeDiffAsync(manifest.Root, baseRef, cancellationToken) is not string diff)
         {
             await context.Error.WriteLineAsync($"lockflight: git diff against '{baseRef}' failed; pass --base <ref> (in a workspace, every unit repository needs that ref)");
@@ -73,15 +75,17 @@ internal sealed class ReviewCommand(CliContext context)
             return ExitCode.NotEarned;
         }
 
-        return await ReviewAsync(manifest, feature, claude, baseRef, diff, options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
+        ReviewBase reviewBase = new(
+            baseRef, await Git.CommitOfAsync(manifest.Root, baseRef, cancellationToken), target, await Git.MergeBaseAsync(manifest.Root, target, cancellationToken));
+        return await ReviewAsync(manifest, feature, claude, reviewBase, diff, options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
     }
 
     /// <summary>Asks the reviewer, confirms its findings and the open ones, stores the run and turns the outcome into the exit code.</summary>
     private async Task<ExitCode> ReviewAsync(
-        Manifest manifest, Feature feature, string claude, string baseRef, string diff, string model, decimal budget, CancellationToken cancellationToken)
+        Manifest manifest, Feature feature, string claude, ReviewBase reviewBase, string diff, string model, decimal budget, CancellationToken cancellationToken)
     {
         DateTimeOffset started = context.Time.GetUtcNow();
-        await context.Output.WriteLineAsync($"Reviewing {feature.Id} against {baseRef} with {model} (budget ${ReviewOfRecord.Usd(budget)})…");
+        await context.Output.WriteLineAsync($"Reviewing {feature.Id} against {reviewBase.Ref} with {model} (budget ${ReviewOfRecord.Usd(budget)})…");
         string requirements = await File.ReadAllTextAsync(feature.SpecPath, cancellationToken);
         string prompt = ReviewPrompt.Build(requirements, Truncated(diff));
         string? claudeVersion = await ClaudeVersionAsync(manifest, claude, cancellationToken);
@@ -97,7 +101,6 @@ internal sealed class ReviewCommand(CliContext context)
         ReviewHistory history = ReviewEvidence.Load(feature.RecordDirectory);
         IReadOnlyList<ReviewFinding> judged = await ConfirmFindingsAsync(manifest, feature, FindingLifecycle.Carry(outcome.Findings, history), cancellationToken);
         outcome = outcome with { Findings = FindingLifecycle.Resolve(judged, history) };
-        ReviewBase reviewBase = new(baseRef, await Git.CommitOfAsync(manifest.Root, baseRef, cancellationToken), await Git.MergeBaseAsync(manifest.Root, baseRef, cancellationToken));
         ReviewRun run = new(
             ReviewEvidence.NewRunId(feature.RecordDirectory, started),
             started,
@@ -243,7 +246,7 @@ internal sealed class ReviewCommand(CliContext context)
             $"Cost ${Cost(outcome)} (estimate), {outcome.Usage.InputTokens} input and {outcome.Usage.OutputTokens} output tokens, {outcome.DurationMs / 1000} s. "
             + $"Evidence: {Path.GetRelativePath(root, evidence)}");
         await context.Output.WriteLineAsync(run.OfRecord
-            ? $"This run is the review of record (base {run.Base.Ref} is the merge base)."
+            ? $"This run is the review of record (base {run.Base.Ref} is the merge base of HEAD and {run.Base.Target})."
             : $"This run is recorded but is not the review of record: {string.Join("; ", run.NotOfRecord)}.");
         int open = outcome.Findings.Count(finding => finding.State == FindingState.Open);
         await context.Output.WriteLineAsync(

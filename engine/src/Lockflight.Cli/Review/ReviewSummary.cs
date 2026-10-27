@@ -14,15 +14,24 @@ internal static class ReviewSummary
         }
 
         ReviewRunSummary latest = history.Runs[^1];
-        string mergeBase = latest.MergeBase is null ? "no merge base" : $"merge base `{ReviewOfRecord.Short(latest.MergeBase)}`";
+        string bases = Bases(latest.Base);
         string record = latest.OfRecord ? "is the review of record" : $"is not the review of record ({string.Join("; ", latest.NotOfRecord)})";
         List<string> lines =
         [
-            $"**Lockflight review:** base `{latest.BaseRef}` ({mergeBase}), {Runs(history.Runs.Count)}; the latest ({latest.Model}) {record}.",
+            $"**Lockflight review:** {bases}, {Runs(history.Runs.Count)}; the latest ({latest.Model}) {record}.",
             $"Open blocker/major findings: {history.Open.Count} · fixed: {history.Fixed.Count} · dismissed by a person: {history.Dismissed.Count}",
         ];
         lines.AddRange(history.Open.Select(tracked => $"- {Line(tracked.Finding)}"));
         return lines;
+    }
+
+    /// <summary>"base `main` (`1a2b3c4`), target `origin/main`, merge base `1a2b3c4`"; parts git could not name say so.</summary>
+    public static string Bases(ReviewBase reviewBase)
+    {
+        string commit = reviewBase.Commit is null ? string.Empty : $" (`{ReviewOfRecord.Short(reviewBase.Commit)}`)";
+        string target = reviewBase.Target.Length == 0 ? "no target recorded" : $"target `{reviewBase.Target}`";
+        string mergeBase = reviewBase.MergeBase is null ? "no merge base" : $"merge base `{ReviewOfRecord.Short(reviewBase.MergeBase)}`";
+        return $"base `{reviewBase.Ref}`{commit}, {target}, {mergeBase}";
     }
 
     /// <summary>"1 review run", "3 review runs".</summary>

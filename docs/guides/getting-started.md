@@ -89,7 +89,7 @@ Commit in the shell, and in each service repository after `workspace sync`. Star
 - **Tool pin:** `init` pins the dev version, which exists only in your local feed. A teammate runs the same script to get it.
   `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
   root, as the skills do; `doctor` reports a pin that cannot be restored on this machine.
-- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `adopt apply|undo`, `update`) are yours: run them in a separate
+- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply|undo`, `update`) are yours: run them in a separate
   terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
   approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`).
 - **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. An install from source

@@ -257,7 +257,7 @@ internal sealed partial class ManifestParser(string root, string path)
     {
         if (valueNode is not YamlMappingNode section)
         {
-            return Error(valueNode.Start, "'review' must be a mapping (known keys: model, maxUsd)");
+            return Error(valueNode.Start, "'review' must be a mapping (known keys: model, maxUsd, target)");
         }
 
         ReviewSettings settings = review with { FromManifest = true };
@@ -280,10 +280,15 @@ internal sealed partial class ManifestParser(string root, string path)
                     && budget is > 0 and <= ReviewSettings.MaxBudgetUsd:
                     settings = settings with { BudgetUsd = budget };
                     break;
+                case "target" when text is not null && TargetName().IsMatch(text):
+                    settings = settings with { Target = text };
+                    break;
+                case "target":
+                    return Error(value.Start, "'review.target' must be a branch name such as main or origin/main");
                 case "maxUsd":
                     return Error(value.Start, $"'review.maxUsd' must be an amount in US dollars above 0 and at most {ReviewSettings.MaxBudgetUsd}, such as 3.00");
                 default:
-                    return Error(keyNode.Start, $"unknown key 'review.{key}' (known: model, maxUsd)");
+                    return Error(keyNode.Start, $"unknown key 'review.{key}' (known: model, maxUsd, target)");
             }
         }
 
@@ -443,4 +448,7 @@ internal sealed partial class ManifestParser(string root, string path)
 
     [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._\[\]-]*$")]
     private static partial Regex ModelName();
+
+    [GeneratedRegex(@"^[A-Za-z0-9_][A-Za-z0-9._/-]*$")]
+    private static partial Regex TargetName();
 }

@@ -66,6 +66,7 @@ internal static class ReviewEvidence
             {
                 ["ref"] = run.Base.Ref,
                 ["commit"] = run.Base.Commit,
+                ["target"] = run.Base.Target,
                 ["mergeBase"] = run.Base.MergeBase,
                 ["isMergeBase"] = run.Base.IsMergeBase,
             },
@@ -78,6 +79,7 @@ internal static class ReviewEvidence
             {
                 ["model"] = run.Settings.Model,
                 ["maxUsd"] = run.Settings.BudgetUsd,
+                ["target"] = run.Settings.Target,
                 ["source"] = run.Settings.FromManifest ? "manifest" : "default",
             },
             ["claudeCodeVersion"] = run.ClaudeCodeVersion,
@@ -152,7 +154,7 @@ internal static class ReviewEvidence
         decimal cost = Number(root, schema == Schema ? "estimatedCostUsd" : "costUsd");
         if (schema == FirstSchema)
         {
-            return new ReviewRunSummary(runId, at, Text(root, "model"), Text(root, "base"), null, [BeforeTheRules], cost);
+            return new ReviewRunSummary(runId, at, Text(root, "model"), new ReviewBase(Text(root, "base"), null, string.Empty, null), [BeforeTheRules], cost);
         }
 
         foreach (JsonElement element in root.GetProperty("findings").EnumerateArray())
@@ -176,8 +178,8 @@ internal static class ReviewEvidence
 
         JsonElement reviewBase = root.GetProperty("base");
         string[] notOfRecord = [.. root.GetProperty("notOfRecord").EnumerateArray().Select(reason => reason.GetString() ?? string.Empty)];
-        string? mergeBase = reviewBase.TryGetProperty("mergeBase", out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-        return new ReviewRunSummary(runId, at, Text(root, "model"), Text(reviewBase, "ref"), mergeBase, notOfRecord, cost);
+        ReviewBase recordedBase = new(Text(reviewBase, "ref"), OptionalText(reviewBase, "commit"), Text(reviewBase, "target"), OptionalText(reviewBase, "mergeBase"));
+        return new ReviewRunSummary(runId, at, Text(root, "model"), recordedBase, notOfRecord, cost);
     }
 
     private static ReviewFinding ReadFinding(JsonElement element) =>
@@ -198,6 +200,8 @@ internal static class ReviewEvidence
 
     private static string Text(JsonElement element, string property) =>
         element.TryGetProperty(property, out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : string.Empty;
+
+    private static string? OptionalText(JsonElement element, string property) => Text(element, property) is { Length: > 0 } text ? text : null;
 
     private static decimal Number(JsonElement element, string property) =>
         element.TryGetProperty(property, out JsonElement value) && value.TryGetDecimal(out decimal number) ? number : 0m;

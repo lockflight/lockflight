@@ -14,9 +14,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   every later `lockflight review` until its reproduction passes (fixed) or you close it with
   `lockflight review dismiss <id> --reason "…"` (human-only, records who, when and why). A later clean run no longer hides it.
 - `lockflight review status` lists the review runs and the open, fixed and dismissed findings, with a summary for the pull
-  request body (base, number of review runs, open findings).
-- A `review:` section in `lockflight.yaml` (`model`, `maxUsd`). A review is the review of record only with those settings
-  against a base that is the merge base; other runs are recorded with the reason and a clean one exits NOT-EARNED.
+  request body (base, target, merge base, number of review runs, open findings).
+- A `review:` section in `lockflight.yaml` (`model`, `maxUsd`, `target`). A review is the review of record only with those
+  settings against a base whose commit is the merge base of HEAD and the target branch (default: `origin/HEAD`'s branch, else
+  `main`); other runs are recorded with the reason and a clean one exits NOT-EARNED. The base now defaults to the target.
 - Review evidence records the base and its merge base, the model and budget, the Claude Code version, tokens, the estimated
   cost and the wall time; the ledger gets `review.completed`, `finding.fixed` and `finding.dismissed` (no finding text), which
   the retro counts and the status line shows.

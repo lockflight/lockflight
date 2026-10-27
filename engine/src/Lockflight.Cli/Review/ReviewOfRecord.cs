@@ -4,8 +4,9 @@ using Lockflight.Cli.Config;
 namespace Lockflight.Cli.Review;
 
 /// <summary>
-/// Whether a run counts as the review of record: only with the manifest's (or the default) model and budget, against a base that is
-/// the merge base of that base and HEAD. Any other run is recorded too, with the reasons it is not of record, so a re-roll with a
+/// Whether a run counts as the review of record: only with the manifest's (or the default) model and budget, against a base whose
+/// commit is the merge base of HEAD and the target branch (so a recent commit on the branch cannot narrow the diff, and an outdated
+/// base cannot widen it). Any other run is recorded too, with the reasons it is not of record, so a re-roll with a
 /// cheaper model or an old base is visible rather than quietly replacing the review.
 /// </summary>
 internal static class ReviewOfRecord
@@ -27,12 +28,12 @@ internal static class ReviewOfRecord
 
         if (reviewBase.MergeBase is null)
         {
-            reasons.Add($"no merge base of {reviewBase.Ref} and HEAD");
+            reasons.Add($"no merge base of HEAD and the target {reviewBase.Target} (review.target)");
         }
         else if (!reviewBase.IsMergeBase)
         {
-            reasons.Add($"{reviewBase.Ref} ({Short(reviewBase.Commit)}) is not the merge base of {reviewBase.Ref} and HEAD ({Short(reviewBase.MergeBase)}): "
-                + $"{reviewBase.Ref} has moved on; merge or rebase onto it first");
+            reasons.Add($"base {reviewBase.Ref} ({Short(reviewBase.Commit)}) is not the merge base of HEAD and the target {reviewBase.Target} "
+                + $"({Short(reviewBase.MergeBase)}): review against the target, after merging or rebasing onto it when it has moved on");
         }
 
         return reasons;

@@ -22,7 +22,7 @@ Short definitions of the terms the other pages use, in the order you are likely 
 | **Baseline** | Accepted existing problems (build warnings, failing tests, advisories) for brownfield adoption. Only a human records them. |
 | **Lockdown** | `.lockflight/lockdown` exists: only reads are allowed until a human removes it. |
 | **Recovery mode** | The engine isn't linked yet: only reads and the restore command are allowed. |
-| **Human-only command** | `approve` (except `approve verify`), `baseline`, `redgreen reset`, `adopt apply\|undo`, `update`: refused inside a Claude Code session. |
+| **Human-only command** | `approve` (except `approve verify`), `baseline`, `redgreen reset`, `review dismiss`, `adopt apply\|undo`, `update`: refused inside a Claude Code session. |
 | **Ledger** | Local JSON-lines event log (blocks, verdicts, rejected reds, confirmed findings) that `ledger retro` clusters. It is not an audit log. |
 | **Lite / standard** | Onboarding profiles. Lite: guard and gates. Standard: adds Spec Kit and the lifecycle. |
 
