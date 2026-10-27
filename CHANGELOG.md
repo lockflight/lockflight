@@ -29,7 +29,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   by the main session as a stub and the round repeated.
 - The documentation has a home page organised by task, an "On this page" list on long guides, "Next" links at the end of
   each, and diagrams of the hook flow, guardrails and boundaries, and the workspace shell sample.
-- `lockflight review` uses `opus` by default (it leads public coding benchmarks among Claude models) with a `3.00` budget;
+- `lockflight review` uses `opus` by default with a `3.00` budget;
   `--model` and `--budget` still override both.
 - The guides now match the engine: the four hooks the plugin installs, every human-only command, red/green on xUnit v2
   as well as v3, what to do while the engine package is not published (install from source; no feed token), and uninstall
