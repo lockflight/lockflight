@@ -62,7 +62,9 @@ internal static class AdoptionPlanWriter
         }
 
         text.AppendLine("It backs up first; `adopt undo` restores. Nothing is replaced automatically: the team's own hooks, skills and agents")
-            .AppendLine("stay, and become protected from the agent.").AppendLine();
+            .AppendLine("stay, and become protected from the agent.").AppendLine()
+            .AppendLine("It also adds the protected files to the Claude Code sandbox's write denials in `.claude/settings.json` (merged, nothing")
+            .AppendLine("removed; `--no-sandbox` skips it). They take effect while the sandbox is on.").AppendLine();
         foreach (IGrouping<AdoptionArea, AdoptionItem> area in plan.Items.GroupBy(item => item.Area).OrderBy(group => group.Key))
         {
             text.AppendLine($"## {Title(area.Key)}").AppendLine().AppendLine("| Item | Action | Why |").AppendLine("|---|---|---|");

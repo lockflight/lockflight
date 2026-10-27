@@ -19,6 +19,7 @@ public sealed class AdoptCommandTests : IDisposable
         (ExitCode apply, string applyOutput, string applyError) = await TestConsole.RunAsync(["adopt", "apply", "--skip-speckit"], string.Empty, root.FullName);
         Manifest adopted = ManifestLocator.Discover(root.FullName).Manifest!;
         string claudeMd = File.ReadAllText(Path.Combine(root.FullName, "CLAUDE.md"));
+        string settingsAfterApply = File.ReadAllText(Path.Combine(root.FullName, ".claude", "settings.json"));
         (ExitCode undo, _, _) = await TestConsole.RunAsync(["adopt", "undo"], string.Empty, root.FullName);
 
         Assert.Equal(ExitCode.Pass, plan);
@@ -29,6 +30,8 @@ public sealed class AdoptCommandTests : IDisposable
         Assert.Equal(["services/orders"], adopted.Units.Select(unit => unit.Path));
         Assert.Contains("<!-- lockflight:begin -->", claudeMd, StringComparison.Ordinal);
         Assert.Contains("2 existing features marked", applyOutput, StringComparison.Ordinal);
+        Assert.Contains("./.claude/hooks", settingsAfterApply, StringComparison.Ordinal);
+        Assert.Contains("PreToolUse", settingsAfterApply, StringComparison.Ordinal);
         Assert.Equal(ExitCode.Pass, undo);
         Assert.Equal(before, Snapshot());
     }

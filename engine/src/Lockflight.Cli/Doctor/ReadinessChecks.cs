@@ -60,7 +60,13 @@ internal static class ReadinessChecks
             checks.Add(pluginEngine);
         }
 
-        checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root), await CheckClaudeVersionAsync(root, Claude, cancellationToken), CheckGitleaks(gitleaks)]);
+        checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root)]);
+        if (SandboxCheck.Check(root, userHome) is DoctorCheck sandbox)
+        {
+            checks.Add(sandbox);
+        }
+
+        checks.AddRange([await CheckClaudeVersionAsync(root, Claude, cancellationToken), CheckGitleaks(gitleaks)]);
         if (OperatingSystem.IsWindows())
         {
             checks.Add(await CheckGitBashAsync(root, Bash, cancellationToken));

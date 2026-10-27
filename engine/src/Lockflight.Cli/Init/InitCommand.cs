@@ -14,10 +14,11 @@ namespace Lockflight.Cli.Init;
 /// </summary>
 internal sealed class InitCommand(CliContext context)
 {
-    /// <summary><c>[--profile lite|standard] [--ci pr|manual|none] [--no-link]</c> in any order.</summary>
+    /// <summary><c>[--profile lite|standard] [--ci pr|manual|none] [--no-link] [--no-sandbox]</c> in any order.</summary>
     public async Task<ExitCode> RunAsync(string[] options, CancellationToken cancellationToken)
     {
         bool link = true;
+        bool sandbox = true;
         InitProfile profile = InitProfile.Lite;
         CiTrigger? requestedCi = null;
         for (int index = 0; index < options.Length; index++)
@@ -26,6 +27,9 @@ internal sealed class InitCommand(CliContext context)
             {
                 case "--no-link":
                     link = false;
+                    break;
+                case "--no-sandbox":
+                    sandbox = false;
                     break;
                 case "--profile" when index + 1 < options.Length:
                     string name = options[++index];
@@ -50,14 +54,14 @@ internal sealed class InitCommand(CliContext context)
                 case "--ci":
                     return await RefuseAsync("--ci needs a value: pr, manual or none");
                 default:
-                    return await RefuseAsync($"unknown init option '{options[index]}'; use --profile lite|standard, --ci pr|manual|none or --no-link");
+                    return await RefuseAsync($"unknown init option '{options[index]}'; use --profile lite|standard, --ci pr|manual|none, --no-link or --no-sandbox");
             }
         }
 
-        return await InitializeAsync(link, profile, requestedCi, cancellationToken);
+        return await InitializeAsync(link, sandbox, profile, requestedCi, cancellationToken);
     }
 
-    private async Task<ExitCode> InitializeAsync(bool link, InitProfile profile, CiTrigger? requestedCi, CancellationToken cancellationToken)
+    private async Task<ExitCode> InitializeAsync(bool link, bool sandbox, InitProfile profile, CiTrigger? requestedCi, CancellationToken cancellationToken)
     {
         // The pin init writes is this engine's version: a newer pin is refused below and an older one is raised to it.
         bool developmentPin = EngineVersion.IsDevelopmentBuild(ToolPin.RunningVersion);
@@ -80,7 +84,6 @@ internal sealed class InitCommand(CliContext context)
             await WriteIfMissingAsync(root, Manifest.FileName, manifest, cancellationToken),
             await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, cancellationToken),
             await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), cancellationToken),
-            await TransformAsync(root, ClaudeSettingsMerger.RelativePath, ClaudeSettingsMerger.Merge, cancellationToken),
         ];
         if (ci != CiTrigger.None)
         {
@@ -91,6 +94,9 @@ internal sealed class InitCommand(CliContext context)
         {
             steps.Add(await TransformAsync(root, ".gitattributes", GitAttributesUpdater.Update, cancellationToken));
         }
+
+        // Last, so the sandbox write denials cover every protected file init has just written (the CI workflow included).
+        steps.Add(await TransformAsync(root, ClaudeSettingsMerger.RelativePath, existing => ClaudeSettingsMerger.Merge(existing, sandbox ? SandboxDenials(root) : null), cancellationToken));
 
         foreach (InitStep step in steps)
         {
@@ -166,6 +172,10 @@ internal sealed class InitCommand(CliContext context)
             ? $"{ClaudeSettingsMerger.RelativePath} {settingsProblem}; fix it by hand (keep your settings) and run init again"
             : null;
     }
+
+    /// <summary>The protected paths of the manifest just written (built-in, per unit and its own) as sandbox write denials.</summary>
+    private static IReadOnlyList<string> SandboxDenials(string root) =>
+        SandboxSettings.DenyWrite(root, ManifestLocator.Discover(root).Manifest is Manifest manifest ? DefaultProtectedPaths.For(manifest) : DefaultProtectedPaths.Globs);
 
     /// <summary>The nearest existing Lockflight project, else the current directory.</summary>
     private string ProjectRoot() =>

@@ -5,8 +5,9 @@ around one.
 
 **On this page:** [Two kinds of control](#two-kinds-of-control) · [Every control, labelled](#every-control-labelled) ·
 [What the shell write detection sees](#what-the-shell-write-detection-sees) ·
-[Proposing a protected change](#proposing-a-protected-change) · [GitHub plan limits](#github-plan-limits) ·
-[Every safeguard red at least once](#every-safeguard-red-at-least-once) · [What this means in practice](#what-this-means-in-practice)
+[The Claude Code sandbox](#the-claude-code-sandbox) · [Proposing a protected change](#proposing-a-protected-change) ·
+[GitHub plan limits](#github-plan-limits) · [Every safeguard red at least once](#every-safeguard-red-at-least-once) ·
+[What this means in practice](#what-this-means-in-practice)
 
 ## Two kinds of control
 
@@ -33,6 +34,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | Human-only commands refused inside Claude Code (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply\|undo`, `update`) | G | detected via `CLAUDECODE=1` and command tokens, also inside the nested command strings the guard reads (`bash -c`, `eval`, a here-document fed to `sh`); the variable can be unset |
 | In-session approval (`/lockflight:approve`, typed by you) | G | It works only in an interactive session, and binds the approval to the content the engine showed you. A prompt Claude Code starts by itself (a scheduled task, a loop, a message from another session) expands slash commands like a typed one, so the guard blocks any tool call that would queue `/lockflight:approve`; the code is shown in the session transcript, so it binds content, it is not a secret; a fifth wrong code discards it, and a typed `/lockflight:approve` is refused rather than passed on to the agent when the engine is missing or fails. It cannot stop a message sent from a session outside this project, or an agent that drives your terminal (tmux, AppleScript). The boundary is a presence-gated signature (`--sign`) verified in CI against signers from the base branch. |
 | Linked engine trust: the hook shim runs `.lockflight/bin/lockflight` only when it is not committed to the repository and, outside Windows, belongs to you | G | It stops a cloned project from shipping its own program as the engine, and a `lockflight.yaml` in a shared folder such as `/tmp` from running another user's binary. The shim does not compare the binary with the released package. A passed check is remembered in `.git` until the file changes, so committing the unchanged file afterwards goes unnoticed until the engine is linked again. Without `git` on the path the committed check is skipped. A project you trust can already run code through its own hooks, so this narrows one path; it is not a sandbox. |
+| Sandbox write denials for protected paths (`sandbox.filesystem.denyWrite`, listed by `init` and `adopt apply`) | G, stronger | While the Claude Code sandbox is on (macOS, Linux, WSL2), the operating system refuses a shell command's write to those paths, in every child process, however the command hides it. It is still your machine: the sandbox is off unless you or your organisation turn it on, Claude can retry a refused command outside the sandbox unless `allowUnsandboxedCommands` is `false`, the built-in Edit and Write tools are not sandboxed (the guard covers them), and native Windows has no sandbox. See [below](#the-claude-code-sandbox) |
 | Task completion gate (`TaskCompleted` hook, with `stop.gate: true`) | G | A task is marked completed only when the stop gate has passed for the current tree (the Stop gate's or a `gate run`'s cached PASS). It reads evidence and runs no build. Claude Code completes the task when the hook fails or times out (only exit 2 blocks), and it does not block twice on a tree the Stop gate already sent back in the session |
 | Stop gate at the end of a turn | G | the agent's own session; Claude Code caps continuations |
 | Test lock during a red cycle | G | applied by the guard (above); see the shell commands it recognises below |
@@ -160,6 +162,76 @@ for `é`, which macOS file systems open as the same file) matches its rule. On W
 `\\?\UNC\…` and this machine's administrative shares (`\\localhost\C$\…`) are judged as the drive path they name; a volume,
 device or share path the guard cannot map to a drive is blocked. Hard links are not followed. That is why it is a
 guardrail: it stops the common accidents, not a determined agent.
+
+## The Claude Code sandbox
+
+The guard reads shell commands; a script or an interpreter can hide a write from it. The
+[Claude Code sandbox](https://code.claude.com/docs/en/sandboxing.md) does not read commands: it runs every Bash command and its
+child processes under the operating system's own restrictions (Seatbelt on macOS, bubblewrap on Linux and WSL2). `init` and
+`adopt apply` therefore list the protected paths in the project's `.claude/settings.json`, merged into what the team has and
+never removing an entry:
+
+```json
+{
+  "sandbox": {
+    "filesystem": {
+      "denyWrite": ["./.claude/settings.json", "./.github/workflows/lockflight-gates.yml", "./.lockflight/bin", "./dotnet-tools.json", "./lockflight.yaml"],
+      "allowWrite": ["~/.nuget/packages", "~/.local/share/NuGet", "~/.dotnet"]
+    }
+  }
+}
+```
+
+- **`denyWrite`** holds the [built-in protected paths](configuration.md#built-in-protected-paths), each unit's and the manifest's
+  own, as they exist when the command runs. Claude Code documents that the sandbox's own default already denies writes to its
+  settings files and the `.claude/` hooks, skills, agents and commands, and to `.git/hooks` and `.git/config`. Three choices keep
+  builds working:
+  - A pattern such as `**/Directory.Build.props` is listed as each file it matches: on Linux and WSL2 these lists support no
+    wildcard but a trailing `/**`.
+  - A path that does not exist yet is left out: on Linux and WSL2 the sandbox holds a denial on a missing file by placing an
+    empty read-only file there while a command runs, and an empty `global.json` or `Directory.Build.props` would break the
+    build. Run `init` again after adding a protected file; `doctor` names the ones the list misses.
+  - Of `.lockflight/` only the linked engine (`.lockflight/bin`, listed even before it is linked) and the baselines are listed.
+    Evidence, the ledger and the Stop cache are written by the commands the agent runs, such as `lockflight gate run` and test
+    runs. With the sandbox on, `dotnet lockflight link` therefore runs in a terminal, outside it.
+- **`allowWrite`** adds the folders `dotnet` writes outside the project: the NuGet packages and caches and the SDK's first-run
+  files. Without them a restore fails inside the sandbox, which lets commands write only the project and the temp directory.
+
+`init --no-sandbox` and `adopt apply --no-sandbox` write neither list.
+
+**Lockflight does not turn the sandbox on.** In our check on macOS with the same sandbox runtime, `dotnet build` waited five
+minutes and exited 1, because MSBuild's worker nodes talk over Unix sockets, which the sandbox blocks by default. With
+`"network": { "allowAllUnixSockets": true }` the build passed, but VSTest still aborted: its test host connects over localhost.
+Turning the sandbox on is a choice for you or your organisation:
+
+- **For yourself:** run `/sandbox`, or set `"sandbox": { "enabled": true }` in `~/.claude/settings.json`. For .NET, also set
+  `"network": { "allowAllUnixSockets": true }` there, and check that your test runner works inside the sandbox. Allowing every
+  Unix socket loosens the sandbox: a sandboxed command can then reach local services such as the Docker socket, and with Docker
+  write anywhere. Turning the sandbox on also switches Bash to auto-allow mode (`autoAllowBashIfSandboxed`, default `true`):
+  sandboxed commands run without a permission prompt. Set it to `false` to keep your prompts.
+- **For a team:** deliver the sandbox through
+  [managed settings](https://code.claude.com/docs/en/settings.md#settings-files) (macOS
+  `/Library/Application Support/ClaudeCode/managed-settings.json`, Linux and WSL `/etc/claude-code/managed-settings.json`).
+  `allowUnsandboxedCommands: false` makes Claude Code ignore the `dangerouslyDisableSandbox` retry, so a refused command stays
+  refused, and makes the sandbox admin-required: Claude Code then ignores a repository's settings that loosen it, the
+  `allowWrite` entries above included, so the managed file carries them. The project's `denyWrite` still applies.
+  `failIfUnavailable: true` refuses to start Claude Code where the sandbox cannot run, which includes native Windows.
+
+  ```json
+  {
+    "sandbox": {
+      "enabled": true,
+      "failIfUnavailable": true,
+      "allowUnsandboxedCommands": false,
+      "filesystem": { "allowWrite": ["~/.nuget/packages", "~/.local/share/NuGet", "~/.dotnet"] },
+      "network": { "allowAllUnixSockets": true, "allowedDomains": ["api.nuget.org"] }
+    }
+  }
+  ```
+
+`lockflight doctor` shows the state: whether the list is there and covers the protected files that exist, and whether the
+sandbox is on in the managed, local, project or user settings. Even on, it is a guardrail: it runs on your machine with your
+credentials, a person can turn it off, and hooks, MCP servers and the built-in file tools run outside it.
 
 ## Proposing a protected change
 

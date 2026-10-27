@@ -69,8 +69,10 @@ With an existing `.specify/`, never run `specify init`: adoption upgrades it wit
 ## 5. Initialize
 
 Run `~/.lockflight/bin/lockflight init --profile <lite|standard> --ci <pr|manual|none>` and show the
-created/updated/unchanged list. It writes the manifest, the tool pin, `.gitignore`, `.claude/settings.json`, the CI workflow
-and the linked engine; it is idempotent and only merges into existing files. Then follow the reference files that apply.
+created/updated/unchanged list. It writes the manifest, the tool pin, `.gitignore`, `.claude/settings.json` (the plugin, and
+the protected paths as Claude Code sandbox write denials), the CI workflow and the linked engine; it is idempotent and only
+merges into existing files. It does not turn the sandbox on: if the user asks, point them to "The Claude Code sandbox" in
+docs/guides/guardrails-and-boundaries.md, which says what .NET builds need inside it. Then follow the reference files that apply.
 
 ## 6. Verify
 

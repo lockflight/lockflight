@@ -102,6 +102,7 @@ public sealed class InitCommandTests : IDisposable
     [InlineData("// team settings\n{}")]
     [InlineData("""{ "enabledPlugins": { "lockflight@lockflight": "yes" } }""")]
     [InlineData("""{ "enabledPlugins": [] }""")]
+    [InlineData("""{ "sandbox": { "filesystem": { "denyWrite": "./lockflight.yaml" } } }""")]
     public async Task ClaudeSettingsInitCannotMergeIntoAreRefusedBeforeAnythingIsWritten(string settings)
     {
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".claude"));
@@ -247,6 +248,44 @@ public sealed class InitCommandTests : IDisposable
         string gitIgnore = File.ReadAllText(Path.Combine(projectRoot.FullName, ".gitignore"));
         Assert.StartsWith("bin/\nobj/\n", gitIgnore, StringComparison.Ordinal);
         Assert.Contains(".lockflight/bin/", gitIgnore, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task InitListsTheProtectedPathsAsSandboxWriteDenialsWithoutTurningTheSandboxOn()
+    {
+        File.WriteAllText(Path.Combine(projectRoot.FullName, "global.json"), "{}");
+
+        await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        JsonNode settings = JsonNode.Parse(File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json")))!;
+        string[] denied = [.. settings["sandbox"]!["filesystem"]!["denyWrite"]!.AsArray().Select(entry => entry!.GetValue<string>())];
+        Assert.Contains("./lockflight.yaml", denied);
+        Assert.Contains("./global.json", denied);
+        Assert.Contains("./.lockflight/bin", denied);
+        Assert.Contains("~/.nuget/packages", settings["sandbox"]!["filesystem"]!["allowWrite"]!.AsArray().Select(entry => entry!.GetValue<string>()));
+        Assert.Null(settings["sandbox"]!["enabled"]);
+    }
+
+    [Fact]
+    public async Task NoSandboxWritesNoSandboxSettings()
+    {
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["init", "--no-link", "--no-sandbox"], "", projectRoot.FullName);
+
+        JsonNode settings = JsonNode.Parse(File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json")))!;
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Null(settings["sandbox"]);
+    }
+
+    [Fact]
+    public async Task InitAgainAddsAProtectedFileCreatedSince()
+    {
+        await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+        File.WriteAllText(Path.Combine(projectRoot.FullName, "Directory.Build.props"), "<Project />");
+
+        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        Assert.Contains("updated    .claude/settings.json", output, StringComparison.Ordinal);
+        Assert.Contains("./Directory.Build.props", File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json")), StringComparison.Ordinal);
     }
 
     [Fact]

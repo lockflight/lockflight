@@ -152,6 +152,10 @@ These always apply; `protected:` can add paths but never remove these.
 | `.gitleaks.toml`, `.gitleaksignore` | secret-scanning policy |
 | `.github/workflows/lockflight-gates.yml` | the CI job that judges pull requests |
 
+The protected paths that exist are also listed as Claude Code sandbox write denials in `.claude/settings.json`, where the
+operating system enforces them for shell commands while the sandbox is on: see
+[the Claude Code sandbox](guardrails-and-boundaries.md#the-claude-code-sandbox).
+
 **In every unit** (`units:`), the root-anchored entries above are protected again under the unit's path: for example
 `services/orders/global.json`, `services/orders/.claude/hooks/**` and `services/orders/lockflight.yaml`. Each unit's
 `.github/workflows/**` is protected as a whole, because a child repository's own CI is its only hard gate.

@@ -82,6 +82,10 @@ policy, package sources, the CI job, the paths the manifest adds, and the test p
 in-place editors, archive extractors and more); a write whose target the command line does not show is blocked. Agent
 worktrees under `.claude/worktrees/` get the same rules.
 
+`init` also lists the protected paths that exist as write denials for the Claude Code sandbox, so that while the sandbox is
+on the operating system refuses a shell command's write to them however the command hides it
+([the Claude Code sandbox](guides/guardrails-and-boundaries.md#the-claude-code-sandbox)).
+
 The guard is a guardrail: the agent runs with your credentials. The boundary for the same files is CI, which reads the policy
 from the base branch and fails a pull request that changes protected files without a person's review.
 

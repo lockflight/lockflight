@@ -28,7 +28,7 @@ internal static class CliApplication
         Usage: lockflight <command> [options]   (in a project, from its root: .lockflight/bin/lockflight <command> [options])
 
         Setup
-          init [--profile lite|standard] [--ci pr|manual|none] [--no-link]
+          init [--profile lite|standard] [--ci pr|manual|none] [--no-link] [--no-sandbox]
                                                         onboard: manifest, tool pin, settings, CI job, link; --ci:
                                                         the job runs on pull requests, only by hand, or is not written
           doctor [--canaries[=full]]                    readiness report with fixes; --canaries: plant a violation
@@ -78,7 +78,7 @@ internal static class CliApplication
           review dismiss <finding-id> --reason "<text>" [--feature <id>]
                                                         close an open review finding, recording who, when and why
           baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories
-          adopt apply [--speckit-preset <dir>] [--skip-speckit]
+          adopt apply [--speckit-preset <dir>] [--skip-speckit] [--no-sandbox]
                                                         apply the reviewed adoption plan (backs up first)
           adopt undo [--backup <id>] [--force]          revert what apply changed; files changed since are kept
                                                         unless --force
