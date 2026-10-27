@@ -6,7 +6,9 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
 /// <c>lockflight redgreen red</c>: accepts the new tests of a cycle when they all fail in production code (RED_STUB, or RED_ASSERT
-/// in a test that calls production code), which opens the cycle and locks the test projects.
+/// in a test that calls production code), which opens the cycle and locks the test projects. A new test whose code asserts nothing
+/// is flagged assertion-free but not rejected: a test may verify by letting the production code throw (a guard clause, a
+/// validator), which a static reading of the test code cannot tell from a test that verifies nothing.
 /// </summary>
 internal sealed class RedStep(RedGreenSession session)
 {
@@ -91,8 +93,11 @@ internal sealed class RedStep(RedGreenSession session)
         foreach (RedGreenTest test in classified)
         {
             string requirements = test.Requirements.Count > 0 ? string.Join(",", test.Requirements) : "no Requirement trait";
-            await session.Output.WriteLineAsync($"{RedClassNames.ToName(test.RedClass),-12} {test.MethodFilter} ({requirements})");
+            string mark = test.AssertionFree ? $" {RedGreenTest.AssertionFreeMark}" : string.Empty;
+            await session.Output.WriteLineAsync($"{RedClassNames.ToName(test.RedClass),-12} {test.MethodFilter} ({requirements}){mark}");
         }
+
+        await WarnAssertionFreeAsync(classified);
 
         if (flakyCheck.BudgetExhausted)
         {
@@ -117,6 +122,18 @@ internal sealed class RedStep(RedGreenSession session)
         return await AcceptAsync(record, classified, cancellationToken);
     }
 
+    private async Task WarnAssertionFreeAsync(List<RedGreenTest> classified)
+    {
+        string[] assertionFree = [.. classified.Where(test => test.AssertionFree).Select(test => TraceMatrix.ShortName(test.MethodFilter))];
+        if (assertionFree.Length > 0)
+        {
+            await session.Output.WriteLineAsync(
+                $"Warning: {assertionFree.Length} new tests assert nothing ({RedGreenTest.AssertionFreeMark}): {string.Join(", ", assertionFree.Take(RedGreenSession.MaxTestsListed))}. " +
+                "Such a test passes as soon as the code returns without throwing. Add an assertion on the result; " +
+                "a test that verifies by letting the production code throw may keep this warning, which trace and review show.");
+        }
+    }
+
     /// <summary>Classifies each new test by how it failed; tests that passed every time they ran are re-run together to tell flaky from green.</summary>
     private async Task<(List<RedGreenTest> Classified, FlakyCheckResult FlakyCheck)> ClassifyAsync(
         IReadOnlyList<TestCase> inventory, TestCase[] fresh, IReadOnlyList<ExecutedTest> results, DateTimeOffset deadline, CancellationToken cancellationToken)
@@ -125,9 +142,9 @@ internal sealed class RedStep(RedGreenSession session)
         IReadOnlySet<string> testClasses = inventory.Select(test => test.Class).ToHashSet(StringComparer.Ordinal);
         string[] testDirectories = [.. workspace.Apps.Select(app => app.ProjectDirectory)];
         ProductionCode production = ProductionProjects.Find(session.Manifest.Root, workspace.Apps);
-        HashSet<string> callers = CallersOfProduction(fresh, production);
+        NewTestScan scan = Scan(fresh, production);
         List<(TestCase Test, RedClass RedClass)> first = [.. fresh.Select(test => (test, RedClassifier.Classify(
-            [.. results.Where(result => result.Key == test.Key)], testClasses, testDirectories, production, callers.Contains(test.Key))))];
+            [.. results.Where(result => result.Key == test.Key)], testClasses, testDirectories, production, scan.CallsProduction.Contains(test.Key))))];
 
         // Only a test whose rows all passed is re-run: a theory with mixed rows is GREEN_BEFORE, not flaky.
         TestCase[] candidates = [.. first.Where(entry => entry.RedClass == RedClass.GreenBefore && SuiteChecks.PassedEveryRow(results, entry.Test.Key)).Select(entry => entry.Test)];
@@ -139,14 +156,15 @@ internal sealed class RedStep(RedGreenSession session)
             entry.Test.Key,
             entry.Test.MethodFilter,
             flakyCheck.Flaky.Contains(entry.Test.Key) ? RedClass.Flaky : entry.RedClass,
-            entry.Test.Requirements))];
+            entry.Test.Requirements) { AssertionFree = scan.AssertionFree.Contains(entry.Test.Key) })];
         return (classified, flakyCheck);
     }
 
-    /// <summary>The keys of the new tests whose code calls production code, read from the built test assemblies.</summary>
-    private HashSet<string> CallersOfProduction(TestCase[] fresh, ProductionCode production)
+    /// <summary>Which new tests call production code and which assert nothing, read from the built test assemblies.</summary>
+    private NewTestScan Scan(TestCase[] fresh, ProductionCode production)
     {
         HashSet<string> callers = new(StringComparer.Ordinal);
+        HashSet<string> assertionFree = new(StringComparer.Ordinal);
         foreach (TestApp app in session.Workspace.Apps)
         {
             TestCase[] tests = [.. fresh.Where(test => test.Assembly == app.AssemblyName)];
@@ -155,11 +173,12 @@ internal sealed class RedStep(RedGreenSession session)
                 continue;
             }
 
-            using ProductionCallScanner scanner = new(app.AssemblyPath, production.AssemblyNames);
+            using TestCodeScanner scanner = new(app.AssemblyPath, production.AssemblyNames);
             callers.UnionWith(tests.Where(test => scanner.CallsProduction(test.Class, test.Method)).Select(test => test.Key));
+            assertionFree.UnionWith(tests.Where(test => scanner.AssertsNothing(test.Class, test.Method)).Select(test => test.Key));
         }
 
-        return callers;
+        return new NewTestScan(callers, assertionFree);
     }
 
     private async Task<ExitCode> AcceptAsync(RedGreenRecord record, List<RedGreenTest> classified, CancellationToken cancellationToken)

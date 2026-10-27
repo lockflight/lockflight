@@ -2,9 +2,11 @@ using Lockflight.Cli.Lifecycle.RedGreen;
 
 namespace Lockflight.Cli.Tests.Lifecycle.RedGreen;
 
-public sealed class ProductionCallScannerTests
+public sealed class TestCodeScannerTests
 {
     private const string Samples = "Lockflight.Cli.Tests.Lifecycle.RedGreen.ProductionCallSamples";
+
+    private const string AssertionSampleClass = "Lockflight.Cli.Tests.Lifecycle.RedGreen.AssertionSamples";
 
     private static readonly string Engine = typeof(RedClass).Assembly.GetName().Name!;
 
@@ -19,7 +21,7 @@ public sealed class ProductionCallScannerTests
     [InlineData(Samples + "+Nested", nameof(ProductionCallSamples.Nested.CallsDirectly))]
     public void ATestReachingProductionCodeCallsIt(string className, string method)
     {
-        using ProductionCallScanner scanner = Scanner([Engine]);
+        using TestCodeScanner scanner = Scanner([Engine]);
         Assert.True(scanner.CallsProduction(className, method));
     }
 
@@ -31,24 +33,56 @@ public sealed class ProductionCallScannerTests
     [InlineData("NoSuchMethod")]
     public void ATestThatOnlyAssertsDoesNotCallProductionCode(string method)
     {
-        using ProductionCallScanner scanner = Scanner([Engine]);
+        using TestCodeScanner scanner = Scanner([Engine]);
         Assert.False(scanner.CallsProduction(Samples, method));
     }
 
     [Fact]
     public void OnlyTheGivenAssembliesCountAsProduction()
     {
-        using ProductionCallScanner scanner = Scanner(["Some.Other.Assembly"]);
+        using TestCodeScanner scanner = Scanner(["Some.Other.Assembly"]);
         Assert.False(scanner.CallsProduction(Samples, nameof(ProductionCallSamples.CallsDirectly)));
     }
 
     [Fact]
     public void AnUnknownClassDoesNotCallProductionCode()
     {
-        using ProductionCallScanner scanner = Scanner([Engine]);
+        using TestCodeScanner scanner = Scanner([Engine]);
         Assert.False(scanner.CallsProduction("No.Such.Class", "M"));
     }
 
-    private static ProductionCallScanner Scanner(string[] production) =>
+    [Theory]
+    [InlineData(nameof(AssertionSamples.AssertsWithXunit))]
+    [InlineData(nameof(AssertionSamples.AssertsInAHelper))]
+    [InlineData(nameof(AssertionSamples.AssertsThroughALambda))]
+    [InlineData(nameof(AssertionSamples.AssertsAfterAnAwait))]
+    [InlineData(nameof(AssertionSamples.AssertsWithAnAssertMethodOfAnotherLibrary))]
+    [InlineData(nameof(AssertionSamples.ThrowsWhenTheResultIsWrong))]
+    public void ATestThatAssertsOrThrowsIsNotAssertionFree(string method)
+    {
+        using TestCodeScanner scanner = Scanner([Engine]);
+        Assert.False(scanner.AssertsNothing(AssertionSampleClass, method));
+    }
+
+    [Theory]
+    [InlineData(nameof(AssertionSamples.CallsProductionWithoutAsserting))]
+    [InlineData(nameof(AssertionSamples.DoesNothing))]
+    [InlineData(nameof(AssertionSamples.AwaitsWithoutAsserting))]
+    public void ATestWhoseCodeNeitherAssertsNorThrowsIsAssertionFree(string method)
+    {
+        using TestCodeScanner scanner = Scanner([Engine]);
+        Assert.True(scanner.AssertsNothing(AssertionSampleClass, method));
+    }
+
+    [Theory]
+    [InlineData(AssertionSampleClass, "NoSuchMethod")]
+    [InlineData("No.Such.Class", "M")]
+    public void ATestThatCannotBeFoundIsNotCalledAssertionFree(string className, string method)
+    {
+        using TestCodeScanner scanner = Scanner([Engine]);
+        Assert.False(scanner.AssertsNothing(className, method));
+    }
+
+    private static TestCodeScanner Scanner(string[] production) =>
         new(typeof(ProductionCallSamples).Assembly.Location, new HashSet<string>(production, StringComparer.OrdinalIgnoreCase));
 }

@@ -138,6 +138,13 @@ internal sealed class TraceCommand(CliContext context)
             await context.Output.WriteLineAsync($"\nTests name requirements this spec does not define: {string.Join(", ", unknown)}");
         }
 
+        string[] assertionFree = [.. record.Cycles.Where(cycle => !cycle.IsOpen).SelectMany(cycle => cycle.Tests).Where(test => test.AssertionFree).Select(test => TraceMatrix.ShortName(test.MethodFilter))];
+        if (assertionFree.Length > 0)
+        {
+            await context.Output.WriteLineAsync(
+                $"\nNote: {string.Join(", ", assertionFree)} assert nothing ({RedGreenTest.AssertionFreeMark}): they count, but pass whenever the code returns without throwing; check in review that each verifies its requirement.");
+        }
+
         foreach (RedGreenTest broad in record.Cycles.Where(cycle => !cycle.IsOpen).SelectMany(cycle => cycle.Tests).Where(test => test.Requirements.Count > MaxRequirementsPerTest))
         {
             await context.Output.WriteLineAsync($"\nNote: {TraceMatrix.ShortName(broad.MethodFilter)} claims {broad.Requirements.Count} requirements; check that it really verifies each one.");

@@ -18,6 +18,18 @@ public sealed class TraceMatrixTests
     }
 
     [Fact]
+    public void AnAssertionFreeTestStillCoversButIsMarked()
+    {
+        RedGreenRecord record = Record();
+        record.Cycles[0] = record.Cycles[0] with { Tests = [Green("First", "FR-001") with { AssertionFree = true }, Green("Second", "FR-002")] };
+
+        IReadOnlyList<TraceRow> rows = TraceMatrix.Build(Requirements, record, [Test("First", "FR-001"), Test("Second", "FR-002")]);
+
+        Assert.Equal([["ShippingTests.First (assertion-free)"], ["ShippingTests.Second"]], rows.Select(row => row.Tests));
+        Assert.All(rows, row => Assert.True(row.Covered));
+    }
+
+    [Fact]
     public void ATestDeletedOrRenamedAfterGreenNoLongerCovers()
     {
         IReadOnlyList<TraceRow> rows = TraceMatrix.Build(Requirements, Record(), [Test("FirstRenamed", "FR-001"), Test("Second", "FR-002")]);

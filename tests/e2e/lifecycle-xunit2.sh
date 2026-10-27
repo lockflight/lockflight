@@ -101,5 +101,20 @@ public sealed class AlreadyTrueTests
 CS
 expect 1 "a test that passes before the code exists is rejected" "GREEN_BEFORE" -- "$E" redgreen red
 
+# A test that calls a stub but asserts nothing is accepted with an assertion-free warning.
+rm tests/Orders.Tests/AlreadyTrueTests.cs
+sed -i.bak 's/    public void Add(OrderLine line) => lines.Add(line);/    public void Archive() => throw new NotImplementedException();\n\n    public void Add(OrderLine line) => lines.Add(line);/' src/Orders/Order.cs && rm src/Orders/Order.cs.bak
+cat > tests/Orders.Tests/ArchiveTests.cs <<'CS'
+namespace Orders.Tests;
+
+public sealed class ArchiveTests
+{
+    [Fact]
+    [Trait("Requirement", "FR-010")]
+    public void ArchivesTheOrder() => new Orders.Order().Archive();
+}
+CS
+expect 0 "a red whose test asserts nothing is accepted with an assertion-free warning" "assert nothing (assertion-free): ArchiveTests.ArchivesTheOrder" -- "$E" redgreen red
+
 echo "lifecycle (xUnit v2 / VSTest): $([ "$failures" = 0 ] && echo "all checks passed" || echo "$failures failed")"
 [ "$failures" = 0 ]

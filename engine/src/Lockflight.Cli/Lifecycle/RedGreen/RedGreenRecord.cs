@@ -68,13 +68,19 @@ internal sealed record RedGreenRecord
             JsonArray tests = [];
             foreach (RedGreenTest test in cycle.Tests)
             {
-                tests.Add((JsonNode)new JsonObject
+                JsonObject entry = new()
                 {
                     ["key"] = test.Key,
                     ["method"] = test.MethodFilter,
                     ["red"] = RedClassNames.ToName(test.RedClass),
                     ["requirements"] = Array(test.Requirements),
-                });
+                };
+                if (test.AssertionFree)
+                {
+                    entry["assertionFree"] = true;
+                }
+
+                tests.Add((JsonNode)entry);
             }
 
             cycles.Add((JsonNode)new JsonObject
@@ -112,7 +118,10 @@ internal sealed record RedGreenRecord
             test["key"]?.GetValue<string>() ?? string.Empty,
             test["method"]?.GetValue<string>() ?? string.Empty,
             RedClassNames.Parse(test["red"]?.GetValue<string>() ?? "RED_STUB"),
-            Strings(test["requirements"])))]);
+            Strings(test["requirements"]))
+        {
+            AssertionFree = test["assertionFree"]?.GetValue<bool>() == true,
+        })]);
 
     private static string[] Strings(JsonNode? node) =>
         node is JsonArray array ? [.. array.Select(item => item?.GetValue<string>() ?? string.Empty).Where(item => item.Length > 0)] : [];

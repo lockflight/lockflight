@@ -7,7 +7,7 @@ namespace Lockflight.Cli.Lifecycle;
 /// Builds the trace rows from the feature's red/green record, re-checked against the current test inventory: a test that went red,
 /// then green counts for a requirement only while it still exists under the same name, still names the requirement in its
 /// <c>Requirement</c> trait, and is neither skipped nor explicit. A test deleted or renamed after its green would otherwise stay in
-/// the matrix forever.
+/// the matrix forever. A test that asserts nothing still counts, marked assertion-free, so the review sees it.
 /// </summary>
 internal static class TraceMatrix
 {
@@ -29,7 +29,7 @@ internal static class TraceMatrix
                 }
                 else
                 {
-                    tests.Add(ShortName(test.MethodFilter));
+                    tests.Add(test.AssertionFree ? $"{ShortName(test.MethodFilter)} ({RedGreenTest.AssertionFreeMark})" : ShortName(test.MethodFilter));
                 }
             }
 
