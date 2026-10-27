@@ -203,11 +203,26 @@ internal static class ReadinessChecks
             return new("linked engine", CheckStatus.Fail, "hooks have no engine to run (recovery mode)", Relink(pinned));
         }
 
+        EngineRecordStatus record = EngineRecord.Check(root, binary);
+        if (record == EngineRecordStatus.Differs)
+        {
+            return new("linked engine", CheckStatus.Fail,
+                $"replaced since it was linked: its SHA-256 is not the one link recorded in {LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName}, so it was not run (the hooks do not run it either)",
+                $"check what replaced it, then {Relink(pinned)}");
+        }
+
         ProcessResult versionRun = await ProcessRunner.RunAsync(binary, ["version"], root, cancellationToken);
         string linkedVersion = versionRun.Output.Trim();
-        return ToolPin.Matches(linkedVersion, ToolPin.RunningVersion)
-            ? new("linked engine", CheckStatus.Pass, $"{linkedVersion} at {LinkCommand.RelativeBinDirectory}", null)
-            : new("linked engine", CheckStatus.Fail, $"linked {linkedVersion}, expected {ToolPin.RunningVersion}", Relink(pinned));
+        if (!ToolPin.Matches(linkedVersion, ToolPin.RunningVersion))
+        {
+            return new("linked engine", CheckStatus.Fail, $"linked {linkedVersion}, expected {ToolPin.RunningVersion}", Relink(pinned));
+        }
+
+        return record == EngineRecordStatus.Matches
+            ? new("linked engine", CheckStatus.Pass, $"{linkedVersion} at {LinkCommand.RelativeBinDirectory}, as linked", null)
+            : new("linked engine", CheckStatus.Warn,
+                $"{linkedVersion} at {LinkCommand.RelativeBinDirectory}, with no hash recorded (linked by an older Lockflight or copied by hand), so the hooks cannot tell when it is replaced",
+                Relink(pinned));
     }
 
     private static DoctorCheck CheckGitIgnore(string root)

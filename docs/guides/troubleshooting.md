@@ -43,6 +43,17 @@ The shim found an engine at `.lockflight/bin/` but refused to run it, and is in 
   dotnet tool restore && dotnet lockflight link
   ```
 
+- **"because its SHA-256 is not the one lockflight link recorded":** the engine at `.lockflight/bin/` is not the file `link`
+  copied (or `.lockflight/bin/lockflight.sha256` was changed). Something replaced it: a copy, a build, another tool. Check what
+  it was, then link again, which restores the pinned engine and its record:
+
+  ```sh
+  dotnet tool restore && dotnet lockflight link
+  ```
+
+- **"because neither sha256sum nor shasum is installed":** the shim needs one of them to compare the engine with its record.
+  Install coreutils (`sha256sum`) or Perl's `shasum`.
+
 - **"because it belongs to another user":** the `lockflight.yaml` the shim found is in a folder another account wrote (for
   example `/tmp`). Check where it came from, delete it, and link the engine in your own project.
 

@@ -1,6 +1,7 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Doctor;
 using Lockflight.Cli.Init;
+using Lockflight.Cli.Linking;
 
 namespace Lockflight.Cli.Tests.Doctor;
 
@@ -350,6 +351,57 @@ public sealed class ReadinessChecksTests : IDisposable
         Assert.Null(ReadinessChecks.CheckPinRestorable(root.FullName, Path.Combine(root.FullName, "home"), nugetPackages: null));
 
     public void Dispose() => root.Delete(recursive: true);
+
+    [Fact]
+    public async Task ALinkedEngineReplacedSinceItWasLinkedFailsWithoutBeingRun()
+    {
+        string marker = Path.Combine(root.FullName, "ran");
+        WriteEngine($"#!/bin/sh\ntouch '{marker}'\necho {ToolPin.RunningVersion}\n");
+        Write($"{LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName}", new string('0', 64) + "\n");
+
+        DoctorCheck link = await CheckAsync("linked engine");
+
+        Assert.Equal(CheckStatus.Fail, link.Status);
+        Assert.Contains("replaced since it was linked", link.Detail, StringComparison.Ordinal);
+        Assert.False(File.Exists(marker));
+    }
+
+    [Fact]
+    public async Task ALinkedEngineWithoutARecordedHashIsAWarningToLinkAgain()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        WriteEngine($"#!/bin/sh\necho {ToolPin.RunningVersion}\n");
+
+        DoctorCheck link = await CheckAsync("linked engine");
+
+        Assert.Equal(CheckStatus.Warn, link.Status);
+        Assert.Contains("no hash recorded", link.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALinkedEngineThatMatchesItsRecordPasses()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        string binary = WriteEngine($"#!/bin/sh\necho {ToolPin.RunningVersion}\n");
+        Write($"{LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName}", EngineRecord.HashOf(binary) + "\n");
+
+        DoctorCheck link = await CheckAsync("linked engine");
+
+        Assert.Equal(CheckStatus.Pass, link.Status);
+    }
+
+    private string WriteEngine(string script)
+    {
+        string binary = LinkCommand.BinaryPath(root.FullName);
+        Directory.CreateDirectory(Path.GetDirectoryName(binary)!);
+        File.WriteAllText(binary, script);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(binary, LinkCommand.ExecutableMode);
+        }
+
+        return binary;
+    }
 
     private async Task<DoctorCheck> CheckAsync(string name)
     {

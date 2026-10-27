@@ -182,6 +182,17 @@ check "untracked engine: Write allowed"     0 "$cloned" "$(json "$cloned" Write 
 touch -t 200001010000 "$cloned/.git/lockflight-engine-checked"
 cp "$ENGINE" "$committed" && git -C "$cloned" add -f "${committed#"$cloned"/}"
 check "engine committed later: Write blocked" 2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+# link records the engine's SHA-256 beside it; an engine that no longer matches its record is not run.
+git -C "$cloned" rm -q --cached "${committed#"$cloned"/}"
+sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1"; else shasum -a 256 < "$1"; fi | cut -d' ' -f1; }
+sha "$committed" > "$cloned/.lockflight/bin/lockflight.sha256"
+check "recorded engine: Write allowed"       0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+printf '%064d\n' 0 > "$cloned/.lockflight/bin/lockflight.sha256"
+touch -t 200001010000 "$cloned/.git/lockflight-engine-checked"
+check "replaced engine: Write blocked"       2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+if grep -q 'SHA-256' "$WORK/err"; then pass=$((pass+1)); echo "replaced engine: names the reason: ok"; else fail=$((fail+1)); echo "replaced engine: names the reason: FAIL ($(head -c 400 "$WORK/err"))"; fi
+check "replaced engine: Read allowed"        0 "$cloned" "$(json "$cloned" Read "$(fp "$cloned/src/a.cs")")"
+checkexp "replaced engine: approve blocked"  2 cli 1 "$(expansion "$cloned" lockflight:approve spec)" "Nothing was approved"
 
 # An engine that crashes must block, never allow. On Windows the shim prefers lockflight.exe, so the stub there is a real .exe
 # (Git Bash's false.exe, exit 1); elsewhere a script exiting 3.

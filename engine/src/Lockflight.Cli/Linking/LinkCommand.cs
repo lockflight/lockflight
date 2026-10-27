@@ -6,7 +6,8 @@ namespace Lockflight.Cli.Linking;
 /// <summary>
 /// <c>lockflight link</c>: copies the running (pinned, NuGet-restored) binary to <c>.lockflight/bin/</c> in the project, where
 /// hooks execute it directly — <c>dotnet tool run</c> costs ~160 ms per hook call. Only a single-file (Native AOT) binary is
-/// copied: a framework-dependent build cannot run from a copy of its launcher.
+/// copied: a framework-dependent build cannot run from a copy of its launcher. Its hash is recorded beside it
+/// (<see cref="EngineRecord"/>), so an engine replaced afterwards is not run.
 /// </summary>
 internal sealed class LinkCommand(CliContext context)
 {
@@ -60,7 +61,9 @@ internal sealed class LinkCommand(CliContext context)
             File.SetUnixFileMode(temporary, ExecutableMode);
         }
 
+        string hash = EngineRecord.HashOf(temporary);
         ExecutableReplacement.Replace(temporary, target);
+        EngineRecord.Write(manifest.Root, hash);
         await context.Output.WriteLineAsync($"linked lockflight {ToolPin.RunningVersion} -> {target}");
         return ExitCode.Pass;
     }

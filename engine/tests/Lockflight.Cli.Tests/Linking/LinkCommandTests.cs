@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Linking;
@@ -24,6 +26,39 @@ public sealed class LinkCommandTests : IDisposable
         {
             Assert.True(File.GetUnixFileMode(LinkCommand.BinaryPath(root.FullName)).HasFlag(UnixFileMode.UserExecute));
         }
+    }
+
+    [Fact]
+    public async Task LinkingRecordsTheHashOfTheEngineItCopied()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+
+        await LinkAsync(new RunningEngine(EngineFile("native engine"), IsSingleFile: true));
+
+        string expected = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("native engine")));
+        Assert.Equal(expected + "\n", File.ReadAllText(EngineRecord.PathOf(root.FullName)));
+        Assert.Equal(EngineRecordStatus.Matches, EngineRecord.Check(root.FullName, LinkCommand.BinaryPath(root.FullName)));
+    }
+
+    [Fact]
+    public async Task AnEngineReplacedAfterItWasLinkedNoLongerMatchesItsRecord()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        await LinkAsync(new RunningEngine(EngineFile("native engine"), IsSingleFile: true));
+
+        File.WriteAllText(LinkCommand.BinaryPath(root.FullName), "another program");
+
+        Assert.Equal(EngineRecordStatus.Differs, EngineRecord.Check(root.FullName, LinkCommand.BinaryPath(root.FullName)));
+    }
+
+    [Fact]
+    public void AnEngineCopiedWithoutLinkHasNoRecord()
+    {
+        string binary = LinkCommand.BinaryPath(root.FullName);
+        Directory.CreateDirectory(Path.GetDirectoryName(binary)!);
+        File.WriteAllText(binary, "copied by hand");
+
+        Assert.Equal(EngineRecordStatus.NotRecorded, EngineRecord.Check(root.FullName, binary));
     }
 
     [Fact]

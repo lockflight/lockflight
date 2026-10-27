@@ -1,12 +1,13 @@
 using System.Text.RegularExpressions;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Linking;
 
 namespace Lockflight.Cli.Tests.Hooks;
 
 public sealed partial class ShimSyncTests
 {
-    private static readonly Lazy<string> Shim = new(() => File.ReadAllText(ShimPath()));
+    private static readonly Lazy<string> Shim = new(() => File.ReadAllText(ShimLocation.Path));
 
     [Fact]
     public void TheShimAllowsTheSameReadOnlyToolsAsTheEngine()
@@ -26,6 +27,10 @@ public sealed partial class ShimSyncTests
         string[] shimCommands = [.. QuotedWord().Matches(commands.Groups["commands"].Value).Select(match => match.Groups["word"].Value)];
         Assert.Equal(RecoveryCommands.Commands.Order(StringComparer.Ordinal), shimCommands.Order(StringComparer.Ordinal));
     }
+
+    [Fact]
+    public void TheShimChecksTheRecordLinkWrites() =>
+        Assert.Contains($"record=\"$root/{LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName}\"", Shim.Value, StringComparison.Ordinal);
 
     [Fact]
     public async Task TheShimRecognisesTheRefusalOfAnEngineThatDoesNotKnowAnEvent()
@@ -67,20 +72,6 @@ public sealed partial class ShimSyncTests
         string pinLine = $"\"lockflight.cli\":{{\"version\":\"{version}\",\"commands\":[\"lockflight\"]}}";
 
         Assert.Equal(EngineVersion.IsDevelopmentBuild(version), Regex.IsMatch(pinLine, grep.Groups["pattern"].Value, options));
-    }
-
-    private static string ShimPath()
-    {
-        for (DirectoryInfo? directory = new(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            string candidate = Path.Combine(directory.FullName, "plugins", "lockflight", "bin", "lockflight-hook");
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        throw new FileNotFoundException("plugins/lockflight/bin/lockflight-hook was not found above the test binaries");
     }
 
     [GeneratedRegex(@"case ""\$tool"" in\s+(?<tools>[A-Za-z|]+)\)")]
