@@ -53,6 +53,7 @@ internal static class ReviewEvidence
                 ["title"] = finding.Title,
                 ["evidence"] = finding.Evidence,
                 ["reproduction"] = finding.Reproduction,
+                ["earlierReproductions"] = new JsonArray([.. finding.EarlierReproductions.Select(earlier => (JsonNode)JsonValue.Create(earlier))]),
             });
         }
 
@@ -195,6 +196,9 @@ internal static class ReviewEvidence
         {
             Id = Text(element, "id"),
             Dimension = Text(element, "dimension"),
+            EarlierReproductions = element.TryGetProperty("earlierReproductions", out JsonElement earlier) && earlier.ValueKind == JsonValueKind.Array
+                ? [.. earlier.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)]
+                : [],
             State = ReviewNames.ParseState(Text(element, "state")),
         };
 

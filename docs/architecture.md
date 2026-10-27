@@ -123,7 +123,7 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
 - **Review of record.** `lockflight review` builds the reviewer's prompt itself, from the spec and the diff, and runs an
   independent, read-only Claude call with a fixed output schema. The implementing agent can start a review but cannot brief the
   reviewer. A blocker or major finding counts only when its reproduction test, which the engine compiles and runs, fails on the
-  current code. Such a finding stays open across review runs until its reproduction passes or a person dismisses it.
+  current code. Such a finding stays open across review runs until every reproduction it was given passes or a person dismisses it.
 
 Commands that record a human decision (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply|undo`,
 `update`) refuse to run inside a Claude Code session.
