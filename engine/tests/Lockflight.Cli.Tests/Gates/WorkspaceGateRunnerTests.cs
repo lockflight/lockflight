@@ -58,7 +58,7 @@ public sealed class WorkspaceGateRunnerTests : IDisposable
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         Manifest manifest = await CreateWorkspaceAsync(cancellationToken);
-        Directory.Delete(Path.Combine(shell.FullName, "web", "admin"), recursive: true);
+        TempDirectories.DeleteRecursively(new DirectoryInfo(Path.Combine(shell.FullName, "web", "admin")));
         GateRunContext run = new(shell.FullName, shell.FullName, GateProfile.PullRequest, GateSettings.Default, BaseRef: null, TimeProvider.System);
 
         GateResult result = await WorkspaceGateRunner.RunAsync(manifest, run, ["web/admin"], useCache: false, TextWriter.Null, cancellationToken);
