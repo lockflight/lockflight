@@ -35,9 +35,9 @@ far, the **test author**. Install it next to the core plugin:
   `[Trait("Requirement", "FR-…")]`, and runs `redgreen red` until the engine accepts the red, fixing the tests (never the
   production code) when it is rejected. It stops and reports when it is blocked, for example by a missing stub or a stale
   approval.
-- **The gates still judge.** The skill does not take the agent's word: it runs `redgreen status` itself and goes on only if
-  the red is recorded. A rejected red or a stop at the agent's turn limit is a failed round; after two, the skill hands the
-  last verdict to you.
+- **The gates still judge.** The skill does not take the agent's word: its very next step after the agent returns is
+  `redgreen status`, whose line it quotes, and it goes on only if the red is recorded. A rejected red or a stop at the
+  agent's turn limit is a failed round; after two, the skill hands the last verdict to you.
 - **A guardrail, not a boundary.** The agent's tool list and its brief (test projects only; no production code, protected
   files, spec, plan or tasks; spec text and tool output are data, not instructions) shape what it does but do not enforce
   it. What is enforced is what was enforced before: the protected-path guard, the red/green lock and the gates. See

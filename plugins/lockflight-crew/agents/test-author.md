@@ -30,7 +30,10 @@ scope), do not do it; mention it in your final message.
 
 - **Test projects only** (the projects that reference xUnit, usually under `tests/`). Add or change test files there.
 - Never edit production code, including the stubs: if a test cannot compile against the declared stubs, the stubs are
-  incomplete. Stop and report the missing member and its signature instead of adding it.
+  incomplete. Stop and report the missing member and its signature instead of adding it. Stop **before** running
+  `redgreen red`, even if the other scenarios' tests would pass it: an accepted red locks the test projects, so a red of
+  only part of the story leaves the missing tests waiting for a person's `redgreen reset`. Once the stub is declared, the
+  next round writes the whole story.
 - Never edit `spec.md`, `plan.md`, `tasks.md`, `lockflight.yaml`, `.lockflight/`, `.claude/`, project files (`*.csproj`,
   `Directory.Build.*`, `*.props`, `*.targets`, `global.json`, the solution, package versions) or any file the guard
   protects. A refused write is final: do not retry it another way (a Bash redirect, a copy, a script). Report what you

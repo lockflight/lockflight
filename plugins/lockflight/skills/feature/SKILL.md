@@ -34,14 +34,22 @@ is the engine the hooks run, and it works whatever way Lockflight was installed.
       the red is rejected, fix the tests — never weaken an assertion to make a red "work".
 
       **Optional test author.** If the agent type `lockflight-crew:test-author` is available (the `lockflight-crew` plugin
-      is installed), delegate steps 2–3 for this story to it instead: the Agent tool with
-      `subagent_type: "lockflight-crew:test-author"` and a prompt naming the feature directory and the story (for example
-      `specs/001-shipping`, `US1`). It is an aid, not a judge: whatever it reports, run
-      `.lockflight/bin/lockflight redgreen status` yourself and go on only if a cycle for this story is now
-      `RED (test projects locked)`. A rejected red, a stop at its turn limit, or a report that it was blocked is a failed
-      round; start a fresh one with the engine's last output in the prompt, at most two rounds in all. After two failed
-      rounds, stop and give the user the last verdict and what the test author reported. Without that plugin, write the
-      tests yourself as above.
+      is installed), delegate steps 2–3 for this story to it instead, in these steps; none of them may be skipped:
+      1. Call the Agent tool with `subagent_type: "lockflight-crew:test-author"` and a prompt naming the feature directory
+         and the story (for example `specs/001-shipping`, `US1`).
+      2. **When it returns, your very next action MUST be `.lockflight/bin/lockflight redgreen status`, as a Bash call of
+         its own,** before you summarize, edit, or run anything else, and whatever the agent reported, accepted or not.
+         Quote the line for this story from its output in your reply. Why: the agent is an aid, not a judge. Its report is
+         its own word, and a subagent can be wrong or stop early while sounding finished; the engine's record is the only
+         evidence that the red was accepted.
+      3. Go on only if that output shows a cycle for this story as `RED (test projects locked)`. A rejected red, a stop at
+         its turn limit, or a report that it was blocked is a failed round: start a fresh one with the engine's last
+         output and the agent's report in the prompt, at most two rounds in all, and run step 2 again after each.
+      4. After two failed rounds, stop and give the user the last verdict and what the test author reported. If it reports
+         a missing stub, declare only that member as in step 6.1 (body `throw new NotImplementedException();`) and
+         start the next round; never implement it.
+
+      Without that plugin, write the tests yourself as above.
    4. The test projects are now locked. Implement in production code until `.lockflight/bin/lockflight redgreen green` passes.
       If a test itself turns out wrong, stop and ask the user: only they can unlock, with
       `.lockflight/bin/lockflight redgreen reset` run in a separate terminal window (not with `!` in Claude Code: that runs

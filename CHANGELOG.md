@@ -9,7 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `lockflight-crew`, an optional plugin in the same marketplace, with a test author agent: at the red step of
   `/lockflight:feature` it writes a story's failing tests against the declared stubs until `redgreen red` accepts them. The
   skill checks the recorded red itself and hands over to you after two failed rounds; without the plugin nothing changes.
-- A benchmark of the test author against a plain agent on seeded stories (`tests/benchmark/crew/`).
+- A benchmark of the test author against a plain agent on seeded stories (`tests/benchmark/crew/`), including stories
+  built to provoke compile reds, test-side exceptions, a missing stub and requirement tagging across several classes.
 - Review findings have a lifecycle: each gets a stable id, and a confirmed or unverified blocker/major finding stays open in
   every later `lockflight review` until its reproduction passes (fixed) or you close it with
   `lockflight review dismiss <id> --reason "…"` (human-only, records who, when and why). A later clean run no longer hides it.
@@ -23,6 +24,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   the retro counts and the status line shows.
 
 ### Changed
+- `/lockflight:feature` makes checking the red after the test author a numbered step: the very next action is
+  `redgreen status`, quoted in the reply, because the agent's report is not evidence. A missing stub it reports is declared
+  by the main session as a stub and the round repeated.
 - The documentation has a home page organised by task, an "On this page" list on long guides, "Next" links at the end of
   each, and diagrams of the hook flow, guardrails and boundaries, and the workspace shell sample.
 - `lockflight review` uses `opus` by default (it leads public coding benchmarks among Claude models) with a `3.00` budget;
@@ -34,6 +38,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 - `lockflight review` no longer passes when a blocker/major finding has a reproduction but the tests do not build: the
   finding is unverified (NOT-EARNED).
+- The crew test author stops before `redgreen red` when a stub is missing, instead of getting a red of only part of the
+  story accepted, which locked the test projects until a person reset them.
 - The shell guard treats a drive-relative value (`C:dir`, what an unquoted `C:\dir` becomes in Git Bash) as unknown, so
   writes through it are judged as before.
 - `adopt plan` reports hook scripts with the platform's own path separators.
