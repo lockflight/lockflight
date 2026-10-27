@@ -25,5 +25,12 @@ internal sealed record ShellWrites(
     /// <summary>Files whose name holds a <c>*</c> for the output of a command (<c>logs/*.log</c>); judged by pattern, not by what exists.</summary>
     public IReadOnlyList<string> ComputedFiles { get; init; } = [];
 
+    /// <summary>A command reserved for a person found inside a nested command string (<c>approve spec</c>); null when none is.</summary>
+    public string? HumanOnly { get; init; }
+
+    /// <summary>Whether the command writes anything the guard sees, or hides what it writes.</summary>
+    public bool HasTargets =>
+        Hidden is not null || Files.Count + Trees.Count + SourceTrees.Count + FloatingFiles.Count + FloatingTrees.Count + PatternFiles.Count + ComputedFiles.Count > 0;
+
     public static ShellWrites OfFile(string path) => None with { Files = [path] };
 }

@@ -11,8 +11,10 @@ public sealed class ShellTokenizerTests
     [InlineData("echo '>' x", "echo|>|x")]
     [InlineData("echo x >> y", "echo|x|W|y")]
     [InlineData("cat < in > out", "cat|R|in|W|out")]
-    [InlineData("cat <<EOF\nrm x\nEOF\nls", "cat|R|EOF|;|ls")]
-    [InlineData("cat <<-'END'\n\trm x\n\tEND\nls", "cat|R|END|;|ls")]
+    [InlineData("cat <<EOF\nrm x\nEOF\nls", "cat|R|H[rm x\n]|;|ls")]
+    [InlineData("cat <<-'END'\n\trm x\n\tEND\nls", "cat|R|H[rm x\n]|;|ls")]
+    [InlineData("cat <<A <<B\na1\nA\nb1\nB\nls", "cat|R|H[a1\n]|R|H[b1\n]|;|ls")]
+    [InlineData("cat <<< 'a b' > out", "cat|H[a b]|W|out")]
     [InlineData("echo a # rm x\nls", "echo|a|;|ls")]
     [InlineData("rm a \\\nb", "rm|a|b")]
     [InlineData("echo \"C:\\repo\"", "echo|C:\\repo")]
@@ -55,6 +57,7 @@ public sealed class ShellTokenizerTests
         ShellTokenKind.WriteRedirect => "W",
         ShellTokenKind.InputRedirect => "R",
         ShellTokenKind.Close => ")",
+        ShellTokenKind.HereText => $"H[{token.Text}]",
         _ => "(",
     }));
 }

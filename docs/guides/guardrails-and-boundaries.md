@@ -30,7 +30,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | Control | Label | Why |
 |---|---|---|
 | PreToolUse guard on protected paths (Edit/Write, Bash and PowerShell write detection) | G | best-effort parsing of shell commands; a script file or an interpreter can hide a write |
-| Human-only commands refused inside Claude Code (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply\|undo`, `update`) | G | detected via `CLAUDECODE=1` and command tokens; the variable can be unset |
+| Human-only commands refused inside Claude Code (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply\|undo`, `update`) | G | detected via `CLAUDECODE=1` and command tokens, also inside the nested command strings the guard reads (`bash -c`, `eval`, a here-document fed to `sh`); the variable can be unset |
 | In-session approval (`/lockflight:approve`, typed by you) | G | It works only in an interactive session, and binds the approval to the content the engine showed you. A prompt Claude Code starts by itself (a scheduled task, a loop, a message from another session) expands slash commands like a typed one, so the guard blocks any tool call that would queue `/lockflight:approve`; the code is shown in the session transcript, so it binds content, it is not a secret. It cannot stop a message sent from a session outside this project, or an agent that drives your terminal (tmux, AppleScript). The boundary is a presence-gated signature (`--sign`) verified in CI against signers from the base branch. |
 | Stop gate at the end of a turn | G | the agent's own session; Claude Code caps continuations |
 | Test lock during a red cycle | G | applied by the guard (above); see the shell commands it recognises below |
@@ -50,10 +50,15 @@ Lockflight separates two kinds of control and labels every feature with one of t
 The guard parses Bash and PowerShell commands for writes. Commands are split on `;`, `&&`, `||`, `|`, `&` and **newlines**
 (`\n` and `\r\n`); subshells `( … )`, groups `{ …; }`, `if`/`for`/`while` bodies, PowerShell script blocks `& { … }` and the
 commands inside `$( … )`, backticks and `<( … )` are each checked as commands of their own. Here-document bodies and comments are
-not commands. Prefixes that run the next word as a program are looked through: `command`, `env [VAR=…]`, `sudo [-u …]`, `time`,
-`nice`, `nohup`, `exec`, `timeout`, `busybox`, `!`, and `VAR=value` assignments. The command strings of `bash -c`/`sh -c`,
-`eval`, `pwsh -Command`, `Invoke-Expression`, `cmd /c` and `Start-Process` are parsed too. ANSI-C quoting (`$'…'`) is decoded
-and brace lists (`secrets/{a,b}`) are expanded.
+not commands, except a here-document a shell reads (below). Prefixes that run the next word as a program are looked through:
+`command`, `env [VAR=…]`, `sudo [-u …]`, `time`, `nice`, `nohup`, `exec`, `timeout`, `busybox`, `!`, and `VAR=value`
+assignments. The command strings of `bash -c`/`sh -c`, `eval`, `pwsh -Command`, `Invoke-Expression`, `cmd /c` and
+`Start-Process` are parsed too. For the POSIX shells that includes
+`-c` in any option spelling (`bash -ce`, `sh -cx`, `bash -c -e`, `bash -c --`, `bash -o pipefail -c`), positional parameters
+bound to the words after the string (`sh -c 'rm "$1"' _ file`; under `find … -exec sh -c '…' {} \;` a string that writes
+counts as rewriting everything under the start directories), and, for a shell given no script (or `-s`), the commands it reads
+on stdin when the command line shows them: a here-document (`sh <<EOF`), a here-string (`bash <<< "…"`) or the words of an
+`echo`/`printf` piped into it. ANSI-C quoting (`$'…'`) is decoded and brace lists (`secrets/{a,b}`) are expanded.
 
 It recognises:
 
@@ -77,15 +82,20 @@ It recognises:
   manifest, the evidence and locked tests are protected like the originals.
 - **Targets the command line does not show** are blocked: a path entirely computed by a command substitution or a PowerShell
   expression (`rm $(cat list)`, `> $(cmd)`, `Remove-Item (Join-Path secrets k)`), a writer fed by `xargs` (`… | xargs rm`) or, in PowerShell, by the
-  pipeline (`… | Remove-Item`), .NET file APIs (`[IO.File]::WriteAllText`) and `pwsh -EncodedCommand`. One exception: a file
-  list from `grep -l`/`-L` or `find` names the paths it searches, so `grep -rl Foo web | xargs sed -i …` counts as rewriting
-  anything under `web`, and is allowed when no protected file lies there.
+  pipeline (`… | Remove-Item`), a writer that uses a name read by `… | while read f` (`… | while read f; do rm "$f"; done`),
+  .NET file APIs (`[IO.File]::WriteAllText`) and `pwsh -EncodedCommand`. So is a command string the command line does not
+  show: `eval "$X"`, `eval "$(cmd)"`, `bash -c "$CMD"`, a shell reading a process substitution (`bash <(curl …)`) or the
+  output of another command on stdin (`curl … | sh`, `cat x.sh | bash`). Note that this blocks `eval "$(ssh-agent -s)"` and
+  similar environment set-ups. One exception: a file list from `grep -l`/`-L` or `find` names the paths it searches, so
+  `grep -rl Foo web | xargs sed -i …` and `find web -name '*.tmp' | while read f; do rm "$f"; done` count as rewriting
+  anything under `web`, and are allowed when no protected file lies there.
 - **Partly computed targets:** a substitution inside literal text stands for a `*` in its segment (`logs/$(date +%F).log` is
   `logs/*.log`), so `touch "build-$(date +%s).log"` is allowed and `echo x > "secrets/$(date).log"` is blocked; one that starts
   the target (`"$(pwd)/x"`) is also judged like a variable.
 - **Variables in a target:** `$PWD`, `$HOME` and `~` are resolved. A target built from another variable is blocked only when the
   literal part after it could be a protected path (`"$X/secrets/k"`, `$DIR/lockflight.yaml`); `"$TMPDIR/build.log"` or a bare
-  `"$FILE"` are allowed, because the guard cannot follow variables. One exception: a variable the same command line set to plain
+  `"$FILE"` are allowed, because the guard cannot follow variables. The word of a default or alternative value
+  (`${X:-lockflight.yaml}`, `${X-…}`, `${X:=…}`, `${X:+…}`) is checked as a target as well. One exception: a variable the same command line set to plain
   literal text in the current shell (`S=/tmp/out; cd $S && …`, `export S=/tmp/out`) is replaced by that text in `cd` and write
   targets; an assignment in a subshell, a pipeline or the background, before a single command (`S=x cmd`), after `||`, inside
   `if`/loops/functions, or to anything but literal text (`$(…)`, `~`, a glob) leaves the variable unknown, and so do `unset`,
@@ -123,7 +133,8 @@ It does **not** see:
 
 - writes made by **interpreters and programs that write on their own**: `python -c "open(…, 'w')"`, `node -e`, `ruby -e`,
   build tasks, test runs, code generators, package managers;
-- **script files** (`./fix.sh`, `bash fix.sh`, `source x`, `. ./x.ps1`) — only command strings given inline are parsed;
+- **script files** (`./fix.sh`, `bash fix.sh`, `bash < fix.sh`, `source x`, `. ./x.ps1`) — only command strings given inline
+  are parsed;
 - **paths held in variables** whose literal part does not look protected (`rm "$FILE"`);
 - **git commands that switch the working tree to committed states**: `git switch <branch>`, `git checkout <branch>`, `git merge`,
   `git pull`, `git rebase`, `git cherry-pick`, `git am`. They can change protected files, but only to content that was committed

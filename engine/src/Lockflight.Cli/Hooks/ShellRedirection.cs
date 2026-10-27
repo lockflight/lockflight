@@ -2,7 +2,8 @@ namespace Lockflight.Cli.Hooks;
 
 /// <summary>
 /// A redirection operator read at a position of a command: how many characters it spans, the token it produces (null for an fd
-/// duplication such as <c>2&gt;&amp;1</c>, which writes nothing), and for a here-document whether its body strips leading tabs.
+/// duplication such as <c>2&gt;&amp;1</c>, which writes nothing; <see cref="ShellTokenKind.HereText"/> for a here-string, whose next
+/// word is the text read), and for a here-document whether its body strips leading tabs.
 /// </summary>
 internal sealed record ShellRedirection(int Length, ShellTokenKind? Kind, bool? HereDocumentStripsTabs)
 {
@@ -17,7 +18,7 @@ internal sealed record ShellRedirection(int Length, ShellTokenKind? Kind, bool? 
         {
             '&' when At(1) == '>' => new ShellRedirection(At(2) == '>' ? 3 : 2, ShellTokenKind.WriteRedirect, null),
             '>' => Output(command, index, At(1) is '>' or '|' ? 2 : 1),
-            '<' when At(1) == '<' && At(2) == '<' => new ShellRedirection(3, ShellTokenKind.InputRedirect, null),
+            '<' when At(1) == '<' && At(2) == '<' => new ShellRedirection(3, ShellTokenKind.HereText, null),
             '<' when At(1) == '<' => new ShellRedirection(At(2) == '-' ? 3 : 2, ShellTokenKind.InputRedirect, At(2) == '-'),
             '<' when At(1) == '>' => new ShellRedirection(2, ShellTokenKind.WriteRedirect, null),
             '<' when At(1) == '&' => new ShellRedirection(2 + DescriptorLength(command, index + 2), null, null),

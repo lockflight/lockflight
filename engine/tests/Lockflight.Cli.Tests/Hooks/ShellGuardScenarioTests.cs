@@ -50,6 +50,17 @@ public sealed class ShellGuardScenarioTests : IDisposable
     [InlineData("if true; then rm secrets/k; fi")]
     [InlineData("echo $(rm secrets/k)")]
     [InlineData("bash -c 'echo x > lockflight.yaml'")]
+    [InlineData("bash -ce \"rm lockflight.yaml\"")]
+    [InlineData("bash -c -- \"rm lockflight.yaml\"")]
+    [InlineData("eval \"$X\"")]
+    [InlineData("bash -c \"$CMD\"")]
+    [InlineData("bash -s <<< \"rm lockflight.yaml\"")]
+    [InlineData("echo 'rm secrets/k' | bash")]
+    [InlineData("sh <<EOF\nrm secrets/k\nEOF")]
+    [InlineData("sh -c 'rm \"$1\"' _ lockflight.yaml")]
+    [InlineData("find secrets -exec sh -c 'touch $0' {} \\;")]
+    [InlineData("rm ${X:-lockflight.yaml}")]
+    [InlineData("ls | while read f; do rm \"$f\"; done")]
     [InlineData("ls | xargs rm")]
     [InlineData("git rm -r secrets")]
     [InlineData("git mv src/Directory.Build.props old.props")]
@@ -112,6 +123,11 @@ public sealed class ShellGuardScenarioTests : IDisposable
     [InlineData("dotnet lockflight propose src/Directory.Build.props --from /tmp/props.new")]
     [InlineData("lockflight propose lockflight.yaml --from \"$TMPDIR/manifest.new\" secrets/k --delete")]
     [InlineData("git apply --check .lockflight/local/proposals/20261015-101500-global-json.patch")]
+    [InlineData("bash -ec 'dotnet build && echo ok'")]
+    [InlineData("sh -c 'touch \"$1\"' _ src/notes.txt")]
+    [InlineData("bash <<'EOF'\ndotnet build > build.log\nEOF")]
+    [InlineData("rm ${X:-build.log}")]
+    [InlineData("ls src | while read f; do echo \"$f\"; done")]
     public async Task OrdinaryCommandsStayAllowed(string command)
     {
         (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
@@ -172,6 +188,18 @@ public sealed class ShellGuardScenarioTests : IDisposable
         (ExitCode exitCode, _, _) = await RunAsync("Bash", resolved);
 
         Assert.True(exitCode == ExitCode.HookBlock, $"'{resolved}' was allowed");
+    }
+
+    [Theory]
+    [InlineData("bash -c \"lockflight approve spec\"")]
+    [InlineData("eval 'dotnet lockflight redgreen reset'")]
+    [InlineData("sh <<'EOF'\nlockflight approve tasks\nEOF")]
+    public async Task AReservedCommandInsideANestedCommandStringIsBlocked(string command)
+    {
+        (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
+
+        Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
+        Assert.Contains("records a human decision", error, StringComparison.Ordinal);
     }
 
     [Fact]
