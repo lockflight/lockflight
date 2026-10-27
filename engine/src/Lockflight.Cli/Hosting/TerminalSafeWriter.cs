@@ -32,6 +32,8 @@ internal sealed class TerminalSafeWriter(TextWriter terminal) : TextWriter(termi
 
     public override Task WriteAsync(string? value) => terminal.WriteAsync(value is null ? null : TerminalText.Clean(value));
 
+    // The two `= default` tokens below depart from code-style rule 15 on purpose: they repeat TextWriter's own signatures, so
+    // code holding this type calls these overrides exactly as it calls any TextWriter. The rule covers the engine's own methods.
     public override Task WriteAsync(ReadOnlyMemory<char> buffer, CancellationToken cancellationToken = default) =>
         terminal.WriteAsync(TerminalText.Clean(buffer.Span).AsMemory(), cancellationToken);
 
