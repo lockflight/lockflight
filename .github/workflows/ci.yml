@@ -1,5 +1,5 @@
 # Lockflight CI: engine tests, Native AOT build and the LLM-free hook compatibility suite on Linux, Windows (Git Bash) and
-# macOS, plus plugin and marketplace validation and the public-tree check.
+# macOS, the Windows install and update from a checkout, plus plugin and marketplace validation and the public-tree check.
 name: ci
 
 on:
@@ -104,6 +104,77 @@ jobs:
             out/lockflight
             out/lockflight.exe
           if-no-files-found: error
+
+  # The Windows user install: scripts/dev-install.ps1 from a checkout in a folder with spaces, then the installed engine runs
+  # init, link and the hook suite, and `lockflight update` replaces the engine it runs from, from source and from a package.
+  windows-install:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+      - name: Install from a checkout (Windows PowerShell)
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name ci
+          # update pulls the checkout it was installed from, so the clone is on a branch that tracks one.
+          git switch --quiet -c ci-install
+          $source = Join-Path $env:RUNNER_TEMP "lockflight source"
+          git clone --quiet "$PWD" "$source"
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$source\scripts\dev-install.ps1" -NoPlugin
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $userHome = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }
+          "LOCKFLIGHT_SOURCE=$source" >> $env:GITHUB_ENV
+          "LOCKFLIGHT_ENGINE=$(Join-Path $userHome '.lockflight\bin\lockflight.exe')" >> $env:GITHUB_ENV
+      - name: Install again from Git Bash
+        shell: bash
+        run: |
+          cd "$(cygpath -u "$LOCKFLIGHT_SOURCE")" && scripts/dev-install.sh --no-plugin
+      - name: Version, init and link in a project, and the hook suite, with the installed engine
+        run: |
+          $engine = $env:LOCKFLIGHT_ENGINE
+          & $engine version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $project = Join-Path $env:RUNNER_TEMP "a project"
+          New-Item -ItemType Directory -Force $project | Out-Null
+          Set-Location $project
+          git init --quiet
+          & $engine init
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $engine link
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ((& .lockflight\bin\lockflight.exe version) -ne (& $engine version)) { throw "the linked engine is not the installed one" }
+          "LOCKFLIGHT_PROJECT=$project" >> $env:GITHUB_ENV
+      - name: Hook compatibility suite against the installed engine
+        shell: bash
+        run: ENGINE="$(cygpath -m "$LOCKFLIGHT_ENGINE")" sh tests/compat/probe-suite.sh
+      - name: Update from source, replacing the running engine
+        run: |
+          Set-Location $env:LOCKFLIGHT_PROJECT
+          & $env:LOCKFLIGHT_ENGINE update
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & $env:LOCKFLIGHT_ENGINE version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Update from a package feed, replacing the running engine
+        working-directory: engine
+        run: |
+          $feed = Join-Path $env:RUNNER_TEMP "package feed"
+          $version = "99.0.0-ci.1"
+          dotnet pack src/Lockflight.Cli -c Release -r win-x64 -o "$feed" "-p:Version=$version" -nologo -v q
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          dotnet pack src/Lockflight.Cli -c Release -o "$feed" "-p:Version=$version" -nologo -v q
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # A package install records no checkout.
+          Remove-Item (Join-Path (Split-Path (Split-Path $env:LOCKFLIGHT_ENGINE)) "source")
+          Set-Location $env:LOCKFLIGHT_PROJECT
+          & $env:LOCKFLIGHT_ENGINE update --source "$feed"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ((& $env:LOCKFLIGHT_ENGINE version) -ne $version) { throw "the installed engine is not $version" }
+          if ((& .lockflight\bin\lockflight.exe version) -ne $version) { throw "the project's engine is not $version" }
 
   plugin:
     runs-on: ubuntu-latest

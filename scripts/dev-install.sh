@@ -5,6 +5,7 @@
 #      RID-specific package), and points ~/.lockflight/bin/lockflight at it,
 #   3. adds the marketplace and installs the plugin at user scope (needed for sessions started inside a child repo of a
 #      workspace shell: Claude Code loads project settings only from the directory it starts in).
+# On Windows (Git Bash) it runs scripts/dev-install.ps1, which keeps the same layout with a copy of the engine instead of a link.
 # Usage: scripts/dev-install.sh [--no-plugin]        Needs the .NET 10 SDK; the plugin step needs `claude` and git access to the
 # lockflight/lockflight repository.
 set -eu
@@ -18,12 +19,22 @@ for option in "$@"; do
   esac
 done
 
+# Windows (Git Bash): the PowerShell installer keeps the same layout without symbolic links, which Windows creates only in
+# developer mode or an elevated session.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    set --
+    [ "$plugin" = true ] || set -- -NoPlugin
+    [ -z "${LOCKFLIGHT_UPDATING:-}" ] || set -- "$@" -Updating
+    exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$REPO/scripts/dev-install.ps1")" "$@" ;;
+esac
+
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) rid=osx-arm64 ;;
   Darwin-x86_64) rid=osx-x64 ;;
   Linux-x86_64) rid=linux-x64 ;;
   Linux-aarch64|Linux-arm64) rid=linux-arm64 ;;
-  *) echo "unsupported platform $(uname -s)-$(uname -m); on Windows run this from Git Bash with rid=win-x64 support (not yet)" >&2; exit 1 ;;
+  *) echo "unsupported platform $(uname -s)-$(uname -m): Lockflight ships engines for macOS (arm64, x64), Linux (x64, arm64) and Windows (x64)" >&2; exit 1 ;;
 esac
 
 # The version follows the commit, so the same code always gets the same version and a project's pin goes stale only when the

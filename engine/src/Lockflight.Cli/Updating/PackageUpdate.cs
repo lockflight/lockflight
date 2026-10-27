@@ -5,11 +5,12 @@ namespace Lockflight.Cli.Updating;
 
 /// <summary>
 /// Updates the user install from a package feed: installs the newest <c>Lockflight.Cli</c> into a fresh tool path, moves it to
-/// <c>~/.lockflight/tools/&lt;version&gt;</c> and points <c>~/.lockflight/bin/lockflight</c> at it. The SDK runs in
-/// <c>~/.lockflight</c>, outside any project, so a project's <c>global.json</c> pinning an SDK older than 10 (which cannot install
-/// the platform-specific package) is never in the way. Older versions stay installed: projects keep their own copies anyway.
+/// <c>~/.lockflight/tools/&lt;version&gt;</c> and points <c>~/.lockflight/bin/lockflight</c> at it as <paramref name="layout"/> says
+/// (a link, or on Windows a copy, which replaces the old one even while that runs). The SDK runs in <c>~/.lockflight</c>, outside
+/// any project, so a project's <c>global.json</c> pinning an SDK older than 10 (which cannot install the platform-specific
+/// package) is never in the way. Older versions stay installed: projects keep their own copies anyway.
 /// </summary>
-internal sealed class PackageUpdate(RunProcess processes, TimeProvider time)
+internal sealed class PackageUpdate(RunProcess processes, TimeProvider time, EngineLayout layout)
 {
     public const string PackageId = "Lockflight.Cli";
 
@@ -56,7 +57,7 @@ internal sealed class PackageUpdate(RunProcess processes, TimeProvider time)
                 Directory.Move(staging, target);
             }
 
-            UserInstall.PointAt(home, version);
+            UserInstall.PointAt(home, version, layout);
             ProcessResult check = await processes(UserInstall.Engine(home), ["version"], lockflightHome, cancellationToken);
             return check.ExitCode == 0
                 ? new PackageUpdateResult(PackageUpdateStatus.Installed, version, null)
@@ -65,6 +66,10 @@ internal sealed class PackageUpdate(RunProcess processes, TimeProvider time)
         catch (ExecutableNotFoundException)
         {
             return PackageUpdateResult.Failure("the .NET SDK (dotnet) is not on PATH; install the .NET 10 SDK");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return PackageUpdateResult.Failure($"the engine could not be put in place in {lockflightHome}: {exception.Message}");
         }
         finally
         {

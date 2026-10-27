@@ -11,8 +11,9 @@ namespace Lockflight.Cli.Updating;
 
 /// <summary>
 /// <c>lockflight update</c>, a person's command: brings Lockflight up to date in one step. An install from source pulls the
-/// checkout it was built from and reinstalls the engine and the plugin (<c>scripts/dev-install.sh</c>); an install from a package
-/// installs the newest engine from the package feed (<see cref="PackageUpdate"/>). Then the new engine takes over
+/// checkout it was built from and reinstalls the engine and the plugin (<c>scripts/dev-install.sh</c>, or
+/// <c>scripts/dev-install.ps1</c> on Windows); an install from a package installs the newest engine from the package feed
+/// (<see cref="PackageUpdate"/>). Then the new engine takes over
 /// (<c>update --project</c>): it re-pins and links the current project and refreshes the CLAUDE.md block. The tool pin and the
 /// block are protected, so the agent cannot run this: updating the engine changes the judge.
 /// </summary>
@@ -51,14 +52,6 @@ internal sealed class UpdateCommand(CliContext context)
             return ExitCode.Config;
         }
 
-        if (OperatingSystem.IsWindows())
-        {
-            await context.Error.WriteLineAsync(source is null
-                ? $"lockflight: on Windows, update the engine with: dotnet tool update {PackageUpdate.PackageId} --prerelease --tool-path %USERPROFILE%\\.lockflight\\bin (run it in your user folder), then %USERPROFILE%\\.lockflight\\bin\\lockflight.exe update --project in each project"
-                : $"lockflight: on Windows, update from Git Bash: cd \"{source}\" && git pull && scripts/dev-install.sh");
-            return ExitCode.Config;
-        }
-
         ExitCode installed = source is null
             ? await UpdateFromPackageAsync(home, feed, cancellationToken)
             : await UpdateFromSourceAsync(source, cancellationToken);
@@ -76,8 +69,8 @@ internal sealed class UpdateCommand(CliContext context)
         }
 
         await context.Output.WriteLineAsync("Installing the engine and the plugin");
-        ProcessResult install = await context.Processes(
-            "sh", ["-c", "LOCKFLIGHT_UPDATING=1 exec sh \"$0\"", Path.Combine(source, "scripts", "dev-install.sh")], source, cancellationToken);
+        (string script, List<string> arguments) = InstallScript(source);
+        ProcessResult install = await context.Processes(script, arguments, source, cancellationToken);
         await context.Output.WriteAsync(install.Output);
         if (install.ExitCode != 0)
         {
@@ -88,10 +81,18 @@ internal sealed class UpdateCommand(CliContext context)
         return ExitCode.Pass;
     }
 
+    /// <summary>
+    /// The checkout's install script, told that update prints the next steps: <c>dev-install.ps1</c> through Windows PowerShell,
+    /// which every Windows has, else <c>dev-install.sh</c>.
+    /// </summary>
+    private static (string FileName, List<string> Arguments) InstallScript(string source) => OperatingSystem.IsWindows()
+        ? ("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(source, "scripts", "dev-install.ps1"), "-Updating"])
+        : ("sh", ["-c", "LOCKFLIGHT_UPDATING=1 exec sh \"$0\"", Path.Combine(source, "scripts", "dev-install.sh")]);
+
     private async Task<ExitCode> UpdateFromPackageAsync(string home, string? feed, CancellationToken cancellationToken)
     {
         await context.Output.WriteLineAsync($"Installing the newest {PackageUpdate.PackageId} from {feed ?? "the configured NuGet sources"}");
-        PackageUpdateResult result = await new PackageUpdate(context.Processes, context.Time).RunAsync(home, feed, cancellationToken);
+        PackageUpdateResult result = await new PackageUpdate(context.Processes, context.Time, UserInstall.PlatformLayout).RunAsync(home, feed, cancellationToken);
         switch (result.Status)
         {
             case PackageUpdateStatus.Installed:

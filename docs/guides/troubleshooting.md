@@ -187,8 +187,23 @@ separate terminal window (`.lockflight/bin/lockflight approve spec` or `approve 
 
 ## Windows
 
-There is no install path for Windows yet: `scripts/dev-install.sh` refuses it, and no package is published. Where the engine
-does run on Windows, the hook shim is a POSIX script, so Claude Code needs **Git Bash**; `doctor` checks for it.
+Install with `scripts\dev-install.ps1` ([Install on Windows](getting-started.md#install-on-windows)). The hook shim is a POSIX
+script, so Claude Code needs **Git Bash**; `doctor` checks for it.
+
+- **"running scripts is disabled on this system":** PowerShell's execution policy refuses unsigned scripts. Run the installer
+  as `powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1`, which changes the policy for that one run only.
+- **"Git Bash was not found":** install [Git for Windows](https://git-scm.com/download/win). If it is installed somewhere
+  unusual, set `CLAUDE_CODE_GIT_BASH_PATH` to its `bash.exe` (Claude Code reads the same variable).
+- **"pack failed" with a linker error in `~\.lockflight\pack.log`:** the Native AOT build needs Visual Studio Build Tools with
+  the *Desktop development with C++* workload. Install it, open a new terminal and run the installer again.
+- **`lockflight.exe.old-…` files in `~\.lockflight\bin`:** engines that were running when an install or `update` replaced them
+  (Windows does not let a running program be overwritten, only renamed). The next install or update removes them; deleting them
+  by hand once no Claude Code session or terminal runs them is safe too. The same goes for `.lockflight\bin` in a project.
+- **`update` says the install failed:** it runs `scripts\dev-install.ps1` in the recorded checkout (`~\.lockflight\source`)
+  through Windows PowerShell; run that script by hand to see the full output, and see `~\.lockflight\pack.log` and
+  `install.log`.
+- **`~/.lockflight/bin/lockflight` does not run in `cmd.exe`:** `cmd` does not expand `~` or accept `/`. Use PowerShell or Git
+  Bash, or `%USERPROFILE%\.lockflight\bin\lockflight.exe`.
 
 ## "records a human decision and does not run inside a Claude Code session"
 
@@ -216,7 +231,8 @@ command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approv
    if you installed the crew (`/plugin uninstall …` in Claude Code does the same). Then remove the marketplace:
    `claude plugin marketplace remove lockflight`.
 6. Remove the user install: `rm -rf ~/.lockflight`. A package install and an install from source share this layout
-   (`~/.lockflight/bin/lockflight` pointing at `~/.lockflight/tools/<version>`); a source install also keeps its local feed
+   (`~/.lockflight/bin/lockflight` pointing at `~/.lockflight/tools/<version>`, a copy on Windows: remove the folder with
+   `Remove-Item -Recurse -Force ~\.lockflight` once no session runs the engine); a source install also keeps its local feed
    (`~/.lockflight/feed`) and the path of its checkout (`~/.lockflight/source`) there.
 
 ## Next
