@@ -73,7 +73,17 @@ internal static partial class Reproductions
         return repairer is null ? judged : await RepairAsync(judged, candidates, chosen, root, folder.Name, timeLimit, repairer, repairable, cancellationToken);
     }
 
-    public static string? MethodName(string reproduction) => TestMethod().Match(reproduction) is { Success: true } match ? match.Groups["name"].Value : null;
+    /// <summary>
+    /// The reproduction's test method: the first method with an xUnit, NUnit or MSTest test attribute (<c>[Fact]</c>, <c>[Theory]</c>,
+    /// <c>[Test]</c>, <c>[TestCase]</c>, <c>[TestMethod]</c>, …), so a helper placed before it is not run as the test; without one, the
+    /// first <c>void</c> or <c>Task</c> method. Comments and string contents are not read. Null when there is no such method.
+    /// </summary>
+    public static string? MethodName(string reproduction)
+    {
+        string code = CSharpMask.Mask(reproduction);
+        Match match = TestAttributedMethod().Match(code) is { Success: true } attributed ? attributed : AnyMethod().Match(code);
+        return match.Success ? match.Groups["name"].Value : null;
+    }
 
     private static async Task<ReviewFinding[]> RepairAsync(
         ReviewFinding[] judged,
@@ -243,6 +253,12 @@ internal static partial class Reproductions
             : ReproductionResult.Inconclusive;
     }
 
+    // An attribute list's contents may hold one level of brackets, such as the array in [InlineData(new[] { 1 })].
+    [GeneratedRegex(
+        @"\[(?:(?:[^\[\]]|\[[^\[\]]*\])*,)?\s*(?:\w+\s*\.\s*)*(?:Fact|Theory|Test|TestCase|TestCaseSource|TestMethod|DataTestMethod)(?:Attribute)?\s*(?:[(,](?:[^\[\]]|\[[^\[\]]*\])*)?\]"
+        + @"(?:\s*\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\s*(?:(?:public|internal|protected|private|static|async|override|virtual|new)\s+)*(?:void|Task|ValueTask)\s+(?<name>\w+)\s*\(")]
+    private static partial Regex TestAttributedMethod();
+
     [GeneratedRegex(@"\b(?:void|Task)\s+(?<name>\w+)\s*\(")]
-    private static partial Regex TestMethod();
+    private static partial Regex AnyMethod();
 }
