@@ -39,6 +39,12 @@ internal static class EnvironmentVariables
     /// <summary><c>0</c> keeps Levi, the pixel mascot, out of command output.</summary>
     public const string Mascot = "LOCKFLIGHT_MASCOT";
 
+    /// <summary>
+    /// The Anthropic API key Claude Code signs in with; when set, the reviewer runs in bare mode, which uses only this key and never
+    /// a subscription sign-in.
+    /// </summary>
+    public const string AnthropicApiKey = "ANTHROPIC_API_KEY";
+
     /// <summary>The directories searched for executables such as <c>claude</c>.</summary>
     public const string Path = "PATH";
 
