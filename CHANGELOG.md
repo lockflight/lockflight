@@ -49,10 +49,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `adopt plan` reports hook scripts with the platform's own path separators.
 - `init` adds `.claude/worktrees/` to `.gitignore`, so the checkouts Claude Code makes for isolated subagents are not shown
   as untracked files.
-- The guard judges a path where the operating system opens it: a `..` after a symbolic link leads to the parent of the
-  link's target (`ln -s .lockflight/local l` then `echo x > l/../../lockflight.yaml` is blocked), names are compared in
-  Unicode composed form on both sides (a decomposed `café` matches its rule), and on Windows `\\?\`, `\\.\`, `\\?\UNC\` and
-  local administrative-share paths map to their drive, while volume, device and other share paths it cannot map are blocked.
 
 ## [0.2.0-alpha.5] — 2026-10-15
 
