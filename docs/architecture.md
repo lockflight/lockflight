@@ -58,7 +58,8 @@ engine linked into `.lockflight/bin/`. Running the binary directly keeps a hook 
 The shim has three states:
 
 - **No `lockflight.yaml`:** it does nothing, so the plugin is harmless in other projects.
-- **Linked engine of the pinned version:** it runs it.
+- **Linked engine of the pinned version:** it runs it, unless the binary is committed to the repository or belongs to
+  another user; then it treats the engine as missing and says how to fix it.
 - **Engine missing, stale or unreadable configuration:** recovery mode. Reads and the exact restore command are allowed;
   everything else is blocked with the fix.
 
