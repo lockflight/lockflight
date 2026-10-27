@@ -15,11 +15,6 @@ public sealed class UpdateCommandTests : IDisposable
     [Fact]
     public async Task WithoutACheckoutUpdateInstallsFromTheFeedAndHandsTheProjectToTheNewEngine()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
         FakeToolFeed feed = new("0.2.0-alpha.5");
 
@@ -42,11 +37,36 @@ public sealed class UpdateCommandTests : IDisposable
 
         (ExitCode exitCode, _, string error) = await RunAsync(["update"], feed);
 
-        Assert.Equal(OperatingSystem.IsWindows() ? ExitCode.Config : ExitCode.Error, exitCode);
+        Assert.Equal(ExitCode.Error, exitCode);
         Assert.DoesNotContain(feed.Calls, call => call.Arguments.Contains("--project"));
-        if (!OperatingSystem.IsWindows())
+        Assert.Contains("NU1101", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnInstallFromSourcePullsTheCheckoutAndRunsItsInstallScript()
+    {
+        string checkout = Directory.CreateTempSubdirectory("lockflight checkout ").FullName;
+        Directory.CreateDirectory(UserInstall.Directory(home.FullName));
+        File.WriteAllText(Path.Combine(UserInstall.Directory(home.FullName), "source"), checkout);
+        FakeToolFeed feed = new("0.2.0-alpha.5");
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["update"], feed);
+
+        Directory.Delete(checkout);
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("Not in a Lockflight project", output, StringComparison.Ordinal);
+        Assert.Equal(["git", "-C", checkout, "pull", "--ff-only", "--quiet"], [feed.Calls[0].FileName, .. feed.Calls[0].Arguments]);
+        (string script, IReadOnlyList<string> arguments, string workingDirectory) = feed.Calls[1];
+        Assert.Equal(checkout, workingDirectory);
+        if (OperatingSystem.IsWindows())
         {
-            Assert.Contains("NU1101", error, StringComparison.Ordinal);
+            Assert.Equal("powershell", script);
+            Assert.Equal(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(checkout, "scripts", "dev-install.ps1"), "-Updating"], arguments);
+        }
+        else
+        {
+            Assert.Equal("sh", script);
+            Assert.Equal(Path.Combine(checkout, "scripts", "dev-install.sh"), arguments[^1]);
         }
     }
 

@@ -3,27 +3,42 @@
 #   1. packs the engine for this machine into a local feed (~/.lockflight/feed),
 #   2. installs it under ~/.lockflight/tools/<version>, outside any project's global.json (an SDK 8 pin cannot restore the
 #      RID-specific package), and points ~/.lockflight/bin/lockflight at it,
-#   3. adds the marketplace and installs the plugin at user scope (needed for sessions started inside a child repo of a
+#   3. puts ~/.lockflight/bin on PATH for new terminals (scripts/user-path.sh: one marked line in your shell's startup file),
+#   4. adds the marketplace and installs the plugin at user scope (needed for sessions started inside a child repo of a
 #      workspace shell: Claude Code loads project settings only from the directory it starts in).
-# Usage: scripts/dev-install.sh [--no-plugin]        Needs the .NET 10 SDK; the plugin step needs `claude` and git access to the
+# On Windows (Git Bash) it runs scripts/dev-install.ps1, which keeps the same layout with a copy of the engine instead of a link.
+# Usage: scripts/dev-install.sh [--no-plugin] [--no-modify-path]        Needs the .NET 10 SDK; the plugin step needs `claude` and git access to the
 # lockflight/lockflight repository.
 set -eu
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 HOME_DIR="${LOCKFLIGHT_HOME:-$HOME/.lockflight}"
 plugin=true
+modify_path=true
 for option in "$@"; do
   case "$option" in
     --no-plugin) plugin=false ;;
-    *) echo "unknown option: $option (use --no-plugin)" >&2; exit 4 ;;
+    --no-modify-path) modify_path=false ;;
+    *) echo "unknown option: $option (use --no-plugin, --no-modify-path)" >&2; exit 4 ;;
   esac
 done
+
+# Windows (Git Bash): the PowerShell installer keeps the same layout without symbolic links, which Windows creates only in
+# developer mode or an elevated session.
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    set --
+    [ "$plugin" = true ] || set -- -NoPlugin
+    [ "$modify_path" = true ] || set -- "$@" -NoModifyPath
+    [ -z "${LOCKFLIGHT_UPDATING:-}" ] || set -- "$@" -Updating
+    exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$REPO/scripts/dev-install.ps1")" "$@" ;;
+esac
 
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) rid=osx-arm64 ;;
   Darwin-x86_64) rid=osx-x64 ;;
   Linux-x86_64) rid=linux-x64 ;;
   Linux-aarch64|Linux-arm64) rid=linux-arm64 ;;
-  *) echo "unsupported platform $(uname -s)-$(uname -m); on Windows run this from Git Bash with rid=win-x64 support (not yet)" >&2; exit 1 ;;
+  *) echo "unsupported platform $(uname -s)-$(uname -m): Lockflight ships engines for macOS (arm64, x64), Linux (x64, arm64) and Windows (x64)" >&2; exit 1 ;;
 esac
 
 # The version follows the commit, so the same code always gets the same version and a project's pin goes stale only when the
@@ -67,6 +82,7 @@ else
 fi
 ln -sf "$tools/lockflight" "$HOME_DIR/bin/lockflight"
 "$HOME_DIR/bin/lockflight" version > /dev/null || { echo "the installed engine does not run" >&2; exit 1; }
+[ "$modify_path" = false ] || sh "$REPO/scripts/user-path.sh" "$HOME_DIR/bin"
 
 if [ "$plugin" = true ]; then
   if command -v claude > /dev/null; then

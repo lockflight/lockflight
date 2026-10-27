@@ -83,7 +83,8 @@ when the guard says no. Only you see him: he stays out of anything the agent rea
 
 **Requirements**
 
-- **macOS (Apple silicon or Intel) or Linux (x64 or arm64).** Windows has no install path yet: the install script refuses it and no package is published.
+- **macOS (Apple silicon or Intel), Linux (x64 or arm64), or Windows (x64) with Git for Windows** (Git Bash runs the hooks).
+  On Windows install with `scripts\dev-install.ps1`: see [Install on Windows](docs/guides/getting-started.md#install-on-windows).
 - **The .NET 10 SDK** for the engine, plus the SDK your project needs; git.
 - **An SDK-style .NET 8, 9 or 10 project.** xUnit v3 (Microsoft.Testing.Platform) gets everything; xUnit v2 (VSTest) is
   supported; NUnit and MSTest get the gates only, no red/green or trace yet. .NET Framework projects are not supported.
@@ -95,7 +96,7 @@ when the guard says no. Only you see him: he stays out of anything the agent rea
 
 ```sh
 git clone https://github.com/lockflight/lockflight && cd lockflight
-scripts/dev-install.sh        # the engine at ~/.lockflight/bin/lockflight, the plugin at user scope
+scripts/dev-install.sh        # the engine at ~/.lockflight/bin/lockflight (on PATH in new terminals), the plugin at user scope
 ```
 
 **2. Set up your repository**

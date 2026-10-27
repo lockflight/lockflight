@@ -34,9 +34,10 @@ Windows, Git Bash; for the standard profile, `uv` and a working `python3 -c "imp
 
 During the preview the engine package is on no public feed, so do not start with `dotnet tool install`: it fails.
 
-- **`~/.lockflight/bin/lockflight` exists:** use it. It works whatever SDK the project's `global.json` pins.
+- **`~/.lockflight/bin/lockflight` exists** (`lockflight.exe` on Windows)**:** use it. It works whatever SDK the project's `global.json` pins.
 - **It does not:** ask the user to install the engine from source in their own terminal: clone `lockflight/lockflight` and
-  run `scripts/dev-install.sh` in the checkout (it also installs the plugin at user scope). Wait until the file exists. Never
+  run `scripts/dev-install.sh` in the checkout (on Windows, `scripts\dev-install.ps1` from PowerShell; it also installs the
+  plugin at user scope). Wait until the file exists. Never
   suggest storing a feed token in a NuGet config, and never edit `nuget.config`: it is protected.
 - **The project already pins a different version** (`doctor` reports the pin or link as behind, or the pin as not
   restorable): ask the user to run `~/.lockflight/bin/lockflight update` in the project, in a separate terminal window. It

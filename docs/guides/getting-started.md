@@ -5,7 +5,7 @@ at the end of a turn and in CI, and — in the standard profile — a spec-drive
 evidence. This page takes you from nothing to a first green gate.
 
 **On this page:** [Requirements](#requirements) · [Install from source](#install-from-source-no-feed-no-token) ·
-[Install from a package](#install-from-a-package) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
+[Install on Windows](#install-on-windows) · [Install from a package](#install-from-a-package) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
 [An existing setup](#a-repository-with-an-existing-claude-code-or-spec-kit-setup) · [Monorepos](#monorepos) ·
 [Workspace shells](#workspace-shells) · [Standard profile](#standard-profile) · [CI during the preview](#ci-during-the-preview) ·
 [Levi and the status line](#levi-and-the-status-line)
@@ -14,7 +14,7 @@ evidence. This page takes you from nothing to a first green gate.
 
 | For | You need |
 |---|---|
-| Your machine | macOS (Apple silicon or Intel) or Linux (x64 or arm64). **Windows has no install path yet:** `scripts/dev-install.sh` refuses it and no package is published. |
+| Your machine | macOS (Apple silicon or Intel), Linux (x64 or arm64), or Windows (x64) with [Git for Windows](https://git-scm.com/download/win): Claude Code and the plugin's hooks run under Git Bash. See [Install on Windows](#install-on-windows). |
 | The engine | The .NET 10 SDK, plus the SDK your project needs (the engine runs whatever SDK the project's `global.json` pins). git. |
 | Claude Code | 2.1.295 or newer: from that version a guard hook that times out blocks the tool call. `doctor` checks it. |
 | Your project | SDK-style .NET 8, 9 or 10. .NET Framework projects are not supported. |
@@ -24,7 +24,8 @@ evidence. This page takes you from nothing to a first green gate.
 
 ## Install from source (no feed, no token)
 
-This is the install that works today: build the engine from a checkout of this repository and install it for your user.
+This is the install that works today: build the engine from a checkout of this repository and install it for your user. On
+Windows, see [Install on Windows](#install-on-windows).
 
 ```sh
 git clone https://github.com/lockflight/lockflight && cd lockflight
@@ -34,6 +35,11 @@ scripts/dev-install.sh            # packs the engine into ~/.lockflight/feed, in
 
 Then set up your project: the [lite profile](#lite-profile-target-first-green-in-under-15-minutes) below.
 
+- **`lockflight` by name:** the script puts `~/.lockflight/bin` on your `PATH` for new terminals, with one line marked
+  `# added by Lockflight: its engine on PATH` in your shell's startup file: `~/.zshrc` for zsh, `~/.bashrc` for bash (and
+  `~/.bash_profile` on macOS), `~/.config/fish/conf.d/lockflight.fish` for fish, else `~/.profile`. It prints the file it
+  changed; a reinstall or `update` finds the line and adds nothing. Open a new terminal (or `source` that file) to use it.
+  `--no-modify-path` leaves your startup files alone; delete the line to undo it.
 - **Why user scope:** Claude Code loads project settings only from the directory where a session starts. With the plugin at
   user scope, the guard also runs when you start Claude inside a child repository of a workspace shell. Your own project hooks
   in the shell's `.claude/settings.json` still load only from the shell root.
@@ -61,6 +67,36 @@ Then set up your project: the [lite profile](#lite-profile-target-first-green-in
   mapping makes `dotnet restore` warn NU1507 in every project with central package management (an error under
   `TreatWarningsAsErrors`).
 
+## Install on Windows
+
+Windows (x64) installs from source with a PowerShell script, into the same layout under your user folder. It needs, besides
+the [requirements](#requirements): **Git for Windows** (Git Bash runs the plugin's hooks, as it runs Claude Code's shell
+commands) and **Visual Studio Build Tools** with the *Desktop development with C++* workload (the engine is a Native AOT
+build). Run it from PowerShell:
+
+```powershell
+git clone https://github.com/lockflight/lockflight; cd lockflight
+powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1    # add -NoPlugin for the engine only
+```
+
+From Git Bash, `scripts/dev-install.sh` runs the same script. Paths with spaces are fine for the checkout, your user folder
+and your projects.
+
+- **What it installs:** the engine at `%USERPROFILE%\.lockflight\bin\lockflight.exe` (with `HOME` set, under `HOME` instead,
+  as the engine reads it), the plugin at user scope, and the same feed, `tools\<version>` and `source` as on macOS and Linux.
+- **`lockflight` by name:** the script adds `%USERPROFILE%\.lockflight\bin` to your user `PATH` (the per-user environment
+  variable, never the system one), once, and says so; open a new terminal to use it. `-NoModifyPath` skips it. To undo it,
+  remove the folder from the user variable `Path` in *Environment Variables*.
+- **A copy, not a link:** on Windows `bin\lockflight.exe` is a copy of the native engine, and `bin\lockflight.version` records
+  its version. Creating a symbolic link needs developer mode or an elevated session, and the launcher that `dotnet tool
+  install` puts in a tool path starts the engine from its store, so it is not one file that `link` can copy into a project.
+- **Running it:** from PowerShell, `& "$env:USERPROFILE\.lockflight\bin\lockflight.exe" init` in your project, then
+  `.lockflight\bin\lockflight.exe doctor`. From Git Bash, `~/.lockflight/bin/lockflight` and `.lockflight/bin/lockflight` work
+  as written everywhere in these guides. `doctor` checks that Git Bash is found.
+- **Updating:** `lockflight update` works as on macOS and Linux: it pulls the checkout and runs `scripts\dev-install.ps1` again
+  (or installs the newest package). Windows does not let a running program be overwritten, so the old engine is renamed
+  aside (`lockflight.exe.old-…`) and removed by a later update once nothing runs it.
+
 ## Install from a package
 
 > [!NOTE]
@@ -76,7 +112,8 @@ claude plugin marketplace add lockflight/lockflight
 claude plugin install lockflight@lockflight --scope user
 ```
 
-Then set up your project as below.
+Then set up your project as below. This install does not change your `PATH`: run the engine as `~/.lockflight/bin/lockflight`,
+or add `~/.lockflight/bin` to `PATH` yourself.
 
 - **Why `--tool-path` and not `dotnet tool install --local` in the project:** the engine package is built for each platform,
   and only the .NET 10 SDK can install such a package. In a repository whose `global.json` pins an older SDK, a local tool

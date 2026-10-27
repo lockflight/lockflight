@@ -10,7 +10,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 |---|---|
 | Every tool call or every write is blocked | [engine not installed](#every-tool-call-is-blocked-engine-not-installed-in-this-project) · [engine not run](#every-tool-call-is-blocked-the-engine-was-not-run) · [lockdown](#every-write-is-blocked-the-project-is-in-lockdown) · [after editing `lockflight.yaml`](#writes-are-blocked-after-editing-lockflightyaml) · [engine and pin differ](#running-engine-x-but-the-project-pins-y) · [internal error](#lockflight-internal-error-or-the-engine-failed-exit-n) |
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a shell command after `cd`](#a-shell-command-is-blocked-after-a-cd) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
-| Install and versions | [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
+| Install and versions | [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`NOT-EARNED`](#a-gate-says-not-earned) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
 | Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) |
 
@@ -128,6 +128,19 @@ relative path could be anywhere, including a protected file, so relative writes 
 (`cd src/Shop.Api && …`) or paths from the project directory. See
 [what the shell write detection sees](guardrails-and-boundaries.md#what-the-shell-write-detection-sees).
 
+## `command not found: lockflight`
+
+The install puts `~/.lockflight/bin` on `PATH` for **new** terminals only. Open a new terminal, or load the line now:
+`source ~/.zshrc` (zsh) or `source ~/.bashrc` (bash). If it still fails:
+
+- the install ran with `--no-modify-path`, or you use a shell whose startup file it does not know: it then wrote
+  `~/.profile`, which only login shells read. Add `export PATH="$HOME/.lockflight/bin:$PATH"` to your shell's startup file,
+  or run `scripts/user-path.sh ~/.lockflight/bin` from the checkout with `SHELL` set to your shell;
+- on Windows, open a new terminal (a running one keeps its old `PATH`); if it is still missing, check that the user variable
+  `Path` holds `%USERPROFILE%\.lockflight\bin`, or sign out and in again.
+
+Until then, `~/.lockflight/bin/lockflight` works everywhere, and in a set-up project `.lockflight/bin/lockflight`.
+
 ## The engine package is not found
 
 The `Lockflight.Cli` packages are not on nuget.org yet, so `dotnet tool install Lockflight.Cli` finds nothing. Until they are
@@ -187,8 +200,23 @@ separate terminal window (`.lockflight/bin/lockflight approve spec` or `approve 
 
 ## Windows
 
-There is no install path for Windows yet: `scripts/dev-install.sh` refuses it, and no package is published. Where the engine
-does run on Windows, the hook shim is a POSIX script, so Claude Code needs **Git Bash**; `doctor` checks for it.
+Install with `scripts\dev-install.ps1` ([Install on Windows](getting-started.md#install-on-windows)). The hook shim is a POSIX
+script, so Claude Code needs **Git Bash**; `doctor` checks for it.
+
+- **"running scripts is disabled on this system":** PowerShell's execution policy refuses unsigned scripts. Run the installer
+  as `powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1`, which changes the policy for that one run only.
+- **"Git Bash was not found":** install [Git for Windows](https://git-scm.com/download/win). If it is installed somewhere
+  unusual, set `CLAUDE_CODE_GIT_BASH_PATH` to its `bash.exe` (Claude Code reads the same variable).
+- **"pack failed" with a linker error in `~\.lockflight\pack.log`:** the Native AOT build needs Visual Studio Build Tools with
+  the *Desktop development with C++* workload. Install it, open a new terminal and run the installer again.
+- **`lockflight.exe.old-…` files in `~\.lockflight\bin`:** engines that were running when an install or `update` replaced them
+  (Windows does not let a running program be overwritten, only renamed). The next install or update removes them; deleting them
+  by hand once no Claude Code session or terminal runs them is safe too. The same goes for `.lockflight\bin` in a project.
+- **`update` says the install failed:** it runs `scripts\dev-install.ps1` in the recorded checkout (`~\.lockflight\source`)
+  through Windows PowerShell; run that script by hand to see the full output, and see `~\.lockflight\pack.log` and
+  `install.log`.
+- **`~/.lockflight/bin/lockflight` does not run in `cmd.exe`:** `cmd` does not expand `~` or accept `/`. Use PowerShell or Git
+  Bash, or `%USERPROFILE%\.lockflight\bin\lockflight.exe`.
 
 ## "records a human decision and does not run inside a Claude Code session"
 
@@ -216,8 +244,13 @@ command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approv
    if you installed the crew (`/plugin uninstall …` in Claude Code does the same). Then remove the marketplace:
    `claude plugin marketplace remove lockflight`.
 6. Remove the user install: `rm -rf ~/.lockflight`. A package install and an install from source share this layout
-   (`~/.lockflight/bin/lockflight` pointing at `~/.lockflight/tools/<version>`); a source install also keeps its local feed
+   (`~/.lockflight/bin/lockflight` pointing at `~/.lockflight/tools/<version>`, a copy on Windows: remove the folder with
+   `Remove-Item -Recurse -Force ~\.lockflight` once no session runs the engine); a source install also keeps its local feed
    (`~/.lockflight/feed`) and the path of its checkout (`~/.lockflight/source`) there.
+7. Take the engine off `PATH`: delete the line ending in `# added by Lockflight: its engine on PATH` from your shell's
+   startup file (`~/.zshrc`, `~/.bashrc`, `~/.bash_profile` or `~/.profile`), or the file
+   `~/.config/fish/conf.d/lockflight.fish`. On Windows, remove `%USERPROFILE%\.lockflight\bin` from the user variable `Path`
+   (*Environment Variables*).
 
 ## Next
 

@@ -15,7 +15,7 @@ internal sealed class LinkCommand(CliContext context)
     /// <summary>The platforms with a Native AOT engine package (the tool's runtime identifiers).</summary>
     public const string SupportedPlatforms = "osx-arm64, osx-x64, linux-x64, linux-arm64 and win-x64";
 
-    private const UnixFileMode ExecutableMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+    public const UnixFileMode ExecutableMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
         | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
 
     /// <summary>The linked engine of the project at <paramref name="root"/> (<c>.exe</c> on Windows).</summary>
@@ -60,7 +60,7 @@ internal sealed class LinkCommand(CliContext context)
             File.SetUnixFileMode(temporary, ExecutableMode);
         }
 
-        File.Move(temporary, target, overwrite: true);
+        ExecutableReplacement.Replace(temporary, target);
         await context.Output.WriteLineAsync($"linked lockflight {ToolPin.RunningVersion} -> {target}");
         return ExitCode.Pass;
     }

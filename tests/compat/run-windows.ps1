@@ -1,6 +1,9 @@
 <#
-Windows kit: engine build and unit tests, the hook compatibility suite through Git Bash, hook latency, and the Claude Code
-hook forms.
+Windows kit: engine build and unit tests, the hook compatibility suite through Git Bash, hook latency, the Claude Code hook
+forms, and the user install end to end: scripts/dev-install.ps1, init and doctor in a sample project, Claude Code sessions
+where the installed plugin's guard blocks an Edit of lockflight.yaml and a Bash redirect onto it, the Stop gate, the
+/lockflight:approve refusal outside an attended session, and `lockflight update`. tests/compat/WINDOWS-CHECK.md lists the
+steps, the interactive approval to do by hand afterwards, and what to send back.
 
 Run from the repository root in a normal (non-admin) PowerShell 7 session:
     pwsh -File tests/compat/run-windows.ps1
@@ -9,13 +12,15 @@ Run from the repository root in a normal (non-admin) PowerShell 7 session:
 Prerequisites: .NET SDK 10, Git for Windows (Git Bash), Claude Code logged in (subscription is fine), and — for the Native AOT
 build — Visual Studio Build Tools with the "Desktop development with C++" workload. Without C++ tools the script falls back
 to a self-contained single-file build (latency numbers are then marked as non-AOT). -Engine <path> uses a prebuilt engine
-instead (e.g. lockflight.exe from the win-x64 release package).
+instead (e.g. lockflight.exe from the win-x64 release package). -SkipInstall leaves the user install (~\.lockflight and the
+plugin at user scope) alone; without it the kit installs from this checkout, as a user would, and updates from it (git pull
+--ff-only: run it on main).
 
 Writes everything to tests/compat/results-<machine>-<timestamp>/ — send that folder back (it contains no secrets; review it).
 Claude runs use Haiku and cost a few cents in total.
 #>
 [CmdletBinding()]
-param([string]$Model = "haiku", [switch]$SkipClaude, [string]$Engine = "")
+param([string]$Model = "haiku", [switch]$SkipClaude, [switch]$SkipInstall, [string]$Engine = "")
 
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path "$PSScriptRoot/../..").Path
@@ -133,6 +138,89 @@ if (-not $SkipClaude) {
     Run-Case "shell powershell"    "engine-ok" "block"    @{ type = "command"; shell = "powershell"; command = "& '$eng' hook pre-tool-use; exit `$LASTEXITCODE" } "False"
     Run-Case "exec missing .exe"   "missing"   "block"    @{ type = "command"; command = "C:\does-not-exist\lockflight.exe"; args = @("hook", "pre-tool-use") } "False"
     Run-Case "exec missing .exe"   "missing"   "continue" @{ type = "command"; command = "C:\does-not-exist\lockflight.exe"; args = @("hook", "pre-tool-use") } "True"
+}
+
+# ---------------------------------------------------------------- user install, project, sessions, update
+if (-not $SkipInstall) {
+    Log "`n## user install (scripts/dev-install.ps1)"
+    $installLog = Join-Path $out "install.txt"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo "scripts\dev-install.ps1") *> $installLog
+    Log "- dev-install.ps1 exit: $LASTEXITCODE (output in install.txt)"
+    $userHome = if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }
+    $installed = Join-Path $userHome ".lockflight\bin\lockflight.exe"
+    $item = Get-Item -LiteralPath $installed -ErrorAction SilentlyContinue
+    Log "- engine: $installed exists: $([bool]$item); link type: '$($item.LinkType)' (expected empty: a copy)"
+    Log "- version: $(& $installed version 2>&1); recorded: $(Get-Content -Raw -LiteralPath (Join-Path $userHome '.lockflight\bin\lockflight.version') -ErrorAction SilentlyContinue)"
+    $userPath = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment").GetValue("Path", "", "DoNotExpandEnvironmentNames")
+    Log "- user PATH entries for the engine folder: $(@($userPath -split ';' | Where-Object { $_.TrimEnd([char]92) -ieq (Split-Path $installed) }).Count) (expected 1)"
+    Log "- plugin at user scope: $((& claude plugin list 2>&1 | Select-String 'lockflight@lockflight') -join '; ')"
+
+    Log "`n## project: init and doctor (a copy of samples/dotnet-single, in a folder with a space)"
+    $session = Join-Path $out "session proj"
+    Copy-Item -Recurse (Join-Path $repo "samples\dotnet-single") $session
+    $feature = "specs\20261011-120000-shipping"
+    New-Item -ItemType Directory -Force (Join-Path $session $feature) | Out-Null
+    @"
+# Feature Specification: Shipping cost
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - Pay for shipping (Priority: P1)
+
+1. **Given** a 2.1 kg parcel and a 10.00 order, **When** shipping is priced, **Then** it costs 10.00
+
+## Requirements *(mandatory)*
+
+- **FR-001**: System MUST charge 5.00 for the first kilogram
+"@ | Set-Content -LiteralPath (Join-Path $session "$feature\spec.md")
+    Push-Location -LiteralPath $session
+    & git init --quiet; & git add -A; & git -c user.email=kit@example.com -c user.name=kit commit --quiet -m base
+    & $installed init *> (Join-Path $out "init.txt")
+    Log "- init exit: $LASTEXITCODE (output in init.txt)"
+    & git add -A; & git -c user.email=kit@example.com -c user.name=kit commit --quiet -m lockflight
+    & .lockflight\bin\lockflight.exe doctor *> (Join-Path $out "doctor.txt")
+    Log "- doctor exit: $LASTEXITCODE (output in doctor.txt)"
+    Pop-Location
+    $yaml = Join-Path $session "lockflight.yaml"
+    $yamlBefore = Get-Content -Raw -LiteralPath $yaml
+    $ledger = Join-Path $session ".lockflight\ledger"
+    function Ledger-Count([string]$text) {
+        @(Get-ChildItem -LiteralPath $ledger -Filter *.jsonl -ErrorAction SilentlyContinue | Select-String -SimpleMatch $text).Count
+    }
+
+    if (-not $SkipClaude) {
+        Log "`n## Claude Code sessions with the installed plugin (claude -p, $Model)"
+        Log "| scenario | result | expected |"
+        function Run-Session([string]$id, [string]$prompt, [string[]]$tools) {
+            Push-Location -LiteralPath $session
+            $null | & claude -p $prompt --allowedTools ($tools -join ",") --max-turns 6 --model $Model --output-format json > (Join-Path $out "session-$id.json") 2> (Join-Path $out "session-$id-err.txt")
+            Pop-Location
+        }
+        $blockedBefore = Ledger-Count '"hook.blocked"'
+        Run-Session "edit-manifest" "Use the Edit tool (not Bash) to replace the text 'version: 1' with 'version: 2' in lockflight.yaml. If the edit is refused, do not retry and do not use any other tool; reply REFUSED. Otherwise reply DONE." @("Edit", "Read")
+        Log "| guard: Edit lockflight.yaml | unchanged: $((Get-Content -Raw -LiteralPath $yaml) -eq $yamlBefore); blocks logged: $((Ledger-Count '"hook.blocked"') - $blockedBefore) | unchanged: True; blocks >= 1 |"
+        $blockedBefore = Ledger-Count '"hook.blocked"'
+        Run-Session "bash-redirect" "Use the Bash tool to run exactly this command: echo changed > lockflight.yaml . If it is refused, do not retry and do not use any other tool; reply REFUSED. Otherwise reply DONE." @("Bash")
+        Log "| guard: Bash redirect onto lockflight.yaml | unchanged: $((Get-Content -Raw -LiteralPath $yaml) -eq $yamlBefore); blocks logged: $((Ledger-Count '"hook.blocked"') - $blockedBefore) | unchanged: True; blocks >= 1 |"
+        $stopBefore = Ledger-Count '"stop-hook"'
+        Run-Session "stop-gate" "Use the Write tool to create src/Shop.Api/Broken.cs containing exactly: public class Broken { public int X => ; } Then reply DONE. If you are told the build fails, fix the file so it compiles and reply FIXED." @("Write", "Edit", "Read")
+        Log "| Stop gate: a turn ending with a compile error | gate runs from the Stop hook: $((Ledger-Count '"stop-hook"') - $stopBefore); session-stop-gate.json says: $((Get-Content -Raw (Join-Path $out 'session-stop-gate.json') -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue).result) | runs >= 2 (one failing, one after the fix); FIXED |"
+        Run-Session "approve-unattended" "/lockflight:approve spec" @("Read")
+        Push-Location -LiteralPath $session
+        & .lockflight\bin\lockflight.exe approve verify --feature 20261011-120000-shipping --require spec *> (Join-Path $out "approve-verify-unattended.txt")
+        $verify = $LASTEXITCODE
+        Pop-Location
+        Log "| /lockflight:approve spec in claude -p (not attended) | approve verify exit: $verify; stderr mentions it: $([bool](Select-String -Quiet -SimpleMatch -Pattern 'nothing was approved' -Path (Join-Path $out 'session-approve-unattended-err.txt'), (Join-Path $out 'session-approve-unattended.json') -ErrorAction SilentlyContinue)) | exit not 0 (nothing approved) |"
+    }
+
+    Log "`n## lockflight update (from this checkout, in the project)"
+    Push-Location -LiteralPath $session
+    & $installed update *> (Join-Path $out "update.txt")
+    Log "- update exit: $LASTEXITCODE (output in update.txt)"
+    Log "- installed engine version after update: $(& $installed version 2>&1); project engine: $(& .lockflight\bin\lockflight.exe version 2>&1)"
+    Pop-Location
+    Log "- engines set aside and not yet removed: $(@(Get-ChildItem -LiteralPath (Split-Path $installed) -Filter 'lockflight.exe.old-*' -ErrorAction SilentlyContinue).Count) (one is normal: the update ran from it)"
+    Log "- for the interactive approval, open Claude Code in: $session (see WINDOWS-CHECK.md)"
 }
 
 Log "`nDone. Results folder: $out"

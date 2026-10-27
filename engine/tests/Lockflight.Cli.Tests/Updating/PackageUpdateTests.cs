@@ -13,11 +13,6 @@ public sealed class PackageUpdateTests : IDisposable
     [Fact]
     public async Task AFirstInstallPutsTheEngineUnderItsVersionAndLinksIt()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         FakeToolFeed feed = new("0.2.0-alpha.5");
 
         PackageUpdateResult result = await Update(feed);
@@ -37,11 +32,6 @@ public sealed class PackageUpdateTests : IDisposable
     [Fact]
     public async Task ANewerPackageMovesTheLinkAndKeepsTheOlderEngine()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         FakeToolFeed feed = new("0.2.0-alpha.4");
         await Update(feed);
         feed.Newest = "0.2.0-alpha.5";
@@ -57,11 +47,6 @@ public sealed class PackageUpdateTests : IDisposable
     [Fact]
     public async Task TheSameVersionIsAlreadyUpToDate()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         FakeToolFeed feed = new("0.2.0-alpha.5");
         await Update(feed);
 
@@ -74,11 +59,6 @@ public sealed class PackageUpdateTests : IDisposable
     [Fact]
     public async Task ANewerDevelopmentBuildIsNotReplacedByAnOlderRelease()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         FakeToolFeed feed = new("0.2.0-alpha.5.dev.20261015101143");
         await Update(feed);
         feed.Newest = "0.2.0-alpha.5";
@@ -93,11 +73,6 @@ public sealed class PackageUpdateTests : IDisposable
     [Fact]
     public async Task AReleaseInstallFollowsReleasesOnly()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         FakeToolFeed feed = new("1.0.0");
         await Update(feed);
         feed.Newest = "1.0.1";
@@ -111,11 +86,6 @@ public sealed class PackageUpdateTests : IDisposable
     [Fact]
     public async Task AFailedInstallSaysWhyAndLeavesTheInstallAsItWas()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         FakeToolFeed feed = new("0.2.0-alpha.4");
         await Update(feed);
         feed.Fails = true;
@@ -131,13 +101,8 @@ public sealed class PackageUpdateTests : IDisposable
     [Fact]
     public async Task APackageInstalledStraightIntoBinMovesIntoTheVersionedLayout()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         string bin = Path.GetDirectoryName(UserInstall.Engine(home.FullName))!;
-        FakeToolFeed.LayOut(bin, "0.2.0-alpha.4");
+        FakeToolFeed.LayOut(bin, "0.2.0-alpha.4", UserInstall.PlatformLayout);
         Assert.Equal("0.2.0-alpha.4", UserInstall.InstalledVersion(home.FullName));
 
         PackageUpdateResult result = await Update(new FakeToolFeed("0.2.0-alpha.5"));
@@ -147,8 +112,38 @@ public sealed class PackageUpdateTests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(bin, ".store")));
     }
 
-    private Task<PackageUpdateResult> Update(FakeToolFeed feed) =>
-        new PackageUpdate(feed.RunAsync, time).RunAsync(home.FullName, Feed, TestContext.Current.CancellationToken);
+    [Fact]
+    public async Task ACopiedEngineIsReplacedByTheNewerPackagesEngine()
+    {
+        FakeToolFeed feed = new("0.2.0-alpha.4", EngineLayout.Copy);
+        await Update(feed, EngineLayout.Copy);
+        feed.Newest = "0.2.0-alpha.5";
+        time.Advance(TimeSpan.FromMinutes(1));
+
+        PackageUpdateResult result = await Update(feed, EngineLayout.Copy);
+
+        Assert.Equal(new PackageUpdateResult(PackageUpdateStatus.Installed, "0.2.0-alpha.5", null), result);
+        Assert.Equal("0.2.0-alpha.5", UserInstall.InstalledVersion(home.FullName));
+        Assert.Equal(FakeToolFeed.EngineContent("0.2.0-alpha.5"), File.ReadAllText(UserInstall.Engine(home.FullName)));
+        Assert.Null(File.ResolveLinkTarget(UserInstall.Engine(home.FullName), returnFinalTarget: false));
+        Assert.True(Directory.Exists(UserInstall.ToolPath(home.FullName, "0.2.0-alpha.4")));
+    }
+
+    [Fact]
+    public async Task ACopiedEngineOfTheNewestVersionIsAlreadyUpToDate()
+    {
+        FakeToolFeed feed = new("0.2.0-alpha.5", EngineLayout.Copy);
+        await Update(feed, EngineLayout.Copy);
+
+        PackageUpdateResult result = await Update(feed, EngineLayout.Copy);
+
+        Assert.Equal(new PackageUpdateResult(PackageUpdateStatus.UpToDate, "0.2.0-alpha.5", null), result);
+    }
+
+    private Task<PackageUpdateResult> Update(FakeToolFeed feed) => Update(feed, UserInstall.PlatformLayout);
+
+    private Task<PackageUpdateResult> Update(FakeToolFeed feed, EngineLayout layout) =>
+        new PackageUpdate(feed.RunAsync, time, layout).RunAsync(home.FullName, Feed, TestContext.Current.CancellationToken);
 
     public void Dispose() => TempDirectories.DeleteRecursively(home);
 }
