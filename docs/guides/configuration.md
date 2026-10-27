@@ -86,14 +86,16 @@ directories the same way.
 - **Protection:** the guard protects every unit's control files (next section).
 - **Workspace-wide gates:** the gates see every unit repository. Changed lines (format, patch coverage), secret scanning,
   `policy.protected` and the Stop gate's cache all ask each child repository's git, and report paths relative to the shell.
-- **Per-unit baselines:** `baseline tests|build|deps --path <unit>` writes `.lockflight/baselines/<unit>/…`.
+- **Per-unit baselines:** `baseline tests|build|deps --path <unit>` writes `.lockflight/baselines/<unit>/…`. It builds and tests
+  the unit with its own settings (`build:`, `test.framework`, `test.stopFilter`), as a workspace run does.
 - **Base ref:** with `--base`, the same ref must exist in every unit repository.
 - **Gate runs at the shell root** cover the units. `gate run` and the Stop gate run every check that reads the whole
   workspace once: format, and in `pr` also `policy.protected` and secrets. They build and test each changed .NET unit in its
   own directory, two at a time, on one shared budget.
   - The stop and edit profiles skip units without changes. The Stop gate also skips a unit unchanged since its last PASS
     (`.lockflight/local/stop-pass-<unit>`).
-  - `--unit a,b` limits a run to those units; `--path <unit>` runs one unit as before.
+  - `--unit a,b` limits a run to those units; `--path <unit>` (or a directory inside it) runs one unit with its own `build:`, test framework and
+    stop filter; the root's `gates.build` applies only outside every unit.
   - The verdict is the worst of all steps.
 - **The lifecycle across units:** specs, approvals and phase checks stay in the shell.
   - Red/green, trace and review build each .NET unit in its own directory and list and run the tests of all of them.

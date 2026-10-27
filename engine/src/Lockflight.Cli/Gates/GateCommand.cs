@@ -43,12 +43,9 @@ internal sealed class GateCommand(CliContext context)
         }
 
         Manifest? manifest = loadResult.Manifest;
-        GateRunContext run = new(
-            target, manifest?.Root ?? target, profile, manifest?.Gates ?? GateSettings.Default, options.Value("--base"), context.Time)
-        {
-            UnitPath = manifest is null ? null : UnitResolver.Owning(manifest, target)?.Path,
-            BuildFile = manifest?.Gates.BuildFile,
-        };
+        GateRunContext run = manifest is null
+            ? new(target, target, profile, GateSettings.Default, options.Value("--base"), context.Time)
+            : GateRunContext.ForTarget(manifest, target, profile, options.Value("--base"), context.Time);
         string[] units = [.. (options.Value("--unit") ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(name => name.TrimEnd('/'))];
         bool workspaceRun = manifest is { Units.Count: > 0 } && SameDirectory(target, manifest.Root);
         if (units.Length > 0 && !workspaceRun)

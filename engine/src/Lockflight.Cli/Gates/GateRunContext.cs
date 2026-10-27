@@ -26,6 +26,32 @@ internal sealed record GateRunContext(
     /// <summary>The unit's <c>test.stopFilter</c>: tests the stop profile leaves to the pr profile; null for none.</summary>
     public string? StopFilter { get; init; }
 
+    /// <summary>
+    /// The run for one directory of a project: in a unit of a workspace, that unit's <c>build:</c> file (resolved from the target),
+    /// test framework and <c>test.stopFilter</c>; outside every unit, the root's <c>gates.build</c>. Every command that runs a unit's
+    /// steps outside a workspace run (<c>gate run --path</c>, <c>baseline</c>) starts here, so it builds what the workspace run builds.
+    /// </summary>
+    public static GateRunContext ForTarget(
+        Manifest manifest, string target, GateProfile profile, string? baseRef, TimeProvider time, bool underStopHook = true)
+    {
+        GateRunContext run = new(target, manifest.Root, profile, manifest.Gates, baseRef, time, underStopHook);
+        return UnitResolver.Owning(manifest, target) is Unit unit
+            ? run.ForUnit(unit, Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar)))
+            : run with { BuildFile = manifest.Gates.BuildFile };
+    }
+
+    /// <summary>
+    /// This run with a unit's settings: its <c>build:</c> file (relative to the unit's directory, passed relative to the target),
+    /// its test framework (else the root's) and its stop filter. The root's <c>gates.build</c> never applies to a unit.
+    /// </summary>
+    public GateRunContext ForUnit(Unit unit, string unitDirectory) => this with
+    {
+        Settings = Settings with { TestFramework = unit.TestFramework ?? Settings.TestFramework },
+        UnitPath = unit.Path,
+        BuildFile = unit.Build is null ? null : Path.GetRelativePath(Target, Path.Combine(unitDirectory, unit.Build.Replace('/', Path.DirectorySeparatorChar))),
+        StopFilter = unit.StopFilter,
+    };
+
     /// <summary>The plugin's Stop hook timeout (<c>plugins/lockflight/hooks/hooks.json</c>), in seconds.</summary>
     public const int StopHookTimeoutSeconds = 600;
 

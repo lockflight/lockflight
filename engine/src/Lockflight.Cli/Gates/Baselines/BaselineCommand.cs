@@ -39,7 +39,9 @@ internal sealed class BaselineCommand(CliContext context)
         }
 
         // A full rebuild: an incremental build skips unchanged projects and would leave their warnings out of the baseline.
-        ProcessResult build = await ProcessRunner.RunAsync("dotnet", ["build", "--no-incremental", "--nologo", "--interactive", "false"], target, cancellationToken);
+        GateRunContext buildRun = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: false);
+        ProcessResult build = await ProcessRunner.RunAsync(
+            "dotnet", ["build", .. buildRun.BuildFileArguments, "--no-incremental", "--nologo", "--interactive", "false"], target, cancellationToken);
         if (build.ExitCode != 0)
         {
             await context.Error.WriteLineAsync("lockflight: the build fails; a baseline is taken from a building tree only");
@@ -47,7 +49,7 @@ internal sealed class BaselineCommand(CliContext context)
         }
 
         IReadOnlyList<BuildDiagnostic> diagnostics = BuildDiagnostics.Parse(build.Output, manifest.Root);
-        DiagnosticsBaseline baseline = new(manifest.Root, UnitResolver.Owning(manifest, target)?.Path);
+        DiagnosticsBaseline baseline = new(manifest.Root, buildRun.UnitPath);
         baseline.Save(diagnostics);
         await new LedgerWriter(manifest.Root, context.Time).AppendAsync(
             new LedgerEvent(LedgerEventType.ConfigWritten, "baseline:build", $"{diagnostics.Count} warnings accepted", null), cancellationToken);
@@ -57,10 +59,7 @@ internal sealed class BaselineCommand(CliContext context)
 
     private async Task<ExitCode> AcceptFailingTestsAsync(string target, Manifest manifest, CancellationToken cancellationToken)
     {
-        GateRunContext run = new(target, manifest.Root, GateProfile.Stop, manifest.Gates, BaseRef: null, context.Time, UnderStopHook: false)
-        {
-            UnitPath = UnitResolver.Owning(manifest, target)?.Path,
-        };
+        GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: false);
         if ((await BuildStep.RunAsync(run, cancellationToken)).Verdict != Verdict.Pass)
         {
             await context.Error.WriteLineAsync("lockflight: the build gate does not pass; fix it before accepting failing tests");
@@ -85,10 +84,7 @@ internal sealed class BaselineCommand(CliContext context)
 
     private async Task<ExitCode> AcceptAdvisoriesAsync(string target, Manifest manifest, CancellationToken cancellationToken)
     {
-        GateRunContext run = new(target, manifest.Root, GateProfile.PullRequest, manifest.Gates, BaseRef: null, context.Time)
-        {
-            UnitPath = UnitResolver.Owning(manifest, target)?.Path,
-        };
+        GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.PullRequest, baseRef: null, context.Time);
         (GateStep step, IReadOnlyList<VulnerablePackage> found) = await DependencyStep.RunAsync(run, cancellationToken);
         if (step.Verdict == Verdict.Error)
         {
