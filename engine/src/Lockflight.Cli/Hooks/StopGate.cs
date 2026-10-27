@@ -40,7 +40,8 @@ internal static class StopGate
         else
         {
             string target = Path.GetFullPath(manifest.StopTarget ?? ".", manifest.Root);
-            GateRunContext run = new(target, manifest.Root, GateProfile.Stop, manifest.Gates, BaseRef: null, time) { UnitPath = UnitResolver.Owning(manifest, target)?.Path, BuildFile = manifest.Gates.BuildFile };
+            // A stop target inside a unit runs with that unit's build: file, test framework and stop filter.
+            GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, time);
             result = await GateRunner.RunAsync(run, TextWriter.Null, cancellationToken);
         }
 

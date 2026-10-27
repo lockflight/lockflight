@@ -96,7 +96,7 @@ directories the same way.
   - The stop and edit profiles skip units without changes. The Stop gate also skips a unit unchanged since its last PASS
     (`.lockflight/local/stop-pass-<unit>`).
   - `--unit a,b` limits a run to those units; `--path <unit>` (or a directory inside it) runs one unit with its own `build:`, test framework and
-    stop filter; the root's `gates.build` applies only outside every unit.
+    stop filter, and so does the Stop gate when `stop.target` lies inside a unit; the root's `gates.build` applies only outside every unit.
   - The verdict is the worst of all steps.
 - **The lifecycle across units:** specs, approvals and phase checks stay in the shell.
   - Red/green, trace and review build each .NET unit in its own directory and list and run the tests of all of them.
