@@ -3,7 +3,7 @@ namespace Lockflight.Cli.Hooks;
 /// <summary>
 /// A command string another program runs: <c>bash -c</c> (in any option spelling, with its positional parameters bound), the
 /// commands a POSIX shell without a script reads on stdin (a here-document, a here-string, an <c>echo</c> piped into it),
-/// <c>eval</c>, <c>flock -c</c>, <c>pwsh -Command</c>, <c>Invoke-Expression</c>, <c>cmd /c</c> and <c>Start-Process</c>. <see cref="SameShell"/> is
+/// <c>eval</c>, <c>flock -c</c>, the commands <c>script</c>, <c>watch</c> and GNU <c>parallel</c> run, <c>pwsh -Command</c>, <c>Invoke-Expression</c>, <c>cmd /c</c> and <c>Start-Process</c>. <see cref="SameShell"/> is
 /// set when it runs in the current shell (a cd inside it persists); <see cref="Hidden"/> names one whose text cannot be read
 /// (<c>-EncodedCommand</c>, <c>curl … | sh</c>, <c>bash &lt;(…)</c>).
 /// </summary>
@@ -36,6 +36,21 @@ internal sealed record NestedShellCommand(string Command, ShellDialect Dialect, 
             // flock [options] FILE -c STRING runs the string with sh -c.
             int flag = IndexOf(arguments, argument => argument is "-c" or "--command");
             return flag >= 0 && flag + 1 < arguments.Count ? new(arguments[flag + 1], ShellDialect.Posix, SameShell: false, null) : null;
+        }
+
+        if (program == "script")
+        {
+            return RunnerCommandLines.Script(arguments);
+        }
+
+        if (program == "watch")
+        {
+            return RunnerCommandLines.Watch(arguments);
+        }
+
+        if (program == "parallel")
+        {
+            return ParallelCommandLine.Of(arguments);
         }
 
         if (program == "cmd")
