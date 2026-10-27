@@ -68,8 +68,9 @@ decides it: by the nearest `global.json`'s `test.runner`.
 
 - **Microsoft.Testing.Platform (xUnit v3):** results are read from the console summary.
 - **VSTest (xUnit v2, NUnit, MSTest):** results are read from TRX reports written to `.lockflight/local/test-results/`.
-  - A run with no executed test is NOT-EARNED, never PASS.
   - A non-zero exit without a failed test is ERROR.
+- **On both:** a run with no executed test is NOT-EARNED, never PASS. That includes a run in which every test was skipped, which
+  Microsoft.Testing.Platform reports as "Zero tests ran" with exit code 0.
 
 Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform) and xUnit v2 on VSTest.
 
