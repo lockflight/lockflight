@@ -8,7 +8,7 @@
 
 - [ ] `cd engine && dotnet build && dotnet test`
 - [ ] Cross-component suites touched by this change (see [tests/README.md](../tests/README.md))
-- [ ] Docs updated (guides, commands, configuration, CHANGELOG under Unreleased)
+- [ ] Docs updated (guides, commands, configuration). CHANGELOG.md is written at release time from the titles.
 
 ## Guarantees
 

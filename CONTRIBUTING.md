@@ -31,8 +31,9 @@ than a fix, please open an issue first, because the design still moves.
 - **Pull requests** are squash-merged, so the title becomes the commit on `main` and follows the same format. Fill in the
   [template](.github/pull_request_template.md): what and why, how it was verified, the effect on guarantees, breaking changes.
   One concern per pull request.
-- **Changelog:** add a line under `Unreleased` in [CHANGELOG.md](CHANGELOG.md) for anything a user notices.
-  [git-cliff](https://git-cliff.org) drafts release notes from the commits ([cliff.toml](cliff.toml)).
+- **Changelog:** pull requests do not edit [CHANGELOG.md](CHANGELOG.md). The release pull request drafts the entries from the
+  Conventional Commits on `main` with [git-cliff](https://git-cliff.org) ([cliff.toml](cliff.toml)) and edits them for users, so
+  write the pull request title as the line a user should read.
 - **Versions** follow [Semantic Versioning](https://semver.org/); releases are tagged `vX.Y.Z[-alpha.N]`. The plugin and the
   engine share one version. The plugin's version in `plugin.json` is the last release: `scripts/dev-install.sh` numbers
   development builds after it (`0.2.0-alpha.4.dev.<commit time>`, or `0.2.1-0.dev.<commit time>` after a release `0.2.0`) so
