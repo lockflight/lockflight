@@ -79,11 +79,14 @@ internal static class RealPath
         return (current, false);
     }
 
-    /// <summary>The directory above; the file system root and a drive root are their own parents.</summary>
+    /// <summary>
+    /// The directory above; the file system root and a drive root are their own parents. Either separator counts: on Windows
+    /// <see cref="Path.Join(string, string)"/> joins with a backslash.
+    /// </summary>
     private static string Parent(string directory)
     {
-        string trimmed = directory.TrimEnd('/');
-        int separator = trimmed.LastIndexOf('/');
+        string trimmed = directory.TrimEnd('/', '\\');
+        int separator = trimmed.LastIndexOfAny(['/', '\\']);
         if (separator < 0)
         {
             return directory;
