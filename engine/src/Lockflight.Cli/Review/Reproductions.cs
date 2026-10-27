@@ -53,7 +53,8 @@ internal static partial class Reproductions
         }
 
         Dictionary<int, TestApp> chosen = candidates.ToDictionary(candidate => candidate.Index, candidate => NearestTestProject.Choose(apps, root, judged[candidate.Index].File));
-        foreach ((int index, ReproductionVerdict verdict) in await JudgeAsync(candidates, chosen, root, timeLimit, cancellationToken))
+        using ReviewBuildFolder folder = ReviewBuildFolder.Acquire(root);
+        foreach ((int index, ReproductionVerdict verdict) in await JudgeAsync(candidates, chosen, root, folder.Name, timeLimit, cancellationToken))
         {
             judged[index] = judged[index] with
             {
@@ -69,7 +70,7 @@ internal static partial class Reproductions
             };
         }
 
-        return repairer is null ? judged : await RepairAsync(judged, candidates, chosen, root, timeLimit, repairer, repairable, cancellationToken);
+        return repairer is null ? judged : await RepairAsync(judged, candidates, chosen, root, folder.Name, timeLimit, repairer, repairable, cancellationToken);
     }
 
     public static string? MethodName(string reproduction) => TestMethod().Match(reproduction) is { Success: true } match ? match.Groups["name"].Value : null;
@@ -79,6 +80,7 @@ internal static partial class Reproductions
         ReproductionCandidate[] candidates,
         Dictionary<int, TestApp> chosen,
         string root,
+        string outputFolder,
         TimeSpan timeLimit,
         ReproductionRepairer repairer,
         IReadOnlySet<string> repairable,
@@ -107,7 +109,7 @@ internal static partial class Reproductions
         }
 
         Dictionary<int, string> sources = repaired.ToDictionary(candidate => candidate.Index, candidate => candidate.Source);
-        foreach ((int index, ReproductionVerdict verdict) in await JudgeAsync(repaired, chosen, root, timeLimit, cancellationToken))
+        foreach ((int index, ReproductionVerdict verdict) in await JudgeAsync(repaired, chosen, root, outputFolder, timeLimit, cancellationToken))
         {
             ReviewFinding finding = judged[index];
             judged[index] = verdict.Result switch
@@ -149,13 +151,13 @@ internal static partial class Reproductions
 
     /// <summary>Builds and runs the candidates, each in its chosen test project; the verdict of every candidate by its index.</summary>
     private static async Task<Dictionary<int, ReproductionVerdict>> JudgeAsync(
-        IReadOnlyList<ReproductionCandidate> candidates, Dictionary<int, TestApp> chosen, string root, TimeSpan timeLimit, CancellationToken cancellationToken)
+        IReadOnlyList<ReproductionCandidate> candidates, Dictionary<int, TestApp> chosen, string root, string outputFolder, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         Dictionary<int, ReproductionVerdict> verdicts = [];
         foreach (IGrouping<TestApp, ReproductionCandidate> group in candidates.GroupBy(candidate => chosen[candidate.Index]))
         {
             List<string> usings = [.. TestProjectProfiles.Usings(group.Key.ProjectDirectory)];
-            await JudgeInProjectAsync(group.Key, [.. group], usings, verdicts, root, timeLimit, cancellationToken);
+            await JudgeInProjectAsync(group.Key, [.. group], usings, verdicts, root, outputFolder, timeLimit, cancellationToken);
         }
 
         return verdicts;
@@ -167,6 +169,7 @@ internal static partial class Reproductions
         List<string> usings,
         Dictionary<int, ReproductionVerdict> verdicts,
         string root,
+        string outputFolder,
         TimeSpan timeLimit,
         CancellationToken cancellationToken)
     {
@@ -174,7 +177,7 @@ internal static partial class Reproductions
         string lastErrors = string.Empty;
         for (int round = pending.Count + MaxUsingRepairs + 1; round > 0 && pending.Count > 0; round--)
         {
-            ReproductionBuildResult build = await ReproductionBuild.RunAsync(app, pending, usings, root, timeLimit, cancellationToken);
+            ReproductionBuildResult build = await ReproductionBuild.RunAsync(app, pending, usings, root, outputFolder, timeLimit, cancellationToken);
             if (build.Status != ReproductionBuildStatus.DidNotCompile)
             {
                 foreach (ReproductionCandidate candidate in pending)
@@ -216,7 +219,7 @@ internal static partial class Reproductions
             {
                 foreach (ReproductionCandidate candidate in pending)
                 {
-                    await JudgeInProjectAsync(app, [candidate], [.. usings], verdicts, root, timeLimit, cancellationToken);
+                    await JudgeInProjectAsync(app, [candidate], [.. usings], verdicts, root, outputFolder, timeLimit, cancellationToken);
                 }
 
                 return;

@@ -23,6 +23,8 @@ namespace Lockflight.Cli.Review;
 internal sealed class ReviewCommand(CliContext context)
 {
     private const int MaxDiffCharacters = 120_000;
+    private const int MaxGuidanceCharacters = 8_000;
+    private const string GuidanceFile = "CLAUDE.md";
     private const string DefaultTarget = "main";
 
     private static readonly TimeSpan VersionTimeLimit = TimeSpan.FromSeconds(30);
@@ -88,7 +90,15 @@ internal sealed class ReviewCommand(CliContext context)
         DateTimeOffset started = context.Time.GetUtcNow();
         await context.Output.WriteLineAsync($"Reviewing {feature.Id} against {reviewBase.Ref} with {model} (budget ${ReviewOfRecord.Usd(budget)})…");
         string requirements = await File.ReadAllTextAsync(feature.SpecPath, cancellationToken);
-        string prompt = ReviewPrompt.Build(requirements, Truncated(diff), ReproductionContext.Build(manifest.Root, diff));
+        string? guidanceCommit = reviewBase.MergeBase ?? reviewBase.Commit;
+        string prompt = ReviewPrompt.Build(new ReviewPromptData(
+            requirements,
+            Path.GetRelativePath(manifest.Root, feature.SpecPath).Replace('\\', '/'),
+            Truncated(diff),
+            await BaseGuidanceAsync(manifest.Root, guidanceCommit, cancellationToken),
+            $"{GuidanceFile} at the base commit {ReviewOfRecord.Short(guidanceCommit)}",
+            ReproductionContext.Build(manifest.Root, diff),
+            ReviewPrompt.NewMarker()));
         string? claudeVersion = await ClaudeVersionAsync(manifest, claude, cancellationToken);
         ProcessResult reply = await AskReviewerAsync(manifest, claude, model, ReviewOfRecord.Usd(budget), prompt, cancellationToken);
         ReviewOutcome outcome = ReviewResultParser.Parse(reply.Output);
@@ -153,8 +163,9 @@ internal sealed class ReviewCommand(CliContext context)
     /// <summary>
     /// Runs a read-only <c>claude -p</c> with the review schema; the prompt goes through stdin. Every mode is passed explicitly, so
     /// a change of Claude Code's defaults for <c>-p</c> does not change the reviewer: <c>--restricted</c> ignores user, project and
-    /// local settings (no hooks, no plugins), <c>--strict-mcp-config</c> skips MCP servers, <c>--tools</c> leaves only file reads,
-    /// and <c>--permission-mode dontAsk</c> denies anything that would ask. Bare mode (<c>--bare</c>) is chosen only when an API key
+    /// local settings (no hooks, no plugins), <c>--safe-mode</c> leaves out the working tree's <c>CLAUDE.md</c>, skills, agents and
+    /// other customizations (the change under review could have rewritten them), <c>--strict-mcp-config</c> skips MCP servers,
+    /// <c>--tools</c> leaves only file reads, and <c>--permission-mode dontAsk</c> denies anything that would ask. Bare mode (<c>--bare</c>) is chosen only when an API key
     /// is set, because it never reads a subscription sign-in.
     /// </summary>
     private async Task<ProcessResult> AskReviewerAsync(
@@ -168,7 +179,7 @@ internal sealed class ReviewCommand(CliContext context)
             await File.WriteAllTextAsync(promptFile, prompt, cancellationToken);
             return await context.Claude(
                 claude,
-                [.. signIn, "-p", "--restricted", "--strict-mcp-config", "--tools", "Read,Grep,Glob", "--permission-mode", "dontAsk",
+                [.. signIn, "-p", "--restricted", "--safe-mode", "--strict-mcp-config", "--tools", "Read,Grep,Glob", "--permission-mode", "dontAsk",
                  "--model", model, "--json-schema", ReviewPrompt.Schema, "--output-format", "json", "--no-session-persistence", "--max-budget-usd", budget],
                 manifest.Root,
                 TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds),
@@ -179,6 +190,26 @@ internal sealed class ReviewCommand(CliContext context)
         {
             File.Delete(promptFile);
         }
+    }
+
+    /// <summary>
+    /// The project's <c>CLAUDE.md</c> as it is at the base commit (bounded), never the working tree's: the change under review
+    /// cannot rewrite the guidance its reviewer reads. Null when the base has none or git cannot read it.
+    /// </summary>
+    private static async Task<string?> BaseGuidanceAsync(string root, string? commit, CancellationToken cancellationToken)
+    {
+        if (commit is null)
+        {
+            return null;
+        }
+
+        ProcessResult show = await ProcessRunner.RunAsync("git", ["show", $"{commit}:{GuidanceFile}"], root, cancellationToken);
+        if (show.ExitCode != 0 || show.Output.Trim().Length == 0)
+        {
+            return null;
+        }
+
+        return show.Output.Length > MaxGuidanceCharacters ? show.Output[..MaxGuidanceCharacters] + "\n[guidance truncated]" : show.Output;
     }
 
     /// <summary>
