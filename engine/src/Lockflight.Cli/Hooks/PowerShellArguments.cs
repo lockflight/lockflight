@@ -8,7 +8,7 @@ namespace Lockflight.Cli.Hooks;
 internal sealed record PowerShellArguments(IReadOnlyDictionary<string, List<string>> Named, IReadOnlyList<string> Positional, IReadOnlySet<string> Switches)
 {
     private static readonly string[] ValueParameters =
-        ["path", "literalpath", "filepath", "destination", "newname", "name", "value", "encoding", "itemtype", "filter", "include", "exclude", "stream", "inputobject", "width", "variable", "credential", "target", "argumentlist", "delimiter"];
+        ["path", "literalpath", "filepath", "destination", "destinationpath", "outfile", "uri", "newname", "name", "value", "encoding", "itemtype", "filter", "include", "exclude", "stream", "inputobject", "width", "variable", "credential", "target", "argumentlist", "delimiter"];
 
     private static readonly Dictionary<string, string> ParameterAliases = new(StringComparer.OrdinalIgnoreCase)
     {

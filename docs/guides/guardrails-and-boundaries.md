@@ -51,24 +51,29 @@ The guard parses Bash and PowerShell commands for writes. Commands are split on 
 (`\n` and `\r\n`); subshells `( … )`, groups `{ …; }`, `if`/`for`/`while` bodies, PowerShell script blocks `& { … }` and the
 commands inside `$( … )`, backticks and `<( … )` are each checked as commands of their own. Here-document bodies and comments are
 not commands, except a here-document a shell reads (below). Prefixes that run the next word as a program are looked through:
-`command`, `env [VAR=…]`, `sudo [-u …]`, `time`, `nice`, `nohup`, `exec`, `timeout`, `busybox`, `!`, and `VAR=value`
-assignments. The command strings of `bash -c`/`sh -c`, `eval`, `pwsh -Command`, `Invoke-Expression`, `cmd /c` and
-`Start-Process` are parsed too. For the POSIX shells that includes
-`-c` in any option spelling (`bash -ce`, `sh -cx`, `bash -c -e`, `bash -c --`, `bash -o pipefail -c`), positional parameters
-bound to the words after the string (`sh -c 'rm "$1"' _ file`; under `find … -exec sh -c '…' {} \;` a string that writes
-counts as rewriting everything under the start directories), and, for a shell given no script (or `-s`), the commands it reads
-on stdin when the command line shows them: a here-document (`sh <<EOF`), a here-string (`bash <<< "…"`) or the words of an
-`echo`/`printf` piped into it. ANSI-C quoting (`$'…'`) is decoded and brace lists (`secrets/{a,b}`) are expanded.
+`command`, `env [VAR=…]` (and the command line of `env -S '…'`), `sudo [-u …]`, `time`, `nice`, `nohup`, `exec`, `timeout`,
+`busybox`, `setsid`, `flock FILE`, `caffeinate`, `arch`, `ionice`, `chronic`, `!`, `function NAME {`, and `VAR=value`
+assignments. The command strings of `bash -c`/`sh -c`, `eval`, `flock … -c`, `pwsh -Command`, `Invoke-Expression`, `cmd /c`
+and `Start-Process` are parsed too. For the POSIX shells that includes `-c` in any option spelling (`bash -ce`, `sh -cx`,
+`bash -c -e`, `bash -c --`, `bash -o pipefail -c`), positional parameters bound to the words after the string
+(`sh -c 'rm "$1"' _ file`; under `find … -exec sh -c '…' {} \;` a string that writes counts as rewriting everything under the
+start directories), and, for a shell given no script (or `-s`), the commands it reads on stdin when the command line shows
+them: a here-document (`sh <<EOF`), a here-string (`bash <<< "…"`) or the words of an `echo`/`printf` piped into it. ANSI-C
+quoting (`$'…'`) is decoded, brace lists and sequences (`secrets/{a,b}`, `k{1..3}`) are expanded, and in
+`for f in WORD…; do …; done` a reference to `$f` is checked as each word of the list (a glob such as `.lockflight/*` as the
+entries it matches).
 
 It recognises:
 
 - **Redirections** in every form: `>`, `>>`, `>|`, `2>`, `2>>`, `N>`, `&>`, `&>>`, `>&file` (`2>&1` and other fd copies write
   nothing).
-- **File writers:** `tee`, `rm`, `unlink`, `shred`, `truncate`, `touch`, `chmod`/`chown`, `dd of=`, `curl -o`, `wget -O`.
+- **File writers:** `tee`, `rm`, `unlink`, `shred`, `truncate`, `touch`, `chmod`/`chown`, `dd of=`, `curl -o`, `wget -O`,
+  `sort -o`, `uniq INPUT OUTPUT`, `awk -i inplace` and `yq -i`.
 - **Copies and moves:** `cp`, `mv`, `install`, `ln`, `rsync`. The destination counts as written, and so does
   `DEST/<name of each source>` — also with `-t DIR`/`--target-directory=DIR` and `.` as the destination. When the copy can create
   a tree (`cp -r`, every `mv`, `rsync`) or the source names are unknown (`$VAR`), everything under the destination counts.
-  `mv` also removes its sources.
+  `mv` also removes its sources, and so does `rsync --remove-source-files` (everything under them counts). A hard link
+  (`ln` without `-s`, `cp -l`/`--link`) counts its source as written, because a later write through the link changes it.
 - **In-place editors:** `sed` with `-i` in any spelling (`-i`, `-i.bak`, `-Ei`, `-ni`, `--in-place[=suffix]`) and `perl -i`
   (`-pi`, `-0pi`, `-i.bak`).
 - **Wildcards** (`*`, `?`, `[…]`) in any target: checked as the shell would expand them (the entries that exist) and as written.
@@ -103,15 +108,18 @@ It recognises:
 - **git commands that rewrite files** the agent did not name as edits: `git checkout [<rev>] [--] <paths>` (a single operand
   such as `git checkout test` or `git checkout .` counts as a path; a branch name that is no path in the working tree matches
   nothing), `git checkout -f`, `git switch -f`, `git restore`, `git stash [push] [-- <paths>]`, `git stash pop|apply`,
-  `git reset --hard`, `git clean -f`, `git read-tree -u`, `git rm`, `git mv`, and the output file of `git archive -o` (the paths
+  `git reset --hard`, `git clean -f`, `git read-tree -u`, `git checkout-index` (its files, or everything with `-a`; under
+  `--prefix`), `git rm`, `git mv`, and the output file of `git archive -o` (the paths
   an archive is made of are only read, so `git archive HEAD x | tar -x -C dir` writes under `dir` only).
 - **`dotnet format`:** its `--include` files, its project or solution directory, or the whole current directory (source files
   only).
 - **PowerShell:** `Set-Content`, `Add-Content`, `Clear-Content`, `Out-File`, `Tee-Object`, `Set-Item`, `New-Item`, `Export-Csv`,
   `Export-Clixml`,
   `Remove-Item`, `Copy-Item` (into a directory, a tree with `-Recurse`), `Move-Item` and `Rename-Item` (directories as trees),
-  their aliases, and parameters in every form (`-Path x`, `-Path:x`, `-LiteralPath`, `-FilePath`, `-Destination`, unambiguous
-  prefixes such as `-Dest`).
+  `Invoke-WebRequest`/`Invoke-RestMethod -OutFile` (`iwr -o`), `Expand-Archive` (its destination, a tree), `robocopy` and
+  `xcopy` (their destination as a tree; with `/MOV` or `/MOVE` the source too), their aliases, and parameters in every form
+  (`-Path x`, `-Path:x`, `-LiteralPath`, `-FilePath`, `-Destination`, unambiguous prefixes such as `-Dest`). A path array
+  (`Remove-Item a,b`) is checked element by element, and a provider prefix (`FileSystem::C:\…`) is dropped.
 
 **Directories.** A relative path is always checked as written (against the session's working directory); after a `cd <dir>`
 (or `pushd`, `Set-Location`) it is also checked under that directory. A `cd` can only add paths to check, never remove one, so a
@@ -136,6 +144,8 @@ It does **not** see:
 - **script files** (`./fix.sh`, `bash fix.sh`, `bash < fix.sh`, `source x`, `. ./x.ps1`) — only command strings given inline
   are parsed;
 - **paths held in variables** whose literal part does not look protected (`rm "$FILE"`);
+- **hard links that already exist**: a protected file linked under another name before (or by a command the guard cannot
+  see) is written through that name unchecked;
 - **git commands that switch the working tree to committed states**: `git switch <branch>`, `git checkout <branch>`, `git merge`,
   `git pull`, `git rebase`, `git cherry-pick`, `git am`. They can change protected files, but only to content that was committed
   and is reviewed where it was committed (the CI protected-path check reads the base branch's policy);

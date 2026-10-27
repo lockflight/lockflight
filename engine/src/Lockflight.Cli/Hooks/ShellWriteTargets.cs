@@ -26,6 +26,9 @@ internal sealed partial class ShellWriteTargets(ShellWritesBuilder writes)
     /// </summary>
     private readonly Dictionary<string, IReadOnlyList<string>?> inputVariables = new(StringComparer.Ordinal);
 
+    /// <summary>Variables a <c>for NAME in WORD…</c> sets, with its words: a reference to one stands for each of them.</summary>
+    private readonly Dictionary<string, IReadOnlyList<string>> loopVariables = new(StringComparer.Ordinal);
+
     /// <summary>Set once the command line does something after which no variable is known (<see cref="ShellLiteralVariables"/>).</summary>
     private readonly StrongBox<bool> variablesUntracked = new();
 
@@ -118,6 +121,15 @@ internal sealed partial class ShellWriteTargets(ShellWritesBuilder writes)
     private void Run(
         List<ShellWord> segment, ShellDialect dialect, ShellLocations locations, ShellLiteralVariables variables, int depth, string? before, string? after)
     {
+        segment = [.. segment.Select(WithLoopValues)];
+        if (BindLoopVariable(segment))
+        {
+            // A loop sets its variable to each word in turn: no literal value of it is known after it either.
+            variables.Untrack();
+            previous = null;
+            return;
+        }
+
         // A variable the statement assigns is expanded in its redirections with the value from before it.
         bool assigns = segment.Any(word => word.Assignment is not null && !word.RedirectTarget);
         foreach (ShellWord target in segment.Where(word => word.RedirectTarget))
@@ -155,9 +167,9 @@ internal sealed partial class ShellWriteTargets(ShellWritesBuilder writes)
         ShellCommand command = parsed with { PipedInput = piped };
         ShellCommand? upstream = piped ? previous : null;
         previous = command;
-        int programIndex = words.Count - command.Arguments.Count - 1;
+        int programIndex = command.ProgramIndex;
         writes.AddHumanOnly(HumanOnlyCommands.FindInWords(words));
-        if (depth > 0 && IsExpansionOnly(commandWords[programIndex]))
+        if (depth > 0 && programIndex >= 0 && IsExpansionOnly(commandWords[programIndex]))
         {
             // eval "$X", bash -c "$CMD": the command itself is computed when it runs.
             writes.Hide($"{commandWords[programIndex].Text.Replace(ShellTokenizer.SubstitutionPlaceholder, "$(…)", StringComparison.Ordinal)} (a command string computed when it runs)");
@@ -189,7 +201,7 @@ internal sealed partial class ShellWriteTargets(ShellWritesBuilder writes)
             return;
         }
 
-        if (command.ArgumentsFromInput && upstream is not null && CommandWriters.IsWriter(command.Program, dialect)
+        if (command.ArgumentsFromInput && upstream is not null && CommandWriters.IsWriter(command, dialect)
             && PipedFileListSource.Directories(upstream) is IReadOnlyList<string> listed)
         {
             // grep -l … DIR | xargs sed -i …: the files come from under DIR, so the writer rewrites at most that tree.
@@ -199,7 +211,7 @@ internal sealed partial class ShellWriteTargets(ShellWritesBuilder writes)
         }
 
         CommandWrites commandWrites = CommandWriters.Of(command, dialect);
-        if (!CommandWriters.IsWriter(command.Program, dialect) || !AddThroughInputVariables(command.Arguments, command.Program, commandWrites, locations))
+        if (!CommandWriters.IsWriter(command, dialect) || !AddThroughInputVariables(command.Arguments, command.Program, commandWrites, locations))
         {
             writes.Add(commandWrites, locations);
         }
@@ -222,6 +234,41 @@ internal sealed partial class ShellWriteTargets(ShellWritesBuilder writes)
                 }
             }
         }
+    }
+
+    /// <summary><c>for NAME in WORD…</c> (the list up to its <c>;</c> or newline): the name holds each word in turn.</summary>
+    private bool BindLoopVariable(List<ShellWord> segment)
+    {
+        List<string> words = [.. segment.Where(word => !word.RedirectTarget && !word.StandardInput).Select(word => word.Text)];
+        int loop = words.IndexOf("for");
+        if (loop < 0 || loop + 2 >= words.Count || words[loop + 2] != "in" || !ShellAssignment.IsAssignment(words[loop + 1] + "="))
+        {
+            return false;
+        }
+
+        loopVariables[words[loop + 1]] = words[(loop + 3)..];
+        return true;
+    }
+
+    /// <summary>The word with one more alternative per value of each loop variable it refers to (<c>$f</c>, <c>${f}</c>).</summary>
+    private ShellWord WithLoopValues(ShellWord word)
+    {
+        if (loopVariables.Count == 0 || word.Source.LiteralDollar || !word.Text.Contains('$', StringComparison.Ordinal))
+        {
+            return word;
+        }
+
+        List<string> alternatives = [.. word.Alternatives];
+        foreach ((string name, IReadOnlyList<string> values) in loopVariables)
+        {
+            Regex reference = VariableReference(name);
+            if (reference.IsMatch(word.Text))
+            {
+                alternatives.AddRange(values.Select(value => reference.Replace(word.Text, _ => value)));
+            }
+        }
+
+        return alternatives.Count == word.Alternatives.Count ? word : word with { Alternatives = alternatives };
     }
 
     /// <summary><c>… | while read [-r] NAME…</c>: each name holds a line of the input, like an argument behind <c>xargs</c>.</summary>
@@ -261,7 +308,7 @@ internal sealed partial class ShellWriteTargets(ShellWritesBuilder writes)
         return true;
     }
 
-    private static Regex VariableReference(string name) => new($@"\$\{{?{Regex.Escape(name)}(?![A-Za-z0-9_])", RegexOptions.CultureInvariant);
+    private static Regex VariableReference(string name) => new($@"\$(\{{{Regex.Escape(name)}\}}|{Regex.Escape(name)}(?![A-Za-z0-9_]))", RegexOptions.CultureInvariant);
 
     /// <summary>A word that is nothing but expansions (<c>$X</c>, <c>"${CMD}"</c>, <c>$(…)</c>): its text is known only when it runs.</summary>
     private static bool IsExpansionOnly(ShellWord word) => !word.Source.LiteralDollar && ExpansionOnly().IsMatch(word.Text);
