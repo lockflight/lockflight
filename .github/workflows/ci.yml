@@ -134,6 +134,12 @@ jobs:
         shell: bash
         run: |
           cd "$(cygpath -u "$LOCKFLIGHT_SOURCE")" && scripts/dev-install.sh --no-plugin
+      - name: The user PATH holds the engine's folder once after two installs
+        run: |
+          $bin = Split-Path $env:LOCKFLIGHT_ENGINE
+          $path = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment").GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          $count = @($path -split ";" | Where-Object { $_.TrimEnd([char]92) -ieq $bin }).Count
+          if ($count -ne 1) { throw "the user PATH holds $bin $count times: $path" }
       - name: Version, init and link in a project, and the hook suite, with the installed engine
         run: |
           $engine = $env:LOCKFLIGHT_ENGINE
@@ -197,7 +203,9 @@ jobs:
       - name: Shellcheck the hook shim and test scripts
         run: |
           shellcheck --version
-          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh
+          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/user-path.sh
+      - name: The install puts its folder on PATH once, for each shell
+        run: sh tests/install/user-path.sh
       - name: No citations of records outside the repository
         run: scripts/check-public-tree.sh
       # Pinned so a Claude Code release cannot change validation results unannounced. To bump: run

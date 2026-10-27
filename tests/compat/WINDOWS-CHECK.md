@@ -54,7 +54,8 @@ Haiku and cost a few cents.
    Write what you saw into `manual.txt` in the results folder: the messages, in a few lines, and the output of `approve verify`.
 
 4. From Git Bash, once: `cd "<checkout>"` and `scripts/dev-install.sh --no-plugin`. Expected: `already installed`, then the
-   engine path. Add the output to `manual.txt`.
+   engine path, and `already on your user PATH`. In a new terminal, `lockflight version` works by name. Add the output to
+   `manual.txt`.
 
 ## What to send back
 
@@ -67,7 +68,7 @@ include what Claude replied.
 |---|---|
 | build and unit tests | `failed: 0` |
 | LLM-free probe suite | no `FAIL` lines |
-| user install | `dev-install.ps1 exit: 0`, `link type: ''`, the version twice, the plugin listed |
+| user install | `dev-install.ps1 exit: 0`, `link type: ''`, the version twice, one user PATH entry, the plugin listed |
 | project | `init exit: 0`; `doctor exit: 0` (doctor.txt lists any warning) |
 | guard: Edit lockflight.yaml | `unchanged: True`, at least one block logged |
 | guard: Bash redirect | `unchanged: True`, at least one block logged |

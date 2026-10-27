@@ -10,7 +10,9 @@ engine reads it):
      global.json (an SDK 8 pin cannot restore the RID-specific package),
   3. copies the native engine from that tool path's store to ~\.lockflight\bin\lockflight.exe and records its version in
      ~\.lockflight\bin\lockflight.version,
-  4. adds the marketplace and installs the plugin at user scope (needed for sessions started inside a child repo of a workspace
+  4. puts ~\.lockflight\bin on your user PATH (the per-user environment variable, never the system one), once: a reinstall or
+     `lockflight update` finds it there and changes nothing,
+  5. adds the marketplace and installs the plugin at user scope (needed for sessions started inside a child repo of a workspace
      shell: Claude Code loads project settings only from the directory it starts in).
 
 Why a copy and not a link as on macOS and Linux: creating a symbolic link on Windows needs developer mode or an elevated
@@ -21,7 +23,7 @@ renaming it, so the old copy is renamed aside first (an update runs from the ver
 install once it no longer runs. `lockflight update` keeps the same layout (Updating/UserInstall.cs does what step 3 does).
 
 Run it from PowerShell (Windows PowerShell 5.1 or PowerShell 7):
-    powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1 [-NoPlugin]
+    powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1 [-NoPlugin] [-NoModifyPath]
 or from Git Bash as scripts/dev-install.sh, which runs this script.
 
 Needs the .NET 10 SDK, Visual Studio Build Tools with the "Desktop development with C++" workload (the engine is a Native AOT
@@ -31,11 +33,14 @@ lockflight/lockflight repository.
 .PARAMETER NoPlugin
 Installs the engine only.
 
+.PARAMETER NoModifyPath
+Leaves the user PATH alone.
+
 .PARAMETER Updating
 Set by `lockflight update`, which prints its own next steps.
 #>
 [CmdletBinding()]
-param([switch]$NoPlugin, [switch]$Updating)
+param([switch]$NoPlugin, [switch]$NoModifyPath, [switch]$Updating)
 
 $ErrorActionPreference = "Stop"
 $rid = "win-x64"
@@ -179,6 +184,41 @@ $strayStore = Join-Path $bin ".store"
 if (Test-Path -LiteralPath $strayStore) { Remove-Item -LiteralPath $strayStore -Recurse -Force }
 $null = Read-Native $engine @("version")
 if ($LASTEXITCODE -ne 0) { Fail "the installed engine does not run: $engine" }
+
+# The user PATH lives in the registry as an expandable string: read and written raw, so entries such as %USERPROFILE%\bin stay
+# as they are. Then Windows is told the environment changed, so terminals opened from now on see it.
+function Add-UserPath([string]$folder) {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Environment")
+    try {
+        $current = [string]$key.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $entries = @($current -split ";" | Where-Object { $_ })
+        $wanted = $folder.TrimEnd([char]92)
+        foreach ($entry in $entries) {
+            if ([Environment]::ExpandEnvironmentVariables($entry).TrimEnd([char]92) -ieq $wanted) {
+                Write-Output "lockflight: $folder is already on your user PATH"
+                return
+            }
+        }
+        $key.SetValue("Path", (($entries + $folder) -join ";"), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+    } finally {
+        $key.Close()
+    }
+    try {
+        Add-Type -Namespace Lockflight -Name Environment -MemberDefinition @"
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
+"@
+        $result = [UIntPtr]::Zero
+        [void][Lockflight.Environment]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result)
+    } catch {
+        Write-Output "lockflight: sign out and in again if new terminals do not find lockflight"
+    }
+    Write-Output "lockflight: added $folder to your user PATH (HKEY_CURRENT_USER\Environment, Path)."
+    Write-Output "  To undo: Settings > System > About > Advanced system settings > Environment Variables, User variables, Path: remove $folder"
+    Write-Output "  Open a new terminal to use lockflight by name."
+}
+
+if (-not $NoModifyPath) { Add-UserPath $bin }
 
 if (-not $NoPlugin) {
     if (Get-Command claude -ErrorAction SilentlyContinue) {

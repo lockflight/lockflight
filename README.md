@@ -96,7 +96,7 @@ when the guard says no. Only you see him: he stays out of anything the agent rea
 
 ```sh
 git clone https://github.com/lockflight/lockflight && cd lockflight
-scripts/dev-install.sh        # the engine at ~/.lockflight/bin/lockflight, the plugin at user scope
+scripts/dev-install.sh        # the engine at ~/.lockflight/bin/lockflight (on PATH in new terminals), the plugin at user scope
 ```
 
 **2. Set up your repository**

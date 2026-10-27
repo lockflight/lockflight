@@ -151,6 +151,8 @@ if (-not $SkipInstall) {
     $item = Get-Item -LiteralPath $installed -ErrorAction SilentlyContinue
     Log "- engine: $installed exists: $([bool]$item); link type: '$($item.LinkType)' (expected empty: a copy)"
     Log "- version: $(& $installed version 2>&1); recorded: $(Get-Content -Raw -LiteralPath (Join-Path $userHome '.lockflight\bin\lockflight.version') -ErrorAction SilentlyContinue)"
+    $userPath = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment").GetValue("Path", "", "DoNotExpandEnvironmentNames")
+    Log "- user PATH entries for the engine folder: $(@($userPath -split ';' | Where-Object { $_.TrimEnd([char]92) -ieq (Split-Path $installed) }).Count) (expected 1)"
     Log "- plugin at user scope: $((& claude plugin list 2>&1 | Select-String 'lockflight@lockflight') -join '; ')"
 
     Log "`n## project: init and doctor (a copy of samples/dotnet-single, in a folder with a space)"

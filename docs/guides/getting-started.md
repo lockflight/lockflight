@@ -35,6 +35,11 @@ scripts/dev-install.sh            # packs the engine into ~/.lockflight/feed, in
 
 Then set up your project: the [lite profile](#lite-profile-target-first-green-in-under-15-minutes) below.
 
+- **`lockflight` by name:** the script puts `~/.lockflight/bin` on your `PATH` for new terminals, with one line marked
+  `# added by Lockflight: its engine on PATH` in your shell's startup file: `~/.zshrc` for zsh, `~/.bashrc` for bash (and
+  `~/.bash_profile` on macOS), `~/.config/fish/conf.d/lockflight.fish` for fish, else `~/.profile`. It prints the file it
+  changed; a reinstall or `update` finds the line and adds nothing. Open a new terminal (or `source` that file) to use it.
+  `--no-modify-path` leaves your startup files alone; delete the line to undo it.
 - **Why user scope:** Claude Code loads project settings only from the directory where a session starts. With the plugin at
   user scope, the guard also runs when you start Claude inside a child repository of a workspace shell. Your own project hooks
   in the shell's `.claude/settings.json` still load only from the shell root.
@@ -79,6 +84,9 @@ and your projects.
 
 - **What it installs:** the engine at `%USERPROFILE%\.lockflight\bin\lockflight.exe` (with `HOME` set, under `HOME` instead,
   as the engine reads it), the plugin at user scope, and the same feed, `tools\<version>` and `source` as on macOS and Linux.
+- **`lockflight` by name:** the script adds `%USERPROFILE%\.lockflight\bin` to your user `PATH` (the per-user environment
+  variable, never the system one), once, and says so; open a new terminal to use it. `-NoModifyPath` skips it. To undo it,
+  remove the folder from the user variable `Path` in *Environment Variables*.
 - **A copy, not a link:** on Windows `bin\lockflight.exe` is a copy of the native engine, and `bin\lockflight.version` records
   its version. Creating a symbolic link needs developer mode or an elevated session, and the launcher that `dotnet tool
   install` puts in a tool path starts the engine from its store, so it is not one file that `link` can copy into a project.
@@ -104,7 +112,8 @@ claude plugin marketplace add lockflight/lockflight
 claude plugin install lockflight@lockflight --scope user
 ```
 
-Then set up your project as below.
+Then set up your project as below. This install does not change your `PATH`: run the engine as `~/.lockflight/bin/lockflight`,
+or add `~/.lockflight/bin` to `PATH` yourself.
 
 - **Why `--tool-path` and not `dotnet tool install --local` in the project:** the engine package is built for each platform,
   and only the .NET 10 SDK can install such a package. In a repository whose `global.json` pins an older SDK, a local tool
