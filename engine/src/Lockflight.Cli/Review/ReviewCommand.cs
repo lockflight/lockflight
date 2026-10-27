@@ -11,7 +11,7 @@ using Lockflight.Cli.Testing;
 namespace Lockflight.Cli.Review;
 
 /// <summary>
-/// <c>lockflight review [--feature id] [--base ref] [--model sonnet] [--budget 1.00]</c> — the review of record: the
+/// <c>lockflight review [--feature id] [--base ref] [--model opus] [--budget 3.00]</c> — the review of record: the
 /// engine builds the prompt from the spec and the diff, runs a read-only <c>claude -p</c> with a JSON schema, confirms blocker/major
 /// findings by running their reproductions, and stores the result. Exit 1 when a blocker/major finding is confirmed, 5 (NOT-EARNED)
 /// when one could not be verified and needs a person, 0 otherwise.
@@ -21,8 +21,8 @@ internal sealed class ReviewCommand(CliContext context)
 {
     private const int MaxDiffCharacters = 120_000;
     private const string DefaultBase = "main";
-    private const string DefaultModel = "sonnet";
-    private const string DefaultBudgetUsd = "1.00";
+    private const string DefaultModel = "opus";
+    private const string DefaultBudgetUsd = "3.00";
 
     private static readonly string[] ValueOptions = ["--feature", "--base", "--model", "--budget"];
 
