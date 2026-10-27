@@ -30,13 +30,15 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | Control | Label | Why |
 |---|---|---|
 | PreToolUse guard on protected paths (Edit/Write, Bash and PowerShell write detection) | G | best-effort parsing of shell commands; a script file or an interpreter can hide a write |
-| Human-only commands refused inside Claude Code (`approve`, `baseline`, `redgreen reset`, `adopt apply\|undo`, `update`) | G | detected via `CLAUDECODE=1` and command tokens; the variable can be unset |
+| Human-only commands refused inside Claude Code (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply\|undo`, `update`) | G | detected via `CLAUDECODE=1` and command tokens; the variable can be unset |
 | In-session approval (`/lockflight:approve`, typed by you) | G | It works only in an interactive session, and binds the approval to the content the engine showed you. A prompt Claude Code starts by itself (a scheduled task, a loop, a message from another session) expands slash commands like a typed one, so the guard blocks any tool call that would queue `/lockflight:approve`; the code is shown in the session transcript, so it binds content, it is not a secret. It cannot stop a message sent from a session outside this project, or an agent that drives your terminal (tmux, AppleScript). The boundary is a presence-gated signature (`--sign`) verified in CI against signers from the base branch. |
 | Stop gate at the end of a turn | G | the agent's own session; Claude Code caps continuations |
 | Test lock during a red cycle | G | applied by the guard (above); see the shell commands it recognises below |
 | Red/green evidence | G | runtime evidence from commands the agent runs; it does not prove the order of history |
 | Trace | G | built from that evidence |
 | Review of record (`lockflight review`) | G | independent prompt, but the agent may skip running it |
+| Review of record rules: the manifest's model and budget, base = merge base of HEAD and the target branch, open findings carried forward, run count in the pull request summary | G | they make a skipped or re-rolled review visible; they do not prevent it |
+| `review dismiss` human-only | G | refused inside Claude Code like `approve` (`CLAUDECODE=1`); the variable can be unset |
 | Ledger and retro | G | local and fail-open; never an audit log |
 | Proposals (`lockflight propose`) | G | it changes nothing by itself: it writes a patch and the person reads and applies it; the guard keeps blocking the agent's own `git apply` |
 | **CI gates with the base branch's policy** | **B** where the check is **required** (rulesets/branch protection); otherwise advisory | runs on GitHub, with policy the PR cannot change |

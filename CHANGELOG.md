@@ -10,6 +10,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   `/lockflight:feature` it writes a story's failing tests against the declared stubs until `redgreen red` accepts them. The
   skill checks the recorded red itself and hands over to you after two failed rounds; without the plugin nothing changes.
 - A benchmark of the test author against a plain agent on seeded stories (`tests/benchmark/crew/`).
+- Review findings have a lifecycle: each gets a stable id, and a confirmed or unverified blocker/major finding stays open in
+  every later `lockflight review` until its reproduction passes (fixed) or you close it with
+  `lockflight review dismiss <id> --reason "…"` (human-only, records who, when and why). A later clean run no longer hides it.
+- `lockflight review status` lists the review runs and the open, fixed and dismissed findings, with a summary for the pull
+  request body (base, target, merge base, number of review runs, open findings).
+- A `review:` section in `lockflight.yaml` (`model`, `maxUsd`, `target`). A review is the review of record only with those
+  settings against a base whose commit is the merge base of HEAD and the target branch (default: `origin/HEAD`'s branch, else
+  `main`); other runs are recorded with the reason and a clean one exits NOT-EARNED. The base now defaults to the target.
+- Review evidence records the base and its merge base, the model and budget, the Claude Code version, tokens, the estimated
+  cost and the wall time; the ledger gets `review.completed`, `finding.fixed` and `finding.dismissed` (no finding text), which
+  the retro counts and the status line shows.
 
 ### Changed
 - The documentation has a home page organised by task, an "On this page" list on long guides, "Next" links at the end of
@@ -21,6 +32,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   steps for both install modes, the crew plugin and the marketplace.
 
 ### Fixed
+- `lockflight review` no longer passes when a blocker/major finding has a reproduction but the tests do not build: the
+  finding is unverified (NOT-EARNED).
 - The shell guard treats a drive-relative value (`C:dir`, what an unquoted `C:\dir` becomes in Git Bash) as unknown, so
   writes through it are judged as before.
 - `adopt plan` reports hook scripts with the platform's own path separators.

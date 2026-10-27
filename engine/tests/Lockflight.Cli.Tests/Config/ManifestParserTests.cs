@@ -27,6 +27,34 @@ public sealed class ManifestParserTests
     }
 
     [Fact]
+    public void TheReviewSectionSetsTheModelAndBudgetOfTheReviewOfRecord()
+    {
+        ManifestLoadResult result = Parse("version: 1\nreview:\n  model: sonnet\n  maxUsd: 1.50\n  target: origin/develop\n");
+
+        Assert.Equal(ManifestLoadStatus.Loaded, result.Status);
+        Assert.Equal(new ReviewSettings("sonnet", 1.50m) { FromManifest = true, Target = "origin/develop" }, result.Manifest!.Review);
+    }
+
+    [Fact]
+    public void WithoutAReviewSectionTheDefaultsApply() =>
+        Assert.Equal(ReviewSettings.Default, Parse("version: 1\n").Manifest!.Review);
+
+    [Theory]
+    [InlineData("review:\n  maxUsd: free\n", "'review.maxUsd'")]
+    [InlineData("review:\n  maxUsd: 0\n", "'review.maxUsd'")]
+    [InlineData("review:\n  model: \"opus; rm\"\n", "'review.model'")]
+    [InlineData("review:\n  dimensions: all\n", "unknown key 'review.dimensions'")]
+    [InlineData("review:\n  target: \"-main\"\n", "'review.target'")]
+    [InlineData("review: opus\n", "'review' must be a mapping")]
+    public void AnInvalidReviewSectionIsAnError(string yaml, string expected)
+    {
+        ManifestLoadResult result = Parse("version: 1\n" + yaml);
+
+        Assert.Equal(ManifestLoadStatus.Invalid, result.Status);
+        Assert.Contains(expected, result.Error!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnUnknownKeyIsAnErrorPointingAtItsLine()
     {
         ManifestLoadResult result = Parse("version: 1\nprotected:\n  - a/**\ngats:\n  coverage: 80\n");

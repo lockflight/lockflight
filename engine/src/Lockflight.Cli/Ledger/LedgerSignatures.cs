@@ -18,6 +18,10 @@ internal static class LedgerSignatures
     public const string ReviewChanges = ReviewPrefix + "changes";
     public const string ReviewUnverified = ReviewPrefix + "unverified";
     public const string ReviewClean = ReviewPrefix + "clean";
+    public const string ReviewNotOfRecord = ReviewPrefix + "not-of-record";
+
+    public const string FindingDismissed = "finding:dismissed";
+    public const string FindingFixed = "finding:fixed";
 
     public const string ApprovePrefix = "approve:";
 

@@ -82,12 +82,14 @@ internal sealed class RetroCommand(CliContext context)
         LedgerRecord[] stopHookRuns = [.. gateRuns.Where(record => record.Trigger == GateTriggerNames.StopHook)];
         int reds = records.Count(record => record.Signature.StartsWith(LedgerSignatures.RedPrefix, StringComparison.Ordinal));
         int acceptedReds = records.Count(record => record.Signature == LedgerSignatures.RedAccepted);
-        int reviews = records.Count(record => record.Signature.StartsWith(LedgerSignatures.ReviewPrefix, StringComparison.Ordinal));
-        decimal reviewCost = records
-            .Where(record => record.Signature.StartsWith(LedgerSignatures.ReviewPrefix, StringComparison.Ordinal))
+        LedgerRecord[] reviews = [.. records.Where(record => record.Signature.StartsWith(LedgerSignatures.ReviewPrefix, StringComparison.Ordinal))];
+        int reviewsOfRecord = reviews.Count(record => record.OfRecord == true);
+        decimal reviewCost = reviews
             .Select(record => record.Summary.LastIndexOf('$') is int dollar and >= 0
                 && decimal.TryParse(record.Summary[(dollar + 1)..], CultureInfo.InvariantCulture, out decimal cost) ? cost : 0m)
             .Sum();
+        int findingsFixed = records.Count(record => record.Type == LedgerEventTypeNames.FindingFixed);
+        int findingsDismissed = records.Count(record => record.Type == LedgerEventTypeNames.FindingDismissed);
 
         await context.Output.WriteLineAsync("## Activity\n");
         await context.Output.WriteLineAsync($"- Gate runs: {gateRuns.Length} ({passing} PASS)");
@@ -102,6 +104,7 @@ internal sealed class RetroCommand(CliContext context)
         await context.Output.WriteLineAsync($"- Hook blocks: {records.Count(record => record.Type == LedgerEventTypeNames.HookBlocked)}");
         await context.Output.WriteLineAsync($"- Reds: {reds} ({acceptedReds} accepted) · greens closed: {records.Count(record => record.Signature == LedgerSignatures.GreenAccepted)}");
         await context.Output.WriteLineAsync($"- Approvals: {records.Count(record => record.Signature.StartsWith(LedgerSignatures.ApprovePrefix, StringComparison.Ordinal))}");
-        await context.Output.WriteLineAsync($"- Reviews of record: {reviews} (${reviewCost.ToString("0.00", CultureInfo.InvariantCulture)})\n");
+        await context.Output.WriteLineAsync(
+            $"- Reviews: {reviews.Length} ({reviewsOfRecord} of record, ${reviewCost.ToString("0.00", CultureInfo.InvariantCulture)}) · findings fixed: {findingsFixed}, dismissed: {findingsDismissed}\n");
     }
 }

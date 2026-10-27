@@ -50,7 +50,18 @@ units:                          # workspace shell or monorepo; omit for a single
       stopFilter: "Category!=Integration"   # tests the stop gate skips (they still run in the pr profile)
   - path: web/admin
     kind: none
+
+review:                         # what the review of record runs with (both optional)
+  model: opus                   # Claude Code model name (default opus)
+  maxUsd: 3.00                  # the reviewer's --max-budget-usd, above 0 and at most 100 (default 3.00); on a
+                                #   subscription an estimate at API prices, not a bill
+  target: origin/main           # the branch the change targets (default: the branch origin/HEAD points at, else main)
 ```
+
+**Review of record.** A `lockflight review` run counts as the review of record only when it uses `review.model` and
+`review.maxUsd` (or the defaults) and its base commit is the merge base of HEAD and `review.target`: neither an older base nor a
+recent commit on the branch, which would review only part of the change. The base defaults to the target. A run with `--model`, `--budget` or an outdated base is still recorded, says why it is not of record, and
+exits NOT-EARNED when it finds nothing.
 
 **Test platforms.** The test step runs whichever platform `dotnet test` uses in the target directory, decided as the SDK
 decides it: by the nearest `global.json`'s `test.runner`.
@@ -184,10 +195,13 @@ branch's commits since the merge base, so `--base` also scopes `format` (and `co
 | `redgreen start\|red\|green\|status` | agent | red/green cycles; tests locked while red; `red`/`green` refuse while the spec or tasks approval is stale or missing |
 | `redgreen reset` | **human** | discard the feature's red/green evidence |
 | `trace [--feature id]` | agent | requirement → red-then-green tests matrix (Markdown) |
-| `review [--base ref] [--model opus] [--budget 3.00]` | agent | review of record (`claude -p`, read-only, schema) |
+| `review [--base ref] [--model name] [--budget usd]` | agent | review (`claude -p`, read-only, schema); of record with the `review:` settings against the merge base of HEAD and the target |
+| `review status [--feature id]` | agent | review runs, open, fixed and dismissed findings, and the pull request summary (read only) |
+| `review dismiss <finding-id> --reason "…"` | **human** | close an open finding, recording who, when and why |
 | `ledger retro [--days 30] [--min 2]` | anyone | recurring incidents and suggested remedies |
 
-Evidence lives in `.lockflight/features/<feature>/` (approvals, `redgreen.json`, reviews) and is committed.
+Evidence lives in `.lockflight/features/<feature>/` (approvals, `redgreen.json`, `reviews/` with one file per review run and
+`reviews/dismissals/`) and is committed.
 
 ## Environment variables
 

@@ -9,8 +9,9 @@ namespace Lockflight.Cli.Mascot;
 
 /// <summary>
 /// <c>lockflight statusline</c>: Claude Code's status line command. Reads the session JSON on stdin, and in a Lockflight project
-/// prints Levi's face beside the last verdict from the local ledger (a Stop gate, a gate run or a guard block in the past day).
-/// Approvals, evidence, configuration writes and per-unit Stop times are not verdicts and leave the last one shown.
+/// prints Levi's face beside the last verdict from the local ledger (a Stop gate, a gate run, a review run or a guard block in the
+/// past day). Approvals, evidence, fixed or dismissed findings, configuration writes and per-unit Stop times are not verdicts and
+/// leave the last one shown.
 /// The status line is shown to the person only, never to the model. Outside a Lockflight project it prints nothing.
 /// </summary>
 internal sealed class StatusLineCommand(CliContext context)
@@ -64,7 +65,7 @@ internal sealed class StatusLineCommand(CliContext context)
     }
 
     private static bool IsVerdict(LedgerRecord record) =>
-        record.Type == LedgerEventTypeNames.HookBlocked
+        record.Type is LedgerEventTypeNames.HookBlocked or LedgerEventTypeNames.ReviewCompleted
         || (record.Type == LedgerEventTypeNames.GateCompleted && record.Signature.StartsWith("gate:", StringComparison.Ordinal)
             && !StopTimings.IsTiming(record.Signature));
 
@@ -76,6 +77,16 @@ internal sealed class StatusLineCommand(CliContext context)
             return record.Signature.StartsWith("stop:", StringComparison.Ordinal)
                 ? (MascotPose.Fail, $"Stop gate FAIL · {age}")
                 : (MascotPose.Blocked, $"guard blocked {Subject(record.Summary)} · {age}");
+        }
+
+        if (record.Type == LedgerEventTypeNames.ReviewCompleted)
+        {
+            return record.Signature switch
+            {
+                LedgerSignatures.ReviewClean => (MascotPose.Pass, $"review PASS · {age}"),
+                LedgerSignatures.ReviewChanges => (MascotPose.Fail, $"review FAIL · {age}"),
+                _ => (MascotPose.NotEarned, $"review NOT-EARNED · {age}"),
+            };
         }
 
         string profile = record.Signature.Split(':')[1];

@@ -11,8 +11,14 @@ internal static class Executables
             return File.Exists(explicitPath) ? explicitPath : null;
         }
 
+        return FindOnPath(name, Environment.GetEnvironmentVariable("PATH"));
+    }
+
+    /// <summary>The first match for <paramref name="name"/> (with <c>.exe</c> on Windows) in the directories of <paramref name="searchPath"/>; null when absent.</summary>
+    public static string? FindOnPath(string name, string? searchPath)
+    {
         string fileName = OperatingSystem.IsWindows() ? $"{name}.exe" : name;
-        return (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+        return (searchPath ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
             .Select(directory => Path.Combine(directory, fileName))
             .FirstOrDefault(File.Exists);

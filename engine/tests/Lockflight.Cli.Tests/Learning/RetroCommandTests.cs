@@ -32,5 +32,27 @@ public sealed class RetroCommandTests : IDisposable
         Assert.Contains("- Approvals: 1", output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task TheActivityCountsReviewsOfRecordAndHowFindingsClosed()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        string ledger = Path.Combine(root.FullName, ".lockflight", "ledger");
+        Directory.CreateDirectory(ledger);
+        string at = DateTimeOffset.UtcNow.AddHours(-1).ToString("O", CultureInfo.InvariantCulture);
+        string[] lines =
+        [
+            $$"""{"ts":"{{at}}","type":"evidence.recorded","signature":"review:clean","summary":"f1: 0 findings, 0 confirmed and 0 unverified blocker/major, $0.500"}""",
+            $$"""{"ts":"{{at}}","type":"review.completed","signature":"review:unverified","summary":"f1: run 1, of record, 1 open, $1.250","ofRecord":true}""",
+            $$"""{"ts":"{{at}}","type":"review.completed","signature":"review:not-of-record","summary":"f1: run 2, not of record, $0.250","ofRecord":false}""",
+            $$"""{"ts":"{{at}}","type":"finding.fixed","signature":"finding:fixed","summary":"f1 0123456789ab fixed"}""",
+            $$"""{"ts":"{{at}}","type":"finding.dismissed","signature":"finding:dismissed","summary":"f1 abcdefabcdef dismissed"}""",
+        ];
+        File.WriteAllLines(Path.Combine(ledger, $"events-{DateTimeOffset.UtcNow:yyyy-MM}.jsonl"), lines);
+
+        (_, string output, _) = await TestConsole.RunAsync(["ledger", "retro"], string.Empty, root.FullName);
+
+        Assert.Contains("- Reviews: 3 (1 of record, $2.00) · findings fixed: 1, dismissed: 1", output, StringComparison.Ordinal);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(root);
 }

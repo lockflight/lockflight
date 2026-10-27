@@ -30,6 +30,22 @@ public sealed class IncidentClusteringTests
     }
 
     [Fact]
+    public void ReviewRunsWithOpenFindingsAreIncidentsAndClosedFindingsAreNot()
+    {
+        LedgerRecord[] records =
+        [
+            Record("review.completed", "review:changes", "f1: run 1"),
+            Record("review.completed", "review:unverified", "f1: run 2"),
+            Record("review.completed", "review:clean", "f1: run 3"),
+            Record("review.completed", "review:not-of-record", "f1: run 4"),
+            Record("finding.fixed", "finding:fixed", "f1 0123456789ab fixed"),
+            Record("finding.dismissed", "finding:dismissed", "f1 0123456789ab dismissed"),
+        ];
+
+        Assert.Equal(["review:changes", "review:unverified"], IncidentClustering.Cluster(records).Select(cluster => cluster.Fingerprint));
+    }
+
+    [Fact]
     public void StopUnitTimingsAndStopHookGateRunsAreNotIncidents()
     {
         LedgerRecord[] records =

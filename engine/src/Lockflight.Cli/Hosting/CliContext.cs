@@ -14,6 +14,9 @@ internal sealed record CliContext(TextReader Input, TextWriter Output, TextWrite
     /// <summary>Starts the processes a command hands work to (the .NET SDK, git, a newer engine); real ones unless a test fakes them.</summary>
     public RunProcess Processes { get; init; } = ProcessRunner.RunAsync;
 
+    /// <summary>Starts Claude Code for the review (<c>claude -p</c> with the prompt on stdin, <c>claude --version</c>); real unless a test fakes it.</summary>
+    public RunProcessWithInput Claude { get; init; } = ProcessRunner.RunAsync;
+
     /// <summary>Whether <see cref="Output"/> is a terminal a person reads (not a pipe or a file); false unless the host says so.</summary>
     public bool OutputIsTerminal { get; init; }
 

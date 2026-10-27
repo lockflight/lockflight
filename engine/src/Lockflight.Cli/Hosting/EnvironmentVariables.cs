@@ -39,6 +39,9 @@ internal static class EnvironmentVariables
     /// <summary><c>0</c> keeps Levi, the pixel mascot, out of command output.</summary>
     public const string Mascot = "LOCKFLIGHT_MASCOT";
 
+    /// <summary>The directories searched for executables such as <c>claude</c>.</summary>
+    public const string Path = "PATH";
+
     /// <summary>The user's home directory on Unix (and in Git Bash); <c>~</c> in a shell path stands for it.</summary>
     public const string Home = "HOME";
 

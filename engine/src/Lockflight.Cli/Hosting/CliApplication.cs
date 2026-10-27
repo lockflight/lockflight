@@ -54,19 +54,25 @@ internal static class CliApplication
                                                         test-first cycles: baseline, accepted red, green
           trace [--feature <id>]                        requirement → red/green tests matrix
           review [--feature <id>] [--base <ref>] [--model <name>] [--budget <usd>]
-                                                        review of record bound to evidence (main, sonnet, 1.00)
+                                                        review bound to evidence (defaults: the target branch,
+                                                        the manifest's review model and budget, else opus, 3.00);
+                                                        open findings carry forward until fixed or dismissed
+          review status [--feature <id>]                review runs, open, fixed and dismissed findings, and
+                                                        the summary for the pull request (read only)
           ledger retro [--days 30] [--min 2]            recurring incidents → suggested remedies
           propose <path> (--from <file> | --delete) [<path> …]
                                                         a protected change as one patch per file in
                                                         .lockflight/local/proposals/ for a person to review and
                                                         git apply; applies nothing itself
 
-        Human decisions (approve, redgreen reset, baseline, adopt apply|undo and update refuse to run inside a Claude Code
-        session, a `!` command included: run them in a separate terminal window)
+        Human decisions (approve, redgreen reset, review dismiss, baseline, adopt apply|undo and update refuse to run inside a
+        Claude Code session, a `!` command included: run them in a separate terminal window)
           approve spec|tasks [--feature <id>] [--sign [--key <file>]]
                                                         approve the feature's artifacts, optionally SSH-signed;
                                                         in Claude Code, type /lockflight:approve spec|tasks instead
           redgreen reset [--feature <id>]               discard the feature's red/green evidence
+          review dismiss <finding-id> --reason "<text>" [--feature <id>]
+                                                        close an open review finding, recording who, when and why
           baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories
           adopt apply [--speckit-preset <dir>] [--skip-speckit]
                                                         apply the reviewed adoption plan (backs up first)
@@ -123,6 +129,8 @@ internal static class CliApplication
                 ["gate", "run", .. string[] options] => await new GateCommand(context).RunAsync(options, cancellationToken),
                 ["phase", "check", string phase, .. string[] phaseOptions] => await new PhaseCommand(context).CheckAsync(phase, phaseOptions, cancellationToken),
                 ["redgreen", string verb, .. string[] redGreenOptions] => await new RedGreenCommand(context).RunAsync(verb, redGreenOptions, cancellationToken),
+                ["review", "status", .. string[] statusOptions] => await new ReviewStatusCommand(context).RunAsync(statusOptions, cancellationToken),
+                ["review", "dismiss", .. string[] dismissArguments] => await new ReviewDismissCommand(context).RunAsync(dismissArguments, cancellationToken),
                 ["review", .. string[] reviewOptions] => await new ReviewCommand(context).RunAsync(reviewOptions, cancellationToken),
                 ["ledger", "retro", .. string[] retroOptions] => await new RetroCommand(context).RunAsync(retroOptions, cancellationToken),
                 ["propose", .. string[] proposeArguments] => await new ProposeCommand(context).RunAsync(proposeArguments, cancellationToken),

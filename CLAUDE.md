@@ -35,7 +35,7 @@ injected time; `CancellationToken` last without a default; test names as one Pas
 ## Hard rules
 
 - **No third-party private code or data** in this repository.
-- **Human-only commands** (`approve`, `baseline`, `redgreen reset`, `adopt apply|undo`, `update`) are never run by an agent in
+- **Human-only commands** (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply|undo`, `update`) are never run by an agent in
   a real project; tests run them in temporary directories only.
 - **Outward-facing actions need the maintainer's approval:** pushing, publishing packages, creating or changing repositories,
   opening pull requests on other repositories.

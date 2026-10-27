@@ -33,6 +33,7 @@ public sealed class ClaudeMdBlockTests
         Assert.Contains("gate run", ClaudeMdBlock.Text, StringComparison.Ordinal);
         Assert.Contains("accept build warnings, failing tests or package advisories", ClaudeMdBlock.Text, StringComparison.Ordinal);
         Assert.Contains("discard a feature's test-first evidence", ClaudeMdBlock.Text, StringComparison.Ordinal);
+        Assert.Contains("lockflight review dismiss", ClaudeMdBlock.Text, StringComparison.Ordinal);
         Assert.Contains("git apply", ClaudeMdBlock.Text, StringComparison.Ordinal);
     }
 

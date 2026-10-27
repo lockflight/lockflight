@@ -14,12 +14,15 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("echo ok\ndotnet lockflight baseline deps", "baseline deps")]
     [InlineData("(lockflight approve spec)", "approve spec")]
     [InlineData("echo $(lockflight approve tasks)", "approve tasks")]
+    [InlineData(".lockflight/bin/lockflight review dismiss 0123456789ab --reason \"intended\"", "review dismiss")]
     public void ReservedCommandsAreFoundWhateverTheSpelling(string command, string expected) =>
         Assert.Equal(expected, HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 
     [Theory]
     [InlineData("dotnet lockflight approve verify --allowed-signers signers")]
     [InlineData("lockflight redgreen red")]
+    [InlineData("lockflight review --base main")]
+    [InlineData("lockflight review status --feature 001-orders")]
     [InlineData("lockflight gate run --profile pr")]
     [InlineData("echo approve && lockflight phase check tasks")]
     public void OtherCommandsPass(string command) => Assert.Null(HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
