@@ -16,6 +16,7 @@ internal sealed class ShellWritesBuilder
     private readonly List<string> floatingFiles = [];
     private readonly List<string> floatingTrees = [];
     private string? hidden;
+    private string? humanOnly;
 
     public void Add(CommandWrites writes, ShellLocations locations)
     {
@@ -30,11 +31,14 @@ internal sealed class ShellWritesBuilder
 
     public void Hide(string description) => hidden ??= description;
 
+    public void AddHumanOnly(string? command) => humanOnly ??= command;
+
     public ShellWrites Build() =>
         new(Distinct(files), Distinct(trees), Distinct(sourceTrees), Distinct(floatingFiles), Distinct(floatingTrees), hidden)
         {
             PatternFiles = Distinct(patternFiles),
             ComputedFiles = Distinct(computedFiles),
+            HumanOnly = humanOnly,
         };
 
     /// <summary>Adds each path under every location; one with a substitution inside literal text goes to <paramref name="computed"/>.</summary>

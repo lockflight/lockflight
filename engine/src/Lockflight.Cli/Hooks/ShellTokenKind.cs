@@ -26,4 +26,7 @@ internal enum ShellTokenKind
 
     /// <summary>An input redirection or here-document marker: the next word is read, not written.</summary>
     InputRedirect = 7,
+
+    /// <summary>Text a command reads on stdin as written in the command line: a here-document body or a here-string.</summary>
+    HereText = 8,
 }

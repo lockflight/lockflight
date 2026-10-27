@@ -4,7 +4,8 @@ namespace Lockflight.Cli.Hooks;
 
 /// <summary>
 /// Splits a shell command into words and operators, honouring quotes, the dialect's escape character, line continuations,
-/// comments and here-documents. A newline separates commands like <c>;</c>. A command substitution is emitted as a command of
+/// comments and here-documents. A newline separates commands like <c>;</c>. A here-document body or a here-string is a
+/// <see cref="ShellTokenKind.HereText"/> token in place of its delimiter or word. A command substitution is emitted as a command of
 /// its own; the word it sits in continues after it with <see cref="SubstitutionPlaceholder"/> in its place.
 /// </summary>
 internal sealed class ShellTokenizer(string command, ShellDialect dialect)
@@ -27,6 +28,10 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
     private int? quotedFrom;
     private bool literalDollar;
     private bool? awaitedDelimiterStripsTabs;
+    private bool hereStringAwaited;
+
+    /// <summary>Where the body of the next here-document opened on the current line starts, once one has been read.</summary>
+    private int? hereBodyCursor;
 
     public static List<ShellToken> Tokenize(string command, ShellDialect dialect) => new ShellTokenizer(command, dialect).Run();
 
@@ -274,7 +279,11 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
         }
 
         index += redirection.Length;
-        if (redirection.Kind is ShellTokenKind kind)
+        if (redirection.Kind == ShellTokenKind.HereText)
+        {
+            hereStringAwaited = true;
+        }
+        else if (redirection.Kind is ShellTokenKind kind)
         {
             tokens.Add(new ShellToken(kind, kind == ShellTokenKind.WriteRedirect ? ">" : "<"));
         }
@@ -301,6 +310,7 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
     {
         index = ShellHereText.SkipHereDocumentBodies(command, index, pendingHereDocuments);
         pendingHereDocuments.Clear();
+        hereBodyCursor = null;
     }
 
     private void Flush()
@@ -313,14 +323,32 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
 
         string word = current.ToString();
         current.Clear();
-        if (awaitedDelimiterStripsTabs is bool stripsTabs)
+        if (hereStringAwaited)
         {
+            hereStringAwaited = false;
+            tokens.Add(new ShellToken(ShellTokenKind.HereText, word));
+        }
+        else if (awaitedDelimiterStripsTabs is bool stripsTabs)
+        {
+            // The body follows the line: it is read here so that it stays with the command that reads it, and skipped at the newline.
             pendingHereDocuments.Add((word, stripsTabs));
             awaitedDelimiterStripsTabs = null;
+            (string body, int end) = ShellHereText.ReadHereDocumentBody(command, hereBodyCursor ?? NextLineStart(), word, stripsTabs);
+            hereBodyCursor = end;
+            tokens.Add(new ShellToken(ShellTokenKind.HereText, body));
+        }
+        else
+        {
+            tokens.Add(new ShellToken(ShellTokenKind.Word, word) { QuotedFrom = quotedFrom, LiteralDollar = literalDollar });
         }
 
-        tokens.Add(new ShellToken(ShellTokenKind.Word, word) { QuotedFrom = quotedFrom, LiteralDollar = literalDollar });
         ResetWordMarks();
+    }
+
+    private int NextLineStart()
+    {
+        int newline = command.IndexOf(Newline, index);
+        return newline < 0 ? command.Length : newline + 1;
     }
 
     private void ResetWordMarks()

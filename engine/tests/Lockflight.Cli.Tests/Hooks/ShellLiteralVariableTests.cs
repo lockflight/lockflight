@@ -54,7 +54,6 @@ public sealed class ShellLiteralVariableTests
     [InlineData("S=/tmp true; echo x > $S/f")]
     [InlineData("S=/tmp echo x > $S/f")]
     [InlineData("S=/tmp; S=/repo > $S/f")]
-    [InlineData("echo x > ${S:-/tmp}/f")]
     [InlineData("S=/tmp; unset S; echo x > $S/f")]
     [InlineData("S=/tmp | true; echo x > $S/f")]
     [InlineData("true | S=/tmp; echo x > $S/f")]

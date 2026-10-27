@@ -40,21 +40,46 @@ internal static class HumanOnlyCommands
         $"lockflight: '{string.Join(' ', args.Take(CommandWords))}' records a human decision and does not run inside a Claude Code session. "
         + $"Run it {WhereToRun}:\n  cd {ShellQuoting.Quote(directory)} && {engine} {string.Join(' ', args.Select(ShellQuoting.QuoteIfNeeded))}";
 
-    /// <summary>Finds a reserved command in a shell command line: <c>lockflight …</c>, <c>dotnet lockflight …</c> or a path to the binary.</summary>
+    /// <summary>
+    /// Finds a reserved command in a shell command line: <c>lockflight …</c>, <c>dotnet lockflight …</c> or a path to the binary,
+    /// also inside the command strings it runs (<c>bash -c "…"</c>, <c>eval</c>, a here-document fed to <c>sh</c>).
+    /// </summary>
     public static string? FindIn(string command, ShellDialect dialect)
     {
-        List<ShellToken> tokens = ShellTokenizer.Tokenize(command, dialect);
-        for (int index = 0; index < tokens.Count; index++)
+        List<string> words = [];
+        foreach (ShellToken token in ShellTokenizer.Tokenize(command, dialect).Append(new ShellToken(ShellTokenKind.Separator, ";")))
         {
-            if (!tokens[index].IsWord || !IsEngine(tokens[index].Text))
+            if (token.IsWord)
+            {
+                words.Add(token.Text);
+            }
+            else if (FindInWords(words) is string found)
+            {
+                return found;
+            }
+            else
+            {
+                words.Clear();
+            }
+        }
+
+        return ShellWriteTargets.Find(command, dialect).HumanOnly;
+    }
+
+    /// <summary>The reserved command (<c>approve spec</c>) the words of one simple command start, or null.</summary>
+    public static string? FindInWords(IReadOnlyList<string> words)
+    {
+        for (int index = 0; index < words.Count; index++)
+        {
+            if (!IsEngine(words[index]))
             {
                 continue;
             }
 
-            List<string> words = [.. tokens.Skip(index + 1).TakeWhile(token => token.IsWord).Select(token => token.Text).Where(word => !word.StartsWith('-'))];
-            if (IsReserved(words))
+            List<string> arguments = [.. words.Skip(index + 1).Where(word => !word.StartsWith('-'))];
+            if (IsReserved(arguments))
             {
-                return string.Join(' ', words.Take(2));
+                return string.Join(' ', arguments.Take(CommandWords));
             }
         }
 

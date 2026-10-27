@@ -15,6 +15,9 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("(lockflight approve spec)", "approve spec")]
     [InlineData("echo $(lockflight approve tasks)", "approve tasks")]
     [InlineData(".lockflight/bin/lockflight review dismiss 0123456789ab --reason \"intended\"", "review dismiss")]
+    [InlineData("bash -c \"lockflight approve spec\"", "approve spec")]
+    [InlineData("eval 'dotnet lockflight approve tasks'", "approve tasks")]
+    [InlineData("sh -ec 'cd src && lockflight baseline build'", "baseline build")]
     public void ReservedCommandsAreFoundWhateverTheSpelling(string command, string expected) =>
         Assert.Equal(expected, HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 

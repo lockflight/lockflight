@@ -73,7 +73,8 @@ internal sealed partial class ShellLiteralVariables(ShellDialect dialect, Strong
         }
 
         string text = token.LiteralDollar ? token.Text : Expand(token.Text);
-        return new ShellWord(text, token) { Assignment = ShellAssignment.Of(token, text) };
+        string defaulted = token.LiteralDollar ? text : ParameterDefault().Replace(text, match => match.Groups["word"].Value);
+        return new ShellWord(text, token) { Assignment = ShellAssignment.Of(token, text), Alternatives = defaulted == text ? [] : [defaulted] };
     }
 
     /// <summary>
@@ -237,6 +238,10 @@ internal sealed partial class ShellLiteralVariables(ShellDialect dialect, Strong
 
     [GeneratedRegex(@"\$(\{(?<braced>[A-Za-z_][A-Za-z0-9_]*)\}|\{[^}]*\}|(?<name>[A-Za-z_][A-Za-z0-9_]*)|[0-9@*#?$!-])")]
     private static partial Regex Reference();
+
+    /// <summary><c>${NAME:-word}</c>, <c>${NAME-word}</c>, <c>${NAME:=word}</c>, <c>${NAME:+word}</c> and the like: the word may be the value.</summary>
+    [GeneratedRegex(@"\$\{(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+):?[-=+](?<word>[^}]*)\}")]
+    private static partial Regex ParameterDefault();
 
     [GeneratedRegex(@"\$\{[^}]*=")]
     private static partial Regex AssigningExpansion();

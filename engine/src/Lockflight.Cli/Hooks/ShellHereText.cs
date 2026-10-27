@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Lockflight.Cli.Hooks;
 
 /// <summary>
@@ -13,19 +15,31 @@ internal static class ShellHereText
     {
         foreach ((string delimiter, bool stripsTabs) in hereDocuments)
         {
-            while (index < command.Length)
-            {
-                int lineEnd = command.IndexOf(Newline, index);
-                string line = command[index..(lineEnd < 0 ? command.Length : lineEnd)].TrimEnd('\r');
-                index = lineEnd < 0 ? command.Length : lineEnd + 1;
-                if ((stripsTabs ? line.TrimStart('\t') : line) == delimiter)
-                {
-                    break;
-                }
-            }
+            index = ReadHereDocumentBody(command, index, delimiter, stripsTabs).End;
         }
 
         return index;
+    }
+
+    /// <summary>The body of a here-document starting at the index (leading tabs removed for <c>&lt;&lt;-</c>), and where it ends.</summary>
+    public static (string Body, int End) ReadHereDocumentBody(string command, int index, string delimiter, bool stripsTabs)
+    {
+        StringBuilder body = new();
+        while (index < command.Length)
+        {
+            int lineEnd = command.IndexOf(Newline, index);
+            string line = command[index..(lineEnd < 0 ? command.Length : lineEnd)].TrimEnd('\r');
+            index = lineEnd < 0 ? command.Length : lineEnd + 1;
+            string text = stripsTabs ? line.TrimStart('\t') : line;
+            if (text == delimiter)
+            {
+                break;
+            }
+
+            body.Append(text).Append(Newline);
+        }
+
+        return (body.ToString(), index);
     }
 
     /// <summary>Whether a PowerShell here-string (<c>@'</c> or <c>@"</c> followed by the end of the line) starts at the index.</summary>
