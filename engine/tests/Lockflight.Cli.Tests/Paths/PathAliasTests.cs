@@ -37,6 +37,50 @@ public sealed class PathAliasTests : IDisposable
     }
 
     [Theory]
+    [InlineData("l/../../lockflight.yaml", "lockflight.yaml")]
+    [InlineData("l/../evidence.json", ".lockflight/**")]
+    [InlineData("l/./../../secrets/key.txt", "secrets/**")]
+    public void AParentSegmentAfterASymlinkGoesToTheParentOfItsTarget(string target, string expectedRule)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".lockflight", "local"));
+        Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "l"), Path.Combine(projectRoot.FullName, ".lockflight", "local"));
+
+        string? match = PathRules.FindMatch(projectRoot.FullName, target, projectRoot.FullName, ["lockflight.yaml", "secrets/**", ".lockflight/**"]);
+
+        Assert.Equal(expectedRule, match);
+    }
+
+    [Fact]
+    public void AParentSegmentAfterASymlinkToADirectoryElsewhereLeavesTheProject()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        DirectoryInfo elsewhere = Directory.CreateTempSubdirectory("lockflight-elsewhere-");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(elsewhere.FullName, "inner"));
+            Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "out"), Path.Combine(elsewhere.FullName, "inner"));
+
+            Assert.Null(PathRules.FindMatch(projectRoot.FullName, "out/../lockflight.yaml", projectRoot.FullName, ["lockflight.yaml"]));
+        }
+        finally
+        {
+            elsewhere.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("secrets/cafe\u0301.txt", "secrets/caf\u00e9.txt")]
+    [InlineData("secrets/caf\u00e9.txt", "secrets/cafe\u0301.txt")]
+    [InlineData("docs/\u0457.md", "docs/\u0456\u0308.md")]
+    public void DecomposedAndComposedSpellingsOfANameMatchTheSameRule(string path, string glob) =>
+        Assert.Equal(glob, PathRules.FindMatch(projectRoot.FullName, path, projectRoot.FullName, [glob]));
+
+    [Fact]
+    public void ADecomposedSpellingIsJudgedByTheRuleOverlapToo() =>
+        Assert.True(GlobOverlap.CouldMatchBelowAnyDirectory("docs/caf\u00e9.md", "cafe\u0301.md", asTree: false));
+
+    [Theory]
     [InlineData("C:/repo/secrets/key.txt:hidden", "C:/repo/secrets/key.txt")]
     [InlineData("C:/repo/secrets./key.txt", "C:/repo/secrets/key.txt")]
     [InlineData("C:/repo/secrets /key.txt. ", "C:/repo/secrets/key.txt")]

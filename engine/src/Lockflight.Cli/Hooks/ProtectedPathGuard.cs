@@ -231,6 +231,12 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
                 return HookDecision.Block("unresolved-short-name", $"lockflight: cannot resolve short (8.3) path '{target}'; use the full path");
             }
 
+            if (OperatingSystem.IsWindows() && WindowsPaths.ToDosPath(target) is null)
+            {
+                // A volume, device or share path might name a protected file under another spelling.
+                return HookDecision.Block("unresolved-device-path", $"lockflight: cannot tell which file '{target}' names (a volume, device or share path); use the drive path (C:\\…) instead");
+            }
+
             string? relative = relatives.Relative(target, workingDirectory);
             string? matchedGlob = relative is { Length: > 0 } ? globs.FirstOrDefault(glob => PathRules.Matches(glob, relative)) : null;
             await WriteDiagnosticsAsync(target, workingDirectory, manifest, matchedGlob);

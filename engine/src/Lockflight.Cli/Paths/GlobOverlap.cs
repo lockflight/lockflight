@@ -48,7 +48,7 @@ internal static class GlobOverlap
     public static bool HasWildcard(string segment) => segment.IndexOfAny(['*', '?', '[']) >= 0;
 
     /// <summary>A single-segment shell pattern as a regex (case-insensitive, like the protected-path matcher).</summary>
-    public static Regex SegmentRegex(string pattern) => SegmentRegexes.GetOrAdd(pattern, CompileSegment);
+    public static Regex SegmentRegex(string pattern) => SegmentRegexes.GetOrAdd(UnicodeNormalization.Compose(pattern), CompileSegment);
 
     private static Regex CompileSegment(string pattern)
     {
@@ -107,7 +107,7 @@ internal static class GlobOverlap
         return SegmentsOverlap(glob[globIndex], path[pathIndex]) && Matches(glob, globIndex + 1, path, pathIndex + 1, asTree);
     }
 
-    private static string[] Segments(string path) => path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+    private static string[] Segments(string path) => UnicodeNormalization.Compose(path).Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
 
     private static bool SegmentsOverlap(string globSegment, string pathSegment)
     {

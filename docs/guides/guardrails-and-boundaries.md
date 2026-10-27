@@ -141,8 +141,13 @@ It does **not** see:
   and is reviewed where it was committed (the CI protected-path check reads the base branch's policy);
 - a protected file that a `git checkout <rev> -- <dir>` would recreate after it was deleted.
 
-Paths are compared after collapsing `..` and then resolving symbolic links, so `link/../x` is judged as `x` even when `link`
-points elsewhere. That is why it is a guardrail: it stops the common accidents, not a determined agent.
+Paths are compared where the operating system would really open them: symbolic links are resolved segment by segment and each
+`..` goes to the parent of the directory reached so far, as `realpath` does, so `link/../x` is judged beside the link's target.
+Names are compared in Unicode composed form (NFC) on both sides, so a decomposed spelling of a protected name (`e` + U+0301
+for `é`, which macOS file systems open as the same file) matches its rule. On Windows, `\\?\C:\…`, `\\.\C:\…`,
+`\\?\UNC\…` and this machine's administrative shares (`\\localhost\C$\…`) are judged as the drive path they name; a volume,
+device or share path the guard cannot map to a drive is blocked. Hard links are not followed. That is why it is a
+guardrail: it stops the common accidents, not a determined agent.
 
 ## Proposing a protected change
 
