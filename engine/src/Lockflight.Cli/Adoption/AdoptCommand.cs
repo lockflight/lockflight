@@ -157,9 +157,15 @@ internal sealed class AdoptCommand(CliContext context)
 
     private async Task<ExitCode> UndoAsync(Manifest manifest, string? backup, bool force, CancellationToken cancellationToken)
     {
-        if ((backup ?? AdoptionBackup.Latest(manifest.Root)) is not string id || !AdoptionBackup.Exists(manifest.Root, id))
+        if ((backup ?? AdoptionBackup.LatestApplied(manifest.Root)) is not string id || !AdoptionBackup.Exists(manifest.Root, id))
         {
-            return await ReportAsync("no adoption backup found under .lockflight/backup/", ExitCode.Config);
+            return await ReportAsync("no adoption backup of a finished apply found under .lockflight/backup/", ExitCode.Config);
+        }
+
+        if (!AdoptionBackup.WasApplied(manifest.Root, id))
+        {
+            return await ReportAsync(
+                $"the apply that took backup {id} did not finish and was rolled back, so there is nothing to undo; pass --backup with the id of a finished apply", ExitCode.Config);
         }
 
         UndoResult result = AdoptionBackup.Undo(manifest.Root, id, force);
@@ -188,6 +194,11 @@ internal sealed class AdoptCommand(CliContext context)
             if (kept.Length > 0)
             {
                 done.Add($"kept {kept.Length} customised Spec Kit files as they were: {string.Join(", ", kept.Take(MaxCustomisedListed))}{(kept.Length > MaxCustomisedListed ? ", …" : string.Empty)}");
+            }
+
+            if (result.Linked.Count > 0)
+            {
+                manual.Add($"left {result.Linked.Count} Spec Kit files behind symbolic links untouched (undo could not restore what they point to): {string.Join(", ", result.Linked.Take(MaxCustomisedListed))}{(result.Linked.Count > MaxCustomisedListed ? ", …" : string.Empty)}; upgrade them by hand");
             }
 
             foreach (string replaced in result.ReplacedByPreset)

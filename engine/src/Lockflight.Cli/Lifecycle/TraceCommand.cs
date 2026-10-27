@@ -49,6 +49,12 @@ internal sealed class TraceCommand(CliContext context)
             return ExitCode.Pass;
         }
 
+        if (requirements.Count == 0)
+        {
+            await context.Output.WriteLineAsync($"NOT-EARNED {Path.GetRelativePath(manifest.Root, feature.SpecPath)} defines no requirements (FR-001 …); there is nothing to trace");
+            return ExitCode.NotEarned;
+        }
+
         if (record is null)
         {
             await context.Output.WriteLineAsync($"NOT-EARNED {feature.Id} has no red/green evidence; trace needs 'lockflight redgreen' cycles");
@@ -71,7 +77,7 @@ internal sealed class TraceCommand(CliContext context)
 
         int covered = rows.Count(row => row.Covered);
         await context.Output.WriteLineAsync($"\n{covered} of {requirements.Count} requirements covered by tests that went red, then green, and still exist.");
-        return covered == requirements.Count && requirements.Count > 0 ? ExitCode.Pass : ExitCode.Fail;
+        return covered == requirements.Count ? ExitCode.Pass : ExitCode.Fail;
     }
 
     /// <summary>The Markdown matrix, after a warning for each approval that no longer covers the artifacts.</summary>

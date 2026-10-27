@@ -68,16 +68,23 @@ internal static class AdoptionBackup
         JsonFiles.Write(AppliedOf(root, id), hashes);
     }
 
-    /// <summary>The newest backup's id, or null.</summary>
-    public static string? Latest(string root)
+    /// <summary>
+    /// The newest backup of an apply that finished (it has <c>&lt;id&gt;.applied.json</c>), or null. A failed apply is rolled back
+    /// from its backup at once, so its archive has nothing to undo.
+    /// </summary>
+    public static string? LatestApplied(string root)
     {
         string directory = Path.Combine(root, RelativeDirectory);
         return Directory.Exists(directory)
-            ? Directory.EnumerateFiles(directory, "*.tar.gz").Select(path => Path.GetFileName(path)[..^".tar.gz".Length]).Order(StringComparer.Ordinal).LastOrDefault()
+            ? Directory.EnumerateFiles(directory, "*.tar.gz").Select(path => Path.GetFileName(path)[..^".tar.gz".Length])
+                .Where(id => WasApplied(root, id)).Order(StringComparer.Ordinal).LastOrDefault()
             : null;
     }
 
     public static bool Exists(string root, string id) => File.Exists(ArchiveOf(root, id));
+
+    /// <summary>Whether the apply that took this backup finished, so undo knows what it changed.</summary>
+    public static bool WasApplied(string root, string id) => File.Exists(AppliedOf(root, id));
 
     /// <summary>
     /// Makes the covered files exactly the backup again — files added since are removed. Only for rolling back an apply that
@@ -191,24 +198,15 @@ internal static class AdoptionBackup
     /// <summary>Writes a file under the root, refusing to write through a symbolic link anywhere on its path.</summary>
     private static void Write(string root, string relative, byte[] bytes)
     {
-        string current = root;
-        string[] segments = relative.Split('/');
-        foreach (string segment in segments.SkipLast(1))
+        if (SymbolicLinks.OnPath(root, relative) is string link)
         {
-            current = Path.Combine(current, segment);
-            if (new DirectoryInfo(current) is { Exists: true, LinkTarget: not null })
-            {
-                throw new InvalidOperationException($"{relative} lies behind a symbolic link; restore it by hand");
-            }
+            throw new InvalidOperationException(link == relative
+                ? $"{relative} is a symbolic link; restore it by hand"
+                : $"{relative} lies behind a symbolic link; restore it by hand");
         }
 
         string path = Path.Combine(root, relative);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        if (new FileInfo(path) is { Exists: true, LinkTarget: not null })
-        {
-            throw new InvalidOperationException($"{relative} is a symbolic link; restore it by hand");
-        }
-
         File.WriteAllBytes(path, bytes);
     }
 

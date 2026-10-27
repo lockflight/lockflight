@@ -63,6 +63,31 @@ public sealed class SpecKitMergeTests : IDisposable
         Assert.Equal([".specify/workflows/workflow-registry.json"], result.Upgraded);
     }
 
+    [Fact]
+    public void FilesBehindSymbolicLinksAreNeverWritten()
+    {
+        string outside = Path.Combine(work.FullName, "outside");
+        Write(outside, "spec-template.md", "spec v1");
+        Write(outside, "templates/plan-template.md", "plan v1");
+        Write(Old, ".specify/memory/spec-template.md", "spec v1");
+        Write(New, ".specify/memory/spec-template.md", "spec v2");
+        Write(Old, ".specify/templates/plan-template.md", "plan v1");
+        Write(New, ".specify/templates/plan-template.md", "plan v2");
+        Write(New, ".specify/templates/tasks-template.md", "tasks v2");
+        Directory.CreateDirectory(Path.Combine(Root, ".specify", "memory"));
+        File.CreateSymbolicLink(Path.Combine(Root, ".specify", "memory", "spec-template.md"), Path.Combine(outside, "spec-template.md"));
+        Directory.CreateSymbolicLink(Path.Combine(Root, ".specify", "templates"), Path.Combine(outside, "templates"));
+
+        SpecKitMergeResult result = SpecKitMerge.Merge(Root, Old, New);
+
+        Assert.Equal("spec v1", File.ReadAllText(Path.Combine(outside, "spec-template.md")));
+        Assert.Equal("plan v1", File.ReadAllText(Path.Combine(outside, "templates", "plan-template.md")));
+        Assert.False(File.Exists(Path.Combine(outside, "templates", "tasks-template.md")));
+        Assert.Equal([".specify/memory/spec-template.md", ".specify/templates/plan-template.md", ".specify/templates/tasks-template.md"], result.Linked);
+        Assert.Empty(result.Upgraded);
+        Assert.Empty(result.Added);
+    }
+
     private static void Write(string directory, string relative, string text)
     {
         string path = Path.Combine(directory, relative);
