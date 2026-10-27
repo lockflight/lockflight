@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: tests-only
+description: "The test author writes the story's tests in the test project and leaves production code alone."
+tags: [boundary]
+context:
+  scaffold_script: scaffold.sh

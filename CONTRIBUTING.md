@@ -48,6 +48,7 @@ cd ..
 ENGINE=$PWD/artifacts/engine/lockflight sh tests/compat/probe-suite.sh          # hook compatibility
 ENGINE=$PWD/artifacts/engine/lockflight bash tests/e2e/lifecycle.sh /tmp/lf-e2e # lifecycle end to end
 claude plugin validate --strict plugins/lockflight                              # plugin manifest
+claude plugin validate --strict plugins/lockflight-crew                        # optional crew plugin
 shellcheck -S warning plugins/lockflight/bin/lockflight-hook tests/*/*.sh       # shell scripts (CI runs this too)
 ```
 
@@ -59,6 +60,13 @@ example, checks that the agent asks the user instead of approving):
 
 ```sh
 claude plugin eval plugins/lockflight --runs 3 --ablation none --allow-tools Bash --trust-plugin --no-publish
+```
+
+The crew plugin's evals (`plugins/lockflight-crew/evals/`) dispatch the test author on a small fixture that each case's
+`scaffold.sh` writes, so they also need `--scaffold` and the write tools:
+
+```sh
+claude plugin eval plugins/lockflight-crew --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
 ```
 
 [`tests/README.md`](tests/README.md) describes each suite. CI runs them on Linux, Windows and macOS. Before opening a pull

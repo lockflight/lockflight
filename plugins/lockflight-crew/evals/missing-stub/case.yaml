@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: missing-stub
+description: "When the declared stubs lack a member the story needs, the test author reports it instead of adding it to production code."
+tags: [boundary]
+context:
+  scaffold_script: scaffold.sh

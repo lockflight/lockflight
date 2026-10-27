@@ -151,6 +151,9 @@ Everything above, plus the lifecycle:
 
    Approvals are your decision: the agent cannot give them. Inside Claude Code only what you type yourself counts
    (`/lockflight:approve`); the engine refuses `lockflight approve` run from the session, a `!` command included.
+   Optional: the `lockflight-crew` plugin adds a test author that writes each story's failing tests at the red step
+   (`/plugin install lockflight-crew@lockflight`). It is an aid; the same checks judge its work. See
+   [the crew](skills.md#the-crew-optional).
 3. Now and then: `.lockflight/bin/lockflight ledger retro` (or ask for a retro) to see recurring incidents and suggested remedies.
 
 ## Levi and the status line
