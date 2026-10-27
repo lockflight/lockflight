@@ -6,7 +6,8 @@ evidence. This page takes you from nothing to a first green gate.
 
 **On this page:** [Requirements](#requirements) · [Install from a package](#install-from-a-package) ·
 [Install from source](#install-from-source-no-feed-no-token) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
-[Standard profile](#standard-profile) · [Levi and the status line](#levi-and-the-status-line)
+[Standard profile](#standard-profile) · [CI during the preview](#ci-during-the-preview) ·
+[Levi and the status line](#levi-and-the-status-line)
 
 ## Requirements
 
@@ -38,8 +39,8 @@ Then set up your project as below (`~/.lockflight/bin/lockflight init`, `adopt`,
 - **Why `--tool-path` and not `dotnet tool install --local` in the project:** the engine package is built for each platform,
   and only the .NET 10 SDK can install such a package. In a repository whose `global.json` pins an older SDK, a local tool
   install or `dotnet tool restore` fails. Installed into `~/.lockflight/bin` from your home directory, the engine is a native
-  binary that runs whatever SDK the project pins. The project still pins the engine in `dotnet-tools.json`: CI and teammates
-  with SDK 10 restore it from nuget.org.
+  binary that runs whatever SDK the project pins. The project still pins the engine in `dotnet-tools.json`: CI installs that
+  version the same way, outside the repository.
 - **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. It installs the newest
   engine from nuget.org into `~/.lockflight/tools/<version>` (from `~/.lockflight`, outside any project), points
   `~/.lockflight/bin/lockflight` at it, then re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it
@@ -172,6 +173,24 @@ hold the keys to the two approvals.
    (`/plugin install lockflight-crew@lockflight`). It is an aid; the same checks judge its work. See
    [the crew](skills.md#the-crew-optional).
 3. Now and then: `.lockflight/bin/lockflight ledger retro` (or ask for a retro) to see recurring incidents and suggested remedies.
+
+## CI during the preview
+
+The workflow `init` writes installs the engine version the project pins, from nuget.org or the package sources in the
+repository's `nuget.config`. During the preview no feed has it: an engine built from source is a development build
+(`0.2.0-alpha.4.dev.<commit time>`) that exists only in your local feed (`~/.lockflight/feed`). A workflow that ran on every
+pull request would fail at the engine install every time. So:
+
+- When the engine is a development build, `init` writes the workflow to run only when started by hand (`workflow_dispatch`),
+  says why in its output, and the workflow's comment says so too. `init --ci pr` writes the pull-request trigger anyway, and
+  `init` warns that the job fails until the project pins a published release.
+- Run the gates locally in the meantime: `.lockflight/bin/lockflight gate run --profile pr --base origin/main` runs what CI
+  would.
+- Once the project pins a published release (`update`), replace the workflow's `on:` block with the `pull_request` and
+  `push` (`branches: [main]`) triggers, and make `gates` a required check ([CI hardening](ci-hardening.md)).
+
+The workflow installs the engine with `dotnet tool install --tool-path` outside the repository, so it works when the
+repository's `global.json` pins SDK 8 or 9.
 
 ## Levi and the status line
 

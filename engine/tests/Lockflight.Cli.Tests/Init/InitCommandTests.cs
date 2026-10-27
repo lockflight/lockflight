@@ -178,6 +178,19 @@ public sealed class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task APublishedEngineWritesAWorkflowThatJudgesEveryPullRequestByDefault()
+    {
+        Assert.False(EngineVersion.IsDevelopmentBuild(ToolPin.RunningVersion));
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        string workflow = File.ReadAllText(Path.Combine(projectRoot.FullName, ".github", "workflows", "lockflight-gates.yml"));
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("on:\n  pull_request:\n", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("development build", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task NoCiWritesNoWorkflow()
     {
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "none"], "", projectRoot.FullName);
