@@ -171,7 +171,8 @@ types add fields, and readers ignore fields they do not know:
 | `approval.recorded` | `feature`, `phase`, `artifacts` (each artifact with the first 12 characters of its hash), `signed`, `channel` (`terminal` for `lockflight approve`, `session` for `/lockflight:approve`) |
 | `evidence.recorded`, `config.written` | none |
 
-No line names a person: who approved a phase is kept in the approval record, not in the ledger.
+No line names a person, with one exception: who approved a phase is kept in the approval record, not in the ledger, but
+`redgreen:amended` keeps in its detail who amended a test and why, as the red/green record does.
 
 ## Where the trust comes from
 
