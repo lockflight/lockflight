@@ -31,7 +31,10 @@ Never approve for them.
    story the stub declaration comes first, then the test tasks, then the implementation. Tests are mandatory here, whatever
    the stock `/speckit-tasks` text says (the Lockflight preset appends these rules to it). Run
    `.lockflight/bin/lockflight phase check tasks` until it passes; a failure names each misplaced task, its line and why it
-   counted as implementation.
+   counted as implementation. A task counts as a **test** when it sits under a `### Tests` heading, starts with test wording
+   ("Write tests …", "Contract tests …", "Cover … with tests") or names a test file (`…Tests.cs`, `….Tests/`) without starting
+   with "Implement" or "Make"; as a **stub** when it says stub, skeleton, `NotImplementedException` or "declare … signatures";
+   anything else is **implementation**.
 4. **Human gate — tasks.** Ask the user to approve the tasks (`/lockflight:approve tasks`, see Approvals). Wait.
 5. **Start.** `.lockflight/bin/lockflight redgreen start` records the test inventory (once per feature) and runs the suite once.
    If it warns that tests already fail, tell the user: they decide whether to run `.lockflight/bin/lockflight baseline tests` in
@@ -40,10 +43,26 @@ Never approve for them.
 6. **For each user story, one red/green cycle:**
    1. Declare the members the tests need with bodies `throw new NotImplementedException();`.
    2. Write the story's xUnit tests (v3 or v2), each tagged `[Trait("Requirement", "FR-001")]`, asserting the specified behaviour.
-   3. `.lockflight/bin/lockflight redgreen red`. Every new test must fail because of production code: the stub's `NotImplementedException` (RED_STUB) or an assertion in a test that calls the production code (RED_ASSERT). If
-      the red is rejected, fix the tests — never weaken an assertion to make a red "work". A test the output marks
-      `assertion-free` checks nothing but that the code does not throw: add an assertion on the result unless the story's
-      behaviour is the exception itself.
+   3. `.lockflight/bin/lockflight redgreen red`. Every new test (one not in the inventory `start` recorded) must fail because
+      of production code: the stub's `NotImplementedException` (RED_STUB) or an assertion in a test that calls the production
+      code (RED_ASSERT). If the red is rejected, fix the tests — never weaken an assertion to make a red "work". A test the
+      output marks `assertion-free` checks nothing but that the code does not throw: add an assertion on the result unless
+      the story's behaviour is the exception itself.
+
+      | Class | Meaning | Fix |
+      |---|---|---|
+      | RED_STUB (accepted) | `NotImplementedException` thrown by production code | — |
+      | RED_ASSERT (accepted) | an assertion fails in a test that calls production code | — |
+      | COMPILE_RED | the tests do not build | declare the missing members as stubs |
+      | RED_IN_TEST | the test, its fixture, constructor or `Assert.Fail` throws | call the production code and let it fail there |
+      | RED_OTHER | another exception, or one thrown by the runtime or a library | stub the member, or assert on its result |
+      | RED_NO_PRODUCTION | an assertion fails but the test never calls production code | call the member under test |
+      | GREEN_BEFORE | the test passes before the code exists | test behaviour that is still missing |
+      | SKIPPED | skipped or not run | remove `Skip` / `Explicit` |
+      | FLAKY | repeated runs disagree | make the test deterministic |
+
+      Assertions recognised: xUnit `Assert` (v2 and v3), Shouldly, FluentAssertions, AwesomeAssertions, NSubstitute
+      `Received`, Moq `Verify`, Verify snapshots. Their other exceptions (misusing the library) are not assertions.
 
       **Optional test author.** If the agent type `lockflight-crew:test-author` is available (the `lockflight-crew` plugin
       is installed), delegate steps 2–3 for this story to it instead, in these steps; none of them may be skipped:
@@ -62,8 +81,9 @@ Never approve for them.
          start the next round; never implement it.
 
       Without that plugin, write the tests yourself as above.
-   4. The test projects are now locked. Implement in production code until `.lockflight/bin/lockflight redgreen green` passes.
-      If a test itself turns out wrong, stop and ask the user: only they can unlock, with
+   4. The test projects (`tests/**`, `test/**`, `*.Tests/**` and the like) are now locked: edits there are refused until
+      green. Implement in production code until `.lockflight/bin/lockflight redgreen green` passes. If a test must change,
+      stop and ask the user for `redgreen amend` (coming) — never edit a locked test. Only they can unlock, with
       `.lockflight/bin/lockflight redgreen reset` run in a separate terminal window (not with `!` in Claude Code: that runs
       inside the session and is refused).
    5. If `red` or `green` refuses because an approval is stale (spec.md, plan.md or tasks.md changed after approval), show the
