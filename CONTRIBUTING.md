@@ -40,6 +40,8 @@ than a fix, please open an issue first, because the design still moves. Everyone
   development builds after it (`0.2.0-alpha.4.dev.<commit time>`, or `0.2.1-0.dev.<commit time>` after a release `0.2.0`) so
   they sort between that release and the next. `plugins/lockflight/min-engine-version` names the oldest released engine the
   plugin works with; raise it in the change that makes the plugin depend on something newer.
+- **Releases** are published to nuget.org by the release workflow from a version tag, after a maintainer approves it: see
+  [releasing](docs/engineering/releasing.md).
 
 ## Build and test
 
