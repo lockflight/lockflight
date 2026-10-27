@@ -180,16 +180,18 @@ internal sealed class ReviewCommand(CliContext context)
     /// </summary>
     private static async Task<IReadOnlyList<ReviewFinding>> ConfirmFindingsAsync(Manifest manifest, Feature feature, IReadOnlyList<ReviewFinding> findings, CancellationToken cancellationToken)
     {
-        if (!findings.Any(Reproductions.IsRunnable))
+        IReadOnlyList<ReviewFinding> checks = FindingLifecycle.WithEarlierReproductions(findings);
+        if (!checks.Any(Reproductions.IsRunnable))
         {
-            return [.. findings.Select(Reproductions.Unjudged)];
+            return FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]);
         }
 
         TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
         TestWorkspace workspace = TestWorkspaces.For(manifest, feature);
-        return await workspace.BuildAsync(cancellationToken) is null && await workspace.ListAsync(cancellationToken) is not null && workspace.Apps.Count > 0
-            ? await Reproductions.ConfirmAsync(findings, workspace.Apps[0], manifest.Root, timeLimit, cancellationToken)
-            : [.. findings.Select(Reproductions.Unjudged)];
+        IReadOnlyList<ReviewFinding> judged = await workspace.BuildAsync(cancellationToken) is null && await workspace.ListAsync(cancellationToken) is not null && workspace.Apps.Count > 0
+            ? await Reproductions.ConfirmAsync(checks, workspace.Apps[0], manifest.Root, timeLimit, cancellationToken)
+            : [.. checks.Select(Reproductions.Unjudged)];
+        return FindingLifecycle.CombineReproductions(findings, judged);
     }
 
     /// <summary>Records the run and every finding it fixed in the ledger, and turns the open findings into the exit code.</summary>
