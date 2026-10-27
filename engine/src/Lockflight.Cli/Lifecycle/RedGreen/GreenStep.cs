@@ -19,6 +19,14 @@ internal sealed class GreenStep(RedGreenSession session)
             return await session.FailAsync($"no red cycle is open; run '{EngineCommand.Linked} redgreen red' after writing failing tests", cancellationToken);
         }
 
+        if (open.OpenAmends.ToArray() is { Length: > 0 } waiting)
+        {
+            string amended = string.Join(", ", waiting.Select(amend => amend.MethodFilter));
+            return await session.FailAsync(
+                $"{amended} {(waiting.Length == 1 ? "was" : "were")} amended and not re-checked; run '{EngineCommand.Linked} redgreen red' first: the amended tests must fail in production code again before a green",
+                cancellationToken);
+        }
+
         if (session.UnapprovedArtifacts() is string unapproved)
         {
             return await session.FailAsync(unapproved, cancellationToken);

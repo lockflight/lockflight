@@ -69,12 +69,15 @@ internal static class CliApplication
                                                         .lockflight/local/proposals/ for a person to review and
                                                         git apply; applies nothing itself
 
-        Human decisions (approve, redgreen reset, review dismiss, baseline, adopt apply|undo and update refuse to run inside a
+        Human decisions (approve, redgreen reset|amend, review dismiss, baseline, adopt apply|undo and update refuse to run inside a
         Claude Code session, a `!` command included: run them in a separate terminal window)
           approve spec|tasks [--feature <id>] [--sign [--key <file>]]
                                                         approve the feature's artifacts, optionally SSH-signed;
                                                         in Claude Code, type /lockflight:approve spec|tasks instead
           redgreen reset [--feature <id>]               discard the feature's red/green evidence
+          redgreen amend <test> --reason "<text>" [--feature <id>]
+                                                        let one test of the open red cycle change: its file is
+                                                        writable until the next red re-checks it
           review dismiss <finding-id> --reason "<text>" [--feature <id>]
                                                         close an open review finding, recording who, when and why
           baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories

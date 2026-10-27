@@ -55,7 +55,7 @@ Then set up your project: the [lite profile](#lite-profile-target-first-green-in
   `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
   root, as the skills do; `doctor` reports a pin that cannot be restored on this machine. No package feed has it either, so
   CI cannot install it yet.
-- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply|undo`, `update`) are yours: run them in a separate
+- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo`, `update`) are yours: run them in a separate
   terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
   approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`).
 - **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. An install from source

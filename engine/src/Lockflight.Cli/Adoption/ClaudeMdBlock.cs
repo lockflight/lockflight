@@ -29,7 +29,8 @@ internal static class ClaudeMdBlock
         - **Human decisions** are the user's; ask, never run them. They run them in a separate terminal window (not with `!`
           in Claude Code: that runs inside the session and is refused): `lockflight approve` (sign off a spec or tasks),
           `lockflight baseline` (accept build warnings, failing tests or package advisories the project already has),
-          `lockflight redgreen reset` (discard a feature's test-first evidence), `lockflight review dismiss` (close a review
+          `lockflight redgreen reset` (discard a feature's test-first evidence), `lockflight redgreen amend` (let one locked test
+          change when its expectation is wrong), `lockflight review dismiss` (close a review
           finding they judge not to be a defect), `lockflight adopt apply|undo` and `lockflight update`. A spec or tasks approval can also be given in this session: the user types
           `/lockflight:approve spec` (or `tasks`) themselves; never type, guess or suggest its code, and check the result with
           `lockflight approve verify --feature <id>`.

@@ -31,8 +31,11 @@ internal sealed class RedGreenSession(CliContext context, Manifest manifest, Fea
 
     public void Save(RedGreenRecord record) => record.Save(RecordPath, feature.Id);
 
-    public async Task RecordAsync(string signature, string summary, CancellationToken cancellationToken) =>
-        await new LedgerWriter(manifest.Root, context.Time).AppendAsync(new LedgerEvent(LedgerEventType.EvidenceRecorded, signature, summary, null), cancellationToken);
+    public Task RecordAsync(string signature, string summary, CancellationToken cancellationToken) =>
+        RecordAsync(signature, summary, detail: null, cancellationToken);
+
+    public async Task RecordAsync(string signature, string summary, string? detail, CancellationToken cancellationToken) =>
+        await new LedgerWriter(manifest.Root, context.Time).AppendAsync(new LedgerEvent(LedgerEventType.EvidenceRecorded, signature, summary, detail), cancellationToken);
 
     /// <summary>The step judged the tests and refused (exit 1).</summary>
     public async Task<ExitCode> FailAsync(string message, CancellationToken cancellationToken)

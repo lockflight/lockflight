@@ -1,13 +1,16 @@
 using System.Globalization;
+using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle;
+using Lockflight.Cli.Lifecycle.RedGreen;
 
 namespace Lockflight.Cli.Review;
 
 /// <summary>
 /// <c>lockflight review status [--feature id]</c> — read only: the feature's review runs, its open, fixed and dismissed findings,
-/// and the summary for the pull request body. The agent runs it; only this, not the agent's own reading, says a finding is closed.
+/// and the summary for the pull request body, which also names the tests a person amended after their red. The agent runs it;
+/// only this, not the agent's own reading, says a finding is closed.
 /// </summary>
 internal sealed class ReviewStatusCommand(CliContext context)
 {
@@ -75,6 +78,24 @@ internal sealed class ReviewStatusCommand(CliContext context)
             await output.WriteLineAsync(line);
         }
 
+        foreach (string line in ReviewSummary.Amends(AmendsOf(feature)))
+        {
+            await output.WriteLineAsync(line);
+        }
+
         return ExitCode.Pass;
+    }
+
+    /// <summary>The amends in the feature's red/green record; none when there is no record or it cannot be read (red/green says so itself).</summary>
+    private static IReadOnlyList<string> AmendsOf(Feature feature)
+    {
+        try
+        {
+            return RedGreenRecord.Load(RedGreenRecord.PathFor(feature)) is RedGreenRecord record ? RedGreenAmends.Lines(record) : [];
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or FormatException or InvalidOperationException)
+        {
+            return [];
+        }
     }
 }

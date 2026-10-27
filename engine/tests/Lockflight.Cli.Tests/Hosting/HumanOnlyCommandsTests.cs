@@ -11,6 +11,7 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("lockflight --verbose approve spec", "approve spec")]
     [InlineData(".lockflight/bin/lockflight.exe approve tasks --sign", "approve tasks")]
     [InlineData("cd src && \"/opt/tools/lockflight\" redgreen reset", "redgreen reset")]
+    [InlineData(".lockflight/bin/lockflight redgreen amend ShippingTests.FirstKilogramCostsFive --reason \"wrong rate\"", "redgreen amend")]
     [InlineData("echo ok\ndotnet lockflight baseline deps", "baseline deps")]
     [InlineData("(lockflight approve spec)", "approve spec")]
     [InlineData("echo $(lockflight approve tasks)", "approve tasks")]

@@ -145,6 +145,15 @@ internal sealed class TraceCommand(CliContext context)
                 $"\nNote: {string.Join(", ", assertionFree)} assert nothing ({RedGreenTest.AssertionFreeMark}): they count, but pass whenever the code returns without throwing; check in review that each verifies its requirement.");
         }
 
+        if (RedGreenAmends.Lines(record) is { Count: > 0 } amends)
+        {
+            await context.Output.WriteLineAsync($"\nNote: {amends.Count} {(amends.Count == 1 ? "test was changed after its red" : "tests were changed after their red")}, each with a person's amend; check in review that the change kept what the test verifies:");
+            foreach (string amend in amends)
+            {
+                await context.Output.WriteLineAsync($"- {amend}");
+            }
+        }
+
         foreach (RedGreenTest broad in record.Cycles.Where(cycle => !cycle.IsOpen).SelectMany(cycle => cycle.Tests).Where(test => test.Requirements.Count > MaxRequirementsPerTest))
         {
             await context.Output.WriteLineAsync($"\nNote: {TraceMatrix.ShortName(broad.MethodFilter)} claims {broad.Requirements.Count} requirements; check that it really verifies each one.");

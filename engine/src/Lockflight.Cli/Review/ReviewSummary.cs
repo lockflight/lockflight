@@ -25,6 +25,10 @@ internal static class ReviewSummary
         return lines;
     }
 
+    /// <summary>The tests a person allowed to change after their red, for the pull request body; nothing when there are none.</summary>
+    public static IReadOnlyList<string> Amends(IReadOnlyList<string> amends) =>
+        amends.Count == 0 ? [] : [string.Empty, $"**Tests amended after red:** {amends.Count}", .. amends.Select(amend => $"- {amend}")];
+
     /// <summary>"base `main` (`1a2b3c4`), target `origin/main`, merge base `1a2b3c4`"; parts git could not name say so.</summary>
     public static string Bases(ReviewBase reviewBase)
     {

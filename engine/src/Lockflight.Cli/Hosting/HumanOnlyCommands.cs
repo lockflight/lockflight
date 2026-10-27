@@ -20,7 +20,7 @@ internal static class HumanOnlyCommands
     private const int CommandWords = 2;
 
     /// <summary>Command words (subcommand, optional sub-subcommand) reserved for a person.</summary>
-    private static readonly string[][] Reserved = [["baseline"], ["approve"], ["redgreen", "reset"], ["review", "dismiss"], ["adopt", "apply"], ["adopt", "undo"], ["update"]];
+    private static readonly string[][] Reserved = [["baseline"], ["approve"], ["redgreen", "reset"], ["redgreen", "amend"], ["review", "dismiss"], ["adopt", "apply"], ["adopt", "undo"], ["update"]];
 
     public static bool IsReserved(IReadOnlyList<string> args) =>
         Reserved.Any(words => args.Count >= words.Length && words.Select((word, index) => args[index] == word).All(match => match))

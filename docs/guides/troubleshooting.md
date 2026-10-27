@@ -231,7 +231,7 @@ script, so Claude Code needs **Git Bash**; `doctor` checks for it.
 
 ## "records a human decision and does not run inside a Claude Code session"
 
-`approve`, `baseline`, `redgreen reset`, `review dismiss`, `adopt apply|undo` and `update` are refused when `CLAUDECODE=1` is set. That variable
+`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo` and `update` are refused when `CLAUDECODE=1` is set. That variable
 is set inside Claude Code sessions, and a command typed with the `!` prefix runs inside the session too, so it is refused as
 well. Open a separate terminal window and paste the line the refusal prints: it changes to the project root and runs the same
 command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approve spec`.

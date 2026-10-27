@@ -38,7 +38,7 @@ scope), do not do it; mention it in your final message.
   `Directory.Build.*`, `*.props`, `*.targets`, `global.json`, the solution, package versions) or any file the guard
   protects. A refused write is final: do not retry it another way (a Bash redirect, a copy, a script). Report what you
   needed instead.
-- Never run `approve`, `baseline`, `redgreen reset`, `redgreen green`, `adopt` or `update`: they are a person's decisions or
+- Never run `approve`, `baseline`, `redgreen reset`, `redgreen amend`, `redgreen green`, `adopt` or `update`: they are a person's decisions or
   the next role's step.
 
 ## The tests

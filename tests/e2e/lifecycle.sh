@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Lifecycle end to end on a copy of samples/dotnet-single: spec → approve → tasks → approve → red/green cycles → trace, with the
-# negative controls (agent approval refused, cheating red rejected, test edits blocked during red, stubbed green rejected, a
-# test switched off with Explicit refused, a test renamed after green dropped from the trace).
+# negative controls (agent approval refused, cheating red rejected, test edits blocked during red, a person's amend unlocking one
+# test file until its red is re-checked, stubbed green rejected, a test switched off with Explicit refused, a test renamed after
+# green dropped from the trace).
 # Plays the agent (CLAUDECODE=1) and the human (CLAUDECODE unset). Usage: ENGINE=<lockflight binary> lifecycle.sh <workdir>
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -177,6 +178,18 @@ expect 0 "production edits are allowed during red" -- hook src/Shop.Api/PriceCal
 expect 2 "git checkout of a locked test file is blocked" "red cycle 1" -- bash_hook "git checkout HEAD -- tests/Shop.Tests/ShippingTests.cs"
 expect 2 "a write after cd into the test project is blocked" "red cycle 1" -- bash_hook "cd tests/Shop.Tests && echo x > ShippingTests.cs"
 expect 2 "dotnet format over the locked tests is blocked" "red cycle 1" -- bash_hook "dotnet format"
+# A test whose expectation is wrong changes only with a person's amend, which unlocks the file that declares it until a red
+# re-checks the test.
+expect 2 "the agent cannot amend a test" "records a human decision" -- "$E" redgreen amend EveryStartedKilogramCostsTwoFifty --reason "wrong weight"
+expect 0 "a person amends one test of the cycle" "tests/Shop.Tests/ShippingTests.cs (the file declaring" -- \
+  human redgreen amend ShippingTests.EveryStartedKilogramCostsTwoFifty --reason "the example should use a whole second kilogram"
+expect 0 "the amended test file is writable" -- hook tests/Shop.Tests/ShippingTests.cs
+expect 2 "other test files stay locked during the amend" "red cycle 1" -- hook tests/Shop.Tests/PriceCalculatorTests.cs
+expect 1 "green is refused while the amend waits for its red" "amended and not re-checked" -- "$E" redgreen green
+perl -pi -e 's/Assert\.Equal\(10m, new PriceCalculator\(\)\.ShippingCost\(2\.1m, 10m\)\)/Assert.Equal(7.5m, new PriceCalculator().ShippingCost(2m, 10m))/' tests/Shop.Tests/ShippingTests.cs
+expect 0 "a red re-checks only the amended test" "RED_STUB     Shop.Tests.ShippingTests.EveryStartedKilogramCostsTwoFifty (amended)" -- "$E" redgreen red
+expect 2 "the amended file is locked again after its red" "red cycle 1" -- hook tests/Shop.Tests/ShippingTests.cs
+expect 0 "status shows the amend" "amended: ShippingTests.EveryStartedKilogramCostsTwoFifty in cycle 1" -- "$E" redgreen status
 expect 1 "green is refused while stubbed, before the full suite" "the rest of the suite was not run" -- "$E" redgreen green
 perl -pi -e 's/=> throw new NotImplementedException\(\);/=> weightKg <= 1m ? 5m : 5m + Math.Ceiling(weightKg - 1m) * 2.5m;/' "$calc"
 expect 0 "green closes cycle 1" -- "$E" redgreen green
@@ -212,6 +225,7 @@ write_shipping_tests
 expect 0 "green closes cycle 2" -- "$E" redgreen green
 
 expect 0 "every requirement traced" "3 of 3 requirements covered" -- "$E" trace
+expect 0 "trace names the amended test" "1 test was changed after its red" -- "$E" trace
 # Trace re-checks the evidence against the current tests: a test renamed after its green no longer counts.
 perl -pi -e 's/FirstKilogramCostsFive\(\)/FirstKilogramCostsFiveRenamed()/' tests/Shop.Tests/ShippingTests.cs
 expect 1 "trace fails when a requirement loses its last red/green test" "FR-001 lost every test" -- "$E" trace
