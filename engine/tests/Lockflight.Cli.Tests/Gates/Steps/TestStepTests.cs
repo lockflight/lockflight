@@ -124,5 +124,30 @@ public sealed class TestStepTests
         Assert.Equal(Verdict.NotEarned, step.Verdict);
     }
 
+    [Fact]
+    public void AVSTestRunWhoseTestHostCrashedIsAnErrorEvenWhenEveryCountedFailureIsKnown()
+    {
+        TrxSummary summary = new(3, 3, 1, ["Shop.Tests.Legacy.Flaky"])
+        {
+            Incomplete = ["Shop.Worker.Tests.trx: The active test run was aborted. Reason: Test host process crashed"],
+        };
+
+        GateStep step = TestStep.JudgeVSTest(Run(1), reportCount: 2, summary, () => Known);
+
+        Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Contains("Test host process crashed", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AVSTestResultThatTimedOutFailsEvenWhenTheTestIsKnownFailing()
+    {
+        TrxSummary summary = new(3, 3, 0, []) { AbnormalTests = ["Shop.Tests.Legacy.Flaky (Timeout)"] };
+
+        GateStep step = TestStep.JudgeVSTest(Run(1), reportCount: 1, summary, () => Known);
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Contains("Shop.Tests.Legacy.Flaky (Timeout)", step.Detail, StringComparison.Ordinal);
+    }
+
     private static ProcessResult Run(int exitCode) => new(exitCode, string.Empty, string.Empty, 0, TimedOut: false);
 }
