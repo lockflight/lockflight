@@ -29,6 +29,40 @@ public sealed class FindingLifecycleTests
     }
 
     [Fact]
+    public void AnOpenFindingRaisedAgainAsMinorKeepsItsSeverityAndReproduction()
+    {
+        ReviewFinding open = Major("Discount off by one", FindingOutcome.Confirmed) with { State = FindingState.Open, Reproduction = "[Fact] public void R() {}" };
+
+        ReviewFinding raised = Assert.Single(FindingLifecycle.Carry([open with { Severity = FindingSeverity.Minor, Reproduction = null, State = null }], History(open)));
+
+        Assert.Equal(FindingSeverity.Major, raised.Severity);
+        Assert.Equal(open.Reproduction, raised.Reproduction);
+        Assert.False(raised.Carried);
+    }
+
+    [Fact]
+    public void AnOpenFindingRaisedAgainAsBlockerBecomesABlocker()
+    {
+        ReviewFinding open = Major("Discount off by one", FindingOutcome.Unverified) with { State = FindingState.Open };
+
+        ReviewFinding raised = Assert.Single(FindingLifecycle.Carry([open with { Severity = FindingSeverity.Blocker, State = null }], History(open)));
+
+        Assert.Equal(FindingSeverity.Blocker, raised.Severity);
+    }
+
+    [Fact]
+    public void AConfirmedFindingRaisedAgainAsMinorStaysOpenAndConfirmed()
+    {
+        ReviewFinding open = Major("Discount off by one", FindingOutcome.Confirmed) with { State = FindingState.Open };
+        ReviewFinding raised = Assert.Single(FindingLifecycle.Carry([open with { Severity = FindingSeverity.Nit, Outcome = FindingOutcome.Reported, State = null }], History(open)));
+
+        ReviewFinding resolved = Assert.Single(FindingLifecycle.Resolve([raised with { Outcome = FindingOutcome.Unverified }], History(open)));
+
+        Assert.Equal(FindingState.Open, resolved.State);
+        Assert.Equal(FindingOutcome.Confirmed, resolved.Outcome);
+    }
+
+    [Fact]
     public void ACarriedFindingWithoutAReproductionStaysOpen()
     {
         ReviewFinding open = Major("Discount off by one", FindingOutcome.Unverified) with { State = FindingState.Open };

@@ -174,6 +174,23 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task AnOpenFindingRaisedAgainAsMinorStaysOpen()
+    {
+        await ProjectAsync();
+        claude.Answers(FakeClaude.Unverified("Discount ignored"))
+            .Answers("""{"severity":"minor","file":"src/Orders.cs","line":3,"title":"Discount ignored","evidence":"probably fine"}""");
+
+        await RunAsync(["review"]);
+        time.Advance(TimeSpan.FromMinutes(5));
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.NotEarned, exitCode);
+        Assert.Contains("- major [unverified, open]", output, StringComparison.Ordinal);
+        (_, string status, _) = await RunAsync(["review", "status"]);
+        Assert.Contains("Open findings (1)", status, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AReproductionThatCannotRunLeavesTheFindingUnverified()
     {
         await ProjectAsync();
