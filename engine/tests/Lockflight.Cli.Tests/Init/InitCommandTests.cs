@@ -148,6 +148,15 @@ public sealed class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task AgentWorktreesAreIgnored()
+    {
+        await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        string[] gitIgnore = File.ReadAllLines(Path.Combine(projectRoot.FullName, ".gitignore"));
+        Assert.Contains(".claude/worktrees/", gitIgnore);
+    }
+
+    [Fact]
     public async Task ExistingClaudeSettingsAndGitIgnoreKeepTheirContent()
     {
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".claude"));
