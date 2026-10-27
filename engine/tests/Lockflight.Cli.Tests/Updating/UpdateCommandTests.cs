@@ -111,6 +111,20 @@ public sealed class UpdateCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task AProjectUpdateNeverLowersANewerPin()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        const string tools = """{"version":1,"isRoot":true,"tools":{"lockflight.cli":{"version":"99.0.0","commands":["lockflight"]}}}""";
+        File.WriteAllText(Path.Combine(root.FullName, "dotnet-tools.json"), tools);
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["update", "--project"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("99.0.0", error, StringComparison.Ordinal);
+        Assert.Equal(tools, File.ReadAllText(Path.Combine(root.FullName, "dotnet-tools.json")));
+    }
+
+    [Fact]
     public void TheInstalledVersionIsReadFromTheEngineLink()
     {
         if (OperatingSystem.IsWindows())

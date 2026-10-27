@@ -58,6 +58,11 @@ internal sealed class InitCommand(CliContext context)
     private async Task<ExitCode> InitializeAsync(bool link, InitProfile profile, CiTrigger ci, CancellationToken cancellationToken)
     {
         string root = ProjectRoot();
+        if (await PreflightProblemAsync(root, cancellationToken) is string problem)
+        {
+            return await RefuseAsync($"{problem}; nothing was written");
+        }
+
         string[] testFrameworks = [.. ProjectFiles.TestProjects(root).SelectMany(project => ProjectFiles.TargetFrameworks(root, project)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
         IReadOnlyList<string> dotnetChannels = DotnetChannels.For(testFrameworks);
         // A workspace shell: the child directories that look like units go into a new manifest, and the child
@@ -70,7 +75,7 @@ internal sealed class InitCommand(CliContext context)
             await WriteIfMissingAsync(root, Manifest.FileName, manifest, cancellationToken),
             await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, cancellationToken),
             await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), cancellationToken),
-            await TransformAsync(root, ".claude/settings.json", ClaudeSettingsMerger.Merge, cancellationToken),
+            await TransformAsync(root, ClaudeSettingsMerger.RelativePath, ClaudeSettingsMerger.Merge, cancellationToken),
         ];
         if (ci != CiTrigger.None)
         {
@@ -122,6 +127,24 @@ internal sealed class InitCommand(CliContext context)
         await context.Output.WriteLineAsync(workflow == FileOutcome.Created
             ? $"CI installs .NET {channels}: the test projects target {frameworks}, and tests need each runtime. Locally, gates.test.framework in {Manifest.FileName} picks one target when a runtime is missing."
             : $"Note: the test projects target {frameworks}; {Templates.WorkflowPath} already existed, so check that its setup-dotnet installs {channels}.");
+    }
+
+    /// <summary>What init cannot merge into, checked before it writes anything so a refusal leaves the project as it was.</summary>
+    private static async Task<string?> PreflightProblemAsync(string root, CancellationToken cancellationToken)
+    {
+        string toolManifest = ToolManifestWriter.RelativePathIn(root);
+        string toolManifestPath = Path.Combine(root, toolManifest);
+        string? tools = File.Exists(toolManifestPath) ? await File.ReadAllTextAsync(toolManifestPath, cancellationToken) : null;
+        if (ToolManifestWriter.Problem(tools) is string toolsProblem)
+        {
+            return $"{toolManifest} {toolsProblem}";
+        }
+
+        string settingsPath = Path.Combine(root, ClaudeSettingsMerger.RelativePath);
+        string? settings = File.Exists(settingsPath) ? await File.ReadAllTextAsync(settingsPath, cancellationToken) : null;
+        return ClaudeSettingsMerger.Problem(settings) is string settingsProblem
+            ? $"{ClaudeSettingsMerger.RelativePath} {settingsProblem}; fix it by hand (keep your settings) and run init again"
+            : null;
     }
 
     /// <summary>The nearest existing Lockflight project, else the current directory.</summary>

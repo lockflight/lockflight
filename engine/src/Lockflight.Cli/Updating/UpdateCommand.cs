@@ -144,8 +144,16 @@ internal sealed class UpdateCommand(CliContext context)
 
         string root = manifest.Root;
         List<string> changed = [];
-        string pinPath = Path.Combine(root, ToolManifestWriter.RelativePathIn(root));
-        (string pinned, bool pinChanged) = ToolManifestWriter.Pin(File.Exists(pinPath) ? await File.ReadAllTextAsync(pinPath, cancellationToken) : null);
+        string toolManifest = ToolManifestWriter.RelativePathIn(root);
+        string pinPath = Path.Combine(root, toolManifest);
+        string? tools = File.Exists(pinPath) ? await File.ReadAllTextAsync(pinPath, cancellationToken) : null;
+        if (ToolManifestWriter.Problem(tools) is string problem)
+        {
+            await context.Error.WriteLineAsync($"lockflight: {toolManifest} {problem}; nothing was updated");
+            return ExitCode.Config;
+        }
+
+        (string pinned, bool pinChanged) = ToolManifestWriter.Pin(tools);
         if (pinChanged)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(pinPath)!);
