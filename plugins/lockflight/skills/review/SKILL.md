@@ -14,7 +14,9 @@ independent.
 2. Run `.lockflight/bin/lockflight review` (add `--feature <id>` when several features exist). Leave out `--base`, `--model`
    and `--budget`: the base defaults to the target branch, and only the manifest's settings against the merge base of HEAD and
    the target make the review of record. If the output says the run is not of record because the target moved on, merge or
-   rebase onto it (ask the user if that is not yours to do) and run it again.
+   rebase onto it (ask the user if that is not yours to do) and run it again. If it says the reviewer did not see the whole
+   change, the diff is too large for one review: tell the user, and offer to split the change into smaller pull requests,
+   each reviewed on its own. Its findings still count, but no run of the whole change can be the review of record.
 3. Read the findings. Each has an id, an outcome and, for blocker/major, a state:
    - **confirmed** — the reproduction fails on the current code: the defect is real. Fix it in production code, add the
      reproduction as a regression test in the next red/green cycle, and re-run the review.

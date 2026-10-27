@@ -181,6 +181,28 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task ADiffTooLargeForTheReviewerIsReviewedButNotOfRecord()
+    {
+        await ProjectAsync();
+        File.WriteAllText(Path.Combine(root.FullName, "src", "Catalog.cs"), "namespace Shop;\n" + string.Concat(Enumerable.Repeat("// a generated catalog line\n", 6_000)));
+        await GitAsync("add", "src/Catalog.cs");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.NotEarned, exitCode);
+        Assert.Contains("this run will not be the review of record", output, StringComparison.Ordinal);
+        Assert.Contains("not the review of record: the diff (", output, StringComparison.Ordinal);
+        Assert.Contains("not shown in full: src/Catalog.cs", output, StringComparison.Ordinal);
+        string marker = Regex.Match(Assert.Single(claude.Prompts), @"<(data-[0-9a-f]{16}) kind=""diff""").Groups[1].Value;
+        string shown = Fenced(claude.Prompts[0], marker, "diff");
+        Assert.Contains("public static decimal Total(decimal price) => price;", shown, StringComparison.Ordinal);
+        Assert.Contains("not shown in full", shown, StringComparison.Ordinal);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Assert.False(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
+    }
+
+    [Fact]
     public async Task ABaseThatMovedOnIsNotOfRecord()
     {
         await ProjectAsync();

@@ -14,9 +14,9 @@ namespace Lockflight.Cli.Review;
 /// <c>lockflight review [--feature id] [--base ref] [--model name] [--budget usd]</c> — the review: the engine builds the prompt from
 /// the spec and the diff, runs a read-only <c>claude -p</c> with a JSON schema, confirms blocker/major findings by running their
 /// reproductions (and re-runs those of findings still open from earlier runs; a new finding's reproduction that does not compile is
-/// sent back to the reviewer once, within the run's budget), and stores the run. A run counts as the review of
-/// record only with the manifest's model and budget against a base whose commit is the merge base of HEAD and the target branch
-/// (<c>review.target</c>, else <c>origin/HEAD</c>'s branch, else <c>main</c>; also the default base); others are recorded and say why not.
+/// sent back to the reviewer once, within the run's budget), and stores the run. A run counts as the review of record only when
+/// the reviewer was shown the whole diff, with the manifest's model and budget, against a base whose commit is the merge base of
+/// HEAD and the target branch (<c>review.target</c>, else <c>origin/HEAD</c>'s branch, else <c>main</c>; also the default base); others are recorded and say why not.
 /// Exit 1 when an open blocker/major finding is confirmed, 5 (NOT-EARNED) when one is unverified or the run is not of record, 0
 /// otherwise. Advisory (guardrail): it runs with the developer's credentials and the agent can skip it.
 /// </summary>
@@ -80,24 +80,30 @@ internal sealed class ReviewCommand(CliContext context)
 
         ReviewBase reviewBase = new(
             baseRef, await Git.CommitOfAsync(manifest.Root, baseRef, cancellationToken), target, await Git.MergeBaseAsync(manifest.Root, target, cancellationToken));
-        return await ReviewAsync(manifest, feature, claude, reviewBase, diff, options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
+        return await ReviewAsync(manifest, feature, claude, reviewBase, ReviewDiff.Fit(diff, MaxDiffCharacters), options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
     }
 
     /// <summary>Asks the reviewer, confirms its findings and the open ones, stores the run and turns the outcome into the exit code.</summary>
     private async Task<ExitCode> ReviewAsync(
-        Manifest manifest, Feature feature, string claude, ReviewBase reviewBase, string diff, string model, decimal budget, CancellationToken cancellationToken)
+        Manifest manifest, Feature feature, string claude, ReviewBase reviewBase, ReviewDiff diff, string model, decimal budget, CancellationToken cancellationToken)
     {
         DateTimeOffset started = context.Time.GetUtcNow();
         await context.Output.WriteLineAsync($"Reviewing {feature.Id} against {reviewBase.Ref} with {model} (budget ${ReviewOfRecord.Usd(budget)})…");
+        if (!diff.IsComplete)
+        {
+            // Said before the reviewer runs, so a person can stop a run that cannot count before it spends the budget.
+            await context.Output.WriteLineAsync($"Warning: this run will not be the review of record: {ReviewOfRecord.Incomplete(diff)}.");
+        }
+
         string requirements = await File.ReadAllTextAsync(feature.SpecPath, cancellationToken);
         string? guidanceCommit = reviewBase.MergeBase ?? reviewBase.Commit;
         string prompt = ReviewPrompt.Build(new ReviewPromptData(
             requirements,
             Path.GetRelativePath(manifest.Root, feature.SpecPath).Replace('\\', '/'),
-            Truncated(diff),
+            diff.Shown,
             await BaseGuidanceAsync(manifest.Root, guidanceCommit, cancellationToken),
             $"{GuidanceFile} at the base commit {ReviewOfRecord.Short(guidanceCommit)}",
-            ReproductionContext.Build(manifest.Root, diff),
+            ReproductionContext.Build(manifest.Root, diff.Whole),
             ReviewPrompt.NewMarker()));
         string? claudeVersion = await ClaudeVersionAsync(manifest, claude, cancellationToken);
         ProcessResult reply = await AskReviewerAsync(manifest, claude, model, ReviewOfRecord.Usd(budget), prompt, cancellationToken);
@@ -140,14 +146,14 @@ internal sealed class ReviewCommand(CliContext context)
             feature.Id,
             reviewBase,
             await Git.HeadAsync(manifest.Root, cancellationToken) ?? Git.UnknownCommit,
-            Sha256(diff),
+            Sha256(diff.Whole),
             Sha256(prompt),
             model,
             budget,
             manifest.Review,
             claudeVersion,
             (long)(context.Time.GetUtcNow() - started).TotalMilliseconds,
-            ReviewOfRecord.Reasons(manifest.Review, model, budget, reviewBase));
+            ReviewOfRecord.Reasons(manifest.Review, model, budget, reviewBase, diff));
         string evidence = ReviewEvidence.Save(feature.RecordDirectory, run, outcome);
         await PrintAsync(run, outcome, manifest.Root, evidence);
         return await RecordAsync(manifest, run, outcome, cancellationToken);
@@ -317,9 +323,6 @@ internal sealed class ReviewCommand(CliContext context)
             $"Open blocker/major findings: {open}. They stay open until a later review re-runs their reproduction and it passes, or a person "
             + "dismisses them; 'lockflight review status' shows them and the pull request summary.");
     }
-
-    private static string Truncated(string diff) =>
-        diff.Length > MaxDiffCharacters ? diff[..MaxDiffCharacters] + "\n[diff truncated; read the files]" : diff;
 
     private static string Cost(ReviewOutcome outcome) => outcome.CostUsd.ToString("0.000", CultureInfo.InvariantCulture);
 
