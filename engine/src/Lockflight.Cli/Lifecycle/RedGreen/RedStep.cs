@@ -5,8 +5,8 @@ using Lockflight.Cli.Testing;
 namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
-/// <c>lockflight redgreen red</c>: accepts the new tests of a cycle when they all fail for the right reason (RED_STUB or RED_ASSERT),
-/// which opens the cycle and locks the test projects.
+/// <c>lockflight redgreen red</c>: accepts the new tests of a cycle when they all fail in production code (RED_STUB, or RED_ASSERT
+/// in a test that calls production code), which opens the cycle and locks the test projects.
 /// </summary>
 internal sealed class RedStep(RedGreenSession session)
 {
@@ -105,6 +105,11 @@ internal sealed class RedStep(RedGreenSession session)
         if (rejected.Length > 0)
         {
             await session.Output.WriteLineAsync($"Red rejected: {rejected.Length} of {classified.Count} new tests do not fail for the right reason. A red must be RED_STUB or RED_ASSERT.");
+            foreach (RedClass redClass in rejected.Select(test => test.RedClass).Distinct())
+            {
+                await session.Output.WriteLineAsync($"  {RedClassNames.ToName(redClass)}: {RedClassFixes.For(redClass)}.");
+            }
+
             await session.RecordAsync(LedgerSignatures.RedRejected, $"{session.Feature.Id}: {string.Join(",", rejected.Select(test => RedClassNames.ToName(test.RedClass)).Distinct())}", cancellationToken);
             return ExitCode.Fail;
         }
@@ -119,7 +124,10 @@ internal sealed class RedStep(RedGreenSession session)
         TestWorkspace workspace = session.Workspace;
         IReadOnlySet<string> testClasses = inventory.Select(test => test.Class).ToHashSet(StringComparer.Ordinal);
         string[] testDirectories = [.. workspace.Apps.Select(app => app.ProjectDirectory)];
-        List<(TestCase Test, RedClass RedClass)> first = [.. fresh.Select(test => (test, RedClassifier.Classify([.. results.Where(result => result.Key == test.Key)], testClasses, testDirectories)))];
+        ProductionCode production = ProductionProjects.Find(session.Manifest.Root, workspace.Apps);
+        HashSet<string> callers = CallersOfProduction(fresh, production);
+        List<(TestCase Test, RedClass RedClass)> first = [.. fresh.Select(test => (test, RedClassifier.Classify(
+            [.. results.Where(result => result.Key == test.Key)], testClasses, testDirectories, production, callers.Contains(test.Key))))];
 
         // Only a test whose rows all passed is re-run: a theory with mixed rows is GREEN_BEFORE, not flaky.
         TestCase[] candidates = [.. first.Where(entry => entry.RedClass == RedClass.GreenBefore && SuiteChecks.PassedEveryRow(results, entry.Test.Key)).Select(entry => entry.Test)];
@@ -133,6 +141,25 @@ internal sealed class RedStep(RedGreenSession session)
             flakyCheck.Flaky.Contains(entry.Test.Key) ? RedClass.Flaky : entry.RedClass,
             entry.Test.Requirements))];
         return (classified, flakyCheck);
+    }
+
+    /// <summary>The keys of the new tests whose code calls production code, read from the built test assemblies.</summary>
+    private HashSet<string> CallersOfProduction(TestCase[] fresh, ProductionCode production)
+    {
+        HashSet<string> callers = new(StringComparer.Ordinal);
+        foreach (TestApp app in session.Workspace.Apps)
+        {
+            TestCase[] tests = [.. fresh.Where(test => test.Assembly == app.AssemblyName)];
+            if (tests.Length == 0)
+            {
+                continue;
+            }
+
+            using ProductionCallScanner scanner = new(app.AssemblyPath, production.AssemblyNames);
+            callers.UnionWith(tests.Where(test => scanner.CallsProduction(test.Class, test.Method)).Select(test => test.Key));
+        }
+
+        return callers;
     }
 
     private async Task<ExitCode> AcceptAsync(RedGreenRecord record, List<RedGreenTest> classified, CancellationToken cancellationToken)

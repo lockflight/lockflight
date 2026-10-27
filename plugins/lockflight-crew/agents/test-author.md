@@ -46,9 +46,10 @@ scope), do not do it; mention it in your final message.
 - One or more tests per scenario of the story, asserting the specified behaviour exactly (values, rounding, errors).
 - Tag every test with the requirement it checks: `[Trait("Requirement", "FR-001")]` (one trait per requirement it covers).
 - Each new test must **fail inside production code**: the stub's `NotImplementedException` (RED_STUB) or an assertion
-  about a value the production code returns (RED_ASSERT). RED_OTHER (another exception from production code) is accepted
-  with a flag; prefer the first two. Never a compile error (COMPILE_RED), never an exception thrown by
-  the test itself or its setup (RED_IN_TEST), never a test that already passes (GREEN_BEFORE), never `Skip` or `Explicit`.
+  about a value the production code returns (RED_ASSERT). Never another exception, or one thrown by the runtime or a library
+  (RED_OTHER), never an assertion in a test that does not call the production code (RED_NO_PRODUCTION), never a compile error
+  (COMPILE_RED), never an exception thrown by the test itself or its setup, a fixture or `Assert.Fail` (RED_IN_TEST), never a
+  test that already passes (GREEN_BEFORE), never `Skip` or `Explicit`.
 - Do not weaken or delete existing tests, and do not make an assertion vague so that it fails "for the right reason".
 
 ## Loop
@@ -57,8 +58,8 @@ scope), do not do it; mention it in your final message.
 2. From the project root, run `.lockflight/bin/lockflight redgreen red` as a Bash call of its own: no pipe, no `&&` chain,
    no other command in the same message, so the user's permission rules can match it. A denied Bash call refuses that
    command, not Bash: run the plain command once more on its own, and if that is refused too, stop and report it.
-3. If it is rejected, read the classification of each test (`COMPILE_RED`, `RED_IN_TEST`, `GREEN_BEFORE`, `SKIPPED`,
-   `FLAKY`) and fix the **tests**, not the production code. Run it again. Stop after **three** rejected runs.
+3. If it is rejected, read the classification of each test (`COMPILE_RED`, `RED_IN_TEST`, `RED_OTHER`,
+   `RED_NO_PRODUCTION`, `GREEN_BEFORE`, `SKIPPED`, `FLAKY`) and fix the **tests**, not the production code. Run it again. Stop after **three** rejected runs.
 4. If `red` refuses for a reason you cannot fix in the tests (a stale approval, red/green not started, a missing stub, a
    locked test project), stop at once and report it.
 

@@ -75,8 +75,8 @@ Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform
 
 - **xUnit v2 listing:** tests and their `Requirement` traits are read from the built assemblies' metadata, because VSTest's
   listing has neither.
-- **xUnit v2 runs:** tests run with `dotnet test <dll> --filter`, and failures are read from the TRX. An assertion failure counts
-  as RED_ASSERT, and a `NotImplementedException` thrown by production code as RED_STUB.
+- **xUnit v2 runs:** tests run with `dotnet test <dll> --filter`, and failures are read from the TRX. An assertion failure in a test
+  that calls production code counts as RED_ASSERT, and a `NotImplementedException` thrown by production code as RED_STUB.
 - **Other frameworks** (NUnit, MSTest) get the gates only.
 
 **Units.** A workspace shell keeps `lockflight.yaml`, `.claude/`, Spec Kit and `specs/` at its root, and its service

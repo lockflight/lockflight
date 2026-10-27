@@ -111,6 +111,47 @@ public sealed class ShippingTests
 }
 CS
 expect 1 "a test throwing in its own code is rejected" "RED_IN_TEST" -- "$E" redgreen red
+# Reds that never reach production code are rejected, each with its reason: an assertion that compares constants, an
+# exception from the runtime, Assert.Fail, and a class fixture that throws.
+cat > tests/Shop.Tests/ShippingTests.cs <<'CS'
+using Shop.Api;
+
+namespace Shop.Tests;
+
+public sealed class BrokenFixture
+{
+    public BrokenFixture() => throw new InvalidOperationException("setup");
+}
+
+public sealed class ShippingTests(BrokenFixture fixture) : IClassFixture<BrokenFixture>
+{
+    [Fact]
+    [Trait("Requirement", "FR-001")]
+    public void FirstKilogramCostsFive() => Assert.NotNull(fixture);
+}
+
+public sealed class FakeRedTests
+{
+    [Fact]
+    [Trait("Requirement", "FR-001")]
+    public void ComparesConstants() => Assert.Equal(1, 2);
+
+    [Fact]
+    [Trait("Requirement", "FR-001")]
+    public void ThrowsFromTheRuntime() => Assert.Equal(1, Array.Empty<int>().First());
+
+    [Fact]
+    [Trait("Requirement", "FR-001")]
+    public void FailsUnconditionally()
+    {
+        _ = new PriceCalculator();
+        Assert.Fail("todo");
+    }
+}
+CS
+expect 1 "an assertion without a production call is rejected" "RED_NO_PRODUCTION" -- "$E" redgreen red
+expect 1 "an exception from the runtime is rejected" "RED_OTHER" -- "$E" redgreen red
+expect 1 "Assert.Fail and a throwing fixture are rejected" "RED_IN_TEST" -- "$E" redgreen red
 write_shipping_tests() {
   cat > tests/Shop.Tests/ShippingTests.cs <<'CS'
 using Shop.Api;

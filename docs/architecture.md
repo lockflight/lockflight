@@ -113,8 +113,10 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
 - **Approvals** bind the SHA-256 of the approved files to a person. Any later edit makes the approval stale, and the steps that
   depend on it refuse to run. They can be SSH-signed and verified in CI against signers read from the base branch.
 - **Red/green.** The plan declares new signatures; stubs throw `NotImplementedException`. `redgreen red` accepts a cycle only
-  when every new test fails inside production code (`RED_STUB` or `RED_ASSERT`); a test that fails to compile, already passes,
-  is skipped or is flaky is rejected. While red, the test projects are locked. `redgreen green` accepts when those tests pass
+  when every new test fails because of production code: a stub's `NotImplementedException` thrown from production code
+  (`RED_STUB`), or an xUnit assertion in a test that calls production code (`RED_ASSERT`). A test that fails to compile, fails
+  in its own code or setup, fails on another exception, fails without calling production code, already passes, is skipped or
+  is flaky is rejected. While red, the test projects are locked. `redgreen green` accepts when those tests pass
   and nothing was deleted, skipped or broken elsewhere.
 - **Trace** builds the matrix from each requirement (`[Trait("Requirement", "FR-001")]`) to the tests that went red, then
   green, for it. A requirement whose last test is gone fails the trace.
