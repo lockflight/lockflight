@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: gate-triggers
+description: "A request to check the code before calling a task done loads the gate skill."
+tags: [trigger]

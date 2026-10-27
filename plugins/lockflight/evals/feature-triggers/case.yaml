@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: feature-triggers
+description: "A request to add a feature to the product loads the feature skill."
+tags: [trigger]

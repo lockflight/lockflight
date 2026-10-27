@@ -60,19 +60,29 @@ shellcheck -S warning plugins/lockflight/bin/lockflight-hook tests/*/*.sh       
 
 ### Skill evals
 
-The plugin's evals (`plugins/lockflight/evals/`) run real Claude Code sessions, so they are not part of CI. Run them with Bash
-allowed — several cases only mean something when the agent can try a command and be refused (the no-self-approval case, for
-example, checks that the agent asks the user instead of approving):
+The plugin evals run real Claude Code sessions, so they are not part of CI. Every case has the same shape: `case.yaml`
+(name, description, tags, an optional `scaffold.sh` fixture), `prompt.md` (the user's request, turn limit and tools) and
+`graders/*.md`. There are trigger cases (a skill loads for its own requests and not for unrelated ones) and boundary cases
+(the agent hands a human decision to the person, proposes a protected change instead of writing it). Run them with Bash and
+the write tools allowed — several cases only mean something when the agent can try a command and be refused — and with
+`--scaffold`, which runs each case's fixture script. The fixtures that need an engine use a small stand-in that gives the
+real engine's guard decisions and messages for what the case exercises.
 
 ```sh
-claude plugin eval plugins/lockflight --runs 3 --ablation none --allow-tools Bash --trust-plugin --no-publish
+claude plugin eval plugins/lockflight --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
 ```
 
-The crew plugin's evals (`plugins/lockflight-crew/evals/`) dispatch the test author on a small fixture that each case's
-`scaffold.sh` writes, so they also need `--scaffold` and the write tools:
+The crew plugin's evals (`plugins/lockflight-crew/evals/`) dispatch the test author on a small fixture:
 
 ```sh
 claude plugin eval plugins/lockflight-crew --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
+```
+
+Cases that need both plugins at once (the feature skill dispatching the test author) live in `plugins/evals/`, and run with
+`plugins` as the target so both load:
+
+```sh
+claude plugin eval plugins --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
 ```
 
 [`tests/README.md`](tests/README.md) describes each suite. CI runs them on Linux, Windows and macOS. Before opening a pull

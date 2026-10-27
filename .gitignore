@@ -28,6 +28,7 @@ node_modules/
 # Plugin eval run reports
 plugins/lockflight/evals/results/
 plugins/lockflight-crew/evals/results/
+plugins/evals/results/
 
 # Local results of the Windows kit
 /tests/compat/results-*/
