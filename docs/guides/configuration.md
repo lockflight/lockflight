@@ -93,8 +93,12 @@ directories the same way.
 - **Gate runs at the shell root** cover the units. `gate run` and the Stop gate run every check that reads the whole
   workspace once: format, and in `pr` also `policy.protected` and secrets. They build and test each changed .NET unit in its
   own directory, two at a time, on one shared budget.
-  - The stop and edit profiles skip units without changes. The Stop gate also skips a unit unchanged since its last PASS
-    (`.lockflight/local/stop-pass-<unit>`).
+  - The stop profile judges a unit whose state differs from its last PASS (`.lockflight/local/stop-pass-<unit>`). The state is
+    the unit's HEAD (a monorepo unit: its directory's tree), its uncommitted and new files, and the shared build inputs outside
+    every unit (C# and MSBuild files, solutions, `global.json`, NuGet and editor configuration), committed or not. A commit
+    is judged like an edit, and a unit with no PASS yet is judged once. A unit back at a passed state is skipped.
+  - `gate run` also judges every unit with uncommitted changes. The Stop gate skips one whose state matches its cached PASS.
+    A stop-profile PASS is remembered by both. The edit profile runs format only.
   - `--unit a,b` limits a run to those units; `--path <unit>` (or a directory inside it) runs one unit with its own `build:`, test framework and
     stop filter; the root's `gates.build` applies only outside every unit.
   - The verdict is the worst of all steps.

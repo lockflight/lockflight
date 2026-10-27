@@ -70,6 +70,81 @@ public sealed class WorkspaceGateRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task ACommittedChangeInAUnitIsJudgedThoughItsWorkingTreeIsClean()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Manifest manifest = await CreateWorkspaceAsync(DotnetUnit, cancellationToken);
+        GateRunContext run = new(shell.FullName, shell.FullName, GateProfile.Stop, GateSettings.Default, BaseRef: null, TimeProvider.System);
+        await RememberPassesAsync(manifest, cancellationToken);
+        GateResult unchanged = await WorkspaceGateRunner.RunAsync(manifest, run, [], useCache: true, TextWriter.Null, cancellationToken);
+
+        string api = Path.Combine(shell.FullName, "services", "api");
+        await File.WriteAllTextAsync(Path.Combine(api, "Api.cs"), "class Api { int broken }\n", cancellationToken);
+        await GitAsync(api, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "break"]);
+        GateResult stop = await WorkspaceGateRunner.RunAsync(manifest, run, [], useCache: true, TextWriter.Null, cancellationToken);
+        GateResult gateRun = await WorkspaceGateRunner.RunAsync(manifest, run, [], useCache: false, TextWriter.Null, cancellationToken);
+
+        Assert.Equal("unchanged since its last PASS", Assert.Single(unchanged.Steps, step => step.Name == "services/api").Detail);
+        Assert.Contains(stop.Steps, step => step.Name == "services/api: build");
+        Assert.Contains(gateRun.Steps, step => step.Name == "services/api: build");
+        Assert.NotEqual(Verdict.Pass, stop.Verdict);
+    }
+
+    [Fact]
+    public async Task AUnitNeverJudgedIsJudgedThoughItHasNoChanges()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Manifest manifest = await CreateWorkspaceAsync(DotnetUnit, cancellationToken);
+        GateRunContext run = new(shell.FullName, shell.FullName, GateProfile.Stop, GateSettings.Default, BaseRef: null, TimeProvider.System);
+
+        GateResult result = await WorkspaceGateRunner.RunAsync(manifest, run, ["services/api"], useCache: true, TextWriter.Null, cancellationToken);
+
+        Assert.Contains(result.Steps, step => step.Name == "services/api: build");
+    }
+
+    [Fact]
+    public async Task ACommittedChangeToSharedBuildInputsInvalidatesEveryUnitsPass()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Manifest manifest = await CreateWorkspaceAsync(DotnetUnit, cancellationToken);
+        GateRunContext run = new(shell.FullName, shell.FullName, GateProfile.Stop, GateSettings.Default, BaseRef: null, TimeProvider.System);
+        await RememberPassesAsync(manifest, cancellationToken);
+
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, "Directory.Build.props"), "<Project />\n", cancellationToken);
+        await GitAsync(shell.FullName, ["add", "."]);
+        await GitAsync(shell.FullName, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "shared props"]);
+        GateResult result = await WorkspaceGateRunner.RunAsync(manifest, run, [], useCache: true, TextWriter.Null, cancellationToken);
+
+        Assert.Contains(result.Steps, step => step.Name == "services/api: build");
+    }
+
+    [Fact]
+    public async Task AMonorepoUnitsFingerprintIgnoresCommitsOutsideItAndFollowsCommitsInsideIt()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, Manifest.FileName), "version: 1\nunits:\n  - path: svc/a\n", cancellationToken);
+        Directory.CreateDirectory(Path.Combine(shell.FullName, "svc", "a"));
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, "svc", "a", "A.cs"), "class A {}\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, "NOTES.md"), "notes\n", cancellationToken);
+        await GitAsync(shell.FullName, ["init", "-q"]);
+        await CommitAllAsync("base");
+        Manifest manifest = ManifestLocator.Discover(shell.FullName).Manifest!;
+        Unit unit = manifest.Units[0];
+
+        UnitState before = await UnitState.ReadAsync(manifest, unit, "engine", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, "NOTES.md"), "notes, edited\n", cancellationToken);
+        await CommitAllAsync("notes");
+        UnitState afterNotes = await UnitState.ReadAsync(manifest, unit, "engine", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, "svc", "a", "A.cs"), "class A { int x; }\n", cancellationToken);
+        await CommitAllAsync("unit");
+        UnitState afterUnit = await UnitState.ReadAsync(manifest, unit, "engine", cancellationToken);
+
+        Assert.Equal(before.Fingerprint, afterNotes.Fingerprint);
+        Assert.NotEqual(before.Fingerprint, afterUnit.Fingerprint);
+        Assert.False(afterUnit.Dirty);
+    }
+
+    [Fact]
     public async Task AUnitOptionMustNameAUnit()
     {
         await CreateWorkspaceAsync(TestContext.Current.CancellationToken);
@@ -91,20 +166,48 @@ public sealed class WorkspaceGateRunnerTests : IDisposable
         Assert.Contains("--unit applies at the root", error, StringComparison.Ordinal);
     }
 
-    private async Task<Manifest> CreateWorkspaceAsync(CancellationToken cancellationToken)
+    // A .NET unit with no project: its build fails at once, which is enough to see whether the unit was judged.
+    private const string DotnetUnit = "  - path: services/api\n    kind: dotnet\n";
+
+    private Task<Manifest> CreateWorkspaceAsync(CancellationToken cancellationToken) => CreateWorkspaceAsync(string.Empty, cancellationToken);
+
+    private async Task<Manifest> CreateWorkspaceAsync(string extraUnits, CancellationToken cancellationToken)
     {
-        await File.WriteAllTextAsync(Path.Combine(shell.FullName, Manifest.FileName), "version: 1\nunits:\n  - path: web/admin\n", cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(shell.FullName, ".gitignore"), "web/\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, Manifest.FileName), $"version: 1\nunits:\n  - path: web/admin\n{extraUnits}", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, ".gitignore"), "web/\nservices/\n.lockflight/\n", cancellationToken);
         await GitAsync(shell.FullName, ["init", "-q"]);
-        await GitAsync(shell.FullName, ["add", "."]);
-        await GitAsync(shell.FullName, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "shell"]);
-        string admin = Path.Combine(shell.FullName, "web", "admin");
-        Directory.CreateDirectory(admin);
-        await File.WriteAllTextAsync(Path.Combine(admin, "app.ts"), "export const app = 1;\n", cancellationToken);
-        await GitAsync(admin, ["init", "-q"]);
-        await GitAsync(admin, ["add", "."]);
-        await GitAsync(admin, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "admin"]);
+        await CommitAllAsync("shell");
+        await CreateChildAsync(Path.Combine(shell.FullName, "web", "admin"), "app.ts", "export const app = 1;\n", cancellationToken);
+        if (extraUnits.Length > 0)
+        {
+            await CreateChildAsync(Path.Combine(shell.FullName, "services", "api"), "Api.cs", "class Api {}\n", cancellationToken);
+        }
+
         return ManifestLocator.Discover(shell.FullName).Manifest!;
+    }
+
+    private static async Task CreateChildAsync(string directory, string file, string content, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(directory);
+        await File.WriteAllTextAsync(Path.Combine(directory, file), content, cancellationToken);
+        await GitAsync(directory, ["init", "-q"]);
+        await GitAsync(directory, ["add", "."]);
+        await GitAsync(directory, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "child"]);
+    }
+
+    private async Task CommitAllAsync(string message)
+    {
+        await GitAsync(shell.FullName, ["add", "."]);
+        await GitAsync(shell.FullName, ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", message]);
+    }
+
+    /// <summary>Records a PASS for every unit's current state, as a passing Stop gate would.</summary>
+    private static async Task RememberPassesAsync(Manifest manifest, CancellationToken cancellationToken)
+    {
+        foreach ((Unit unit, UnitState state) in await WorkspaceGateRunner.ReadStatesAsync(manifest, [], cancellationToken))
+        {
+            await new StopGateCache(manifest.Root, unit.Path).RememberPassAsync(state.Fingerprint!, cancellationToken);
+        }
     }
 
     private static async Task GitAsync(string directory, string[] arguments)
