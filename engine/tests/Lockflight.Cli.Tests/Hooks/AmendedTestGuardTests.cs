@@ -92,7 +92,8 @@ public sealed class AmendedTestGuardTests : IDisposable
             ["hook", "pre-tool-use"], HookPayloads.ToolCall("Edit", Path.Combine(projectRoot.FullName, Amended), projectRoot.FullName), projectRoot.FullName);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("red cycle 1 of f2", error, StringComparison.Ordinal);
+        Assert.Contains("tests are locked during red cycle 1", error, StringComparison.Ordinal);
+        Assert.Empty(TestLock.AmendedFiles(new Manifest(projectRoot.FullName, [], StopGate: false, StopTarget: null, GateSettings.Default)));
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(projectRoot);
