@@ -35,12 +35,60 @@ internal sealed class TestCodeScanner(string assemblyPath, IReadOnlySet<string> 
 
     private readonly PEReader pe = new(File.OpenRead(assemblyPath));
 
-    public bool CallsProduction(string className, string method) =>
-        Walk(className, method, IsProduction, throwFinds: false) == CodeWalkOutcome.Found;
+    public bool CallsProduction(string className, string method) => ProductionCall(className, method) is not null;
+
+    /// <summary>
+    /// The first production member the test reaches, as <c>PriceCalculator.ShippingCost()</c>, <c>Order.Total</c> (a property) or
+    /// <c>new PriceCalculator()</c>; null when it reaches none. Naming a production type only (a type argument, <c>typeof</c>) is not
+    /// reaching it.
+    /// </summary>
+    public string? ProductionCall(string className, string method)
+    {
+        EntityHandle? found = null;
+        return Walk(className, method, FindsProduction, throwFinds: false) == CodeWalkOutcome.Found ? Describe(pe.GetMetadataReader(), found!.Value) : null;
+
+        bool FindsProduction(MetadataReader reader, EntityHandle token)
+        {
+            if (!IsProduction(reader, token))
+            {
+                return false;
+            }
+
+            found = token;
+            return true;
+        }
+    }
 
     /// <summary>True only when the whole walk ran and found neither an assertion nor a <c>throw</c>; false when the test cannot be found.</summary>
     public bool AssertsNothing(string className, string method) =>
         Walk(className, method, IsAssertion, throwFinds: true) == CodeWalkOutcome.NotFound;
+
+    public void Dispose() => pe.Dispose();
+
+    /// <summary>How the output names a referenced member: <c>Type.Method()</c>, <c>Type.Property</c> or <c>new Type()</c>.</summary>
+    private static string Describe(MetadataReader reader, EntityHandle token)
+    {
+        if (token.Kind == HandleKind.MethodSpecification)
+        {
+            return Describe(reader, reader.GetMethodSpecification((MethodSpecificationHandle)token).Method);
+        }
+
+        MemberReference member = reader.GetMemberReference((MemberReferenceHandle)token);
+        string type = TypeName(reader, member.Parent);
+        string name = reader.GetString(member.Name);
+        return name == ".ctor" ? $"new {type}()"
+            : name.StartsWith("get_", StringComparison.Ordinal) || name.StartsWith("set_", StringComparison.Ordinal) ? $"{type}.{name[4..]}"
+            : $"{type}.{name}()";
+    }
+
+    private static string TypeName(MetadataReader reader, EntityHandle type) => type.Kind switch
+    {
+        HandleKind.TypeReference => StripArity(reader.GetString(reader.GetTypeReference((TypeReferenceHandle)type).Name)),
+        HandleKind.TypeSpecification when GenericBase(reader, (TypeSpecificationHandle)type) is EntityHandle generic => TypeName(reader, generic),
+        _ => "?",
+    };
+
+    private static string StripArity(string name) => name.IndexOf('`', StringComparison.Ordinal) is int arity and >= 0 ? name[..arity] : name;
 
     private CodeWalkOutcome Walk(string className, string method, Func<MetadataReader, EntityHandle, bool> finds, bool throwFinds)
     {
@@ -103,8 +151,6 @@ internal sealed class TestCodeScanner(string assemblyPath, IReadOnlySet<string> 
 
         return CodeWalkOutcome.NotFound;
     }
-
-    public void Dispose() => pe.Dispose();
 
     /// <summary>The type <c>Namespace.Outer+Inner</c> as the test inventory names it.</summary>
     private static TypeDefinitionHandle? FindType(MetadataReader reader, string className)

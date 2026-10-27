@@ -55,7 +55,9 @@ internal static class CliApplication
         Lifecycle (agent)
           phase check specify|tasks [--feature <id>]    deterministic phase-exit checks
           redgreen start|red|green|status [--feature <id>]
-                                                        test-first cycles: baseline, accepted red, green
+                                                        test-first cycles: baseline, accepted red, green;
+                                                        red --verbose also prints each test's deciding
+                                                        stack frame and the production call found
           trace [--feature <id>]                        requirement → red/green tests matrix
           review [--feature <id>] [--base <ref>] [--model <name>] [--budget <usd>]
                                                         review bound to evidence (defaults: the target branch,

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml;
 using Lockflight.Cli.Processes;
 
@@ -93,10 +94,21 @@ internal static class NativeTestRunner
                 outcome,
                 failure?.GetAttribute("exception-type") is { Length: > 0 } type ? type : null,
                 failure is null ? null : TopFrame(failure["stack-trace"]?.InnerText).Method,
-                failure is null ? null : TopFrame(failure["stack-trace"]?.InnerText).File));
+                failure is null ? null : TopFrame(failure["stack-trace"]?.InnerText).File)
+            {
+                TopFrameLine = failure is null ? null : TopFrameLine(failure["stack-trace"]?.InnerText),
+            });
         }
 
         return results;
+    }
+
+    /// <summary><c>at Type.Method(args) in /path/File.cs:line 22</c> → 22; null without symbols.</summary>
+    public static int? TopFrameLine(string? stackTrace)
+    {
+        string? first = stackTrace?.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.StartsWith("at ", StringComparison.Ordinal));
+        int marker = first?.LastIndexOf(":line ", StringComparison.Ordinal) ?? -1;
+        return marker > 0 && int.TryParse(first![(marker + ":line ".Length)..].Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int line) ? line : null;
     }
 
     /// <summary><c>at Type.Method(args) in /path/File.cs:line 22</c> → method and file (file null without symbols).</summary>

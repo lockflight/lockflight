@@ -26,6 +26,23 @@ public sealed class TestCodeScannerTests
     }
 
     [Theory]
+    [InlineData(nameof(ProductionCallSamples.CallsDirectly), "RedClassNames.ToName()")]
+    [InlineData(nameof(ProductionCallSamples.ConstructsAProductionType), "new FlakyCheckResult()")]
+    [InlineData(nameof(ProductionCallSamples.ReadsAProductionProperty), "FlakyCheckResult.BudgetExhausted")]
+    public void TheFirstProductionMemberReachedIsNamed(string method, string expected)
+    {
+        using TestCodeScanner scanner = Scanner([Engine]);
+        Assert.Equal(expected, scanner.ProductionCall(Samples, method));
+    }
+
+    [Fact]
+    public void ATypeArgumentAloneIsNoProductionCall()
+    {
+        using TestCodeScanner scanner = Scanner([Engine]);
+        Assert.Null(scanner.ProductionCall(Samples, nameof(ProductionCallSamples.NamesAProductionTypeAsATypeArgument)));
+    }
+
+    [Theory]
     [InlineData(nameof(ProductionCallSamples.AssertsOnConstants))]
     [InlineData(nameof(ProductionCallSamples.FailsUnconditionally))]
     [InlineData(nameof(ProductionCallSamples.NamesAProductionTypeOnly))]

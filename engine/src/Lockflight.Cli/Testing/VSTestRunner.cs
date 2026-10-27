@@ -102,10 +102,12 @@ internal static partial class VSTestRunner
                 _ => TestOutcome.NotRun,
             };
             string? message = outcome == TestOutcome.Fail ? result.GetElementsByTagName("Message").OfType<XmlElement>().FirstOrDefault()?.InnerText : null;
-            (string? frame, string? file) = outcome == TestOutcome.Fail
-                ? NativeTestRunner.TopFrame(result.GetElementsByTagName("StackTrace").OfType<XmlElement>().FirstOrDefault()?.InnerText)
-                : (null, null);
-            results.Add(new ExecutedTest($"{assembly}:{method}", result.GetAttribute("testName"), outcome, ExceptionTypeOf(message), frame, file));
+            string? stackTrace = outcome == TestOutcome.Fail ? result.GetElementsByTagName("StackTrace").OfType<XmlElement>().FirstOrDefault()?.InnerText : null;
+            (string? frame, string? file) = NativeTestRunner.TopFrame(stackTrace);
+            results.Add(new ExecutedTest($"{assembly}:{method}", result.GetAttribute("testName"), outcome, ExceptionTypeOf(message), frame, file)
+            {
+                TopFrameLine = NativeTestRunner.TopFrameLine(stackTrace),
+            });
         }
 
         return results;

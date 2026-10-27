@@ -100,6 +100,44 @@ public sealed class RedClassifierTests
     public void EveryRejectedClassSaysWhatToChange() =>
         Assert.All(Enum.GetValues<RedClass>().Where(redClass => !RedClassNames.IsAccepted(redClass)), redClass => Assert.NotEmpty(RedClassFixes.For(redClass)));
 
+    [Theory]
+    [InlineData("System.NotImplementedException", "Shop.Api.PriceCalculator.ShippingCost(Decimal w)", "PriceCalculator.ShippingCost()", "NotImplementedException from production code at PriceCalculator.ShippingCost")]
+    [InlineData("Xunit.Sdk.EqualException", "Shop.Tests.ShippingTests.Costs()", "PriceCalculator.ShippingCost()", "EqualException fails; calls PriceCalculator.ShippingCost()")]
+    [InlineData("Xunit.Sdk.EqualException", "Shop.Tests.ShippingTests.Costs()", null, "EqualException fails, but no production call found: naming a production type (a type argument such as Deserialize<T>, typeof) is not a call")]
+    [InlineData("System.NotImplementedException", "Shop.Tests.ShippingTests.Cheat()", "PriceCalculator.ShippingCost()", "NotImplementedException thrown in test code at ShippingTests.Cheat")]
+    [InlineData("Xunit.Sdk.FailException", "Shop.Tests.ShippingTests.Costs()", null, "FailException from the test framework")]
+    [InlineData("System.NullReferenceException", "Shop.Api.PriceCalculator.ShippingCost(Decimal w)", null, "NullReferenceException from production code at PriceCalculator.ShippingCost, not a NotImplementedException")]
+    [InlineData("System.InvalidOperationException", "System.Linq.ThrowHelper.ThrowNoElementsException()", null, "InvalidOperationException thrown outside production code, at ThrowHelper.ThrowNoElementsException")]
+    public void EachVerdictSaysWhy(string exception, string topFrame, string? productionCall, string why)
+    {
+        RedVerdict verdict = RedClassifier.Judge([Fail(exception, topFrame, file: null)], TestClasses, TestDirectories, Production, productionCall);
+
+        Assert.StartsWith(why, verdict.Why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheDetailNamesTheDecidingFrameItsLineAndTheProductionCall()
+    {
+        ExecutedTest row = Fail("System.NotImplementedException", "Shop.Api.PriceCalculator.ShippingCost(Decimal w)", "/repo/src/Shop.Api/PriceCalculator.cs") with { TopFrameLine = 12 };
+
+        RedVerdict verdict = RedClassifier.Judge([row], TestClasses, TestDirectories, Production, "PriceCalculator.ShippingCost()");
+
+        Assert.Equal(
+            "System.NotImplementedException at Shop.Api.PriceCalculator.ShippingCost(Decimal w) in /repo/src/Shop.Api/PriceCalculator.cs:12; calls PriceCalculator.ShippingCost()",
+            verdict.Detail);
+    }
+
+    [Fact]
+    public void ATheoryIsExplainedByTheRowThatDecidedIt()
+    {
+        RedVerdict verdict = RedClassifier.Judge(
+            [Fail("System.NotImplementedException", "Shop.Api.PriceCalculator.ShippingCost(Decimal w)", file: null), Fail("System.NotImplementedException", "Shop.Tests.ShippingTests.Cheat()", file: null)],
+            TestClasses, TestDirectories, Production, "PriceCalculator.ShippingCost()");
+
+        Assert.Equal(RedClass.RedInTest, verdict.Class);
+        Assert.Contains("ShippingTests.Cheat", verdict.Why, StringComparison.Ordinal);
+    }
+
     private static RedClass Classify(ExecutedTest row, bool callsProduction) => RedClassifier.Classify([row], TestClasses, TestDirectories, Production, callsProduction);
 
     private static ExecutedTest Fail(string? exception, string? topFrame, string? file) => new("a:k", "n", TestOutcome.Fail, exception, topFrame, file);

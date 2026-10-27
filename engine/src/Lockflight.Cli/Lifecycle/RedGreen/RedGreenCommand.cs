@@ -22,6 +22,8 @@ internal sealed class RedGreenCommand(CliContext context)
 {
     private const string ResetVerb = "reset";
     private const string AmendVerb = "amend";
+    private const string RedVerb = "red";
+    private const string VerboseFlag = "--verbose";
 
     private static readonly string[] ValueOptions = ["--feature"];
     private static readonly string[] AmendValueOptions = ["--feature", "--reason"];
@@ -41,7 +43,8 @@ internal sealed class RedGreenCommand(CliContext context)
         }
 
         string[] valueOptions = verb == AmendVerb ? AmendValueOptions : ValueOptions;
-        if (await CommandOptions.ParseOrReportAsync($"redgreen {verb}", args, valueOptions, [], context.Error, cancellationToken) is not CommandOptions options)
+        string[] flags = verb == RedVerb ? [VerboseFlag] : [];
+        if (await CommandOptions.ParseOrReportAsync($"redgreen {verb}", args, valueOptions, flags, context.Error, cancellationToken) is not CommandOptions options)
         {
             return ExitCode.Config;
         }
@@ -81,7 +84,7 @@ internal sealed class RedGreenCommand(CliContext context)
         return verb switch
         {
             "start" => await StartAsync(session, record, cancellationToken),
-            "red" => await new RedStep(session).RunAsync(record, cancellationToken),
+            RedVerb => await new RedStep(session, options.Flag(VerboseFlag)).RunAsync(record, cancellationToken),
             "green" => await new GreenStep(session).RunAsync(record, cancellationToken),
             "status" => await StatusAsync(feature, record),
             AmendVerb => await new AmendStep(session).RunAsync(record, test!, reason!, cancellationToken),
