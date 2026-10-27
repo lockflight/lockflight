@@ -28,7 +28,9 @@ internal static class CliApplication
         Usage: lockflight <command> [options]   (in a project, from its root: .lockflight/bin/lockflight <command> [options])
 
         Setup
-          init [--profile lite|standard] [--no-link]    onboard: manifest, tool pin, settings, CI job, link
+          init [--profile lite|standard] [--ci pr|manual|none] [--no-link]
+                                                        onboard: manifest, tool pin, settings, CI job, link; --ci:
+                                                        the job runs on pull requests, only by hand, or is not written
           doctor                                        readiness report with fixes
           statusline                                    Claude Code status line: Levi and the last verdict
           update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a

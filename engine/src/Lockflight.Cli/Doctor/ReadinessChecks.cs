@@ -26,17 +26,27 @@ internal static class ReadinessChecks
     private const string Python = "python3";
     private const string PinRestoreCheck = "pin restorable";
     private const string DevelopmentPinCheck = "development pin";
+    private const string GitleaksCheck = "gitleaks";
+    private const string ClaudeVersionCheck = "claude code";
+    private const string Claude = "claude";
+
+    /// <summary>The oldest Claude Code whose hooks honour <c>onFailure: block</c>: before it, a PreToolUse hook that times out does not block.</summary>
+    private static readonly EngineVersion MinimumClaudeCode = new(2, 1, 295, string.Empty);
+
+    private static readonly TimeSpan ClaudeVersionTimeLimit = TimeSpan.FromSeconds(30);
 
     public static Task<IReadOnlyList<DoctorCheck>> RunAsync(string root, CancellationToken cancellationToken) =>
-        RunAsync(root, userHome: null, nugetPackages: null, TimeProvider.System, cancellationToken);
+        RunAsync(root, userHome: null, nugetPackages: null, gitleaks: null, TimeProvider.System, cancellationToken);
 
     /// <param name="userHome">
     /// The user's home, for the user-scope plugin check of a workspace and for the local feed and tools cache of the pin check; null
     /// skips those inputs (the plugin is reported as not enabled, the pin as not found locally).
     /// </param>
     /// <param name="nugetPackages">The NuGet global packages folder (<c>NUGET_PACKAGES</c>); null for its default under the home.</param>
+    /// <param name="gitleaks">The gitleaks the secrets step runs (<c>LOCKFLIGHT_GITLEAKS</c>, else the one on PATH); null when there is none.</param>
     /// <param name="time">The clock, for the window of Stop timings read from the ledger.</param>
-    public static async Task<IReadOnlyList<DoctorCheck>> RunAsync(string root, string? userHome, string? nugetPackages, TimeProvider time, CancellationToken cancellationToken)
+    public static async Task<IReadOnlyList<DoctorCheck>> RunAsync(
+        string root, string? userHome, string? nugetPackages, string? gitleaks, TimeProvider time, CancellationToken cancellationToken)
     {
         List<DoctorCheck> checks = [CheckManifest(root), CheckPin(root)];
         if (CheckDevelopmentPin(root, userHome, nugetPackages) is DoctorCheck developmentPin)
@@ -50,7 +60,7 @@ internal static class ReadinessChecks
             checks.Add(pluginEngine);
         }
 
-        checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root)]);
+        checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root), await CheckClaudeVersionAsync(root, Claude, cancellationToken), CheckGitleaks(gitleaks)]);
         if (OperatingSystem.IsWindows())
         {
             checks.Add(await CheckGitBashAsync(root, Bash, cancellationToken));
@@ -220,6 +230,44 @@ internal static class ReadinessChecks
         {
             return new("git bash", CheckStatus.Fail, "bash is not on PATH", "install Git for Windows (Git Bash is required)");
         }
+    }
+
+    /// <summary>Whether the secrets step of the pr profile can run: without gitleaks it is NOT-EARNED, locally and in a CI without it.</summary>
+    public static DoctorCheck CheckGitleaks(string? gitleaks) => gitleaks is not null
+        ? new(GitleaksCheck, CheckStatus.Pass, $"the pr profile's secrets step can run ({gitleaks})", null)
+        : new(GitleaksCheck, CheckStatus.Warn, "gitleaks is not on PATH, so the pr profile's secrets step is NOT-EARNED, not PASS",
+            $"install gitleaks (https://github.com/gitleaks/gitleaks) on PATH, or set {EnvironmentVariables.Gitleaks} to its path");
+
+    /// <summary>Runs <c>claude --version</c> and judges it with <see cref="CheckClaudeVersion"/>; a missing executable is a warning, never a crash.</summary>
+    public static async Task<DoctorCheck> CheckClaudeVersionAsync(string root, string claude, CancellationToken cancellationToken)
+    {
+        try
+        {
+            ProcessResult versionRun = await ProcessRunner.RunAsync(claude, ["--version"], root, ClaudeVersionTimeLimit, cancellationToken);
+            return CheckClaudeVersion(versionRun.ExitCode == 0 ? versionRun.Output : null);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ExecutableNotFoundException)
+        {
+            return new(ClaudeVersionCheck, CheckStatus.Warn, $"claude is not on PATH, so its version is unknown; the hooks need Claude Code {MinimumClaudeCode} or newer", "install Claude Code, or check `claude --version` where you start it");
+        }
+    }
+
+    /// <summary>
+    /// Judges the output of <c>claude --version</c> (<c>2.1.309 (Claude Code)</c>): older than <see cref="MinimumClaudeCode"/>, or a
+    /// version that cannot be read (<paramref name="versionOutput"/> null when the command failed), is a warning.
+    /// </summary>
+    public static DoctorCheck CheckClaudeVersion(string? versionOutput)
+    {
+        string? token = versionOutput?.Split([' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        EngineVersion? version = token is null ? null : EngineVersion.Parse(token);
+        if (version is null)
+        {
+            return new(ClaudeVersionCheck, CheckStatus.Warn, $"the Claude Code version could not be read; the hooks need {MinimumClaudeCode} or newer", "run `claude --version`, and `claude update` when it is older");
+        }
+
+        return version.CompareTo(MinimumClaudeCode) >= 0
+            ? new(ClaudeVersionCheck, CheckStatus.Pass, $"version {token}", null)
+            : new(ClaudeVersionCheck, CheckStatus.Warn, $"version {token} is older than {MinimumClaudeCode}: a guard hook that times out does not block the tool call there", "claude update");
     }
 
     private static DoctorCheck CheckClaudeCli() => Executables.Find("claude", explicitPath: null) is string path

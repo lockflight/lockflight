@@ -67,7 +67,7 @@ internal sealed class RedGreenCommand(CliContext context)
         if (record is not null)
         {
             return await session.FailAsync(
-                $"the baseline was taken at {record.BaselineAt:u} (commit {RedGreenSession.Short(record.BaselineCommit)}); it is never retaken by the agent. A person can discard it with 'lockflight redgreen reset'.",
+                $"the baseline was taken at {record.BaselineAt:u} (commit {RedGreenSession.Short(record.BaselineCommit)}); it is never retaken by the agent. A person can discard it with '{EngineCommand.Linked} redgreen reset' in a separate terminal window.",
                 cancellationToken);
         }
 
@@ -107,7 +107,7 @@ internal sealed class RedGreenCommand(CliContext context)
         await session.RecordAsync(LedgerSignatures.RedGreenStart, $"{session.Feature.Id}: baseline of {tests.Count} tests in {workspace.Apps.Count} test projects", cancellationToken);
         await context.Output.WriteLineAsync($"Baseline: {tests.Count} tests in {string.Join(", ", started.TestProjects)} (commit {RedGreenSession.Short(started.BaselineCommit)})");
         await WarnAboutFailingBaselineAsync(session, cancellationToken);
-        await context.Output.WriteLineAsync("Next: declare stubs, write the first story's tests, then run 'lockflight redgreen red'.");
+        await context.Output.WriteLineAsync($"Next: declare stubs, write the first story's tests, then run '{EngineCommand.Linked} redgreen red'.");
         return ExitCode.Pass;
     }
 

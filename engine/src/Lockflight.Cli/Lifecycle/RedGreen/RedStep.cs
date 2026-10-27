@@ -14,12 +14,12 @@ internal sealed class RedStep(RedGreenSession session)
     {
         if (record is null)
         {
-            return await session.FailAsync("no baseline; run 'lockflight redgreen start' before writing the feature's tests", cancellationToken);
+            return await session.FailAsync($"no baseline; run '{EngineCommand.Linked} redgreen start' before writing the feature's tests", cancellationToken);
         }
 
         if (record.OpenCycle is RedGreenCycle open)
         {
-            return await session.FailAsync($"cycle {open.Number} is still red; make it green ('lockflight redgreen green') before the next red", cancellationToken);
+            return await session.FailAsync($"cycle {open.Number} is still red; make it green ('{EngineCommand.Linked} redgreen green') before the next red", cancellationToken);
         }
 
         if (session.UnapprovedArtifacts() is string unapproved)
@@ -173,7 +173,7 @@ internal sealed class RedStep(RedGreenSession session)
         };
         session.Save(accepted);
         await session.RecordAsync(LedgerSignatures.RedAccepted, $"{session.Feature.Id}: cycle {cycle.Number}, {classified.Count} tests", cancellationToken);
-        await session.Output.WriteLineAsync($"Red accepted: cycle {cycle.Number} with {classified.Count} tests. The test projects ({string.Join(", ", accepted.TestProjects)}) are locked until 'lockflight redgreen green' passes.");
+        await session.Output.WriteLineAsync($"Red accepted: cycle {cycle.Number} with {classified.Count} tests. The test projects ({string.Join(", ", accepted.TestProjects)}) are locked until '{EngineCommand.Linked} redgreen green' passes.");
         if (classified.Any(test => test.Requirements.Count == 0))
         {
             await session.Output.WriteLineAsync("Note: tests without [Trait(\"Requirement\", \"FR-xxx\")] will not count for trace.");

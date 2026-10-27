@@ -54,6 +54,21 @@ public sealed class WorkspaceGateRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task AUnitMissingFromTheCheckoutSaysSoInThePrProfile()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Manifest manifest = await CreateWorkspaceAsync(cancellationToken);
+        Directory.Delete(Path.Combine(shell.FullName, "web", "admin"), recursive: true);
+        GateRunContext run = new(shell.FullName, shell.FullName, GateProfile.PullRequest, GateSettings.Default, BaseRef: null, TimeProvider.System);
+
+        GateResult result = await WorkspaceGateRunner.RunAsync(manifest, run, ["web/admin"], useCache: false, TextWriter.Null, cancellationToken);
+
+        GateStep admin = Assert.Single(result.Steps, step => step.Name == "web/admin");
+        Assert.Equal(Verdict.NotApplicable, admin.Verdict);
+        Assert.Equal("not present in this checkout: not built", admin.Detail);
+    }
+
+    [Fact]
     public async Task UnitStateSeesUncommittedAndNewFilesOfAChildRepository()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;

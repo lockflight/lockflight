@@ -193,7 +193,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
             {
                 return HookDecision.Block(
                     $"tests-locked:{treeLock.Glob}",
-                    $"lockflight: this command may rewrite '{tree}', which contains test files locked during {treeLock.Reason}: make the tests pass by changing production code, then run 'lockflight redgreen green'. If a test itself is wrong, ask the user.");
+                    $"lockflight: this command may rewrite '{tree}', which contains test files locked during {treeLock.Reason}: make the tests pass by changing production code, then run '{EngineCommand.Linked} redgreen green'. If a test itself is wrong, ask the user.");
             }
 
             if (globs.FirstOrDefault(glob => scan.CouldMatchUnder(relativeTree, glob, sourceOnly)) is string protectedGlob)
@@ -251,7 +251,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
             {
                 return HookDecision.Block(
                     $"tests-locked:{lockedGlob}",
-                    $"lockflight: '{target}' is a test file and tests are locked during {reason}: make the tests pass by changing production code, then run 'lockflight redgreen green'. If a test itself is wrong, ask the user.");
+                    $"lockflight: '{target}' is a test file and tests are locked during {reason}: make the tests pass by changing production code, then run '{EngineCommand.Linked} redgreen green'. If a test itself is wrong, ask the user.");
             }
         }
 

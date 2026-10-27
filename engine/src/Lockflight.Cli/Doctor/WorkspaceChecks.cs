@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
 using Lockflight.Cli.Processes;
 
@@ -10,7 +11,7 @@ namespace Lockflight.Cli.Doctor;
 /// <summary>
 /// Readiness of a workspace's units: cloned, no second policy inside a unit, child repositories ignored by the shell,
 /// the plugin enabled at user scope (sessions started inside a unit load only user-level plugins), and no SDK pin that
-/// keeps <c>dotnet lockflight</c> from running. The SDK check also applies to a single repository.
+/// keeps <c>dotnet lockflight</c> (the tool pin) from running. The SDK check also applies to a single repository.
 /// </summary>
 internal static class WorkspaceChecks
 {
@@ -38,7 +39,7 @@ internal static class WorkspaceChecks
             IReadOnlyList<string> drift = Workspace.WorkspaceSyncCommand.Drift(manifest!);
             checks.Add(drift.Count == 0
                 ? new("unit CI policy", CheckStatus.Pass, "every .NET unit repository carries the shell's current policy", null)
-                : new("unit CI policy", CheckStatus.Warn, $"unit repositories behind the shell's policy: {List(drift)}; their CI judges with the old one", "dotnet lockflight workspace sync, then commit in each unit"));
+                : new("unit CI policy", CheckStatus.Warn, $"unit repositories behind the shell's policy: {List(drift)}; their CI judges with the old one", $"{EngineCommand.Linked} workspace sync, then commit in each unit"));
             checks.Add(UserScopePlugin(userHome));
             if (StopTimings.Slow(root, now.AddDays(-14)) is { Count: > 0 } slow)
             {
@@ -76,7 +77,7 @@ internal static class WorkspaceChecks
 
         return tracked.Count == 0
             ? new("child repositories", CheckStatus.Pass, "ignored by the shell's git", null)
-            : new("child repositories", CheckStatus.Warn, $"the shell's git does not ignore {List(tracked)}, so it would track their files", $"add {string.Join(" ", tracked)} to .gitignore (dotnet lockflight init does)");
+            : new("child repositories", CheckStatus.Warn, $"the shell's git does not ignore {List(tracked)}, so it would track their files", $"add {string.Join(" ", tracked)} to .gitignore (init does)");
     }
 
     private static DoctorCheck UserScopePlugin(string? userHome)

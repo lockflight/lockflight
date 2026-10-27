@@ -95,6 +95,48 @@ public sealed class ReadinessChecksTests : IDisposable
     }
 
     [Fact]
+    public void GitleaksMissingWarnsThatThePrSecretsStepIsNotEarned()
+    {
+        DoctorCheck check = ReadinessChecks.CheckGitleaks(gitleaks: null);
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("NOT-EARNED", check.Detail, StringComparison.Ordinal);
+        Assert.Contains("LOCKFLIGHT_GITLEAKS", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GitleaksFoundPasses() =>
+        Assert.Equal(CheckStatus.Pass, ReadinessChecks.CheckGitleaks("/usr/local/bin/gitleaks").Status);
+
+    [Theory]
+    [InlineData("2.1.295 (Claude Code)", true)]
+    [InlineData("2.1.309 (Claude Code)\n", true)]
+    [InlineData("2.2.0", true)]
+    [InlineData("2.1.294 (Claude Code)", false)]
+    [InlineData("1.0.128 (Claude Code)", false)]
+    [InlineData("Claude Code", false)]
+    [InlineData(null, false)]
+    public void ClaudeCodeOlderThanTheHooksNeedOrOfUnknownVersionWarns(string? versionOutput, bool recentEnough)
+    {
+        DoctorCheck check = ReadinessChecks.CheckClaudeVersion(versionOutput);
+
+        Assert.Equal(recentEnough ? CheckStatus.Pass : CheckStatus.Warn, check.Status);
+        if (!recentEnough)
+        {
+            Assert.Contains("2.1.295", check.Detail, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task AMissingClaudeCodeIsAWarningNotACrash()
+    {
+        DoctorCheck check = await ReadinessChecks.CheckClaudeVersionAsync(root.FullName, "lockflight-no-such-claude", TestContext.Current.CancellationToken);
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("not on PATH", check.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AMissingBashFailsWithItsFixNotACrash()
     {
         DoctorCheck check = await ReadinessChecks.CheckGitBashAsync(root.FullName, "lockflight-no-such-bash", TestContext.Current.CancellationToken);
