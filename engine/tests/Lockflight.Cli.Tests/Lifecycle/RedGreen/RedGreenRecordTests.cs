@@ -33,6 +33,26 @@ public sealed class RedGreenRecordTests : IDisposable
     }
 
     [Fact]
+    public void AnAssertionFreeTestRoundTripsAndOtherTestsReadAsAsserting()
+    {
+        string path = Path.Combine(root.FullName, ".lockflight", "features", "f1", RedGreenRecord.FileName);
+        RedGreenRecord record = new()
+        {
+            BaselineCommit = "abc",
+            BaselineAt = DateTimeOffset.UnixEpoch,
+            BaselineTests = new HashSet<string>(),
+            TestProjects = ["tests/Shop.Tests"],
+        };
+        record.Cycles.Add(new RedGreenCycle(1, DateTimeOffset.UnixEpoch, GreenAt: null,
+            [new RedGreenTest("T:A.C", "A.C", RedClass.RedStub, []) { AssertionFree = true }, new RedGreenTest("T:A.D", "A.D", RedClass.RedStub, [])]));
+        record.Save(path, "f1");
+
+        RedGreenRecord loaded = RedGreenRecord.Load(path)!;
+        Assert.Equal([true, false], loaded.Cycles[0].Tests.Select(test => test.AssertionFree));
+        Assert.DoesNotContain("\"assertionFree\": false", File.ReadAllText(path), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheBaselineExplicitTestsRoundTrip()
     {
         string path = Path.Combine(root.FullName, ".lockflight", "features", "f1", RedGreenRecord.FileName);

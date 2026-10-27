@@ -65,7 +65,7 @@ internal static partial class TestStep
             return new TestStepOutcome(new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs, $"a TRX report could not be read: {exception.Message}"), null, []) { ResultsDirectory = results };
         }
 
-        GateStep step = JudgeVSTest(testRun, reports.Length, summary, () => new KnownFailingTests(run.ProjectRoot, run.UnitPath).Load());
+        GateStep step = JudgeVSTest(testRun, reports.Length, summary, () => new KnownFailingTests(run.ProjectRoot, run.UnitPath).Load(), AppliedStopFilter(run));
         return new TestStepOutcome(step, reports.Length == 0 ? null : summary.Total, summary.FailedTests) { ResultsDirectory = results };
     }
 
@@ -74,13 +74,14 @@ internal static partial class TestStep
     /// solution without tests exits 0); a non-zero exit without a failed test means a project or test host broke, which is ERROR.
     /// A run that did not complete (a crashed test host drops its results) is ERROR and a result that timed out, was aborted or
     /// errored FAIL, both before the known-failing baseline: a baseline covers failures it can see, never results that are missing.
+    /// <paramref name="stopFilter"/> is the filter the run applied (null for none), named when nothing ran.
     /// </summary>
-    public static GateStep JudgeVSTest(ProcessResult testRun, int reportCount, TrxSummary summary, Func<IReadOnlySet<string>> knownFailures)
+    public static GateStep JudgeVSTest(ProcessResult testRun, int reportCount, TrxSummary summary, Func<IReadOnlySet<string>> knownFailures, string? stopFilter)
     {
         if (reportCount == 0)
         {
             return testRun.ExitCode == 0
-                ? new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, "no tests ran (no test project found: dotnet test wrote no TRX report)")
+                ? new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, NoTestsRan(stopFilter, "no test project found: dotnet test wrote no TRX report"))
                 : new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs, $"dotnet test exited {testRun.ExitCode} without writing a TRX report; run 'dotnet test' to see why");
         }
 
@@ -107,7 +108,9 @@ internal static partial class TestStep
         }
 
         return summary.Executed == 0
-            ? new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, "no tests ran (the TRX reports count no executed test)")
+            ? new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, NoTestsRan(stopFilter, summary.Total == 0
+                ? "the TRX reports count no test"
+                : $"the TRX reports count {summary.Total} tests and none executed: all skipped or not run"))
             : new GateStep(Name, testRun.ExitCode, Verdict.Pass, testRun.DurationMs, $"total {summary.Total}");
     }
 
@@ -150,7 +153,7 @@ internal static partial class TestStep
             return new TestStepOutcome(new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs, explanation), testsTotal, failedTests);
         }
 
-        GateStep step = JudgeTestingPlatform(testRun);
+        GateStep step = JudgeTestingPlatform(testRun, AppliedStopFilter(run));
         if (step.Verdict == Verdict.Fail && failedTests.Count > 0)
         {
             IReadOnlySet<string> known = new KnownFailingTests(run.ProjectRoot, run.UnitPath).Load();
@@ -161,33 +164,53 @@ internal static partial class TestStep
     }
 
     /// <summary>
-    /// Microsoft.Testing.Platform's exit code read with its summary. Exit 0 proves something only when a test executed: a run whose
-    /// every test was skipped also exits 0 ("Zero tests ran"), so it is NOT-EARNED, like a run without a test count.
+    /// Microsoft.Testing.Platform's exit code read with its summary. A success proves something only when the summary counts a test
+    /// that executed (succeeded or failed): a run whose every test was skipped exits 0 too ("Zero tests ran"), and a summary without
+    /// the counts says nothing, so both are NOT-EARNED. Exit 8 (zero tests) from a run in which other test applications executed
+    /// tests is judged by those tests: a filter that leaves one project with nothing to run does not void the others.
+    /// <paramref name="stopFilter"/> is the filter the run applied (null for none), named when nothing ran.
     /// </summary>
-    public static GateStep JudgeTestingPlatform(ProcessResult testRun)
+    public static GateStep JudgeTestingPlatform(ProcessResult testRun, string? stopFilter)
     {
         int? testsTotal = SumOf(TestsTotalPattern(), testRun.Output);
         Verdict verdict = Judge(testRun.ExitCode, testsTotal);
-        if (verdict == Verdict.Pass && NothingExecuted(testRun.Output))
+        if (verdict == Verdict.NotEarned || (verdict == Verdict.Pass && !ExecutedAny(testRun.Output)))
         {
-            return new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs,
-                $"no tests ran (the runner's summary counts {testsTotal} tests and none executed: all skipped or not run)");
+            return new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, NoTestsRan(stopFilter, NothingExecutedReason(testRun.Output, testsTotal)));
         }
 
-        string detail = verdict == Verdict.Error
-            ? $"dotnet test exited {testRun.ExitCode}, which is not a test verdict"
-            : testsTotal is null ? "no tests ran (no test project found, or the runner's summary was missing)" : $"total {testsTotal}";
+        if (verdict == Verdict.Error)
+        {
+            return new GateStep(Name, testRun.ExitCode, verdict, testRun.DurationMs, $"dotnet test exited {testRun.ExitCode}, which is not a test verdict");
+        }
+
+        string[] idle = [.. ZeroTestsModulePattern().Matches(testRun.Output).Select(match => Path.GetFileName(match.Groups["module"].Value.Trim())).Distinct(StringComparer.Ordinal)];
+        string detail = verdict == Verdict.Pass && idle.Length > 0 ? $"total {testsTotal}; ran no test: {string.Join(", ", idle)}" : $"total {testsTotal}";
         return new GateStep(Name, testRun.ExitCode, verdict, testRun.DurationMs, detail);
     }
 
+    /// <summary>The summary counts a test that passed or failed; a summary without the succeeded figure proves no test executed.</summary>
+    private static bool ExecutedAny(string output) =>
+        SumOf(SucceededCountPattern(), output) is int succeeded && succeeded + (SumOf(FailedCountPattern(), output) ?? 0) > 0;
+
+    private static string NothingExecutedReason(string output, int? testsTotal) => testsTotal switch
+    {
+        null => "no test project found, or the runner's summary was missing",
+        0 => "the runner's summary counts no test",
+        _ when SumOf(SucceededCountPattern(), output) is null => $"the runner's summary counts {testsTotal} tests but not how many executed",
+        _ => $"the runner's summary counts {testsTotal} tests and none executed: all skipped or not run",
+    };
+
     /// <summary>
-    /// No test passed or failed: the succeeded and failed figures of every summary add up to zero, or, in a summary without them,
-    /// the runner said "Zero tests ran".
+    /// Why a run executed no test. A stop filter that narrowed the run comes first: one that matches nothing is the likeliest cause,
+    /// and a stop gate that runs no test proves nothing.
     /// </summary>
-    private static bool NothingExecuted(string output) =>
-        SumOf(SucceededCountPattern(), output) is int succeeded
-            ? succeeded + (SumOf(FailedCountPattern(), output) ?? 0) == 0
-            : ZeroTestsRanPattern().IsMatch(output);
+    private static string NoTestsRan(string? stopFilter, string reason) => stopFilter is null
+        ? $"no tests ran ({reason})"
+        : $"no tests ran: test.stopFilter '{stopFilter}' matched no test that runs ({reason}); check the filter in lockflight.yaml";
+
+    /// <summary>The stop filter when this run applied it: the pr profile runs every test.</summary>
+    private static string? AppliedStopFilter(GateRunContext run) => run.Profile == GateProfile.PullRequest ? null : run.StopFilter;
 
     /// <summary>
     /// A VSTest-style trait condition (<c>Category!=Integration</c>, <c>Category=Fast</c>) as xUnit v3's own options; null for
@@ -232,9 +255,9 @@ internal static partial class TestStep
     private static Verdict Judge(int exitCode, int? testsTotal) => (TestPlatformExitCode)exitCode switch
     {
         // Success with no test count (no test project found, or output we cannot read) proves nothing: NOT-EARNED, never PASS.
-        TestPlatformExitCode.Success when testsTotal is null or 0 => Verdict.NotEarned,
-        TestPlatformExitCode.Success => Verdict.Pass,
-        TestPlatformExitCode.ZeroTests => Verdict.NotEarned,
+        // Exit 8 says some test application ran no test; whether any other one executed a test is read from the summary.
+        TestPlatformExitCode.Success or TestPlatformExitCode.ZeroTests when testsTotal is null or 0 => Verdict.NotEarned,
+        TestPlatformExitCode.Success or TestPlatformExitCode.ZeroTests => Verdict.Pass,
         TestPlatformExitCode.TestsFailed => Verdict.Fail,
         _ => Verdict.Error,
     };
@@ -269,6 +292,6 @@ internal static partial class TestStep
     [GeneratedRegex(@"^\s*succeeded:\s*(\d+)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex SucceededCountPattern();
 
-    [GeneratedRegex(@"^Test run summary: Zero tests ran\b", RegexOptions.Multiline)]
-    private static partial Regex ZeroTestsRanPattern();
+    [GeneratedRegex(@"^\s*(?<module>\S.*?\.dll) \([^)]*\) Zero tests ran\b", RegexOptions.Multiline)]
+    private static partial Regex ZeroTestsModulePattern();
 }

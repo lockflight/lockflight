@@ -145,7 +145,8 @@ or a **development pin** warning once a release is installed ([fix](#doctor-repo
 
 The gate could not judge, and NOT-EARNED is never a pass. The line under the step says why. Common causes:
 
-- the test run reported no test count;
+- the test run executed no test: none found, all skipped, or a `test.stopFilter` that matches nothing (the detail names the
+  filter; fix it in `lockflight.yaml`);
 - gitleaks is not installed (set `LOCKFLIGHT_GITLEAKS` or put it on `PATH`);
 - `claude` is not on `PATH` for `review`;
 - red/green found no xUnit test project (xUnit v3, or xUnit v2 on VSTest; other test frameworks get the gates only);

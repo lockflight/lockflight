@@ -41,7 +41,9 @@ Never approve for them.
    1. Declare the members the tests need with bodies `throw new NotImplementedException();`.
    2. Write the story's xUnit tests (v3 or v2), each tagged `[Trait("Requirement", "FR-001")]`, asserting the specified behaviour.
    3. `.lockflight/bin/lockflight redgreen red`. Every new test must fail because of production code: the stub's `NotImplementedException` (RED_STUB) or an assertion in a test that calls the production code (RED_ASSERT). If
-      the red is rejected, fix the tests — never weaken an assertion to make a red "work".
+      the red is rejected, fix the tests — never weaken an assertion to make a red "work". A test the output marks
+      `assertion-free` checks nothing but that the code does not throw: add an assertion on the result unless the story's
+      behaviour is the exception itself.
 
       **Optional test author.** If the agent type `lockflight-crew:test-author` is available (the `lockflight-crew` plugin
       is installed), delegate steps 2–3 for this story to it instead, in these steps; none of them may be skipped:

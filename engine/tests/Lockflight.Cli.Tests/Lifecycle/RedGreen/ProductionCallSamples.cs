@@ -2,7 +2,7 @@ using Lockflight.Cli.Lifecycle.RedGreen;
 
 namespace Lockflight.Cli.Tests.Lifecycle.RedGreen;
 
-/// <summary>Method bodies the production call scanner reads, with the engine as the production assembly.</summary>
+/// <summary>Method bodies the test code scanner reads for production calls, with the engine as the production assembly.</summary>
 public static class ProductionCallSamples
 {
     public static void CallsDirectly() => Assert.Equal("RED_STUB", RedClassNames.ToName(RedClass.RedStub));

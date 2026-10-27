@@ -5,26 +5,30 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
 /// Walks a method body's IL (ECMA-335 III) far enough to collect the metadata tokens of the methods it calls, constructs or takes a
-/// delegate to (<c>call</c>, <c>callvirt</c>, <c>newobj</c>, <c>jmp</c>, <c>ldftn</c>, <c>ldvirtftn</c>); every other operand is skipped
-/// by its size.
+/// delegate to (<c>call</c>, <c>callvirt</c>, <c>newobj</c>, <c>jmp</c>, <c>ldftn</c>, <c>ldvirtftn</c>) and to see whether it throws
+/// (<c>throw</c>, <c>rethrow</c>); every other operand is skipped by its size.
 /// </summary>
 internal static class IlInstructions
 {
     private const byte TwoBytePrefixOpCode = 0xFE;
     private const byte SwitchOpCode = 0x45;
+    private const byte ThrowOpCode = 0x7A;
+    private const byte RethrowOpCode = 0x1A;
 
     private static readonly HashSet<byte> MethodOpCodes = [0x27, 0x28, 0x6F, 0x73];
     private static readonly HashSet<byte> TwoByteMethodOpCodes = [0x06, 0x07];
 
-    public static IReadOnlyList<EntityHandle> MethodTokens(BlobReader il)
+    public static IlBody Read(BlobReader il)
     {
         List<EntityHandle> tokens = [];
+        bool throws = false;
         while (il.RemainingBytes > 0)
         {
             byte code = il.ReadByte();
             if (code == TwoBytePrefixOpCode)
             {
                 byte second = il.ReadByte();
+                throws |= second == RethrowOpCode;
                 if (TwoByteMethodOpCodes.Contains(second))
                 {
                     tokens.Add(MetadataTokens.EntityHandle(il.ReadInt32()));
@@ -44,11 +48,12 @@ internal static class IlInstructions
             }
             else
             {
+                throws |= code == ThrowOpCode;
                 il.Offset += OneByteOperandSize(code);
             }
         }
 
-        return tokens;
+        return new IlBody(tokens, throws);
     }
 
     private static int OneByteOperandSize(byte code) => code switch

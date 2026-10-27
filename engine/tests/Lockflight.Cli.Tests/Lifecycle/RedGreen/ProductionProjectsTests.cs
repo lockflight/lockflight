@@ -37,7 +37,7 @@ public sealed class ProductionProjectsTests : IDisposable
         ProductionCode production = ProductionProjects.Find(root.FullName, [App("tests/Shop.Tests", "tests/Shop.Tests/bin/Shop.Tests.dll")]);
 
         Assert.Contains(typeof(RedClassifier).FullName!, production.TypeNames);
-        Assert.Contains("Lockflight.Cli.Lifecycle.RedGreen.ProductionCallScanner", production.TypeNames);
+        Assert.Contains("Lockflight.Cli.Lifecycle.RedGreen.TestCodeScanner", production.TypeNames);
     }
 
     public void Dispose() => root.Delete(recursive: true);
