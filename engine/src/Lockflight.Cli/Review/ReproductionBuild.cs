@@ -11,7 +11,7 @@ namespace Lockflight.Cli.Review;
 /// Builds reproductions into a test project without touching its files or its build output, then runs them. The generated
 /// source and a props file live in a fresh temporary directory; the props file (passed as <c>CustomAfterMicrosoftCommonProps</c>)
 /// adds the source to that one project only and sends every project of the build to its own <c>bin/lockflight-review/</c> and
-/// <c>obj/lockflight-review/</c>, so the developer's sources, <c>bin/Debug</c> and <c>obj/Debug</c> stay as they were and a
+/// <c>obj/lockflight-review/</c> (or a review's own folder, <see cref="ReviewBuildFolder"/>), so the developer's sources, <c>bin/Debug</c> and <c>obj/Debug</c> stay as they were and a
 /// build the developer runs at the same time does not collide with it. The review output folders are kept between runs, so the
 /// next review builds incrementally. Analyzers are off and warnings stay warnings: a reproduction is judged by whether it
 /// compiles and fails, not by the project's style rules.
@@ -29,7 +29,13 @@ internal static class ReproductionBuild
     private static readonly string[] BuildProperties = ["-p:TreatWarningsAsErrors=false", "-p:WarningsAsErrors=", "-p:RunAnalyzersDuringBuild=false"];
 
     public static async Task<ReproductionBuildResult> RunAsync(
-        TestApp app, IReadOnlyList<ReproductionCandidate> candidates, IReadOnlyList<string> usings, string root, TimeSpan timeLimit, CancellationToken cancellationToken)
+        TestApp app,
+        IReadOnlyList<ReproductionCandidate> candidates,
+        IReadOnlyList<string> usings,
+        string root,
+        string outputFolder,
+        TimeSpan timeLimit,
+        CancellationToken cancellationToken)
     {
         if (TestProjectProfiles.ProjectFile(app.ProjectDirectory, app.AssemblyName) is not string project)
         {
@@ -48,7 +54,7 @@ internal static class ReproductionBuild
                 await File.WriteAllTextAsync(Path.Combine(scratch.FullName, candidate.FileName), candidate.Source, cancellationToken);
             }
 
-            await File.WriteAllTextAsync(props, Props(project, source), cancellationToken);
+            await File.WriteAllTextAsync(props, Props(project, source, outputFolder), cancellationToken);
             string isolation = $"-p:CustomAfterMicrosoftCommonProps={props}";
             if (await TargetAsync(project, app, isolation, root, cancellationToken) is not { } target)
             {
@@ -115,11 +121,11 @@ internal static class ReproductionBuild
         return source.ToString();
     }
 
-    private static string Props(string project, string source) => $"""
+    private static string Props(string project, string source, string outputFolder) => $"""
         <Project>
           <PropertyGroup>
-            <OutputPath>bin/{OutputFolder}/</OutputPath>
-            <IntermediateOutputPath>$(BaseIntermediateOutputPath){OutputFolder}/</IntermediateOutputPath>
+            <OutputPath>bin/{outputFolder}/</OutputPath>
+            <IntermediateOutputPath>$(BaseIntermediateOutputPath){outputFolder}/</IntermediateOutputPath>
           </PropertyGroup>
           <ItemGroup Condition="'$(MSBuildProjectFullPath)' == '{Escape(Path.GetFullPath(project))}'">
             <Compile Include="{Escape(source)}" />
