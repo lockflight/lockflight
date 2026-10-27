@@ -75,7 +75,7 @@ internal sealed class InitCommand(CliContext context)
             await WriteIfMissingAsync(root, Manifest.FileName, manifest, cancellationToken),
             await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, cancellationToken),
             await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), cancellationToken),
-            await TransformAsync(root, ".claude/settings.json", ClaudeSettingsMerger.Merge, cancellationToken),
+            await TransformAsync(root, ClaudeSettingsMerger.RelativePath, ClaudeSettingsMerger.Merge, cancellationToken),
         ];
         if (ci != CiTrigger.None)
         {
@@ -135,7 +135,16 @@ internal sealed class InitCommand(CliContext context)
         string toolManifest = ToolManifestWriter.RelativePathIn(root);
         string toolManifestPath = Path.Combine(root, toolManifest);
         string? tools = File.Exists(toolManifestPath) ? await File.ReadAllTextAsync(toolManifestPath, cancellationToken) : null;
-        return ToolManifestWriter.Problem(tools) is string problem ? $"{toolManifest} {problem}" : null;
+        if (ToolManifestWriter.Problem(tools) is string toolsProblem)
+        {
+            return $"{toolManifest} {toolsProblem}";
+        }
+
+        string settingsPath = Path.Combine(root, ClaudeSettingsMerger.RelativePath);
+        string? settings = File.Exists(settingsPath) ? await File.ReadAllTextAsync(settingsPath, cancellationToken) : null;
+        return ClaudeSettingsMerger.Problem(settings) is string settingsProblem
+            ? $"{ClaudeSettingsMerger.RelativePath} {settingsProblem}; fix it by hand (keep your settings) and run init again"
+            : null;
     }
 
     /// <summary>The nearest existing Lockflight project, else the current directory.</summary>

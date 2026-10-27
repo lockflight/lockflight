@@ -88,11 +88,13 @@ internal static class ReadinessChecks
         _ => new("manifest", CheckStatus.Fail, $"no {Manifest.FileName}", $"{EngineCommand.Name} init"),
     };
 
-    private static DoctorCheck CheckPin(string root) => ToolPin.ReadPinnedVersion(root) switch
+    private static DoctorCheck CheckPin(string root) => ToolPin.ReadPin(root) switch
     {
-        null => new("tool pin", CheckStatus.Fail, "dotnet-tools.json does not pin lockflight.cli", $"{EngineCommand.Name} init"),
-        string pinned when ToolPin.Matches(pinned, ToolPin.RunningVersion) => new("tool pin", CheckStatus.Pass, $"pinned {pinned}", null),
-        string pinned => new("tool pin", CheckStatus.Fail, $"pinned {pinned}, running {ToolPin.RunningVersion}", Relink(pinned)),
+        { Status: ToolPinStatus.Unreadable, Problem: string problem } =>
+            new("tool pin", CheckStatus.Fail, problem, $"fix the file by hand (a person's edit: it is protected), then {EngineCommand.Name} init"),
+        { Version: string pinned } when ToolPin.Matches(pinned, ToolPin.RunningVersion) => new("tool pin", CheckStatus.Pass, $"pinned {pinned}", null),
+        { Version: string pinned } => new("tool pin", CheckStatus.Fail, $"pinned {pinned}, running {ToolPin.RunningVersion}", Relink(pinned)),
+        _ => new("tool pin", CheckStatus.Fail, "dotnet-tools.json does not pin lockflight.cli", $"{EngineCommand.Name} init"),
     };
 
     /// <summary>
@@ -189,9 +191,15 @@ internal static class ReadinessChecks
 
     private static DoctorCheck CheckClaudeSettings(string root)
     {
-        string path = Path.Combine(root, ".claude", "settings.json");
-        JsonNode? settings = File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) : null;
-        bool enabled = settings?["enabledPlugins"]?[Templates.PluginId]?.GetValue<bool>() == true;
+        string path = Path.Combine(root, ClaudeSettingsMerger.RelativePath);
+        string? text = File.Exists(path) ? File.ReadAllText(path) : null;
+        if (ClaudeSettingsMerger.Problem(text) is string problem)
+        {
+            return new("claude settings", CheckStatus.Fail, $"{ClaudeSettingsMerger.RelativePath} {problem}", $"fix it by hand (Lockflight reads it as strict JSON: no comments or trailing commas), then {EngineCommand.Name} init");
+        }
+
+        JsonNode? settings = text is null ? null : JsonNode.Parse(text);
+        bool enabled = settings?["enabledPlugins"]?[Templates.PluginId]?.GetValueKind() == JsonValueKind.True;
         bool marketplace = settings?["extraKnownMarketplaces"]?[Templates.MarketplaceName] is not null;
         return enabled && marketplace
             ? new("claude settings", CheckStatus.Pass, "plugin enabled for the project", null)

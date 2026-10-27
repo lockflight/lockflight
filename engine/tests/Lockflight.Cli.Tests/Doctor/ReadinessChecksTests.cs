@@ -103,6 +103,43 @@ public sealed class ReadinessChecksTests : IDisposable
         Assert.Contains("Git for Windows", check.Fix, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("// team settings\n{ \"enabledPlugins\": {} }")]
+    [InlineData("""{ "enabledPlugins": { "lockflight@lockflight": "yes" } }""")]
+    [InlineData("""{ "enabledPlugins": [] }""")]
+    [InlineData("""{ "extraKnownMarketplaces": "lockflight" }""")]
+    [InlineData("""[]""")]
+    public async Task ClaudeSettingsThatCannotBeReadFailWithTheirFix(string settings)
+    {
+        Write(".claude/settings.json", settings);
+
+        DoctorCheck check = await CheckAsync("claude settings");
+
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.Contains(".claude/settings.json", check.Detail, StringComparison.Ordinal);
+        Assert.Contains("init", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ClaudeSettingsWithThePluginDisabledWarn()
+    {
+        Write(".claude/settings.json", """{ "enabledPlugins": { "lockflight@lockflight": false }, "extraKnownMarketplaces": { "lockflight": {} } }""");
+
+        Assert.Equal(CheckStatus.Warn, (await CheckAsync("claude settings")).Status);
+    }
+
+    [Fact]
+    public async Task AToolManifestOfTheWrongShapeFailsWithItsFix()
+    {
+        Write("dotnet-tools.json", """{ "version": 1, "tools": [] }""");
+
+        DoctorCheck check = await CheckAsync("tool pin");
+
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.Contains("dotnet-tools.json", check.Detail, StringComparison.Ordinal);
+        Assert.NotNull(check.Fix);
+    }
+
     [Fact]
     public void ADevelopmentPinOnNoLocalFeedAndNotInTheToolsCacheFails()
     {
