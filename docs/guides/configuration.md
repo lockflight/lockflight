@@ -44,7 +44,7 @@ gates:
 units:                          # workspace shell or monorepo; omit for a single repository
   - path: services/orders       # relative to this file, no '..'; units cannot be nested
     build: Orders.sln           # optional: the solution or project to build (default: the one in the directory)
-    kind: auto                  # auto | dotnet | none  (none: guarded, not built — e.g. a TypeScript or gitops repo for now)
+    kind: auto                  # auto | dotnet | none  (none: guarded, not built — e.g. a TypeScript or gitops repository)
     test:
       framework: net8.0         # this unit's test target framework
       stopFilter: "Category!=Integration"   # tests the stop gate skips (they still run in the pr profile)

@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## What this repo is
 
-**Lockflight** — gated, spec-driven delivery for Claude Code agents (.NET first): a Claude Code plugin, a C# Native AOT
+**Lockflight** — gated, spec-driven delivery for Claude Code agents on .NET: a Claude Code plugin, a C# Native AOT
 engine and a Spec Kit preset. Alpha.
 
 - [`docs/architecture.md`](docs/architecture.md) explains the parts and the principles. Read the relevant section before

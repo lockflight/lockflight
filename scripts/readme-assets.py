@@ -100,12 +100,29 @@ def banner(dark):
         f'<circle cx="1010" cy="200" r="250" fill="none" stroke="{ring}" stroke-opacity="0.18" stroke-width="2"/>'
         f'<text x="88" y="168" font-family="{FONT}" font-size="96" font-weight="800" letter-spacing="-3" fill="{title}">Lockflight</text>'
         f'<text x="92" y="232" font-family="{FONT}" font-size="38" font-weight="700" fill="{accent}">LLMs propose. Checks decide.</text>'
-        f'<text x="92" y="288" font-family="{FONT}" font-size="22" fill="{body}">Gated, spec-driven delivery for Claude Code agents. .NET first.</text>'
+        f'<text x="92" y="288" font-family="{FONT}" font-size="22" fill="{body}">Gated, spec-driven delivery for Claude Code agents on .NET.</text>'
         f'<g shape-rendering="crispEdges">{rects("pass", 850, 70, 15)}</g></svg>\n')
 
 
 write("banner-dark.svg", banner(True))
 write("banner-light.svg", banner(False))
+
+
+def social_preview():
+    """The repository's social preview (1280x640), rendered to social-preview.png by a headless browser."""
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">'
+        '<defs><radialGradient id="s1" cx="0%" cy="100%" r="80%"><stop offset="0" stop-color="#14808F" stop-opacity="0.55"/><stop offset="1" stop-color="#14808F" stop-opacity="0"/></radialGradient>'
+        '<radialGradient id="s2" cx="85%" cy="0%" r="60%"><stop offset="0" stop-color="#F2A33A" stop-opacity="0.35"/><stop offset="1" stop-color="#F2A33A" stop-opacity="0"/></radialGradient></defs>'
+        '<rect width="1280" height="640" fill="#0B1822"/><rect width="1280" height="640" fill="url(#s1)"/><rect width="1280" height="640" fill="url(#s2)"/>'
+        '<circle cx="1010" cy="320" r="250" fill="none" stroke="#7FE3EC" stroke-opacity="0.18" stroke-width="2"/>'
+        f'<text x="88" y="288" font-family="{FONT}" font-size="96" font-weight="800" letter-spacing="-3" fill="#FFFFFF">Lockflight</text>'
+        f'<text x="92" y="352" font-family="{FONT}" font-size="38" font-weight="700" fill="#7FE3EC">LLMs propose. Checks decide.</text>'
+        f'<text x="92" y="408" font-family="{FONT}" font-size="22" fill="#B7C9D1">Gated, spec-driven delivery for Claude Code agents on .NET.</text>'
+        f'<g shape-rendering="crispEdges">{rects("pass", 850, 190, 15)}</g></svg>\n')
+
+
+write("social-preview.svg", social_preview())
 
 
 def flight(dark):
