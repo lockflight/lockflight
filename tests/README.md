@@ -1,7 +1,12 @@
 # Cross-component tests
 
-Black-box harnesses that run a built engine (and, where noted, the plugin's hook shim) from the outside. Unit tests live next
-to the engine in [`engine/tests/`](../engine/tests/) and run with `dotnet test`.
+Black-box harnesses that run a built engine (and, where noted, the plugin's hook shim) from the outside. This page is for
+contributors who run or extend them.
+
+> [!NOTE]
+> Unit tests live next to the engine in [`engine/tests/`](../engine/tests/) and run with `dotnet test`.
+
+## Suites
 
 | Suite | What it checks | Runs in |
 |---|---|---|
@@ -14,8 +19,17 @@ to the engine in [`engine/tests/`](../engine/tests/) and run with `dotnet test`.
 | [`benchmark/crew/run.sh`](benchmark/crew/run.sh) | The crew's test author against a plain agent on seeded stories: red accepted and on which attempt, compile reds and other rejections, rounds, wall time, tokens, cost ([README](benchmark/crew/README.md)) | manually; costs real model usage |
 | [`canary/run.sh`](canary/run.sh) | A real headless Claude Code session with the plugin: an ordinary write succeeds, a protected file edit and a Bash redirect into a protected path are blocked | scheduled `canary` workflow (needs a token) |
 
+## Run them locally
+
+Publish the engine once, then point each suite at it:
+
 ```sh
 cd engine && dotnet publish src/Lockflight.Cli -c Release -o ../artifacts/engine && cd ..
 ENGINE=$PWD/artifacts/engine/lockflight sh tests/compat/probe-suite.sh
 ENGINE=$PWD/artifacts/engine/lockflight bash tests/e2e/lifecycle.sh /tmp/lockflight-lifecycle
 ```
+
+## Next
+
+- [Contributing](../CONTRIBUTING.md#build-and-test): the full build and test sequence before a pull request
+- [Samples](../samples/README.md): the fixtures these suites run on

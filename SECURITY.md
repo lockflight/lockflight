@@ -6,9 +6,12 @@ that a pull request can change.
 
 ## Reporting
 
-Report privately through
-[GitHub's private vulnerability reporting](https://github.com/lockflight/lockflight/security/advisories/new). Please
-don't open a public issue. Include the Lockflight version (`dotnet lockflight version`), your OS, and a minimal reproduction.
+> [!IMPORTANT]
+> Report privately through
+> [GitHub's private vulnerability reporting](https://github.com/lockflight/lockflight/security/advisories/new). Please
+> don't open a public issue.
+
+Include the Lockflight version (`dotnet lockflight version`), your OS, and a minimal reproduction.
 You can expect an acknowledgement within a week.
 
 ## Scope
