@@ -152,6 +152,11 @@ internal sealed class AdoptCommand(CliContext context)
             await UpgradeSpecKitAsync(manifest.Root, options.Value("--speckit-preset"), done, manual, cancellationToken);
         }
 
+        if (plan.Items.Any(item => item is { Area: AdoptionArea.SpecKit, Action: AdoptionAction.Add }) && !options.Flag("--skip-speckit"))
+        {
+            await AddSpecKitPresetAsync(manifest.Root, options.Value("--speckit-preset"), done, manual, cancellationToken);
+        }
+
         return null;
     }
 
@@ -182,14 +187,35 @@ internal sealed class AdoptCommand(CliContext context)
         return ExitCode.Fail;
     }
 
+    /// <summary>A Spec Kit newer than the pinned one keeps its files; only the Lockflight preset is installed into it.</summary>
+    private static async Task AddSpecKitPresetAsync(string root, string? preset, List<string> done, List<string> manual, CancellationToken cancellationToken)
+    {
+        string installed = SpecKitUpgrade.InstalledVersion(root) ?? "?";
+        if (preset is null)
+        {
+            manual.Add($"Spec Kit {installed} is newer than {SetupInventory.PinnedSpecKitVersion} and was kept as it is. Install the preset: uvx --from {SpecKitSources.PackageName}=={installed} specify preset add --dev <plugin>/speckit-preset (or pass --speckit-preset)");
+            return;
+        }
+
+        (string? problem, string? source) = await SpecKitUpgrade.AddPresetOnlyAsync(root, Path.GetFullPath(preset), cancellationToken);
+        if (problem is not null)
+        {
+            manual.Add($"Spec Kit {installed} was kept as it is, but {problem}");
+            return;
+        }
+
+        done.Add($"Spec Kit {installed} kept as it is (newer than {SetupInventory.PinnedSpecKitVersion}, not downgraded); Lockflight preset installed{(source is null ? string.Empty : $" with Spec Kit {source}")}");
+    }
+
     private static async Task UpgradeSpecKitAsync(string root, string? preset, List<string> done, List<string> manual, CancellationToken cancellationToken)
     {
         string installed = SpecKitUpgrade.InstalledVersion(root) ?? "?";
-        (SpecKitMergeResult? result, string? problem, string? comparedWith) = await SpecKitUpgrade.RunAsync(root, preset is null ? null : Path.GetFullPath(preset), cancellationToken);
+        (SpecKitMergeResult? result, string? problem, string? comparedWith, string? sources) = await SpecKitUpgrade.RunAsync(root, preset is null ? null : Path.GetFullPath(preset), cancellationToken);
         if (result is not null)
         {
             string basis = comparedWith is not null && comparedWith != installed ? $" (your {installed} compared with the stock {comparedWith})" : string.Empty;
-            done.Add($"Spec Kit {SetupInventory.PinnedSpecKitVersion}: {result.Upgraded.Count} files upgraded, {result.Added.Count} added{basis}");
+            string origin = sources is null ? string.Empty : $"; stock {sources}";
+            done.Add($"Spec Kit {SetupInventory.PinnedSpecKitVersion}: {result.Upgraded.Count} files upgraded, {result.Added.Count} added{basis}{origin}");
             string[] kept = [.. result.Customised.Except(result.ReplacedByPreset, StringComparer.Ordinal)];
             if (kept.Length > 0)
             {
