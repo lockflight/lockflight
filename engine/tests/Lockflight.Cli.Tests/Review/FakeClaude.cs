@@ -11,6 +11,9 @@ internal sealed class FakeClaude
 
     public List<IReadOnlyList<string>> Calls { get; } = [];
 
+    /// <summary>The prompt of each <c>-p</c> call, read from its standard input file.</summary>
+    public List<string> Prompts { get; } = [];
+
     /// <summary>Queues a review answering with these findings (JSON objects of the review schema).</summary>
     public FakeClaude Answers(params string[] findings)
     {
@@ -25,6 +28,11 @@ internal sealed class FakeClaude
         string fileName, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeLimit, string? standardInputPath, CancellationToken cancellationToken)
     {
         Calls.Add(arguments);
+        if (standardInputPath is not null)
+        {
+            Prompts.Add(File.ReadAllText(standardInputPath));
+        }
+
         string output = arguments is ["--version"] ? Version : reviews.Dequeue();
         return Task.FromResult(new ProcessResult(0, output, string.Empty, 10, TimedOut: false));
     }
