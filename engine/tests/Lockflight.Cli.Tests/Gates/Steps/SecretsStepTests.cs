@@ -6,7 +6,7 @@ using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Tests.Gates.Steps;
 
-// These run gitleaks itself (LOCKFLIGHT_GITLEAKS or PATH; CI installs the pinned release on Linux) and skip where it is absent.
+// These run gitleaks itself (LOCKFLIGHT_GITLEAKS or PATH; CI installs the pinned release on every runner) and skip where it is absent.
 public sealed class SecretsStepTests : IDisposable
 {
     // A Slack bot token shape gitleaks' default rules recognise; not a real token, and split so this file itself does not match.

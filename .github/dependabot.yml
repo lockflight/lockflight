@@ -1,3 +1,7 @@
+# Not covered here on purpose:
+# - samples/**: fixed test projects that the end-to-end suites build (one deliberately on net8.0 with xUnit v2 on VSTest).
+#   Upgrading them would change what those suites exercise, so they move only by hand, together with the tests.
+# - gitleaks, shellcheck and Claude Code in the workflows: pinned by version and checksum in the workflow files, bumped by hand.
 version: 2
 updates:
   - package-ecosystem: github-actions
