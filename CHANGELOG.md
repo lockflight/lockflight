@@ -12,6 +12,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A benchmark of the test author against a plain agent on seeded stories (`tests/benchmark/crew/`).
 
 ### Changed
+- The documentation has a home page organised by task, an "On this page" list on long guides, "Next" links at the end of
+  each, and diagrams of the hook flow, guardrails and boundaries, and the workspace shell sample.
 - `lockflight review` uses `opus` by default (it leads public coding benchmarks among Claude models) with a `3.00` budget;
   `--model` and `--budget` still override both.
 

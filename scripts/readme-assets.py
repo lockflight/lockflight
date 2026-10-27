@@ -185,4 +185,141 @@ write("demo-terminal-animated.svg",
       '<rect width="1040" height="300" rx="16" fill="#0B1822"/>'
       '<circle cx="28" cy="26" r="7" fill="#C9483B"/><circle cx="50" cy="26" r="7" fill="#F2A33A"/><circle cx="72" cy="26" r="7" fill="#2F8F5B"/>'
       + "".join(body) + "</svg>\n")
+# Diagrams for the guides: light and dark variants, shown through <picture>.
+def theme(dark):
+    return {"bg": "#0B1822", "ink": "#E6EEF2", "muted": "#9FB2BC", "line": "#24384A", "card": "#10222F", "teal": "#7FE3EC",
+            "fill": 0.22} if dark else {"bg": "#FFFFFF", "ink": "#0E1F2B", "muted": "#4A5A64", "line": "#D5DEE2",
+                                         "card": "#F4F7F6", "teal": "#0E6E7B", "fill": 0.12}
+
+
+def esc(text):
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def text(x, y, value, color, size=15, weight=400, anchor="start", font=FONT):
+    return (f'<text x="{x}" y="{y}" text-anchor="{anchor}" font-family="{font}" font-size="{size}" font-weight="{weight}" '
+            f'fill="{color}">{esc(value)}</text>')
+
+
+def card(t, x, y, w, h, color, title, lines, mono=()):
+    """A rounded card with a coloured top bar, a bold title and centred lines (indexes in mono use the monospace font)."""
+    out = [f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="10" fill="{color}" fill-opacity="{t["fill"]}"/>',
+           f'<rect x="{x}" y="{y}" width="{w}" height="6" rx="3" fill="{color}"/>',
+           text(x + w / 2, y + 32, title, t["ink"], 18, 700, "middle")]
+    for i, value in enumerate(lines):
+        out.append(text(x + w / 2, y + 56 + i * 20, value, t["muted"], 13 if i in mono else 14, 400, "middle", MONO if i in mono else FONT))
+    return "".join(out)
+
+
+def arrow(x1, y1, x2, y2, color, dashed=False):
+    dash = ' stroke-dasharray="5 5"' if dashed else ""
+    return (f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="2.5"{dash} '
+            f'marker-end="url(#head)"/>')
+
+
+def head(color):
+    return (f'<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">'
+            f'<path d="M0 0L10 5L0 10z" fill="{color}"/></marker></defs>')
+
+
+def hook_flow(dark):
+    t = theme(dark)
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="340" viewBox="0 0 1040 340" role="img">',
+             '<title>A hook call: Claude Code runs the hook shim, the shim runs the pinned engine, and the engine allows with exit 0 '
+             'or blocks with exit 2</title>', head(t["muted"]),
+             f'<rect width="1040" height="340" rx="20" fill="{t["bg"]}" stroke="{t["line"]}"/>',
+             card(t, 30, 40, 220, 140, "#14808F", "Claude Code", ["SessionStart · PreToolUse", "UserPromptExpansion", "Stop"]),
+             arrow(252, 110, 286, 110, t["muted"]),
+             card(t, 290, 40, 220, 140, "#14808F", "Hook shim", ["lockflight-hook", "finds the project from", "CLAUDE_PROJECT_DIR"], (0, 2)),
+             arrow(512, 110, 546, 110, t["muted"]),
+             card(t, 550, 40, 220, 140, "#F2A33A", "Engine", [".lockflight/bin/lockflight", "the pinned version", "makes every decision"], (0,)),
+             arrow(772, 90, 806, 72, t["muted"]), arrow(772, 130, 806, 148, t["muted"]),
+             card(t, 810, 30, 200, 76, "#2F8F5B", "Allow", ["exit 0"]),
+             card(t, 810, 114, 200, 76, "#C9483B", "Block", ["exit 2, reason on stderr"]),
+             arrow(360, 182, 250, 226, t["muted"], True), arrow(440, 182, 560, 226, t["muted"], True),
+             card(t, 60, 230, 340, 80, "#5B6B75", "No lockflight.yaml", ["does nothing: harmless in other projects"]),
+             card(t, 430, 230, 580, 80, "#C9483B", "Engine missing or stale, configuration unreadable",
+                  ["recovery mode: reads and the exact restore command only"]),
+             "</svg>\n"]
+    return "".join(parts)
+
+
+write("hook-flow-light.svg", hook_flow(False))
+write("hook-flow-dark.svg", hook_flow(True))
+
+
+def trust(dark):
+    t = theme(dark)
+    left = ["The guard on protected paths", "The Stop gate", "Red/green evidence and the trace", "The review of record",
+            "Approvals recorded locally"]
+    right = ["CI with the base branch's policy, as a required check", "Presence-gated signed approvals, verified in CI",
+             "Merge, when the agent has its own identity"]
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="400" viewBox="0 0 1040 400" role="img">',
+             '<title>Guardrails run on your machine, where the agent has your credentials; boundaries are decided outside the '
+             'agent\'s reach</title>', head(t["muted"]),
+             f'<rect width="1040" height="400" rx="20" fill="{t["bg"]}" stroke="{t["line"]}"/>',
+             f'<rect x="30" y="30" width="440" height="340" rx="14" fill="{t["card"]}" stroke="#F2A33A" stroke-width="2"/>',
+             text(56, 70, "Guardrails", t["ink"], 24, 800), text(56, 96, "On your machine, with your credentials", t["muted"], 15),
+             text(56, 118, "They prevent accidents; a determined agent can get around them.", t["muted"], 13),
+             f'<rect x="570" y="30" width="440" height="340" rx="14" fill="{t["card"]}" stroke="#14808F" stroke-width="2"/>',
+             text(596, 70, "Boundaries", t["ink"], 24, 800), text(596, 96, "Outside the agent's reach", t["muted"], 15),
+             text(596, 118, "They hold even against a determined agent.", t["muted"], 13)]
+    for i, value in enumerate(left):
+        y = 140 + i * 44
+        parts.append(f'<rect x="56" y="{y}" width="388" height="34" rx="8" fill="#F2A33A" fill-opacity="{t["fill"]}"/>')
+        parts.append(text(72, y + 22, value, t["ink"], 15))
+    for i, value in enumerate(right):
+        y = 140 + i * 44
+        parts.append(f'<rect x="596" y="{y}" width="388" height="34" rx="8" fill="#14808F" fill-opacity="{t["fill"]}"/>')
+        parts.append(text(612, y + 22, value, t["ink"], 15))
+    parts.append(f'<line x1="520" y1="40" x2="520" y2="360" stroke="{t["muted"]}" stroke-opacity="0.6" stroke-width="2" stroke-dasharray="6 6"/>')
+    parts.append(f'<rect x="478" y="170" width="84" height="22" fill="{t["bg"]}"/>')
+    parts.append(text(520, 186, "pull request", t["muted"], 13, 600, "middle"))
+    parts.append(arrow(476, 206, 562, 206, t["muted"]))
+    parts.append(f'<g shape-rendering="crispEdges">{rects("on-duty", 908, 286, 4)}</g>')
+    parts.append(text(520, 386, "the agent's reach ends here", t["muted"], 12, 400, "middle"))
+    parts.append("</svg>\n")
+    return "".join(parts)
+
+
+write("guardrails-boundaries-light.svg", trust(False))
+write("guardrails-boundaries-dark.svg", trust(True))
+
+
+def shell_layout(dark):
+    t = theme(dark)
+    files = [("CLAUDE.md, NOTES.md", "the team's instructions"), (".claude/", "six hooks, a reviewer agent, skills"),
+             (".specify/", "Spec Kit 1.1.0, customised"), ("specs/", "three features, two share 002")]
+    units = [("services/orders", ".NET 8 · xUnit v2 on VSTest", "Orders.sln"),
+             ("services/billing", ".NET 10 · xUnit v3 on MTP", "Billing.slnx · global.json"),
+             ("web/admin", "TypeScript", "package.json")]
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="400" viewBox="0 0 1040 400" role="img">',
+             '<title>The workspace shell sample: a root repository with the team\'s setup, and three service repositories '
+             'beneath it that the shell ignores</title>',
+             f'<rect width="1040" height="400" rx="20" fill="{t["bg"]}" stroke="{t["line"]}"/>',
+             f'<rect x="30" y="30" width="980" height="340" rx="14" fill="{t["card"]}" stroke="#14808F" stroke-width="2"/>',
+             text(56, 68, "Shell repository", t["ink"], 22, 800),
+             text(56, 92, "the root, where Claude Code starts", t["muted"], 14)]
+    for i, (name, note) in enumerate(files):
+        y = 124 + i * 58
+        parts.append(f'<rect x="56" y="{y}" width="400" height="46" rx="8" fill="#14808F" fill-opacity="{t["fill"]}"/>')
+        parts.append(text(72, y + 20, name, t["ink"], 15, 700, font=MONO))
+        parts.append(text(72, y + 38, note, t["muted"], 13))
+    parts.append(text(500, 68, "Service repositories beneath it", t["ink"], 18, 700))
+    parts.append(text(500, 92, "each its own git repository, ignored by the shell", t["muted"], 14))
+    for i, (path, stack, build) in enumerate(units):
+        y = 112 + i * 84
+        parts.append(f'<rect x="500" y="{y}" width="484" height="72" rx="10" fill="#F2A33A" fill-opacity="{t["fill"]}"/>')
+        parts.append(f'<rect x="500" y="{y}" width="6" height="72" rx="3" fill="#F2A33A"/>')
+        parts.append(text(522, y + 26, path, t["ink"], 16, 700, font=MONO))
+        parts.append(text(522, y + 48, stack, t["muted"], 14))
+        parts.append(text(966, y + 26, build, t["muted"], 13, 400, "end", MONO))
+        parts.append(text(966, y + 48, ".git", t["teal"], 13, 700, "end", MONO))
+    parts.append("</svg>\n")
+    return "".join(parts)
+
+
+write("workspace-shell-light.svg", shell_layout(False))
+write("workspace-shell-dark.svg", shell_layout(True))
+
 print("ok", sorted(os.listdir(OUT)))

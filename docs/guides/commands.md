@@ -1,5 +1,13 @@
 # Commands
 
+Every `lockflight` command, its options and its exit codes: a reference for the person running Lockflight and for anyone
+reading what the agent ran.
+
+**On this page:** [Running the engine](#running-the-engine) · [Setup](#setup) · [Gates](#gates) ·
+[Lifecycle](#lifecycle-standard-profile) · [Human decisions](#human-decisions) · [CI](#ci) · [Exit codes](#exit-codes)
+
+## Running the engine
+
 In a project that is set up, run every command as `.lockflight/bin/lockflight <command>` from the project root (the directory
 holding `lockflight.yaml`). That is the engine the hooks run: `init`, `link` and `update` keep it at the pinned version, it works
 whatever way Lockflight was installed, and it needs no package feed (on Windows, Git Bash finds `lockflight.exe` by this name).
@@ -8,6 +16,7 @@ source) or `dotnet lockflight` (the tool pin, also what CI and teammates who res
 the same list.
 
 Commands that take `--feature <id>` resolve the feature in this order:
+
 1. the explicit `--feature`;
 2. Spec Kit's `.specify/feature.json` (a malformed file is an error, not a fallback);
 3. the only feature, when there is exactly one.
@@ -60,18 +69,21 @@ Profiles and steps are described in the [configuration reference](configuration.
 | `redgreen red [--feature <id>]` | Refused while the spec or tasks approval is stale (as is `green`). Builds, finds the new tests, runs them and classifies each failure. A cycle is accepted only when every new test fails in production code (RED_STUB or RED_ASSERT). It is refused when a known test was skipped or marked `Explicit` since the baseline. New tests that pass are re-run to tell FLAKY from GREEN_BEFORE: at most four batched re-runs, all inside the red's `gates.timeoutSeconds` budget. If the budget runs out, the remaining tests stay GREEN_BEFORE and the red is still rejected, because a test that passes before the code exists rejects the red either way. |
 | `redgreen green [--feature <id>]` | The cycle's tests pass (they run first; if any still fails, green stops without running the suite), nothing else broke, and no tests were deleted, newly skipped or newly marked `Explicit`. Explicit tests are read from the runner's listing, because a normal run reports them as not run. The full run must also be complete: a runner that crashed or timed out, or a report missing known tests, rejects the green. |
 | `redgreen status [--feature <id>]` | Shows the cycles and whether tests are locked. |
-
-A red/green step whose tools cannot build-and-list, list or run the tests ends ERROR (exit 3): that says nothing about the
-tests. A build that fails is a verdict (FAIL, or COMPILE_RED for a red).
 | `trace [--feature <id>]` | A Markdown matrix of each requirement and the tests that went red, then green, for it. It builds and lists the current tests (it runs none). A test counts only while it still exists, still names the requirement, and is neither skipped nor explicit. A requirement whose last such test is gone fails the trace. If the build fails, the trace is NOT-EARNED. A stale spec or tasks approval prints a warning line. |
 | `review [--feature <id>] [--base <ref>] [--model <name>] [--budget <usd>]` | Review of record (defaults `main`, `opus`, `3.00`: the review uses the strongest coding model; pass `--model` and `--budget` to change them). Exit codes: 1 when a finding is confirmed, 5 when a blocker or major finding is unverified. |
 | `ledger retro [--days 30] [--min 2]` | Recurring incidents from the local ledger, each with a suggested remedy. |
 | `propose <path> (--from <file> \| --delete) [<path> …]` | Proposes a change the agent may not make itself, such as an edit to a protected file. `<path>` is a project file (existing or new, protected or not); `--from` names a file outside the protected paths (typically the agent's scratch directory) that holds its complete new content, and `--delete` proposes removing it. Several pairs may be given; each file gets its own git patch in `.lockflight/local/proposals/<yyyyMMdd-HHmmss>-<name>.patch` (git-ignored), with `a/` and `b/` paths relative to the project root and line endings kept. For each it prints whether the file is protected and by which rule, a **high risk** flag for build configuration (`*.props`, `*.targets`, project files), analyzer and code-style policy, Claude Code hooks and settings, CI workflows, NuGet configuration, `global.json` and Lockflight's own policy, a diffstat, and the command for you: `git apply --check <patch> && git apply <patch>`, run at the project root. It applies nothing. Symbolic links are resolved first, so the patch names the real file (and its rule), and on a case-insensitive file system the stored spelling. It refuses (exit 4, no patch written) a path outside the project or inside `.git`, a name with a control character, a `--from` file inside a protected path (also through a link), binary content, a file larger than 8 MB on either side, content identical to the file, and a proposals directory that is a symbolic link or a file. If one pair is refused, no patch is written for any. The ledger records `proposal.created` with the path and rule, never the content. The agent runs it; the guard still blocks the agent's own `git apply`. |
 
+A red/green step whose tools cannot build-and-list, list or run the tests ends ERROR (exit 3): that says nothing about the
+tests. A build that fails is a verdict (FAIL, or COMPILE_RED for a red).
+
 ## Human decisions
 
-These refuse to run inside a Claude Code session (exit 2), and that includes a `!` command typed in Claude Code. Run them
-in a separate terminal window, not with `!` in Claude Code (a `!` command runs inside the session and is refused). The refusal prints the exact line to copy, for example
+> [!IMPORTANT]
+> These refuse to run inside a Claude Code session (exit 2), and that includes a `!` command typed in Claude Code. Run them
+> in a separate terminal window.
+
+A `!` command runs inside the session and is refused. The refusal prints the exact line to copy, for example
 `cd '/path/to/project' && .lockflight/bin/lockflight approve spec`. A spec or tasks approval can also be given in the session
 by typing `/lockflight:approve` (below).
 
@@ -108,3 +120,9 @@ Files the team customised (the constitution, an edited template or skill) are ke
 | 3 | ERROR: the engine or a tool it ran broke (including a tool that is not on PATH). This is not a verdict about the code |
 | 4 | configuration: invalid command line (unknown option, missing value), manifest or target |
 | 5 | NOT-EARNED: nothing to judge, for example zero tests. Never a pass |
+
+## Next
+
+- [Configuration reference](configuration.md): the manifest, gate profiles and baselines these commands read
+- [Plugin skills](skills.md): the skills that run these commands for you
+- [Troubleshooting](troubleshooting.md): what to do when a command or a hook blocks

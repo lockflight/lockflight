@@ -1,9 +1,20 @@
 # Configuration reference
 
+What you can set in `lockflight.yaml`, which paths are always protected, how gate profiles judge a change, and the files and
+variables around them. For the person who owns a project's policy.
+
+**On this page:** [`lockflight.yaml`](#lockflightyaml) · [Built-in protected paths](#built-in-protected-paths) ·
+[Gate profiles](#gate-profiles) · [The format step](#the-format-step-judges-the-change-not-the-file) ·
+[Baselines](#baselines-brownfield-adoption-human-only) · [Lifecycle commands](#lifecycle-commands-standard-profile) ·
+[Environment variables](#environment-variables)
+
 ## `lockflight.yaml`
 
-Strict YAML: unknown keys and wrong types are errors with a position. The file is protected — the agent cannot edit it; change it
-yourself and commit. In CI, pull requests are judged with the **base branch's** copy.
+Strict YAML: unknown keys and wrong types are errors with a position. In CI, pull requests are judged with the **base
+branch's** copy.
+
+> [!NOTE]
+> The file is protected — the agent cannot edit it; change it yourself and commit.
 
 ```yaml
 version: 1                      # optional; when present it must be 1
@@ -121,8 +132,16 @@ These always apply; `protected:` can add paths but never remove these.
 | `stop` | format → build (no new warnings vs baseline) → test | end of an agent turn |
 | `pr` | policy.protected → stop steps (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
 
-Verdicts and exit codes: `PASS` 0 (also a run in which every step was `N/A`) · `FAIL` 1 · blocked 2 (a hook, or a human-only command in an agent session) · `ERROR` 3 · configuration 4 · `NOT-EARNED` 5 (nothing was judged —
-for example zero tests ran or gitleaks is missing; treat it as not passing).
+Verdicts and exit codes:
+
+| | Verdict | Exit | Meaning |
+|:---:|---|:---:|---|
+| <img src="../assets/levi-pass.svg" alt="Levi raising a green flag" width="44"> | `PASS` | 0 | also a run in which every step was `N/A` |
+| <img src="../assets/levi-fail.svg" alt="Levi raising a red flag" width="44"> | `FAIL` | 1 | |
+| <img src="../assets/levi-blocked.svg" alt="Levi behind a lowered barrier" width="44"> | blocked | 2 | a hook, or a human-only command in an agent session |
+| | `ERROR` | 3 | |
+| | configuration | 4 | |
+| <img src="../assets/levi-not-earned.svg" alt="Levi with a question mark" width="44"> | `NOT-EARNED` | 5 | nothing was judged — for example zero tests ran or gitleaks is missing; treat it as not passing |
 
 A step can also be `N/A`: it does not apply to this run (coverage not configured or too few changed lines, no changed C# lines
 for `format`, no `--base` for `policy.protected`). N/A neither passes nor blocks; the run's verdict is that of its last step
@@ -177,3 +196,9 @@ Evidence lives in `.lockflight/features/<feature>/` (approvals, `redgreen.json`,
 | `LOCKFLIGHT_GITLEAKS` | path to the gitleaks binary (else PATH) |
 | `LOCKFLIGHT_DEBUG` | hooks print path-matching diagnostics to stderr |
 | `LOCKFLIGHT_HOOK_LOG` | append every raw hook payload to this file |
+
+## Next
+
+- [Commands](commands.md): every command and option
+- [CI hardening](ci-hardening.md): how CI reads this policy from the base branch
+- [Troubleshooting](troubleshooting.md): when a gate fails or says `NOT-EARNED`

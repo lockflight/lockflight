@@ -1,7 +1,18 @@
 # Troubleshooting
 
-Start with `.lockflight/bin/lockflight doctor` from the project root (or ask Claude to run the `lockflight:doctor` skill). Every `FAIL` or `warn` line has a
-fix after the `→`.
+Fixes for the messages and blocks you are most likely to meet, grouped by what you see.
+
+> [!TIP]
+> Start with `.lockflight/bin/lockflight doctor` from the project root (or ask Claude to run the `lockflight:doctor` skill).
+> Every `FAIL` or `warn` line has a fix after the `→`.
+
+| You see | Go to |
+|---|---|
+| Every tool call or every write is blocked | [engine not installed](#every-tool-call-is-blocked-engine-not-installed-in-this-project) · [lockdown](#every-write-is-blocked-the-project-is-in-lockdown) · [after editing `lockflight.yaml`](#writes-are-blocked-after-editing-lockflightyaml) · [engine and pin differ](#running-engine-x-but-the-project-pins-y) · [internal error](#lockflight-internal-error-or-the-engine-failed-exit-n) |
+| One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a shell command after `cd`](#a-shell-command-is-blocked-after-a-cd) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
+| Install and versions | [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
+| A gate result | [`NOT-EARNED`](#a-gate-says-not-earned) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
+| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) |
 
 ## Every tool call is blocked: "engine not installed in this project"
 
@@ -103,6 +114,8 @@ gh auth refresh -s read:packages
 
 ## A gate says NOT-EARNED
 
+<img src="../assets/levi-not-earned.svg" alt="Levi with a question mark" width="88" align="right">
+
 The gate could not judge, and NOT-EARNED is never a pass. The line under the step says why. Common causes:
 
 - the test run reported no test count;
@@ -162,3 +175,9 @@ command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approv
 2. `dotnet tool uninstall Lockflight.Cli`.
 3. Remove `lockflight.yaml`, `.lockflight/`, `.github/workflows/lockflight-gates.yml` and the Lockflight entries in
    `.claude/settings.json` and `.gitignore`.
+
+## Next
+
+- [Commands](commands.md#exit-codes): what each exit code means
+- [Guardrails and boundaries](guardrails-and-boundaries.md#what-the-shell-write-detection-sees): what the guard blocks, and why
+- [Report a bug](../../CONTRIBUTING.md) or [a way around a control](../../SECURITY.md)
