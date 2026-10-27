@@ -136,6 +136,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
     [Fact]
     public async Task APhaseCheckShowsAFeatureNameWithoutItsEscapes()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows does not allow control characters in directory names.");
         WriteManifest();
         string feature = $"001-x{Escape}[8m";
         Directory.CreateDirectory(Path.Combine(root.FullName, "specs", feature));

@@ -43,6 +43,8 @@ public sealed class ShellLiteralVariableTests
 
     [Theory]
     [InlineData("echo x > $S/f")]
+    [InlineData("S=C:\\\\proj; echo x > $S/f")]
+    [InlineData("S=C:proj; echo x > $S/f")]
     [InlineData("S=$(mktemp -d); echo x > $S/f")]
     [InlineData("S=/tmp; S=$(pwd); echo x > $S/f")]
     [InlineData("S=/tmp; S=`pwd`; echo x > $S/f")]

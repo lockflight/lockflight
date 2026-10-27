@@ -71,7 +71,7 @@ internal static class HookInventory
             path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), path[2..]);
         }
 
-        return path.Length > 0 && Path.IsPathRooted(path) && File.Exists(path) ? path : null;
+        return path.Length > 0 && Path.IsPathRooted(path) && File.Exists(path) ? Path.GetFullPath(path) : null;
     }
 
     /// <summary>Up to <paramref name="count"/> leading shell words, with quotes removed (variables are left as written).</summary>

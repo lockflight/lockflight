@@ -33,11 +33,19 @@ internal sealed partial record ShellAssignment(string Name, string? Value, bool 
         return new ShellAssignment(name, plain && IsLiteral(value) ? value : null, expanded);
     }
 
-    /// <summary>Text a variable can be replaced by without changing how the word splits, globs or expands.</summary>
+    /// <summary>
+    /// Text a variable can be replaced by without changing how the word splits, globs or expands. A drive-relative value
+    /// (<c>C:dir</c>, what <c>C:\dir</c> becomes once the shell removes its backslashes) is not: Git Bash and Windows resolve it
+    /// against a per-drive current directory the guard does not know.
+    /// </summary>
     private static bool IsLiteral(string value) =>
         value.Length > 0
         && value.AsSpan().IndexOfAny(NonLiteralCharacters) < 0
-        && !value.Any(character => char.IsWhiteSpace(character) || char.IsControl(character));
+        && !value.Any(character => char.IsWhiteSpace(character) || char.IsControl(character))
+        && !DriveRelative().IsMatch(value);
+
+    [GeneratedRegex(@"^[A-Za-z]:(?![\\/])")]
+    private static partial Regex DriveRelative();
 
     [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*)(?<index>\[[^\]]*\])?(?<append>\+)?=")]
     private static partial Regex Prefix();

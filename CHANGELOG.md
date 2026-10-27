@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+- The shell guard treats a drive-relative value (`C:dir`, what an unquoted `C:\dir` becomes in Git Bash) as unknown, so
+  writes through it are judged as before.
+- `adopt plan` reports hook scripts with the platform's own path separators.
+
 ## [0.2.0-alpha.5] — 2026-10-15
 
 ### Added
