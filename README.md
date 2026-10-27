@@ -150,8 +150,11 @@ measures it (p50 and p95 over 200 calls).
 
 ## Contributing
 
-Bug reports and ideas are welcome: see [CONTRIBUTING](CONTRIBUTING.md). Before you propose a design change, read
-[how it works](docs/architecture.md). C# follows the [code style](docs/engineering/code-style.md).
+Questions, ideas and stories of how you use Lockflight go to
+[Discussions](https://github.com/lockflight/lockflight/discussions); bugs go to
+[Issues](https://github.com/lockflight/lockflight/issues/new/choose); a way around a control goes to
+[private reporting](SECURITY.md). Pull requests are welcome: see [CONTRIBUTING](CONTRIBUTING.md), and before you propose a
+design change, read [how it works](docs/architecture.md). C# follows the [code style](docs/engineering/code-style.md).
 
 ```sh
 cd engine && dotnet build && dotnet test                     # engine
