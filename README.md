@@ -81,35 +81,52 @@ when the guard says no. Only you see him: he stays out of anything the agent rea
 
 ## Quick start
 
-You need the .NET 10 SDK, git and Claude Code (Git Bash on Windows). Three steps, about five minutes.
+**Requirements**
 
-**1. Install the engine and the plugin**
+- **macOS (Apple silicon or Intel) or Linux (x64 or arm64).** Windows has no install path yet: the install script refuses it and no package is published.
+- **The .NET 10 SDK** for the engine, plus the SDK your project needs; git.
+- **An SDK-style .NET 8, 9 or 10 project.** xUnit v3 (Microsoft.Testing.Platform) gets everything; xUnit v2 (VSTest) is
+  supported; NUnit and MSTest get the gates only, no red/green or trace yet. .NET Framework projects are not supported.
+- **Claude Code 2.1.295 or newer.**
+- **[gitleaks](https://github.com/gitleaks/gitleaks)** on `PATH` for the secrets step of the `pr` profile.
+- For the standard profile: `uv` and Python 3 with PyYAML (Spec Kit).
+
+**1. Install the engine and the plugin, from source**
 
 ```sh
 git clone https://github.com/lockflight/lockflight && cd lockflight
-scripts/dev-install.sh
+scripts/dev-install.sh        # the engine at ~/.lockflight/bin/lockflight, the plugin at user scope
 ```
 
-**2. In Claude Code, at your repository's root**
-
-```
-> Set up Lockflight
-```
-
-It shows you a plan first: what it keeps, what it protects, what it flags. Nothing changes yet.
-
-**3. Apply it yourself, then commit**
+**2. Set up your repository**
 
 ```sh
-~/.lockflight/bin/lockflight adopt apply      # the plan gives you the exact command
+cd /path/to/your/repo
+~/.lockflight/bin/lockflight init       # or: init --profile standard
+.lockflight/bin/lockflight doctor       # the engine init linked into the project, as the agent runs it
 ```
 
-Approvals and adoption are yours to run, in a separate terminal window: the engine refuses them inside an agent session, a
-`!` command in Claude Code included. Apply backs up first, and `adopt undo` reverts it. You're gated. The [getting-started guide](docs/guides/getting-started.md)
-covers the profiles (`lite` for gates and guard, `standard` for the full lifecycle), workspace shells and the status line.
+Or ask Claude Code, started at the repository root: *"Set up Lockflight"*. `init` writes `lockflight.yaml`, the engine pin in
+`dotnet-tools.json`, `.gitignore` entries, the plugin in `.claude/settings.json`, a CI workflow
+(`.github/workflows/lockflight-gates.yml`) and the linked engine in `.lockflight/bin/` (git-ignored). It merges into files
+that exist and never overwrites them.
+
+**3. Commit, and start Claude Code at the root**
+
+The guard is on, and `.lockflight/bin/lockflight gate run` runs format → build → tests. You're gated. The
+[getting-started guide](docs/guides/getting-started.md) covers the profiles (`lite` for gates and guard, `standard` for the
+full lifecycle), monorepos, workspace shells and the status line.
+
+**Already have a Claude Code or Spec Kit setup?** Only then: `.lockflight/bin/lockflight adopt plan` writes a plan of what it
+keeps, protects and flags, and ends with the exact `adopt apply` line. Approvals and adoption are yours to run, in a separate
+terminal window: the engine refuses them inside an agent session, a `!` command in Claude Code included. Apply backs up
+first, and `adopt undo` reverts it.
 
 > [!NOTE]
-> **Preview.** The engine installs from source and needs no tokens. A package on nuget.org comes with 1.0.
+> **Preview.** The engine installs from source and needs no tokens. Once the `Lockflight.Cli` packages are published on
+> nuget.org, step 1 becomes `dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin` and
+> `claude plugin install lockflight@lockflight --scope user` ([install from a package](docs/guides/getting-started.md#install-from-a-package)). Until then the engine pin is a
+> development build that no package feed has, so the generated CI workflow cannot install it.
 
 ## Honest about its limits
 

@@ -187,7 +187,8 @@ separate terminal window (`.lockflight/bin/lockflight approve spec` or `approve 
 
 ## Windows
 
-The hook shim is a POSIX script, so Claude Code on Windows needs **Git Bash**. `doctor` checks for it.
+There is no install path for Windows yet: `scripts/dev-install.sh` refuses it, and no package is published. Where the engine
+does run on Windows, the hook shim is a POSIX script, so Claude Code needs **Git Bash**; `doctor` checks for it.
 
 ## "records a human decision and does not run inside a Claude Code session"
 
@@ -200,14 +201,21 @@ command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approv
 
 1. In each project, if you ran `adopt apply`, run `.lockflight/bin/lockflight adopt undo` first, in a separate terminal window,
    to revert what it changed.
-2. In each project, remove what `init` added: `lockflight.yaml`, `.lockflight/`, the tool pin (the `lockflight.cli` entry
+2. In a standard-profile project, remove the Spec Kit preset: `uvx --from specify-cli==1.1.3 specify preset remove lockflight`.
+   Spec Kit itself (`.specify/`, the `speckit-*` skills) is yours to keep or remove.
+3. In each project, remove what `init` added: `lockflight.yaml`, `.lockflight/`, the tool pin (the `lockflight.cli` entry
    in `dotnet-tools.json` or `.config/dotnet-tools.json`; `dotnet tool uninstall Lockflight.Cli` removes it),
    `.github/workflows/lockflight-gates.yml`, the Lockflight marketplace and plugin entries in `.claude/settings.json`, and the
    Lockflight blocks in `.gitignore` and (standard profile) `.gitattributes`. The `<!-- lockflight:begin -->` …
    `<!-- lockflight:end -->` block in `CLAUDE.md` can go too.
-3. In Claude Code, `/plugin uninstall lockflight@lockflight`, and `/plugin uninstall lockflight-crew@lockflight` if you
-   installed the crew. Then remove the marketplace: `/plugin marketplace remove lockflight`.
-4. Remove the user install: `rm -rf ~/.lockflight`. A package install and an install from source share this layout
+4. In a workspace shell, also remove what `workspace sync` wrote into each unit repository, and commit there:
+   `lockflight.unit.yaml`, the `lockflight.cli` entry in its tool manifest, `.lockflight/baselines/` and
+   `.github/workflows/lockflight-gates.yml`.
+5. Remove the plugins. `scripts/dev-install.sh` and the package install put them at user scope:
+   `claude plugin uninstall lockflight@lockflight --scope user`, and `claude plugin uninstall lockflight-crew@lockflight --scope user`
+   if you installed the crew (`/plugin uninstall …` in Claude Code does the same). Then remove the marketplace:
+   `claude plugin marketplace remove lockflight`.
+6. Remove the user install: `rm -rf ~/.lockflight`. A package install and an install from source share this layout
    (`~/.lockflight/bin/lockflight` pointing at `~/.lockflight/tools/<version>`); a source install also keeps its local feed
    (`~/.lockflight/feed`) and the path of its checkout (`~/.lockflight/source`) there.
 

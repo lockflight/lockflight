@@ -34,6 +34,33 @@ public sealed class AdoptCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task ThePlanGivesTheFullApplyCommandWithThePreset()
+    {
+        await CreateSetupAsync();
+        DirectoryInfo home = Directory.CreateTempSubdirectory("lockflight-home-");
+        try
+        {
+            string checkout = Path.Combine(home.FullName, "lockflight");
+            string preset = Path.Combine(checkout, "plugins", "lockflight", "speckit-preset");
+            Directory.CreateDirectory(preset);
+            Directory.CreateDirectory(Path.Combine(home.FullName, ".lockflight"));
+            File.WriteAllText(Path.Combine(home.FullName, ".lockflight", "source"), checkout);
+
+            (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["adopt", "plan"], string.Empty, root.FullName, new Dictionary<string, string> { ["HOME"] = home.FullName });
+
+            string markdown = File.ReadAllText(Path.Combine(root.FullName, ".lockflight", "adopt", "plan.md"));
+            Assert.Equal(ExitCode.Pass, exitCode);
+            Assert.Contains($"adopt apply --speckit-preset '{preset}'", markdown, StringComparison.Ordinal);
+            Assert.Contains("--skip-speckit", markdown, StringComparison.Ordinal);
+            Assert.Contains($"adopt apply --speckit-preset '{preset}'", output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            home.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ApplyAndUndoAreRefusedInsideAClaudeCodeSession()
     {
         await CreateSetupAsync();
