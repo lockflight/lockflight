@@ -153,9 +153,17 @@ internal static class SetupInventory
     private static AdoptionItem ClaudeMd(string root)
     {
         string path = Path.Combine(root, "CLAUDE.md");
-        string text = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
-        int tokens = text.Length / 4;
-        string size = $"about {tokens} tokens of the {ClaudeMdTokenBudget} budget";
+        bool exists = File.Exists(path);
+        string text = exists ? File.ReadAllText(path) : string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new AdoptionItem(AdoptionArea.ClaudeMd, "CLAUDE.md", AdoptionAction.Add, exists
+                ? "the file is empty; a short Lockflight block is added"
+                : "there is none yet; it is created with a short Lockflight block");
+        }
+
+        int tokens = Math.Max(1, text.Length / 4);
+        string size = $"about {tokens} {(tokens == 1 ? "token" : "tokens")} of the {ClaudeMdTokenBudget} budget";
         return ClaudeMdBlock.IsCurrent(text)
             ? new AdoptionItem(AdoptionArea.ClaudeMd, "CLAUDE.md", AdoptionAction.Keep, $"already has the Lockflight block; {size}")
             : ClaudeMdBlock.IsPresent(text)

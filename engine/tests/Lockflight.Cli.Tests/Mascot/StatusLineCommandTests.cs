@@ -30,7 +30,7 @@ public sealed class StatusLineCommandTests : IDisposable
 
     [Theory]
     [InlineData("hook.blocked", "pre-tool-use:protected-path:**/.env", "protected-path:**/.env", "guard blocked **/.env")]
-    [InlineData("hook.blocked", "stop:stop-gate", "stop-gate", "Stop gate FAIL")]
+    [InlineData("hook.blocked", "stop:stop-gate", "stop-gate", "stop gate FAIL")]
     [InlineData("gate.completed", "gate:pr:NOT-EARNED:test", "NOT-EARNED", "pr gate NOT-EARNED")]
     [InlineData("review.completed", "review:changes", "001-orders: 1 open confirmed", "review FAIL")]
     [InlineData("review.completed", "review:clean", "001-orders: clean", "review PASS")]

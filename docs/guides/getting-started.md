@@ -300,7 +300,7 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
   Claude Code starts (it sets `CLAUDECODE`) get plain text, so the agent never pays tokens for him. `LOCKFLIGHT_MASCOT=0`
   turns him off.
 - **In Claude Code's status line** (optional). `lockflight statusline` prints his face and the last verdict from the local
-  ledger, for example `guard blocked **/.env · 2m ago`, `stop gate PASS · just now` or `Stop gate FAIL · just now`, or
+  ledger, for example `guard blocked **/.env · 2m ago`, `stop gate PASS · just now` or `stop gate FAIL · just now`, or
   `approval waiting: type /lockflight:approve spec <code>` while an in-session code waits for you. The status line is shown to you only
   and costs no tokens. A plugin cannot set it, so add it to your user settings (`~/.claude/settings.json`) yourself, unless
   you already have a status line you want to keep:

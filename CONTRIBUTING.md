@@ -36,9 +36,9 @@ than a fix, please open an issue first, because the design still moves. Everyone
 - **Changelog:** pull requests do not edit [CHANGELOG.md](CHANGELOG.md). The release pull request drafts the entries from the
   Conventional Commits on `main` with [git-cliff](https://git-cliff.org) ([cliff.toml](cliff.toml)) and edits them for users, so
   write the pull request title as the line a user should read.
-- **Versions** follow [Semantic Versioning](https://semver.org/); releases are tagged `vX.Y.Z[-alpha.N]`. The plugin and the
-  engine share one version. The plugin's version in `plugin.json` is the last release: `scripts/dev-install.sh` numbers
-  development builds after it (`0.2.0-alpha.4.dev.<commit time>`, or `0.2.1-0.dev.<commit time>` after a release `0.2.0`) so
+- **Versions** follow [Semantic Versioning](https://semver.org/); releases are tagged `vX.Y.Z[-alpha.N]`. The plugins, the Spec
+  Kit preset and the engine share one version. The plugin's version in `plugin.json` is the last release:
+  `scripts/dev-install.sh` numbers development builds after it (`0.2.0-alpha.4.dev.<commit time>`, or `0.2.1-0.dev.<commit time>` after a release `0.2.0`) so
   they sort between that release and the next. `plugins/lockflight/min-engine-version` names the oldest released engine the
   plugin works with; raise it in the change that makes the plugin depend on something newer.
 - **Releases** are published to nuget.org by the release workflow from a version tag, after a maintainer approves it: see
