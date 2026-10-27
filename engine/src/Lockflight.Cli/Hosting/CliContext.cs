@@ -1,3 +1,4 @@
+using Lockflight.Cli.Linking;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Hosting;
@@ -16,6 +17,9 @@ internal sealed record CliContext(TextReader Input, TextWriter Output, TextWrite
 
     /// <summary>Starts Claude Code for the review (<c>claude -p</c> with the prompt on stdin, <c>claude --version</c>); real unless a test fakes it.</summary>
     public RunProcessWithInput Claude { get; init; } = ProcessRunner.RunAsync;
+
+    /// <summary>The engine binary <c>lockflight link</c> copies into a project; this process unless a test supplies one.</summary>
+    public RunningEngine Engine { get; init; } = RunningEngine.Current;
 
     /// <summary>Whether <see cref="Output"/> is a terminal a person reads (not a pipe or a file); false unless the host says so.</summary>
     public bool OutputIsTerminal { get; init; }

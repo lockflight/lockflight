@@ -1,4 +1,4 @@
-# Builds the Lockflight.Cli tool packages (pointer + one Native AOT package per RID + framework-dependent "any") and, only when
+# Builds the Lockflight.Cli tool packages (pointer + one Native AOT package per RID) and, only when
 # explicitly asked, pushes them to the GitHub Packages feed. Manual dispatch only; versions are never re-published.
 name: release-packages
 
@@ -23,6 +23,7 @@ jobs:
       matrix:
         include:
           - { os: macos-latest, rid: osx-arm64 }
+          - { os: macos-15-intel, rid: osx-x64 }
           - { os: ubuntu-latest, rid: linux-x64 }
           - { os: ubuntu-24.04-arm, rid: linux-arm64 }
           - { os: windows-latest, rid: win-x64 }
@@ -47,11 +48,9 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: engine/global.json
-      - name: Pack pointer and any
+      - name: Pack pointer
         working-directory: engine
-        run: |
-          dotnet pack src/Lockflight.Cli -c Release -o ../packages -p:Version=${{ inputs.version }}
-          dotnet pack src/Lockflight.Cli -c Release -r any -o ../packages -p:Version=${{ inputs.version }} -p:PublishAot=false
+        run: dotnet pack src/Lockflight.Cli -c Release -o ../packages -p:Version=${{ inputs.version }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package-pointer

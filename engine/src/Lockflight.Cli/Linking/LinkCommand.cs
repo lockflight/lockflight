@@ -5,11 +5,15 @@ namespace Lockflight.Cli.Linking;
 
 /// <summary>
 /// <c>lockflight link</c>: copies the running (pinned, NuGet-restored) binary to <c>.lockflight/bin/</c> in the project, where
-/// hooks execute it directly — <c>dotnet tool run</c> costs ~160 ms per hook call.
+/// hooks execute it directly — <c>dotnet tool run</c> costs ~160 ms per hook call. Only a single-file (Native AOT) binary is
+/// copied: a framework-dependent build cannot run from a copy of its launcher.
 /// </summary>
 internal sealed class LinkCommand(CliContext context)
 {
     public const string RelativeBinDirectory = ".lockflight/bin";
+
+    /// <summary>The platforms with a Native AOT engine package (the tool's runtime identifiers).</summary>
+    public const string SupportedPlatforms = "osx-arm64, osx-x64, linux-x64, linux-arm64 and win-x64";
 
     private const UnixFileMode ExecutableMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
         | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
@@ -25,10 +29,23 @@ internal sealed class LinkCommand(CliContext context)
             return ExitCode.Config;
         }
 
-        string? source = Environment.ProcessPath;
-        if (source is null || !File.Exists(source))
+        if (context.Engine.Path is not string source || !File.Exists(source))
         {
             await context.Error.WriteLineAsync("lockflight: cannot locate the running engine binary");
+            return ExitCode.Error;
+        }
+
+        // A framework-dependent build's launcher fails on its own (it looks for the assembly next to it), and the hooks block
+        // every tool call, recovery commands included, when the linked engine fails. An unlinked project stays in recovery
+        // mode instead, where restore and link still run.
+        if (!context.Engine.IsSingleFile)
+        {
+            await context.Error.WriteLineAsync(
+                $"lockflight: this engine ({source}) is not a single-file native build, and a copy of it cannot run from "
+                + $"{RelativeBinDirectory}, so nothing was linked. Lockflight ships native engines for {SupportedPlatforms}: install "
+                + "the package on one of those (scripts/dev-install.sh builds one from source). Until a native engine is "
+                + "linked, the project stays in recovery mode: the hooks allow reading and the restore and link commands, and block "
+                + "other tool calls.");
             return ExitCode.Error;
         }
 
