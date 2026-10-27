@@ -4,8 +4,8 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
 /// Classifies a new test from its pre-implementation run. A red is accepted only when the failure comes from production code:
-/// a <c>NotImplementedException</c> whose top stack frame is in production code (RED_STUB), or an xUnit assertion in a test that
-/// calls production code (RED_ASSERT). Test code is recognised by the frame's source file under a test project, or, without
+/// a <c>NotImplementedException</c> whose top stack frame is in production code (RED_STUB), or an assertion (xUnit's, or one of the
+/// assertion and mocking libraries below) in a test that calls production code (RED_ASSERT). Test code is recognised by the frame's source file under a test project, or, without
 /// symbols, by its declaring type; production code by the frame's file under a production project or its type in a production
 /// assembly. Runtime and static evidence, not proof of history: the review judges assertion quality.
 /// </summary>
@@ -26,6 +26,30 @@ internal static class RedClassifier
             "ThrowsAny", "True",
         ],
         StringComparer.Ordinal);
+
+    /// <summary>
+    /// The failure exceptions of assertion and mocking libraries, checked against the packages: <c>Xunit.Sdk.XunitException</c>
+    /// (FluentAssertions and AwesomeAssertions throw it under xUnit, and an xUnit v2 assertion in a VSTest run reports it; xUnit itself
+    /// never throws it bare), Shouldly's <c>Should…</c> failures, the two libraries' own exception without a test framework, a failed
+    /// NSubstitute <c>Received</c> or <c>Received.InOrder</c>, a failed Moq verification (or an unexpected call on a strict mock), and
+    /// a failed Verify snapshot. A library's other exceptions report its misuse, not the production code.
+    /// </summary>
+    private static readonly HashSet<string> LibraryAssertionExceptions = new(
+        [
+            "Xunit.Sdk.XunitException",
+            "Shouldly.ShouldAssertException", "Shouldly.ShouldMatchApprovedException", "Shouldly.ShouldCompleteInException",
+            "FluentAssertions.Execution.AssertionFailedException", "AwesomeAssertions.Execution.AssertionFailedException",
+            "NSubstitute.Exceptions.ReceivedCallsException", "NSubstitute.Exceptions.CallSequenceNotFoundException",
+            "Moq.MockException",
+            "VerifyException",
+        ],
+        StringComparer.Ordinal);
+
+    /// <summary>
+    /// Where FluentAssertions and AwesomeAssertions throw. A VSTest run prints their failure without its exception type, so the
+    /// top frame identifies it.
+    /// </summary>
+    private static readonly string[] AssertionLibraryFrames = ["FluentAssertions.Execution.", "AwesomeAssertions.Execution."];
 
     public static RedClass Classify(
         IReadOnlyList<ExecutedTest> rows, IReadOnlySet<string> testClasses, IReadOnlyList<string> testDirectories, ProductionCode production, bool callsProduction)
@@ -51,7 +75,7 @@ internal static class RedClassifier
     private static RedClass ClassifyFailure(
         ExecutedTest row, IReadOnlySet<string> testClasses, IReadOnlyList<string> testDirectories, ProductionCode production, bool callsProduction)
     {
-        if (IsAssertion(row.ExceptionType))
+        if (IsAssertion(row.ExceptionType, row.TopFrame))
         {
             return callsProduction ? RedClass.RedAssert : RedClass.RedNoProduction;
         }
@@ -66,8 +90,12 @@ internal static class RedClassifier
         return inProduction && row.ExceptionType == "System.NotImplementedException" ? RedClass.RedStub : RedClass.RedOther;
     }
 
-    private static bool IsAssertion(string? exceptionType) =>
-        exceptionType is not null && exceptionType.StartsWith(XunitNamespace, StringComparison.Ordinal) && exceptionType.EndsWith("Exception", StringComparison.Ordinal)
+    private static bool IsAssertion(string? exceptionType, string? topFrame) => exceptionType is null
+        ? topFrame is not null && AssertionLibraryFrames.Any(frame => topFrame.StartsWith(frame, StringComparison.Ordinal))
+        : LibraryAssertionExceptions.Contains(exceptionType) || IsXunitAssertion(exceptionType);
+
+    private static bool IsXunitAssertion(string exceptionType) =>
+        exceptionType.StartsWith(XunitNamespace, StringComparison.Ordinal) && exceptionType.EndsWith("Exception", StringComparison.Ordinal)
         && AssertionExceptions.Contains(exceptionType[XunitNamespace.Length..^"Exception".Length]);
 
     private static bool IsInDirectory(string? file, IReadOnlyList<string> directories)
