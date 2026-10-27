@@ -10,8 +10,9 @@ description: Diagnose a Lockflight setup — manifest, engine pin, linked engine
    If the engine itself is missing (recovery mode) or differs from the pinned version ("running engine X but the project pins
    Y"), the only things the guard allows are reads and exactly `dotnet tool restore && dotnet lockflight link` (nothing
    chained before or after it) — run exactly that first, then doctor. When the pin is a development build (`dev` in the
-   version, such as `0.2.0-alpha.4.dev.…`, installed from source), that restore cannot find it: ask the user to run `~/.lockflight/bin/lockflight update` in
-   the project in a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused).
+   version, such as `0.2.0-alpha.4.dev.…`, installed from source), that restore cannot find it: ask the user to open a separate terminal window (not with `!`
+   in Claude Code: that runs inside the session and is refused) and run `~/.lockflight/bin/lockflight update` there, in the
+   project.
    If the pin cannot be read (`dotnet-tools.json` is malformed), that file is protected: show the user the error and let them
    fix it.
 2. Report each line. For `FAIL`/`warn`, give the fix shown after `→`.

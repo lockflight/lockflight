@@ -85,8 +85,11 @@ tests. A build that fails is a verdict (FAIL, or COMPILE_RED for a red).
 > These refuse to run inside a Claude Code session (exit 2), and that includes a `!` command typed in Claude Code. Run them
 > in a separate terminal window.
 
-A `!` command runs inside the session and is refused. The refusal prints the exact line to copy, for example
-`cd '/path/to/project' && .lockflight/bin/lockflight approve spec`. A spec or tasks approval can also be given in the session
+A `!` command runs inside the session and is refused. The refusal says to open a separate terminal window first and then
+gives the line to run there, inside the sentence, for example: Open a separate terminal window (not with `!` in Claude Code:
+that runs inside the session and is refused) and run `cd '/path/to/project' && .lockflight/bin/lockflight approve spec`. Or
+type /lockflight:approve spec in Claude Code. Every hand-off from the engine, the guard and the skills follows the same
+order: the session command when there is one, else the separate terminal window, and only then the command line. A spec or tasks approval can also be given in the session
 by typing `/lockflight:approve`, and a baseline, a reset or an amend by typing `/lockflight:baseline`, `/lockflight:reset` or
 `/lockflight:amend` (below). `update` and `adopt` run in a terminal only.
 

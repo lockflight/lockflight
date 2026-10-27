@@ -59,5 +59,5 @@ internal static class SessionCommands
 
     /// <summary>What the person is told when the engine fails on the command: nothing was done, and how to do it in a terminal.</summary>
     public static string InternalError(SessionCommandSpec spec, string message) =>
-        $"lockflight: {spec.NothingDone}: internal error: {message}. Run lockflight {spec.TerminalCommand} {HumanOnlyCommands.WhereToRun}.";
+        $"lockflight: {spec.NothingDone}: internal error: {message}. {HumanOnlyCommands.Sentence(HumanOnlyCommands.OpenATerminalAndRun($"lockflight {spec.TerminalCommand}"))} instead.";
 }

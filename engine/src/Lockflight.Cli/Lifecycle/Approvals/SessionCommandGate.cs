@@ -135,7 +135,7 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
     {
         string engine = File.Exists(LinkCommand.BinaryPath(manifest.Root)) ? EngineCommand.Linked : EngineCommand.Name;
         string code = $"{spec.RefusalPrefix}:{refusal.Code}";
-        string message = $"lockflight: {spec.NothingDone}: {refusal.Reason}.\nOr run it {HumanOnlyCommands.WhereToRun}:\n  cd {ShellQuoting.Quote(manifest.Root)} && {engine} {terminalArguments}";
+        string message = $"lockflight: {spec.NothingDone}: {refusal.Reason}.\nOr {HumanOnlyCommands.OpenATerminalAndRun($"cd {ShellQuoting.Quote(manifest.Root)} && {engine} {terminalArguments}")}.";
         return Blocking.Contains(refusal.Code) ? SessionCommandResult.Refused(code, message) : SessionCommandResult.Answered(code, message);
     }
 

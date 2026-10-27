@@ -31,9 +31,9 @@ independent.
    later review re-runs its reproductions — the new one and every earlier one — and all of them pass (**fixed**), or when the
    user dismisses it. Re-running the review is never a way to make a finding go away.
 4. Never say a finding is fixed or closed from your own reading: run `.lockflight/bin/lockflight review status` and report what it
-   says. If the user thinks a finding is not a defect, ask them to run
-   `.lockflight/bin/lockflight review dismiss <id> --reason "<why>"` themselves, in a separate terminal window (not with `!` in
-   Claude Code: that runs inside the session and is refused). You cannot dismiss findings.
+   says. If the user thinks a finding is not a defect, ask them to open a separate terminal window (not with `!` in Claude
+   Code: that runs inside the session and is refused) and run `.lockflight/bin/lockflight review dismiss <id> --reason "<why>"`
+   there themselves. You cannot dismiss findings.
 5. The command exits 1 when an open finding is confirmed, 5 (NOT-EARNED) when one is unverified or the run is not of record,
    and 0 otherwise. Repair cycles are bounded: after two reviews that still confirm findings, stop and ask the user.
 6. In the PR body, paste the "Pull request summary" from `review status` unchanged: it names the base, the number of review

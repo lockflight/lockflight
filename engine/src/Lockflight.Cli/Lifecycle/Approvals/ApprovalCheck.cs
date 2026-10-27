@@ -15,7 +15,7 @@ internal sealed record ApprovalCheck(ApprovalPhase Phase, ApprovalState State, s
             ApprovalState.Valid => $"{phase} approved by {ApprovedBy}",
             ApprovalState.Stale => $"{phase} approval is stale: {string.Join(", ", ChangedArtifacts)} changed; {HumanOnlyCommands.AskTheUser($"approve {phase}")} again",
             ApprovalState.Invalid => $"{phase} approval record is not valid here: {Problem}; {HumanOnlyCommands.AskTheUser($"approve {phase}")}",
-            _ => $"{phase} is not approved; ask the user to review it, then {HumanOnlyCommands.AskTheUser($"approve {phase}")[4..]}",
+            _ => $"{phase} is not approved; ask the user to review it, then to {HumanOnlyCommands.HandOff($"approve {phase}")}",
         };
     }
 }

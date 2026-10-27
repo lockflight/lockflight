@@ -31,7 +31,7 @@ internal static class InitNextSteps
             "Next (standard profile):",
             .. specKit,
             $"  2. {char.ToUpperInvariant(doctor[0])}{doctor[1..]}",
-            $"  3. Before the first feature, accept the tests that already fail: you run `{EngineCommand.Linked} baseline tests` {HumanOnlyCommands.WhereToRun}, and merge that baseline in its own pull request.",
+            $"  3. Before the first feature, accept the tests that already fail: you type /lockflight:baseline tests in Claude Code, or {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.Linked} baseline tests")}; then merge that baseline in its own pull request.",
         ];
     }
 }

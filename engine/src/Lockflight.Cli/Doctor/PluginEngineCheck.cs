@@ -35,7 +35,7 @@ internal static class PluginEngineCheck
         return EngineVersion.Parse(engine) is EngineVersion version && version.CompareTo(minimum) < 0
             ? new(Name, CheckStatus.Fail,
                 $"the installed plugin needs engine {minimum} or newer; the project pins {engine}",
-                $"a person runs `{EngineCommand.UserInstall} update` in the project {HumanOnlyCommands.WhereToRun}: it installs the newest engine, re-pins the project and links it; then commit dotnet-tools.json")
+                $"a person opens a separate terminal window ({HumanOnlyCommands.NotWithBang}) and runs `{EngineCommand.UserInstall} update` in the project: it installs the newest engine, re-pins the project and links it; then commit dotnet-tools.json")
             : new(Name, CheckStatus.Pass, $"the plugin needs engine {minimum} or newer; the project pins {engine}", null);
     }
 

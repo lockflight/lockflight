@@ -205,7 +205,7 @@ internal sealed class HookCommand(CliContext context)
         string reason = pin.Status == ToolPinStatus.Unreadable
             ? $"lockflight: the engine pin cannot be read: {pin.Problem}. Fix dotnet-tools.json (a protected file: a human edit), then run exactly: {RecoveryCommands.RestoreAndLink}"
             : EngineVersion.IsDevelopmentBuild(pin.Version!)
-                ? $"lockflight: running engine {ToolPin.RunningVersion} but the project pins the development build {pin.Version}, which no package feed has. Ask the user to run ~/.lockflight/bin/lockflight update {HumanOnlyCommands.WhereToRun}."
+                ? $"lockflight: running engine {ToolPin.RunningVersion} but the project pins the development build {pin.Version}, which no package feed has. Ask the user to {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} update")} in the project."
                 : $"lockflight: running engine {ToolPin.RunningVersion} but the project pins {pin.Version}. Run exactly: {RecoveryCommands.RestoreAndLink}";
         return HookDecision.Block("stale-engine", reason);
     }
@@ -220,7 +220,7 @@ internal sealed class HookCommand(CliContext context)
     /// <summary>The plugin updated from its marketplace past what this project's engine supports.</summary>
     private string? PluginNotice() =>
         PluginHandshake.EngineTooOld(context.Environment, ToolPin.RunningVersion) is string minimum
-            ? $"The Lockflight plugin needs engine {minimum} or newer; this project runs {ToolPin.RunningVersion}. Run {EngineCommand.UserInstall} update in the project {HumanOnlyCommands.WhereToRun}."
+            ? $"The Lockflight plugin needs engine {minimum} or newer; this project runs {ToolPin.RunningVersion}. {HumanOnlyCommands.Sentence(HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} update"))} in the project."
             : null;
 
     /// <summary>
@@ -230,7 +230,7 @@ internal sealed class HookCommand(CliContext context)
     private string? UpdateNotice() =>
         context.Environment.HomeDirectory() is string home && UserInstall.InstalledVersion(home) is string installed
         && !ToolPin.Matches(installed, ToolPin.RunningVersion)
-            ? $"Lockflight {installed} is installed; this project runs {ToolPin.RunningVersion}. Run {EngineCommand.UserInstall} update in the project {HumanOnlyCommands.WhereToRun}."
+            ? $"Lockflight {installed} is installed; this project runs {ToolPin.RunningVersion}. {HumanOnlyCommands.Sentence(HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} update"))} in the project."
             : null;
 
     /// <summary>CLAUDE_PROJECT_DIR stays at the session's root after `cd` or entering a worktree; the payload cwd does not.</summary>

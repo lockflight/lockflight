@@ -61,7 +61,7 @@ Then set up your project: the [lite profile](#lite-profile-target-first-green-in
   amend by typing `/lockflight:baseline`, `/lockflight:reset` or `/lockflight:amend`. Each takes two steps: the engine shows
   you what would be recorded under "UserPromptExpansion operation blocked by hook" (not an error), starting with
   `Step 1 of 2`, and ends with the line to type with its code.
-- **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. An install from source
+- **Updating:** in a separate terminal window (not with `!` in Claude Code), run `~/.lockflight/bin/lockflight update` in a project. An install from source
   (the checkout recorded in `~/.lockflight/source`) pulls your checkout, reinstalls the engine and the plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
   commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at
   session start.
@@ -123,7 +123,7 @@ or add `~/.lockflight/bin` to `PATH` yourself.
   install or `dotnet tool restore` fails. Installed into `~/.lockflight/bin` from your home directory, the engine is a native
   binary that runs whatever SDK the project pins. The project still pins the engine in `dotnet-tools.json`: CI installs that
   version the same way, outside the repository.
-- **Updating:** run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal window. It installs the newest
+- **Updating:** in a separate terminal window (not with `!` in Claude Code), run `~/.lockflight/bin/lockflight update` in a project. It installs the newest
   engine from nuget.org into `~/.lockflight/tools/<version>` (from `~/.lockflight`, outside any project), points
   `~/.lockflight/bin/lockflight` at it, then re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it
   lists. An engine installed as a prerelease follows prereleases. `--source <feed>` replaces the NuGet sources (a mirror, or a
@@ -181,8 +181,8 @@ Kit. A new user on a plain repository does not need it. After `init`:
 
 The plan lists what is kept, what becomes protected, what is flagged, and ends with the exact `adopt apply` line to paste:
 `cd` to the project root, the engine, and — when the plan upgrades Spec Kit — `--speckit-preset` with the preset's absolute
-path on this machine, or `--skip-speckit` to leave Spec Kit as it is. Run that line yourself, in a separate terminal window
-(not with `!` in Claude Code). It needs a clean working tree, backs up first, and `adopt undo` reverts it. Commit what it
+path on this machine, or `--skip-speckit` to leave Spec Kit as it is. Open a separate terminal window (not `!` in Claude
+Code) and run that line there yourself. It needs a clean working tree, backs up first, and `adopt undo` reverts it. Commit what it
 changed.
 
 ## Monorepos
@@ -243,8 +243,8 @@ hold the keys to the two approvals.
    A repository that already has Spec Kit does not run `specify init` again (it would overwrite customised files): run
    [`adopt plan`](#a-repository-with-an-existing-claude-code-or-spec-kit-setup) and the `adopt apply` line it gives, which
    adds the preset. Then commit, and run `.lockflight/bin/lockflight doctor`.
-   Before the first feature, accept the tests that already fail: run `.lockflight/bin/lockflight baseline tests` yourself, in
-   a separate terminal window, and merge
+   Before the first feature, accept the tests that already fail: type `/lockflight:baseline tests` in Claude Code, or, in a
+   separate terminal window, run `.lockflight/bin/lockflight baseline tests` yourself; then merge
    that baseline in its own pull request first (CI takes baselines from the base branch, so one committed with a feature is
    discarded; see [CI hardening](ci-hardening.md)). Each feature's `redgreen start` then runs the **whole suite once** to
    record the baseline and find tests that already fail — on a large suite that takes minutes (about 3 minutes for ~5,000

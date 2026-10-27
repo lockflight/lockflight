@@ -32,20 +32,47 @@ public sealed class HumanOnlyCommandsTests
     public void OtherCommandsPass(string command) => Assert.Null(HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 
     [Fact]
-    public void TheRefusalSaysToUseASeparateTerminalAndNotTheBangPrefix()
+    public void TheRefusalNamesTheSeparateTerminalBeforeTheCommandAndPointsAtTheSessionCommand()
     {
         string refusal = HumanOnlyCommands.Refusal(["approve", "spec", "--feature", "001-orders"], "/work/shop", EngineCommand.Linked);
 
         Assert.Contains("'approve spec' records a human decision", refusal, StringComparison.Ordinal);
-        Assert.Contains("separate terminal window", refusal, StringComparison.Ordinal);
-        Assert.Contains("not with `!` in Claude Code", refusal, StringComparison.Ordinal);
-        Assert.EndsWith("cd '/work/shop' && .lockflight/bin/lockflight approve spec --feature 001-orders", refusal, StringComparison.Ordinal);
+        Assert.Contains(
+            "Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '/work/shop' && .lockflight/bin/lockflight approve spec --feature 001-orders`.",
+            refusal,
+            StringComparison.Ordinal);
+        Assert.EndsWith("Or type /lockflight:approve spec in Claude Code.", refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n  cd", refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATerminalOnlyCommandHasNoSessionAlternative()
+    {
+        string refusal = HumanOnlyCommands.Refusal(["update"], "/work/shop", EngineCommand.UserInstall);
+
+        Assert.EndsWith("and run `cd '/work/shop' && ~/.lockflight/bin/lockflight update`.", refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain("/lockflight:", refusal, StringComparison.Ordinal);
     }
 
     [Fact]
     public void TheCommandToCopyQuotesArgumentsTheShellWouldSplit() =>
-        Assert.EndsWith(
-            "cd '/work/my shop' && dotnet lockflight approve tasks --sign --key '/keys/it'\\''s key'",
+        Assert.Contains(
+            "`cd '/work/my shop' && dotnet lockflight approve tasks --sign --key '/keys/it'\\''s key'`",
             HumanOnlyCommands.Refusal(["approve", "tasks", "--sign", "--key", "/keys/it's key"], "/work/my shop", EngineCommand.Tool),
             StringComparison.Ordinal);
+
+    [Theory]
+    [InlineData("approve tasks", "ask the user to type /lockflight:approve tasks in Claude Code, or open a separate terminal window")]
+    [InlineData("baseline tests", "ask the user to type /lockflight:baseline tests in Claude Code, or open a separate terminal window")]
+    [InlineData("redgreen reset", "ask the user to type /lockflight:reset in Claude Code, or open a separate terminal window")]
+    [InlineData("redgreen amend <test> --reason \"<why>\"", "ask the user to type /lockflight:amend <test> --reason <why> in Claude Code, or open a separate terminal window")]
+    [InlineData("adopt apply", "ask the user to open a separate terminal window")]
+    [InlineData("update", "ask the user to open a separate terminal window")]
+    public void AHandOffPutsTheSessionCommandOrTheSeparateTerminalFirst(string command, string start)
+    {
+        string handOff = HumanOnlyCommands.AskTheUser(command);
+
+        Assert.StartsWith(start, handOff, StringComparison.Ordinal);
+        Assert.Contains($"(not with `!` in Claude Code: that runs inside the session and is refused) and run `{EngineCommand.Name} {command}` from the project root", handOff, StringComparison.Ordinal);
+    }
 }

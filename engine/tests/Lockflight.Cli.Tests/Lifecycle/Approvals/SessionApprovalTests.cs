@@ -76,8 +76,8 @@ public sealed class SessionApprovalTests : IDisposable
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Empty(output);
         Assert.Contains("nothing was approved", error, StringComparison.Ordinal);
-        Assert.Contains(HumanOnlyCommands.WhereToRun, error, StringComparison.Ordinal);
-        Assert.Contains("approve spec --sign", error, StringComparison.Ordinal);
+        Assert.Contains($"Or open a separate terminal window ({HumanOnlyCommands.NotWithBang}) and run `cd ", error, StringComparison.Ordinal);
+        Assert.Contains("approve spec --sign`.", error, StringComparison.Ordinal);
         Assert.False(File.Exists(WaitingCodePath("spec")));
         Assert.False(File.Exists(RecordPath("spec")));
     }

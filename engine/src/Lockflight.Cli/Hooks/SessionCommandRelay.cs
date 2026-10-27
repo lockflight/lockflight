@@ -30,7 +30,7 @@ internal static class SessionCommandRelay
             {
                 return HookDecision.Block(
                     $"{spec.Name.Split(':')[^1]}-relay",
-                    $"lockflight: {toolName} would send '/{spec.Name}' as a prompt. Only the person {spec.Decision}: they type /{spec.Name} themselves, or run lockflight {spec.TerminalCommand} {HumanOnlyCommands.WhereToRun}.");
+                    $"lockflight: {toolName} would send '/{spec.Name}' as a prompt. Only the person {spec.Decision}: they type /{spec.Name} themselves, or {HumanOnlyCommands.OpenATerminalAndRun($"lockflight {spec.TerminalCommand}")}.");
             }
         }
 

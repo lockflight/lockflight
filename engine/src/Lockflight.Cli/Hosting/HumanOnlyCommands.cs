@@ -14,7 +14,10 @@ internal static class HumanOnlyCommands
     /// Where a person runs a reserved command. A <c>!</c> command in Claude Code runs inside the session (with <c>CLAUDECODE</c> set),
     /// so the engine refuses it there too.
     /// </summary>
-    public const string WhereToRun = "in a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused)";
+    public const string WhereToRun = $"in a separate terminal window ({NotWithBang})";
+
+    /// <summary>Why a <c>!</c> command in Claude Code is no way to run a reserved command.</summary>
+    public const string NotWithBang = "not with `!` in Claude Code: that runs inside the session and is refused";
 
     /// <summary>A command and its verb (<c>approve spec</c>, <c>redgreen reset</c>): what a refusal names.</summary>
     private const int CommandWords = 2;
@@ -28,17 +31,54 @@ internal static class HumanOnlyCommands
 
     public static bool RunsUnderAgent(EnvironmentReader environment) => environment.Get(EnvironmentVariables.ClaudeCode) == "1";
 
-    /// <summary>What the agent is told when a reserved command is due: who runs it, with which command line, and where.</summary>
-    public static string AskTheUser(string command) =>
-        $"ask the user to run '{EngineCommand.Name} {command}' from the project root {WhereToRun}";
+    /// <summary>
+    /// How to hand a terminal-only command line to a person: the separate terminal window first, then the command inside the
+    /// sentence, so pasting it after <c>!</c> in Claude Code is not the obvious thing to do. Lower case, to follow "ask the user to".
+    /// </summary>
+    public static string OpenATerminalAndRun(string commandLine) => $"open a separate terminal window ({NotWithBang}) and run `{commandLine}`";
 
     /// <summary>
-    /// The engine's refusal of a reserved command run inside a Claude Code session, ending with the exact command line a person
-    /// copies into another terminal: <c>cd</c> to <paramref name="directory"/>, then <paramref name="engine"/> with the same arguments.
+    /// The slash command a person can type in Claude Code instead of <c>lockflight <paramref name="command"/></c> (approve, baseline,
+    /// redgreen reset, redgreen amend); null for a command that runs in a terminal only.
     /// </summary>
-    public static string Refusal(IReadOnlyList<string> args, string directory, string engine) =>
-        $"lockflight: '{string.Join(' ', args.Take(CommandWords))}' records a human decision and does not run inside a Claude Code session. "
-        + $"Run it {WhereToRun}:\n  cd {ShellQuoting.Quote(directory)} && {engine} {string.Join(' ', args.Select(ShellQuoting.QuoteIfNeeded))}";
+    public static string? InSession(string command) => command.Split(' ', 3) switch
+    {
+        ["approve", string phase, ..] when phase is "spec" or "tasks" => $"/lockflight:approve {phase}",
+        ["approve", ..] => "/lockflight:approve spec|tasks",
+        ["baseline", string kind, ..] when kind is "build" or "tests" or "deps" => $"/lockflight:baseline {kind}",
+        ["baseline", ..] => "/lockflight:baseline build|tests|deps",
+        ["redgreen", "reset", ..] => "/lockflight:reset",
+        ["redgreen", "amend", string rest] => $"/lockflight:amend {rest.Replace("\"", string.Empty, StringComparison.Ordinal)}",
+        ["redgreen", "amend"] => "/lockflight:amend <test> --reason <why>",
+        _ => null,
+    };
+
+    /// <summary>
+    /// What the agent is told when a reserved command is due: the session command the person types when there is one, else a
+    /// separate terminal window, and only then the command line.
+    /// </summary>
+    public static string AskTheUser(string command) => $"ask the user to {HandOff(command)}";
+
+    /// <summary>What the person does, as it follows "ask the user to": <c>type /lockflight:… in Claude Code, or open a separate terminal window …</c>.</summary>
+    public static string HandOff(string command)
+    {
+        string terminal = $"{OpenATerminalAndRun($"{EngineCommand.Name} {command}")} from the project root";
+        return InSession(command) is string slash ? $"type {slash} in Claude Code, or {terminal}" : terminal;
+    }
+
+    /// <summary>
+    /// The engine's refusal of a reserved command run inside a Claude Code session. It names the separate terminal window before
+    /// the command line to copy (<c>cd</c> to <paramref name="directory"/>, then <paramref name="engine"/> with the same arguments),
+    /// and the session command when there is one.
+    /// </summary>
+    public static string Refusal(IReadOnlyList<string> args, string directory, string engine)
+    {
+        string command = string.Join(' ', args.Take(CommandWords));
+        string commandLine = $"cd {ShellQuoting.Quote(directory)} && {engine} {string.Join(' ', args.Select(ShellQuoting.QuoteIfNeeded))}";
+        string slash = InSession(command) is string inSession ? $" Or type {inSession} in Claude Code." : string.Empty;
+        return $"lockflight: '{command}' records a human decision and does not run inside a Claude Code session. "
+            + $"{Sentence(OpenATerminalAndRun(commandLine))}.{slash}";
+    }
 
     /// <summary>
     /// Finds a reserved command in a shell command line: <c>lockflight …</c>, <c>dotnet lockflight …</c> or a path to the binary,
@@ -85,6 +125,9 @@ internal static class HumanOnlyCommands
 
         return null;
     }
+
+    /// <summary>The phrase as the start of a sentence.</summary>
+    public static string Sentence(string phrase) => phrase.Length == 0 ? phrase : char.ToUpperInvariant(phrase[0]) + phrase[1..];
 
     private static bool IsEngine(string token)
     {
