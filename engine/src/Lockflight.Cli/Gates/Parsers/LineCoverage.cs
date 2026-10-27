@@ -5,7 +5,9 @@ namespace Lockflight.Cli.Gates.Parsers;
 
 /// <summary>
 /// Hits per coverable line, merged from one or more Cobertura reports (several test projects can cover the same file; the highest
-/// hit count wins). Files are keyed by their path relative to the project root.
+/// hit count wins). Files are keyed by their path relative to the project root. A deterministic build (ContinuousIntegrationBuild)
+/// writes the repository root as <c>/_/</c> into the PDBs, so a report may name <c>/_/src/A.cs</c>: such paths are read against the
+/// repository root the build ran in. Other mapped roots (<c>/_1/</c> and on: packages, submodules) are not guessed.
 /// </summary>
 internal sealed class LineCoverage
 {
@@ -22,7 +24,12 @@ internal sealed class LineCoverage
     public int? HitsAt(string relativeFile, int line) =>
         hitsByFile.TryGetValue(relativeFile, out Dictionary<int, int>? lines) && lines.TryGetValue(line, out int hits) ? hits : null;
 
-    public void AddCobertura(string reportPath, string projectRoot)
+    private const string DeterministicRoot = "/_/";
+
+    public void AddCobertura(string reportPath, string projectRoot) => AddCobertura(reportPath, projectRoot, deterministicSourceRoot: null);
+
+    /// <param name="deterministicSourceRoot">The directory <c>/_/</c> stands for (the repository the tests were built in); null for none.</param>
+    public void AddCobertura(string reportPath, string projectRoot, string? deterministicSourceRoot)
     {
         using XmlReader reader = XmlReader.Create(reportPath, new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore });
         List<string> sources = [];
@@ -48,7 +55,7 @@ internal sealed class LineCoverage
                     sources.Add(reader.ReadElementContentAsString().Trim());
                     break;
                 case "class":
-                    currentLines = LinesFor(reader.GetAttribute("filename") ?? string.Empty, sources, projectRoot);
+                    currentLines = LinesFor(reader.GetAttribute("filename") ?? string.Empty, sources, projectRoot, deterministicSourceRoot);
                     break;
                 case "method" when !reader.IsEmptyElement:
                     methodDepth++;
@@ -63,9 +70,14 @@ internal sealed class LineCoverage
         }
     }
 
-    private Dictionary<int, int>? LinesFor(string filename, List<string> sources, string projectRoot)
+    private Dictionary<int, int>? LinesFor(string filename, List<string> sources, string projectRoot, string? deterministicSourceRoot)
     {
         string absolute = Path.IsPathRooted(filename) || sources.Count == 0 ? filename : Path.Combine(sources[0], filename);
+        string separated = absolute.Replace('\\', '/');
+        if (deterministicSourceRoot is not null && separated.StartsWith(DeterministicRoot, StringComparison.Ordinal))
+        {
+            absolute = Path.Combine(deterministicSourceRoot, separated[DeterministicRoot.Length..].Replace('/', Path.DirectorySeparatorChar));
+        }
         if (PathRules.ToRelative(projectRoot, absolute) is not string relative)
         {
             return null;

@@ -68,6 +68,23 @@ internal static class CoverageStep
         return Path.GetDirectoryName(relativeFile.Replace('/', Path.DirectorySeparatorChar))?.Replace('\\', '/') ?? string.Empty;
     }
 
+    /// <summary>
+    /// The repository the target was built in: the nearest directory at or above it with a <c>.git</c> folder or file. A
+    /// deterministic build maps that directory (the source control root) to <c>/_/</c>. Null outside a repository.
+    /// </summary>
+    public static string? RepositoryRootOf(string target)
+    {
+        for (string? directory = Path.GetFullPath(target); directory is not null; directory = Path.GetDirectoryName(directory))
+        {
+            if (Directory.Exists(Path.Combine(directory, ".git")) || File.Exists(Path.Combine(directory, ".git")))
+            {
+                return directory;
+            }
+        }
+
+        return null;
+    }
+
     /// <param name="resultsDirectory">Where a VSTest run wrote its results (Cobertura in per-run GUID folders); null for MTP.</param>
     public static async Task<GateStep> RunAsync(GateRunContext run, DateTimeOffset testsStarted, string? resultsDirectory, CancellationToken cancellationToken)
     {
@@ -94,9 +111,10 @@ internal static class CoverageStep
         }
 
         LineCoverage coverage = new();
+        string? sourceRoot = RepositoryRootOf(run.Target);
         foreach (string report in reports)
         {
-            coverage.AddCobertura(report, run.ProjectRoot);
+            coverage.AddCobertura(report, run.ProjectRoot, sourceRoot);
         }
 
         if (await ChangedLines.FindAsync(run.ProjectRoot, run.BaseRef, cancellationToken) is not IReadOnlyDictionary<string, IReadOnlySet<int>> allChanged)

@@ -42,6 +42,41 @@ public sealed class LineCoverageTests : IDisposable
         Assert.Equal(2, coverage.HitsAt("src/B.cs", 5));
     }
 
+    [Fact]
+    public void DeterministicSourcePathsMapBackToTheRepositoryRoot()
+    {
+        // ContinuousIntegrationBuild maps the repository root to /_/ in the PDBs, and a report read from them names /_/ paths.
+        string unit = Path.Combine(projectRoot.FullName, "services", "orders");
+        string microsoft = Write("ms.cobertura.xml", """
+            <coverage><packages><package><classes>
+              <class name="A" filename="/_/src/A.cs"><methods /><lines><line number="4" hits="2" /></lines></class>
+            </classes></package></packages></coverage>
+            """);
+        string coverlet = Write("coverlet.cobertura.xml", Coverlet("/_/src/", hits: 1));
+        LineCoverage coverage = new();
+
+        coverage.AddCobertura(microsoft, projectRoot.FullName, unit);
+        coverage.AddCobertura(coverlet, projectRoot.FullName, unit);
+
+        Assert.Equal(2, coverage.HitsAt("services/orders/src/A.cs", 4));
+        Assert.Equal(1, coverage.HitsAt("services/orders/src/B.cs", 5));
+    }
+
+    [Fact]
+    public void AnotherDeterministicSourceRootIsNotGuessed()
+    {
+        string report = Write("ms.cobertura.xml", """
+            <coverage><packages><package><classes>
+              <class name="A" filename="/_1/src/A.cs"><methods /><lines><line number="4" hits="2" /></lines></class>
+            </classes></package></packages></coverage>
+            """);
+        LineCoverage coverage = new();
+
+        coverage.AddCobertura(report, projectRoot.FullName, projectRoot.FullName);
+
+        Assert.False(coverage.CoversAnyUnder(string.Empty));
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(projectRoot);
 
     private static string Coverlet(string sources, int hits) => $"""

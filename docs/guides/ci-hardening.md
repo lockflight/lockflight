@@ -34,7 +34,9 @@ The agent works with your credentials, so CI is where an independent check happe
   1. `policy.protected` — lists protected files the PR changes (never fails; the list goes to the job summary);
   2. `format` → `build` → `test` (with coverage when `gates.coverage.collector` is set);
   3. `coverage.patch` — covered share of the changed coverable lines ≥ `patchThreshold` (default 80 %; N/A below
-     `minChangedLines`, default 10, and when `gates.coverage.collector` is not set);
+     `minChangedLines`, default 10, and when `gates.coverage.collector` is not set). A deterministic CI build
+     (`ContinuousIntegrationBuild`) may leave `/_/…` source paths in the report; they are read against the repository the
+     tests were built in;
   4. `security.deps` — no new High/Critical advisories;
   5. `security.secrets` — gitleaks over the PR's commits, uncommitted changes, and untracked files that git does not ignore.
      False positives go to `.gitleaksignore`, reviewed by a human. An added inline `gitleaks:allow` comment fails the step.
