@@ -5,7 +5,7 @@ namespace Lockflight.Cli.Testing;
 
 /// <summary>
 /// Runs tests of an xUnit v3 application selected by method and collects xUnit XML (each failure's exception type and stack):
-/// through the in-process console runner (<c>-method … -result-xml …</c>) or, for MTP-only apps, through xUnit's MTP options
+/// through the in-process console runner (<c>-method … -result-xml …</c>, <c>-xml</c> before xUnit v3 4.0) or, for MTP-only apps, through xUnit's MTP options
 /// (<c>--filter-method … --report-xunit-xml</c>). Method filters go in batches so the command line stays under Windows' limit.
 /// </summary>
 internal static class NativeTestRunner
@@ -44,7 +44,7 @@ internal static class NativeTestRunner
                 List<string> arguments = app.Mode == RunnerMode.Mtp
                     ? [app.AssemblyPath, "--no-ansi", "--no-progress", "--report-xunit-xml", "--report-xunit-xml-filename", Path.GetFileName(report),
                        "--results-directory", Path.GetDirectoryName(report)!]
-                    : [app.AssemblyPath, "-noLogo", "-noColor", "-result-xml", report];
+                    : [app.AssemblyPath, "-noLogo", "-noColor", InProcessRunner.ResultXmlSwitch(InProcessRunner.VersionOf(app.AssemblyPath)), report];
                 foreach (string method in batch)
                 {
                     arguments.AddRange([app.Mode == RunnerMode.Mtp ? "--filter-method" : "-method", method]);
