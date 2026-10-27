@@ -98,6 +98,24 @@ public sealed class InitCommandTests : IDisposable
         Assert.False(File.Exists(Path.Combine(projectRoot.FullName, Manifest.FileName)));
     }
 
+    [Theory]
+    [InlineData("// team settings\n{}")]
+    [InlineData("""{ "enabledPlugins": { "lockflight@lockflight": "yes" } }""")]
+    [InlineData("""{ "enabledPlugins": [] }""")]
+    public async Task ClaudeSettingsInitCannotMergeIntoAreRefusedBeforeAnythingIsWritten(string settings)
+    {
+        Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".claude"));
+        File.WriteAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json"), settings);
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains(".claude/settings.json", error, StringComparison.Ordinal);
+        Assert.Equal(settings, File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json")));
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, Manifest.FileName)));
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, "dotnet-tools.json")));
+    }
+
     [Fact]
     public async Task ASingleTargetKeepsTheEnginesChannelOnly()
     {
