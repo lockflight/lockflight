@@ -11,25 +11,35 @@ stop and ask, you never approve on the user's behalf.
 Run the engine as `.lockflight/bin/lockflight <command>` from the project root (the directory holding `lockflight.yaml`): it
 is the engine the hooks run, and it works whatever way Lockflight was installed.
 
+**First, check the profile.** This lifecycle needs the standard profile. If the project root has no `lockflight.yaml`, or
+no `.specify/` (a lite project), stop before writing anything: tell the user the project is not set up for the lifecycle,
+offer the standard setup (`/lockflight:init`), or build the change without it and rely on the gates
+(`/lockflight:gate`).
+
+**Approvals.** Whenever a step below asks for an approval, the user gives it in one of two ways: they type
+`/lockflight:approve spec` (or `tasks`) in this session, or they run `.lockflight/bin/lockflight approve spec|tasks` from
+the project root in a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused).
+Never approve for them.
+
 1. **Specify.** Run `/speckit-specify` with the user's request (Spec Kit 1.1.3 creates `specs/<NNN-slug>/spec.md`, numbered
    `001`, `002`, …). Requirements are lines `- **FR-001**: …`; each user story has `**Given** … **When** … **Then** …`
    scenarios. Resolve open points with `/speckit-clarify`. Replace every template placeholder (`[FEATURE NAME]`,
    `[Brief Title]`, "System MUST [specific capability …]") and delete unused example lines. Then run
    `.lockflight/bin/lockflight phase check specify` until it passes.
-2. **Human gate — spec.** Ask the user to review `spec.md` and approve it with `/lockflight:approve spec`. Wait.
+2. **Human gate — spec.** Ask the user to review `spec.md` and approve it (`/lockflight:approve spec`, see Approvals). Wait.
 3. **Plan and tasks.** Run `/speckit-plan`, then `/speckit-tasks`. Every story task cites its requirements `(FR-001)`; within a
    story the stub declaration comes first, then the test tasks, then the implementation. Tests are mandatory here, whatever
    the stock `/speckit-tasks` text says (the Lockflight preset appends these rules to it). Run
    `.lockflight/bin/lockflight phase check tasks` until it passes; a failure names each misplaced task, its line and why it
    counted as implementation.
-4. **Human gate — tasks.** Ask the user to approve with `/lockflight:approve tasks`. Wait.
+4. **Human gate — tasks.** Ask the user to approve the tasks (`/lockflight:approve tasks`, see Approvals). Wait.
 5. **Start.** `.lockflight/bin/lockflight redgreen start` records the test inventory (once per feature) and runs the suite once.
    If it warns that tests already fail, tell the user: they decide whether to run `.lockflight/bin/lockflight baseline tests` in
    a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused), and merge that
    baseline in its own pull request first.
 6. **For each user story, one red/green cycle:**
    1. Declare the members the tests need with bodies `throw new NotImplementedException();`.
-   2. Write the story's xUnit v3 tests, each tagged `[Trait("Requirement", "FR-001")]`, asserting the specified behaviour.
+   2. Write the story's xUnit tests (v3 or v2), each tagged `[Trait("Requirement", "FR-001")]`, asserting the specified behaviour.
    3. `.lockflight/bin/lockflight redgreen red`. Every new test must fail because of production code: the stub's `NotImplementedException` (RED_STUB) or an assertion in a test that calls the production code (RED_ASSERT). If
       the red is rejected, fix the tests — never weaken an assertion to make a red "work".
 
@@ -55,12 +65,14 @@ is the engine the hooks run, and it works whatever way Lockflight was installed.
       `.lockflight/bin/lockflight redgreen reset` run in a separate terminal window (not with `!` in Claude Code: that runs
       inside the session and is refused).
    5. If `red` or `green` refuses because an approval is stale (spec.md, plan.md or tasks.md changed after approval), show the
-      user what changed and ask them to approve again (`/lockflight:approve`): they run the command in a separate terminal
-      window. Wait.
+      user what changed and ask them to approve again (see Approvals). Wait.
 7. **Verify.** `.lockflight/bin/lockflight trace` (every requirement covered by a test that went red, then green) and
-   `.lockflight/bin/lockflight gate run --profile pr --base <base branch>`. Put the trace table and the gate summary into the PR
-   body.
-8. **Deliver.** Open the PR; merging is always the user's decision.
+   `.lockflight/bin/lockflight gate run --profile pr --base <base branch>`.
+8. **Review.** Run the review of record as the `review` skill describes (`.lockflight/bin/lockflight review`; leave out
+   `--base`, `--model` and `--budget`). Fix confirmed findings in a new red/green cycle and review again; show unverified
+   ones to the user. Then run `.lockflight/bin/lockflight review status`: only its output says which findings are open.
+9. **Deliver.** Open the PR. Its body holds the trace table, the gate summary and the "Pull request summary" from
+   `review status`, unchanged. Merging is always the user's decision.
 
-If the project has no xUnit v3 tests, `redgreen` reports NOT-EARNED: say so, follow the steps without red/green, and rely on the
-gates.
+If the project has no xUnit tests, `redgreen` reports NOT-EARNED (it could not judge): say so, follow the steps without
+red/green, and rely on the gates.
