@@ -1,12 +1,16 @@
+using System.Text.RegularExpressions;
+
 namespace Lockflight.Cli.Hooks;
 
 /// <summary>
 /// PowerShell cmdlets that write, by full name (in either dialect) or alias (PowerShell only): the <c>Set-Content</c>/
 /// <c>Add-Content</c>/<c>Out-File</c>/<c>Tee-Object</c>/<c>Set-Item</c>/<c>New-Item</c> family write their paths;
 /// <c>Remove-Item</c> deletes them as trees; <c>Copy-Item</c> writes the destination and <c>DEST\&lt;name&gt;</c> (a tree with
-/// <c>-Recurse</c>); <c>Move-Item</c> and <c>Rename-Item</c> move whole directories, so source and target are trees.
+/// <c>-Recurse</c>); <c>Move-Item</c> and <c>Rename-Item</c> move whole directories, so source and target are trees;
+/// <c>Invoke-WebRequest</c>/<c>Invoke-RestMethod</c> write their <c>-OutFile</c>; <c>Expand-Archive</c> rewrites its destination
+/// tree. A path may be an array (<c>a,b</c>), each element checked too, and carry a provider prefix (<c>FileSystem::C:\x</c>).
 /// </summary>
-internal static class PowerShellWriteTargets
+internal static partial class PowerShellWriteTargets
 {
     private static readonly string[] PathParameters = ["path", "literalpath", "filepath"];
 
@@ -21,19 +25,41 @@ internal static class PowerShellWriteTargets
         ["ren"] = "rename-item", ["rni"] = "rename-item",
         ["sc"] = "set-content", ["ac"] = "add-content", ["clc"] = "clear-content", ["ni"] = "new-item", ["si"] = "set-item",
         ["tee"] = "tee-object", ["cli"] = "clear-item", ["epcsv"] = "export-csv",
+        ["iwr"] = "invoke-webrequest", ["irm"] = "invoke-restmethod",
     };
+
+    private static readonly HashSet<string> OtherWriters = ["remove-item", "copy-item", "move-item", "rename-item", "invoke-webrequest", "invoke-restmethod", "expand-archive"];
 
     /// <summary>The cmdlet a program name stands for in the dialect; null when it is not a writing cmdlet.</summary>
     public static string? Cmdlet(string program, ShellDialect dialect)
     {
         string name = dialect == ShellDialect.PowerShell && Aliases.TryGetValue(program, out string? cmdlet) ? cmdlet : program;
-        return PathWriters.Contains(name) || name is "remove-item" or "copy-item" or "move-item" or "rename-item" ? name : null;
+        return PathWriters.Contains(name) || OtherWriters.Contains(name) ? name : null;
     }
 
     /// <summary>A cmdlet fed by a pipeline without a path of its own (<c>… | Remove-Item</c>) writes paths that are not shown.</summary>
     public static CommandWrites Of(string cmdlet, IReadOnlyList<string> arguments, bool pipedInput)
     {
+        CommandWrites writes = Written(cmdlet, arguments, pipedInput);
+        return writes with { Files = [.. writes.Files.SelectMany(Elements)], Trees = [.. writes.Trees.SelectMany(Elements)] };
+    }
+
+    private static CommandWrites Written(string cmdlet, IReadOnlyList<string> arguments, bool pipedInput)
+    {
         PowerShellArguments parsed = PowerShellArguments.Parse(arguments);
+        if (cmdlet is "invoke-webrequest" or "invoke-restmethod")
+        {
+            return CommandWrites.OfFiles(parsed.Values("outfile"));
+        }
+
+        if (cmdlet == "expand-archive")
+        {
+            string destination = FirstOf(parsed.Values("destinationpath", "destination"))
+                ?? parsed.Positional.Skip(parsed.Values("path", "literalpath").Count > 0 ? 0 : 1).FirstOrDefault()
+                ?? ShellArguments.CurrentDirectory;
+            return CommandWrites.OfFilesAndTrees([destination]);
+        }
+
         List<string> named = [.. parsed.Values(PathParameters)];
         if (pipedInput && named.Count == 0 && parsed.Positional.Count == 0)
         {
@@ -106,4 +132,24 @@ internal static class PowerShellWriteTargets
     private static List<string> Targets(PowerShellArguments parsed, List<string> named) => named.Count > 0 ? named : [.. parsed.Positional.Take(1)];
 
     private static string? FirstOf(IReadOnlyList<string> values) => values.Count > 0 ? values[0] : null;
+
+    /// <summary>
+    /// The path without a provider prefix, and each element of an array (<c>a,b</c>; a name with a comma in it is kept whole as
+    /// well).
+    /// </summary>
+    private static IEnumerable<string> Elements(string path)
+    {
+        string plain = ProviderPrefix().Replace(path, string.Empty);
+        yield return plain;
+        if (plain.Contains(',', StringComparison.Ordinal))
+        {
+            foreach (string element in plain.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                yield return ProviderPrefix().Replace(element, string.Empty);
+            }
+        }
+    }
+
+    [GeneratedRegex(@"^(Microsoft\.PowerShell\.Core\\)?FileSystem::", RegexOptions.IgnoreCase)]
+    private static partial Regex ProviderPrefix();
 }

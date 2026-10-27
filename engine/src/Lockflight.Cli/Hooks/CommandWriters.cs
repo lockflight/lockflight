@@ -12,7 +12,7 @@ internal static class CommandWriters
         if (command.ArgumentsFromInput)
         {
             // xargs: the operands come from stdin, so a writer behind it has targets the command line does not show.
-            return IsWriter(program, dialect) ? new CommandWrites([], [], [], $"xargs {program}") : CommandWrites.None;
+            return IsWriter(command, dialect) ? new CommandWrites([], [], [], $"xargs {program}") : CommandWrites.None;
         }
 
         if (PowerShellWriteTargets.Cmdlet(program, dialect) is string cmdlet)
@@ -26,6 +26,8 @@ internal static class CommandWriters
             "dotnet" => DotnetFormatTargets.Of(arguments),
             _ when CopyCommandTargets.Programs.Contains(program) => CopyCommandTargets.Of(program, arguments),
             _ when InPlaceEditTargets.Programs.Contains(program) => InPlaceEditTargets.Of(program, arguments),
+            _ when FilterCommandTargets.Programs.Contains(program) => FilterCommandTargets.Of(program, arguments),
+            _ when WindowsCopyCommandTargets.Programs.Contains(program) => WindowsCopyCommandTargets.Of(program, arguments),
             _ when ExtractCommandTargets.Programs.Contains(program) => ExtractCommandTargets.Of(program, arguments),
             _ when FileCommandTargets.Programs.Contains(program) => FileCommandTargets.Of(program, arguments, words => Writes(words, dialect)),
             _ => CommandWrites.None,
@@ -45,15 +47,25 @@ internal static class CommandWriters
             return nested.Hidden is not null || ShellWriteTargets.Find(nested.Command, nested.Dialect).HasTargets;
         }
 
-        return IsWriter(command.Program, dialect);
+        return IsWriter(command, dialect);
     }
 
+    /// <summary>
+    /// Whether the command is one the scanner knows to write files given suitable arguments; a filter (<c>sort</c>, <c>awk</c>, …)
+    /// only with the option that makes it write (<c>-o</c>, <c>-i inplace</c>, …).
+    /// </summary>
+    public static bool IsWriter(ShellCommand command, ShellDialect dialect) =>
+        FilterCommandTargets.Programs.Contains(command.Program)
+            ? FilterCommandTargets.Of(command.Program, command.Arguments).Files.Count > 0
+            : IsWriter(command.Program, dialect);
+
     /// <summary>Whether the program is one the scanner knows to write files given suitable arguments.</summary>
-    public static bool IsWriter(string program, ShellDialect dialect) =>
+    private static bool IsWriter(string program, ShellDialect dialect) =>
         PowerShellWriteTargets.Cmdlet(program, dialect) is not null
         || OtherWriters.Contains(program)
         || CopyCommandTargets.Programs.Contains(program)
         || InPlaceEditTargets.Programs.Contains(program)
+        || WindowsCopyCommandTargets.Programs.Contains(program)
         || ExtractCommandTargets.Programs.Contains(program)
         || (FileCommandTargets.Programs.Contains(program) && program != "find");
 }

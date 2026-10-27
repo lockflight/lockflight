@@ -3,7 +3,7 @@ namespace Lockflight.Cli.Hooks;
 /// <summary>
 /// git subcommands that overwrite or delete working-tree files the agent did not name as edits: <c>checkout -- &lt;paths&gt;</c>,
 /// <c>checkout -f</c>, <c>switch -f</c>, <c>restore</c>, <c>stash</c>, <c>reset --hard</c>, <c>clean -f</c>, <c>read-tree -u</c>,
-/// <c>apply</c>, <c>rm</c>, <c>mv</c> and <c>archive -o</c> (the paths an archive is made of are only read). Pathspecs may be
+/// <c>apply</c>, <c>rm</c>, <c>mv</c>, <c>checkout-index</c> and <c>archive -o</c> (the paths an archive is made of are only read). Pathspecs may be
 /// files or directories, so each counts as both. Commands that only bring in committed states (<c>switch &lt;branch&gt;</c>,
 /// <c>merge</c>, <c>pull</c>, <c>rebase</c>, <c>cherry-pick</c>, <c>am</c>) are not treated as writes: their content is reviewed
 /// where it was committed.
@@ -63,8 +63,15 @@ internal static class GitWriteTargets
             "mv" => [.. afterSeparator, .. ShellArguments.Operands(beforeSeparator, [])],
             "worktree" => WorktreePath(arguments),
             "archive" when ShellArguments.OptionValue(arguments, "-o", "--output") is string output => [output],
+            "checkout-index" when arguments.Contains("--stdin") => [],
+            "checkout-index" => CheckoutIndexPaths(beforeSeparator, afterSeparator),
             _ => [],
         };
+
+        if (subcommand == "checkout-index" && arguments.Contains("--stdin"))
+        {
+            return CommandWrites.Hiding("git checkout-index --stdin");
+        }
 
         if (subcommand == "mv" && paths.Count >= 2)
         {
@@ -73,6 +80,23 @@ internal static class GitWriteTargets
         }
 
         return CommandWrites.OfFilesAndTrees(paths);
+    }
+
+    /// <summary>
+    /// <c>git checkout-index [-a] [--prefix=P] [--] [&lt;file&gt;…]</c> writes the named files, or every indexed file with <c>-a</c>;
+    /// with a prefix they land under it instead (a tree: <c>out/</c>, or the directory a name prefix sits in).
+    /// </summary>
+    private static List<string> CheckoutIndexPaths(List<string> beforeSeparator, List<string> afterSeparator)
+    {
+        List<string> files = [.. ShellArguments.Operands(beforeSeparator, []), .. afterSeparator];
+        string? prefix = beforeSeparator.FirstOrDefault(argument => argument.StartsWith("--prefix=", StringComparison.Ordinal))?["--prefix=".Length..];
+        bool all = ShellArguments.HasFlag(beforeSeparator, "a", "--all");
+        if (prefix is { Length: > 0 })
+        {
+            return [prefix.EndsWith('/') ? prefix.TrimEnd('/') : ShellArguments.Parent(prefix)];
+        }
+
+        return all ? [ShellArguments.CurrentDirectory] : files;
     }
 
     /// <summary><c>git worktree add [options] &lt;path&gt; [&lt;commit-ish&gt;]</c> checks a whole tree out at the path.</summary>

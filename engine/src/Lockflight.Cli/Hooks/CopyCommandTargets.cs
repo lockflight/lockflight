@@ -4,7 +4,9 @@ namespace Lockflight.Cli.Hooks;
 /// <c>cp</c>, <c>mv</c>, <c>install</c>, <c>ln</c> and <c>rsync</c>. The destination may be a file or a directory, so it counts as
 /// written and so does <c>DEST/&lt;name of each source&gt;</c> (also with <c>-t DIR</c>/<c>--target-directory=DIR</c>). A copy that
 /// can create a directory tree (<c>cp -r</c>, every <c>mv</c>, <c>rsync</c>) or whose source names are unknown (<c>$VAR</c>) makes the
-/// destination a tree. <c>mv</c> also removes its sources.
+/// destination a tree. <c>mv</c> also removes its sources. A hard link (<c>ln</c> without <c>-s</c>, <c>cp -l</c>/<c>--link</c>) shares
+/// its source's content, so a later write through the link changes the source: the source counts as written (as a tree when the
+/// copy is recursive). <c>rsync --remove-source-files</c> deletes the files under its sources.
 /// </summary>
 internal static class CopyCommandTargets
 {
@@ -40,6 +42,8 @@ internal static class CopyCommandTargets
             : operands.Count == 1 ? (ShellArguments.CurrentDirectory, operands) : (operands[^1], operands[..^1]);
         bool move = program == "mv";
         bool recursive = move || (program == "cp" && ShellArguments.HasFlag(arguments, "rRa", "--recursive", "--archive"));
+        bool hardLink = (program == "ln" && !ShellArguments.HasFlag(arguments, "s", "--symbolic"))
+            || (program == "cp" && ShellArguments.HasFlag(arguments, "l", "--link"));
         bool parents = program == "cp" && arguments.Contains("--parents");
         bool intoDirectory = !ShellArguments.HasFlag(arguments, "T", "--no-target-directory");
 
@@ -68,6 +72,11 @@ internal static class CopyCommandTargets
             files.AddRange(sources);
             trees.AddRange(sources);
         }
+        else if (hardLink)
+        {
+            files.AddRange(sources);
+            trees.AddRange(recursive ? sources : []);
+        }
 
         return new CommandWrites(files, trees, [], null);
     }
@@ -83,11 +92,12 @@ internal static class CopyCommandTargets
         string destination = operands[^1];
         List<string> sources = operands[..^1];
         List<string> files = [destination, .. sources.Select(ShellArguments.BaseName).OfType<string>().Select(name => ShellArguments.Join(destination, name))];
-        if (arguments.Contains("--remove-source-files"))
+        bool removesSources = arguments.Contains("--remove-source-files");
+        if (removesSources)
         {
             files.AddRange(sources);
         }
 
-        return new CommandWrites(files, [destination], [], null);
+        return new CommandWrites(files, [destination, .. removesSources ? sources : []], [], null);
     }
 }

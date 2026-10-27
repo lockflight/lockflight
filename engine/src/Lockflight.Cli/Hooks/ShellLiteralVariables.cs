@@ -114,7 +114,7 @@ internal sealed partial class ShellLiteralVariables(ShellDialect dialect, Strong
             return;
         }
 
-        IReadOnlyList<ShellWord> arguments = [.. words.Skip(words.Count - command.Arguments.Count)];
+        IReadOnlyList<ShellWord> arguments = command.ProgramIndex < 0 ? [] : [.. words.Skip(command.ProgramIndex + 1)];
         RunBuiltin(command.Program, arguments, before, currentShell);
     }
 
