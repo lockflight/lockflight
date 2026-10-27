@@ -30,6 +30,35 @@ public sealed class RedClassifierTests
     public void FailuresAreJudgedByExceptionAndWhereItWasThrown(string exception, string topFrame, string expected) =>
         Assert.Equal(RedClassNames.Parse(expected), Classify(Fail(exception, topFrame, file: null), callsProduction: true));
 
+    /// <summary>Exception types and top frames as the libraries report them in a real xUnit v3 run (the native report) and a VSTest run (TRX).</summary>
+    [Theory]
+    [InlineData(VSTestRunner.AssertionException, "Shop.Tests.ShippingTests.Costs()")]
+    [InlineData("Shouldly.ShouldAssertException", "Shop.Tests.ShippingTests.Costs()")]
+    [InlineData("Shouldly.ShouldMatchApprovedException", "Shop.Tests.ShippingTests.Costs()")]
+    [InlineData("Shouldly.ShouldCompleteInException", "Shop.Tests.ShippingTests.Costs()")]
+    [InlineData("Xunit.Sdk.XunitException", "FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)")]
+    [InlineData(null, "FluentAssertions.Execution.LateBoundTestFramework.Throw(String message)")]
+    [InlineData("FluentAssertions.Execution.AssertionFailedException", "FluentAssertions.Execution.FallbackTestFramework.Throw(String message)")]
+    [InlineData("Xunit.Sdk.XunitException", "AwesomeAssertions.Execution.LateBoundTestFramework.Throw(String message)")]
+    [InlineData(null, "AwesomeAssertions.Execution.LateBoundTestFramework.Throw(String message)")]
+    [InlineData("AwesomeAssertions.Execution.AssertionFailedException", "AwesomeAssertions.Execution.FallbackTestFramework.Throw(String message)")]
+    [InlineData("NSubstitute.Exceptions.ReceivedCallsException", "NSubstitute.Core.ReceivedCallsExceptionThrower.Throw(ICallSpecification callSpecification)")]
+    [InlineData("NSubstitute.Exceptions.CallSequenceNotFoundException", "NSubstitute.Core.SequenceChecking.SequenceInOrderAssertion.Assert(IQueryResults queryResult)")]
+    [InlineData("Moq.MockException", "Moq.Mock.Verify(Mock mock, LambdaExpression expression, Times times, String failMessage)")]
+    [InlineData("VerifyException", null)]
+    public void AssertionLibraryFailuresInATestThatCallsProductionCodeAreAssertionReds(string? exception, string? topFrame)
+    {
+        Assert.Equal(RedClass.RedAssert, Classify(Fail(exception, topFrame, file: null), callsProduction: true));
+        Assert.Equal(RedClass.RedNoProduction, Classify(Fail(exception, topFrame, file: null), callsProduction: false));
+    }
+
+    [Theory]
+    [InlineData("NSubstitute.Exceptions.CouldNotSetReturnDueToNoLastCallException", "NSubstitute.Core.ConfigureCall.SetResultForLastCall(IReturn valueToReturn)", "RED_OTHER")]
+    [InlineData(null, "Shop.Tests.ShippingTests.Costs()", "RED_IN_TEST")]
+    [InlineData("VerifyCheckException", "VerifyTests.VerifyChecks.Run()", "RED_OTHER")]
+    public void MisusingAnAssertionLibraryIsNotAnAssertionRed(string? exception, string topFrame, string expected) =>
+        Assert.Equal(RedClassNames.Parse(expected), Classify(Fail(exception, topFrame, file: null), callsProduction: true));
+
     [Fact]
     public void AnAssertionInATestThatNeverCallsProductionCodeIsRejected() =>
         Assert.Equal(RedClass.RedNoProduction, Classify(Fail("Xunit.Sdk.EqualException", "Shop.Tests.ShippingTests.Costs()", file: null), callsProduction: false));
@@ -73,7 +102,7 @@ public sealed class RedClassifierTests
 
     private static RedClass Classify(ExecutedTest row, bool callsProduction) => RedClassifier.Classify([row], TestClasses, TestDirectories, Production, callsProduction);
 
-    private static ExecutedTest Fail(string exception, string topFrame, string? file) => new("a:k", "n", TestOutcome.Fail, exception, topFrame, file);
+    private static ExecutedTest Fail(string? exception, string? topFrame, string? file) => new("a:k", "n", TestOutcome.Fail, exception, topFrame, file);
 
     private static ExecutedTest Row(TestOutcome outcome) => new("a:k", "n", outcome, null, null);
 }

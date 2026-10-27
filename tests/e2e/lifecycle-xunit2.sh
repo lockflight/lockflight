@@ -115,6 +115,28 @@ public sealed class ArchiveTests
 }
 CS
 expect 0 "a red whose test asserts nothing is accepted with an assertion-free warning" "assert nothing (assertion-free): ArchiveTests.ArchivesTheOrder" -- "$E" redgreen red
+sed -i.bak 's/public void Archive() => throw new NotImplementedException();/public void Archive() { }/' src/Orders/Order.cs && rm src/Orders/Order.cs.bak
+expect 0 "green after the archive cycle" -- "$E" redgreen green
+
+# An xUnit v2 assertion on a value production code returns is an accepted red: VSTest prints no exception type for it.
+sed -i.bak 's/    public void Archive() { }/    public bool IsArchived => false;\n\n    public void Archive() { }/' src/Orders/Order.cs && rm src/Orders/Order.cs.bak
+cat > tests/Orders.Tests/ArchivedTests.cs <<'CS'
+namespace Orders.Tests;
+
+public sealed class ArchivedTests
+{
+    [Fact]
+    [Trait("Requirement", "FR-010")]
+    public void AnArchivedOrderSaysSo()
+    {
+        Orders.Order order = new();
+        order.Archive();
+
+        Assert.True(order.IsArchived);
+    }
+}
+CS
+expect 0 "an assertion failure on a production value is an accepted red (RED_ASSERT)" "RED_ASSERT" -- "$E" redgreen red
 
 echo "lifecycle (xUnit v2 / VSTest): $([ "$failures" = 0 ] && echo "all checks passed" || echo "$failures failed")"
 [ "$failures" = 0 ]
