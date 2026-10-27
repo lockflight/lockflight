@@ -23,4 +23,7 @@ internal enum HookEvent
 
     /// <summary>The person's typed prompt expands a slash command — <c>/lockflight:approve</c> records an approval in the session.</summary>
     UserPromptExpansion = 6,
+
+    /// <summary>A task is being marked completed — allowed only when the stop gate has passed for the current tree.</summary>
+    TaskCompleted = 7,
 }

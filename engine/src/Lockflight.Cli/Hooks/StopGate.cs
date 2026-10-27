@@ -11,7 +11,8 @@ namespace Lockflight.Cli.Hooks;
 /// </summary>
 internal static class StopGate
 {
-    public static async Task<HookDecision> DecideAsync(Manifest manifest, TimeProvider time, CancellationToken cancellationToken)
+    /// <param name="sessionId">The Claude Code session, recorded with a block so the TaskCompleted hook does not block on it again.</param>
+    public static async Task<HookDecision> DecideAsync(Manifest manifest, string? sessionId, TimeProvider time, CancellationToken cancellationToken)
     {
         if (!manifest.StopGate)
         {
@@ -26,6 +27,7 @@ internal static class StopGate
         {
             GateResult cached = new(manifest.Root, GateProfile.Stop, Verdict.Pass, TestsTotal: null, Steps: []);
             await RecordAsync(manifest, cached, Run(time, started, StopCacheResult.Hit), time, cancellationToken);
+            new StopBlockRecord(manifest.Root).Clear();
             return HookDecision.Allow;
         }
 
@@ -46,11 +48,14 @@ internal static class StopGate
         }
 
         await RecordAsync(manifest, result, Run(time, started, cacheResult), time, cancellationToken);
+        StopBlockRecord blocks = new(manifest.Root);
         if (!VerdictNames.AllowsNextStep(result.Verdict))
         {
+            await blocks.RememberAsync(sessionId, inputsHash, cancellationToken);
             return Blocked(result);
         }
 
+        blocks.Clear();
         if (inputsHash is not null)
         {
             await cache.RememberPassAsync(inputsHash, cancellationToken);

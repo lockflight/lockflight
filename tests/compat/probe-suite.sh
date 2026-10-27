@@ -20,6 +20,13 @@ checkenv() { # $1=name $2=expected exit $3=project dir $4=json
   printf '%-44s expected=%s got=%s %s\n' "$1" "$2" "$got" "$r"
 }
 fp() { printf '"file_path":"%s"' "$(winpath "$1")"; }
+# A task being marked completed (TaskCompleted); $1=name $2=expected exit $3=dir [$4=text stderr must contain].
+checktask() {
+  printf '{"cwd":"%s","hook_event_name":"TaskCompleted","session_id":"probe","task_id":"t1","task_subject":"Probe task"}' "$(winpath "$3")" \
+    | "$SHIM" task-completed >/dev/null 2>"$WORK/err"; got=$?
+  if [ "$got" = "$2" ] && { [ -z "${4:-}" ] || grep -qF -- "$4" "$WORK/err"; }; then pass=$((pass+1)); r=ok; else fail=$((fail+1)); r="FAIL ($(head -c 400 "$WORK/err"))"; fi
+  printf '%-44s expected=%s got=%s %s\n' "$1" "$2" "$got" "$r"
+}
 # A typed slash command (UserPromptExpansion); $1=dir $2=command name $3=arguments.
 expansion() { printf '{"cwd":"%s","hook_event_name":"UserPromptExpansion","expansion_type":"slash_command","command_name":"%s","command_args":"%s","command_source":"plugin"}' "$(winpath "$1")" "$2" "$3"; }
 checkexp() { # $1=name $2=expected exit $3=entrypoint $4=attended $5=json [$6=text stderr must contain]
@@ -35,6 +42,8 @@ version=$("$ENGINE" version)
 printf '{"version":1,"isRoot":true,"tools":{"lockflight.cli":{"version":"%s","commands":["lockflight"]}}}' "$version" > "$proj/dotnet-tools.json"
 
 check "no manifest: Write"                0 "$plain" "$(json "$plain" Write "$(fp "$plain/a")")"
+checktask "no manifest: task completed"    0 "$plain"
+checktask "not restored: task completed"   0 "$proj"
 check "not restored: Write"               2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 check "not restored: Read"                0 "$proj"  "$(json "$proj" Read "$(fp "$proj/src/a.cs")")"
 check "not restored: Bash restore+link"   0 "$proj"  "$(json "$proj" Bash "\"command\":\"dotnet tool restore && dotnet lockflight link\"")"
@@ -86,6 +95,14 @@ checkexp "linked: approve, unattended refused"  2 cli 0 "$(expansion "$proj" loc
 checkexp "linked: approve, attended shows code" 2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "/lockflight:approve spec "
 checkexp "linked: approve, wrong code refused"  2 cli 1 "$(expansion "$proj" lockflight:approve "spec zzzzzz")" "not the code shown"
 check "linked: malformed JSON"            2 "$proj"  '{"cwd":"'"$proj"'","tool_name":'
+checktask "linked, stop gate off: task completed" 0 "$proj"
+# With the stop gate on, a task is completed only after the gate passed for the tree; nothing has passed here.
+gated="$WORK/gated"; mkdir -p "$gated/.lockflight/bin"
+printf 'stop:\n  gate: true\n' > "$gated/lockflight.yaml"; cp "$proj/dotnet-tools.json" "$gated/"
+cp "$linked" "$gated/.lockflight/bin/"
+printf '.lockflight/\n' > "$gated/.gitignore"
+git -C "$gated" init -q && git -C "$gated" add -A && git -C "$gated" -c user.email=p@p -c user.name=p commit -qm probe
+checktask "linked, stop gate on: task blocked" 2 "$gated" "Probe task"
 # Shell writes, checked while the pin still matches (after the pin changes below, every call is blocked anyway).
 check "linked: bash redirect into protected" 2 "$proj" "$(json "$proj" Bash "\"command\":\"echo x > secrets/k\"")"
 check "linked: git checkout into protected" 2 "$proj" "$(json "$proj" Bash "\"command\":\"git checkout HEAD -- secrets/k\"")"
@@ -157,7 +174,15 @@ case "$ENGINE" in
   *) printf '#!/bin/sh\nexit 3\n' > "$proj/.lockflight/bin/lockflight"; crash=3 ;;
 esac
 check "crashing engine: tool call blocked" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
+checktask "crashing engine: task not blocked" "$crash" "$proj"
 checkexp "crashing engine: approve blocked"  2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
 checkexp "crashing engine: other slash command" "$crash" cli 1 "$(expansion "$proj" lockflight:status "")"
+
+# An engine older than the plugin refuses the event it does not know; that must not block every task completion.
+case "$ENGINE" in
+  *.exe) ;;
+  *) printf '#!/bin/sh\ncat >/dev/null\necho "lockflight: this engine does not know the hook event it was called for; update it with: x" >&2\nexit 2\n' > "$proj/.lockflight/bin/lockflight"
+     checktask "older engine: unknown event let through" 0 "$proj" ;;
+esac
 
 echo "passed=$pass failed=$fail"; rm -rf "$WORK"; [ "$fail" = 0 ]

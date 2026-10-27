@@ -86,7 +86,8 @@ internal sealed class HookCommand(CliContext context)
         {
             HookEvent.PreToolUse => ApprovalCommandRelay.Decide(input)
                 ?? await new ProtectedPathGuard(context.Error, context.Environment, new DirectoryReads()).DecideAsync(input, manifest),
-            HookEvent.Stop => await StopGate.DecideAsync(manifest, context.Time, cancellationToken),
+            HookEvent.Stop => await StopGate.DecideAsync(manifest, input.SessionId, context.Time, cancellationToken),
+            HookEvent.TaskCompleted => await TaskCompletedGate.DecideAsync(manifest, input, cancellationToken),
             _ => HookDecision.Allow,
         };
 

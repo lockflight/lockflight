@@ -24,7 +24,7 @@ public sealed class StopGateTests : IDisposable
         await GitAsync(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base"]);
         Manifest manifest = ManifestLocator.Discover(root.FullName).Manifest!;
 
-        HookDecision decision = await StopGate.DecideAsync(manifest, TimeProvider.System, cancellationToken);
+        HookDecision decision = await StopGate.DecideAsync(manifest, sessionId: null, TimeProvider.System, cancellationToken);
 
         Assert.DoesNotContain("MSB1011", decision.Reason ?? string.Empty, StringComparison.Ordinal);
         Assert.Contains("build=PASS", decision.Reason ?? string.Empty, StringComparison.Ordinal);

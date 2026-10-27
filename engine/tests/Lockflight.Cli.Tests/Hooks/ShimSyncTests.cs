@@ -27,6 +27,26 @@ public sealed partial class ShimSyncTests
         Assert.Equal(RecoveryCommands.Commands.Order(StringComparer.Ordinal), shimCommands.Order(StringComparer.Ordinal));
     }
 
+    [Fact]
+    public async Task TheShimRecognisesTheRefusalOfAnEngineThatDoesNotKnowAnEvent()
+    {
+        Match refusal = UnknownEventRefusalCase().Match(Shim.Value);
+        DirectoryInfo project = Directory.CreateTempSubdirectory("lockflight-shim-event-");
+        try
+        {
+            File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 1\n");
+
+            (_, _, string error) = await TestConsole.RunAsync(["hook", "not-an-event"], "{}", project.FullName);
+
+            Assert.True(refusal.Success, "the shim's unknown-event case was not found");
+            Assert.Contains(refusal.Groups["text"].Value, error, StringComparison.Ordinal);
+        }
+        finally
+        {
+            project.Delete(recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("0.2.0-alpha.4.dev.20261001")]
     [InlineData("0.2.1-0.dev.1")]
@@ -74,4 +94,7 @@ public sealed partial class ShimSyncTests
 
     [GeneratedRegex(@"grep -(?<flags>[A-Za-z]+) -e '(?<pattern>[^']*)'")]
     private static partial Regex DevelopmentGrep();
+
+    [GeneratedRegex(@"case ""\$refusal"" in \*""(?<text>[^""]+)""\*\)")]
+    private static partial Regex UnknownEventRefusalCase();
 }

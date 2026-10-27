@@ -11,6 +11,7 @@ internal static class HookEventNames
         "subagent-stop" => HookEvent.SubagentStop,
         "session-start" => HookEvent.SessionStart,
         "user-prompt-expansion" => HookEvent.UserPromptExpansion,
+        "task-completed" => HookEvent.TaskCompleted,
         _ => HookEvent.Unknown,
     };
 
@@ -22,6 +23,7 @@ internal static class HookEventNames
         HookEvent.SubagentStop => "subagent-stop",
         HookEvent.SessionStart => "session-start",
         HookEvent.UserPromptExpansion => "user-prompt-expansion",
+        HookEvent.TaskCompleted => "task-completed",
         _ => "unknown",
     };
 }
