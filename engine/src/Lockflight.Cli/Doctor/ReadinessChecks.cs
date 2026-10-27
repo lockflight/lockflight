@@ -90,11 +90,26 @@ internal static class ReadinessChecks
         return checks;
     }
 
-    /// <summary>The standard profile's init writes the evidence rule into .gitattributes; the lite profile does not.</summary>
+    /// <summary>
+    /// The project uses the standard lifecycle: the standard profile's init wrote the evidence rule into .gitattributes (the lite
+    /// profile does not), or the Lockflight Spec Kit preset is installed and enabled (as <c>adopt apply</c> does, after either init).
+    /// </summary>
     private static bool IsStandardProfile(string root)
     {
         string path = Path.Combine(root, ".gitattributes");
-        return File.Exists(path) && File.ReadAllLines(path).Any(line => line.Trim() == GitAttributesUpdater.Rule);
+        if (File.Exists(path) && File.ReadAllLines(path).Any(line => line.Trim() == GitAttributesUpdater.Rule))
+        {
+            return true;
+        }
+
+        try
+        {
+            return IsEnabled(RegisteredPreset(root));
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static DoctorCheck CheckManifest(string root) => ManifestLocator.Discover(root) switch
@@ -292,22 +307,30 @@ internal static class ReadinessChecks
             return new(PresetCheck, missing, "Spec Kit is not initialised (.specify/ is missing)", "uvx --from specify-cli==1.1.3 specify init --here --force --integration claude --script sh");
         }
 
-        string registryPath = Path.Combine(root, ".specify", "presets", ".registry");
         JsonNode? preset;
         try
         {
-            preset = File.Exists(registryPath) ? JsonNode.Parse(File.ReadAllText(registryPath))?["presets"]?[PresetId] : null;
+            preset = RegisteredPreset(root);
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException)
         {
             return new(PresetCheck, missing, ".specify/presets/.registry is not readable JSON", AddPreset);
         }
 
-        bool enabled = preset is JsonObject && preset["enabled"]?.GetValueKind() != JsonValueKind.False;
-        return enabled
+        return IsEnabled(preset)
             ? new(PresetCheck, CheckStatus.Pass, $"installed (version {preset!["version"]?.ToString() ?? "unknown"})", null)
             : new(PresetCheck, missing, "the Lockflight Spec Kit preset is not installed or is disabled; tasks written from Spec Kit's stock template fail 'phase check tasks'", AddPreset);
     }
+
+    /// <summary>The Lockflight entry in Spec Kit's preset registry (<c>.specify/presets/.registry</c>); null when there is none.</summary>
+    /// <exception cref="JsonException">The registry is not JSON.</exception>
+    private static JsonNode? RegisteredPreset(string root)
+    {
+        string registryPath = Path.Combine(root, ".specify", "presets", ".registry");
+        return File.Exists(registryPath) ? JsonNode.Parse(File.ReadAllText(registryPath))?["presets"]?[PresetId] : null;
+    }
+
+    private static bool IsEnabled(JsonNode? preset) => preset is JsonObject && preset["enabled"]?.GetValueKind() != JsonValueKind.False;
 
     /// <summary>
     /// Every test project (or a Directory.Build file above it) must reference the configured collector's package — the MTP extension
