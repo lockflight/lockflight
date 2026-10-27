@@ -4,6 +4,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Lifecycle.Approvals;
+using Lockflight.Cli.Paths;
 using Lockflight.Cli.Updating;
 
 namespace Lockflight.Cli.Hooks;
@@ -84,7 +85,7 @@ internal sealed class HookCommand(CliContext context)
         HookDecision decision = hookEvent switch
         {
             HookEvent.PreToolUse => ApprovalCommandRelay.Decide(input)
-                ?? await new ProtectedPathGuard(context.Error, context.Environment).DecideAsync(input, manifest),
+                ?? await new ProtectedPathGuard(context.Error, context.Environment, new DirectoryReads()).DecideAsync(input, manifest),
             HookEvent.Stop => await StopGate.DecideAsync(manifest, context.Time, cancellationToken),
             _ => HookDecision.Allow,
         };

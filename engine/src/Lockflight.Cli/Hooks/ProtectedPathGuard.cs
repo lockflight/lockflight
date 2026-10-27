@@ -9,7 +9,7 @@ namespace Lockflight.Cli.Hooks;
 /// PreToolUse guard: blocks file-editing tools, and shell commands that visibly write, when they target a protected path
 /// (built-in defaults plus the manifest's rules) or a test locked during a red cycle. A guardrail, not a boundary.
 /// </summary>
-internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentReader environment)
+internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentReader environment, DirectoryReads reads)
 {
     private const int MaxWildcardMatches = 2000;
     private const int MinSiblingsToPrime = 8;
@@ -82,7 +82,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
             return HookDecision.Block("wildcard-too-broad", $"lockflight: a wildcard in this command matches more than {MaxWildcardMatches} paths; name the files or a narrower pattern.");
         }
 
-        ProtectedTreeScan scan = new(manifest.Root, [.. globs, .. testLocks.Select(testLock => testLock.Glob)]);
+        ProtectedTreeScan scan = new(manifest.Root, [.. globs, .. testLocks.Select(testLock => testLock.Glob)], reads);
         RootRelativePaths relatives = new(manifest.Root);
         return TreeDecision(scan, relatives, trees, sourceTrees, globs, testLocks, workingDirectory)
             ?? await FileDecisionAsync(relatives, [.. files, .. trees, .. sourceTrees], manifest, globs, testLocks, workingDirectory)
@@ -135,7 +135,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
                 continue;
             }
 
-            if (PathWildcards.Expand(path, workingDirectory, MaxWildcardMatches) is not IReadOnlyList<string> matches)
+            if (PathWildcards.Expand(path, workingDirectory, MaxWildcardMatches, reads) is not IReadOnlyList<string> matches)
             {
                 return null;
             }

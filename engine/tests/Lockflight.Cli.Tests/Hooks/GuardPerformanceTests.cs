@@ -1,71 +1,48 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Paths;
 
 namespace Lockflight.Cli.Tests.Hooks;
 
-[Collection(SerialPerformanceTests.Name)]
-public sealed class GuardPerformanceTests : IDisposable
+public sealed class GuardPerformanceTests(GuardPerformanceTree tree) : IClassFixture<GuardPerformanceTree>
 {
-    private const int PackageCount = 1500;
-    private const int MaxDecisionMilliseconds = 500;
-    private const int MaxTimesOneWalk = 8;
-    private const int TimedRuns = 3;
+    // Counted, not timed: a decision's directory reads are the same on every machine, so the bound can be tight without
+    // flaking on a loaded runner. "rm -rf node_modules" walks the whole tree once; a wildcard over it may read each entry a few
+    // times (its expansion lists the siblings again) but never once per sibling.
+    private const int MaxTimesOneWalk = 3;
+    private const int MaxSharedListings = 4;
 
-    private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-perf-");
-
-    public GuardPerformanceTests()
-    {
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
-        for (int index = 0; index < PackageCount; index++)
-        {
-            string package = Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "node_modules", $"p{index}", "lib")).FullName;
-            File.WriteAllText(Path.Combine(package, "index.js"), string.Empty);
-        }
-    }
-
+    /// <param name="separateWalks">Trees walked on their own: none when the siblings are most of the directory and one walk of it
+    /// serves them all; one per match when they are a small part of it (node_modules/p1* matches 611 of 1500).</param>
     [Theory]
-    [InlineData("rm -rf node_modules/*")]
-    [InlineData("rm -rf node_modules/p1*")]
-    [InlineData("rm -rf node_modules/*/lib")]
-    public async Task AWildcardOverThousandsOfDirectoriesIsDecidedQuickly(string command)
+    [InlineData("rm -rf node_modules/*", 0)]
+    [InlineData("rm -rf node_modules/p1*", 611)]
+    [InlineData("rm -rf node_modules/*/lib", 0)]
+    public async Task AWildcardOverThousandsOfDirectoriesReadsTheTreeAFewTimesAtMost(string command, int separateWalks)
     {
-        // Shared CI runners are noisy: allow several walks of the whole directory (what "rm -rf node_modules" costs anyway). The
-        // bound still catches a decision that grows faster than the tree, which is what this test is for.
-        long oneWalk = await TimeAsync("rm -rf node_modules");
-        long elapsed = await TimeAsync(command);
+        DirectoryReads oneWalk = await DecideAsync("rm -rf node_modules");
+        DirectoryReads wildcard = await DecideAsync(command);
 
-        Assert.InRange(elapsed, 0, Math.Max(MaxDecisionMilliseconds, MaxTimesOneWalk * oneWalk));
+        Assert.InRange(wildcard.Entries, GuardPerformanceTree.PackageCount, MaxTimesOneWalk * oneWalk.Entries);
+        Assert.InRange(wildcard.Listings, 1, separateWalks + MaxSharedListings);
     }
 
-    /// <summary>The best of a few timed runs after a warm-up: one run on a shared CI runner is too noisy to hold to a bound.</summary>
-    private async Task<long> TimeAsync(string command)
-    {
-        await RunAsync(command);
-        long best = long.MaxValue;
-        for (int run = 0; run < TimedRuns; run++)
-        {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            (ExitCode exitCode, _, string error) = await RunAsync(command);
-            stopwatch.Stop();
-            Assert.True(exitCode == ExitCode.Pass, error);
-            best = Math.Min(best, stopwatch.ElapsedMilliseconds);
-        }
-
-        return best;
-    }
-
-    private Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string command)
+    private async Task<DirectoryReads> DecideAsync(string command)
     {
         string payload = JsonSerializer.Serialize(new Dictionary<string, object>
         {
-            ["cwd"] = projectRoot.FullName,
+            ["cwd"] = tree.Root,
             ["tool_name"] = "Bash",
             ["tool_input"] = new Dictionary<string, string> { ["command"] = command },
         });
-        return TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
-    }
+        DirectoryReads reads = new();
+        ProtectedPathGuard guard = new(TextWriter.Null, EnvironmentReader.Of(new Dictionary<string, string>()), reads);
 
-    public void Dispose() => projectRoot.Delete(recursive: true);
+        HookDecision decision = await guard.DecideAsync(HookInput.Parse(payload)!, ManifestLocator.Discover(tree.Root).Manifest!);
+
+        Assert.Equal(HookOutcome.Allow, decision.Outcome);
+        return reads;
+    }
 }

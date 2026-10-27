@@ -16,6 +16,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
     private const string HostileShown = "^[]52;c;cHduZWQ=^G^[[2J";
 
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-terminal-");
+    private readonly ManualTime time = new(new DateTimeOffset(2026, 3, 15, 12, 0, 0, TimeSpan.Zero));
 
     [Theory]
     [InlineData("plain text", "plain text")]
@@ -73,7 +74,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
     [Fact]
     public async Task EveryCommandPrintsThroughTheSafeWriter()
     {
-        (_, string output, string error) = await TestConsole.RunAsync(["gate", "run", "--profile", Hostile], string.Empty, root.FullName);
+        (_, string output, string error) = await TestConsole.RunAsync(["gate", "run", "--profile", Hostile], string.Empty, root.FullName, time);
 
         AssertClean(output + error);
         Assert.Contains(HostileShown, output + error, StringComparison.Ordinal);
@@ -82,7 +83,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
     [Fact]
     public async Task AnUnknownCommandIsEchoedWithoutItsEscapes()
     {
-        (_, _, string error) = await TestConsole.RunAsync([Hostile], string.Empty, root.FullName);
+        (_, _, string error) = await TestConsole.RunAsync([Hostile], string.Empty, root.FullName, time);
 
         AssertClean(error);
         Assert.Contains(HostileShown, error, StringComparison.Ordinal);
@@ -97,7 +98,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
         WriteLedger($$"""{"ts":"{{Recently()}}","type":"hook.blocked","signature":"pre-tool-use:protected-path:x","summary":{{JsonSerializer.Serialize("protected-path:" + Hostile)}}}""");
         Dictionary<string, string> environment = color ? [] : new() { [EnvironmentVariables.NoColor] = "1" };
 
-        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", environment);
+        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", environment, time);
 
         Assert.Contains(HostileShown, output, StringComparison.Ordinal);
         Assert.DoesNotContain("\u001b]52", output, StringComparison.Ordinal);
@@ -112,7 +113,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
         string payload = HookPayloads.ToolCall("Write", Path.Combine(root.FullName, "secrets", $"key{Hostile}.txt"), root.FullName);
 
-        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, root.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, root.FullName, time);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         AssertClean(error);
@@ -126,7 +127,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
         string line = $$"""{"ts":"{{Recently()}}","type":"hook.blocked","signature":{{JsonSerializer.Serialize("pre-tool-use:" + Hostile)}},"summary":{{JsonSerializer.Serialize(Hostile)}},"detail":{{JsonSerializer.Serialize(Hostile)}}}""";
         WriteLedger(line, line, line);
 
-        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["ledger", "retro"], string.Empty, root.FullName);
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["ledger", "retro"], string.Empty, root.FullName, time);
 
         Assert.Equal(ExitCode.Pass, exitCode);
         AssertClean(output);
@@ -142,7 +143,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
         Directory.CreateDirectory(Path.Combine(root.FullName, "specs", feature));
         File.WriteAllText(Path.Combine(root.FullName, "specs", feature, "spec.md"), $"# Spec\n\n- **FR-001**: {Hostile}\n");
 
-        (_, string output, string error) = await TestConsole.RunAsync(["phase", "check", "specify"], string.Empty, root.FullName);
+        (_, string output, string error) = await TestConsole.RunAsync(["phase", "check", "specify"], string.Empty, root.FullName, time);
 
         AssertClean(output + error);
         Assert.Contains("001-x^[[8m", output, StringComparison.Ordinal);
@@ -169,7 +170,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
             [EnvironmentVariables.ClaudeCodeSessionAttended] = "1",
         };
 
-        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "user-prompt-expansion"], payload, root.FullName, attended);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "user-prompt-expansion"], payload, root.FullName, attended, time);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Contains("you are about to approve the spec", error, StringComparison.Ordinal);
@@ -185,7 +186,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
         Assert.DoesNotContain(Bell, text, StringComparison.Ordinal);
     }
 
-    private static string Recently() => DateTimeOffset.UtcNow.AddMinutes(-5).ToString("O", CultureInfo.InvariantCulture);
+    private string Recently() => time.Now.AddMinutes(-5).ToString("O", CultureInfo.InvariantCulture);
 
     private void WriteManifest() => File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
 
@@ -193,7 +194,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
     {
         string ledger = Path.Combine(root.FullName, ".lockflight", "ledger");
         Directory.CreateDirectory(ledger);
-        File.WriteAllLines(Path.Combine(ledger, $"events-{DateTimeOffset.UtcNow:yyyy-MM}.jsonl"), lines);
+        File.WriteAllLines(Path.Combine(ledger, $"events-{time.Now:yyyy-MM}.jsonl"), lines);
     }
 
     private string Session() => JsonSerializer.Serialize(new Dictionary<string, object> { ["workspace"] = new Dictionary<string, string> { ["project_dir"] = root.FullName } });

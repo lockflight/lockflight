@@ -12,7 +12,7 @@ internal static class PathWildcards
     public static bool HasWildcard(string path) => GlobOverlap.HasWildcard(path);
 
     /// <summary>The existing absolute paths the pattern expands to; null when there are more than <paramref name="maxMatches"/>.</summary>
-    public static IReadOnlyList<string>? Expand(string path, string workingDirectory, int maxMatches)
+    public static IReadOnlyList<string>? Expand(string path, string workingDirectory, int maxMatches, DirectoryReads reads)
     {
         string[] segments = PathRules.ToAbsolute(path, workingDirectory).Split('/');
         int firstWildcard = Array.FindIndex(segments, GlobOverlap.HasWildcard);
@@ -35,8 +35,15 @@ internal static class PathWildcards
                 }
                 else if (Directory.Exists(directory))
                 {
-                    next.AddRange(Directory.EnumerateFileSystemEntries(directory)
-                        .Where(entry => Path.GetFileName(entry) is string name && pattern.IsMatch(UnicodeNormalization.Compose(name)) && (!name.StartsWith('.') || segment.StartsWith('.'))));
+                    reads.StartListing();
+                    foreach (string entry in Directory.EnumerateFileSystemEntries(directory))
+                    {
+                        reads.SeeEntry();
+                        if (Path.GetFileName(entry) is string name && pattern.IsMatch(UnicodeNormalization.Compose(name)) && (!name.StartsWith('.') || segment.StartsWith('.')))
+                        {
+                            next.Add(entry);
+                        }
+                    }
                 }
 
                 if (next.Count > maxMatches)

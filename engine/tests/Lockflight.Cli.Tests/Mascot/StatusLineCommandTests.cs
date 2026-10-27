@@ -6,11 +6,12 @@ namespace Lockflight.Cli.Tests.Mascot;
 public sealed class StatusLineCommandTests : IDisposable
 {
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-statusline-");
+    private readonly ManualTime time = new(new DateTimeOffset(2026, 3, 15, 12, 0, 0, TimeSpan.Zero));
 
     [Fact]
     public async Task OutsideALockflightProjectItPrintsNothing()
     {
-        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), root.FullName);
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), root.FullName, time);
 
         Assert.Equal(ExitCode.Pass, exitCode);
         Assert.Empty(output);
@@ -21,7 +22,7 @@ public sealed class StatusLineCommandTests : IDisposable
     {
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
 
-        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain());
+        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
 
         Assert.Equal("Lockflight · on duty", output);
     }
@@ -38,11 +39,11 @@ public sealed class StatusLineCommandTests : IDisposable
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
         string ledger = Path.Combine(root.FullName, ".lockflight", "ledger");
         Directory.CreateDirectory(ledger);
-        string at = DateTimeOffset.UtcNow.AddMinutes(-5).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
-        File.WriteAllText(Path.Combine(ledger, $"events-{DateTimeOffset.UtcNow:yyyy-MM}.jsonl"),
+        string at = time.Now.AddMinutes(-5).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        File.WriteAllText(Path.Combine(ledger, $"events-{time.Now:yyyy-MM}.jsonl"),
             $$"""{"schema":"lockflight.ledger/v1","id":"1","ts":"{{at}}","type":"{{type}}","signature":"{{signature}}","summary":"{{summary}}","detail":null}""" + "\n");
 
-        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain());
+        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
 
         Assert.Equal($"Lockflight · {expected} · 5m ago", output);
     }
@@ -57,13 +58,13 @@ public sealed class StatusLineCommandTests : IDisposable
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
         string ledger = Path.Combine(root.FullName, ".lockflight", "ledger");
         Directory.CreateDirectory(ledger);
-        string earlier = DateTimeOffset.UtcNow.AddMinutes(-5).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
-        string later = DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
-        File.WriteAllText(Path.Combine(ledger, $"events-{DateTimeOffset.UtcNow:yyyy-MM}.jsonl"),
+        string earlier = time.Now.AddMinutes(-5).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        string later = time.Now.AddMinutes(-1).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        File.WriteAllText(Path.Combine(ledger, $"events-{time.Now:yyyy-MM}.jsonl"),
             $$"""{"ts":"{{earlier}}","type":"gate.completed","signature":"gate:stop:PASS:","summary":"PASS","trigger":"stop-hook","durationMs":900,"cache":"miss"}""" + "\n"
             + $$"""{"ts":"{{later}}","type":"{{type}}","signature":"{{signature}}","summary":"{{summary}}"}""" + "\n");
 
-        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain());
+        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
 
         Assert.Equal("Lockflight · stop gate PASS · 5m ago", output);
     }
@@ -73,7 +74,7 @@ public sealed class StatusLineCommandTests : IDisposable
     {
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
 
-        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/");
+        (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", time);
 
         Assert.Equal(2, output.Split('\n').Length);
         Assert.Contains("▀", output, StringComparison.Ordinal);

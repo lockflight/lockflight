@@ -9,7 +9,7 @@ public sealed class ShellGuardScenarioTests : IDisposable
 {
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-shell-");
 
-    private static string ScratchDirectory => Path.Combine(Path.GetTempPath(), "lockflight-scratch");
+    private readonly DirectoryInfo scratchDirectory = Directory.CreateTempSubdirectory("lockflight-scratch-");
 
     // How an agent writes a path in Git Bash on Windows: forward slashes keep it literal (backslashes would be escapes).
     private static string ShellPath(string path) => path.Replace('\\', '/');
@@ -160,7 +160,7 @@ public sealed class ShellGuardScenarioTests : IDisposable
     [InlineData("export S={scratch} && echo x > ${S}/notes.txt")]
     public async Task WritesThroughAVariableSetToAScratchDirectoryAreAllowed(string command)
     {
-        string resolved = command.Replace("{scratch}", ShellPath(ScratchDirectory), StringComparison.Ordinal);
+        string resolved = command.Replace("{scratch}", ShellPath(scratchDirectory.FullName), StringComparison.Ordinal);
 
         (ExitCode exitCode, _, string error) = await RunAsync("Bash", resolved);
 
@@ -183,7 +183,7 @@ public sealed class ShellGuardScenarioTests : IDisposable
     [InlineData("S={scratch}; git archive -o lockflight.yaml HEAD")]
     public async Task WritesThroughAVariableNotKnownToBeOutsideStayBlocked(string command)
     {
-        string resolved = command.Replace("{scratch}", ShellPath(ScratchDirectory), StringComparison.Ordinal).Replace("{root}", ShellPath(projectRoot.FullName), StringComparison.Ordinal);
+        string resolved = command.Replace("{scratch}", ShellPath(scratchDirectory.FullName), StringComparison.Ordinal).Replace("{root}", ShellPath(projectRoot.FullName), StringComparison.Ordinal);
 
         (ExitCode exitCode, _, _) = await RunAsync("Bash", resolved);
 
@@ -244,5 +244,9 @@ public sealed class ShellGuardScenarioTests : IDisposable
         return TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
     }
 
-    public void Dispose() => projectRoot.Delete(recursive: true);
+    public void Dispose()
+    {
+        projectRoot.Delete(recursive: true);
+        scratchDirectory.Delete(recursive: true);
+    }
 }
