@@ -1,5 +1,6 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Paths;
 
 namespace Lockflight.Cli.Tests.Hooks;
 
@@ -46,7 +47,7 @@ public sealed class ProtectedTreeScanTests : IDisposable
         Assert.False(scan.CouldMatchUnder("node_modules/p2", BuildProps, sourceOnly: false));
     }
 
-    private ProtectedTreeScan Scan() => new(projectRoot.FullName, DefaultProtectedPaths.With(["secrets/**"]));
+    private ProtectedTreeScan Scan() => new(projectRoot.FullName, DefaultProtectedPaths.With(["secrets/**"]), new DirectoryReads());
 
     public void Dispose() => projectRoot.Delete(recursive: true);
 }

@@ -10,7 +10,7 @@ namespace Lockflight.Cli.Hooks;
 /// into <c>node_modules</c>; <c>**/Directory.Build.props</c> does), the walk keeps only files whose name fits one of those rules,
 /// and the result is reused for every directory below it, so a wildcard over thousands of siblings costs one walk.
 /// </summary>
-internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules)
+internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules, DirectoryReads reads)
 {
     private const string AnyDepth = "**";
     private const string GitDirectory = ".git";
@@ -66,7 +66,15 @@ internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules
     public void Prime(string relativeParent, int siblingCount)
     {
         string directory = relativeParent.Length == 0 ? root : Path.Combine(root, relativeParent);
-        if (Directory.Exists(directory) && siblingCount * 2 >= Directory.EnumerateDirectories(directory).Count())
+        if (!Directory.Exists(directory))
+        {
+            return;
+        }
+
+        reads.StartListing();
+        int directoryCount = Directory.EnumerateDirectories(directory).Count();
+        reads.SeeEntries(directoryCount);
+        if (siblingCount * 2 >= directoryCount)
         {
             RuleFilesUnder(relativeParent);
         }
@@ -160,13 +168,18 @@ internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules
         [.. rules.Select(rule => rule.Replace('\\', '/').Split('/')[^1]).Distinct(StringComparer.Ordinal).Select(name => name == AnyDepth ? null : GlobOverlap.SegmentRegex(name))];
 
     /// <summary>Files below the directory whose name passes a filter, without links and <c>.git</c>, as absolute paths.</summary>
-    private static FileSystemEnumerable<string> Walk(string directory, Regex?[] names)
+    private FileSystemEnumerable<string> Walk(string directory, Regex?[] names)
     {
         bool anyName = names.Any(name => name is null);
+        reads.StartListing();
         EnumerationOptions options = new() { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint };
         return new FileSystemEnumerable<string>(directory, (ref FileSystemEntry entry) => entry.ToFullPath(), options)
         {
-            ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory && (anyName || MatchesAny(names, entry.FileName)),
+            ShouldIncludePredicate = (ref FileSystemEntry entry) =>
+            {
+                reads.SeeEntry();
+                return !entry.IsDirectory && (anyName || MatchesAny(names, entry.FileName));
+            },
             ShouldRecursePredicate = (ref FileSystemEntry entry) => !entry.FileName.SequenceEqual(GitDirectory),
         };
     }

@@ -31,11 +31,11 @@ public sealed class GlobOverlapTests
             File.WriteAllText(Path.Combine(root.FullName, ".hidden.json"), "{}");
             File.WriteAllText(Path.Combine(root.FullName, "b.cs"), "");
 
-            IReadOnlyList<string>? matches = PathWildcards.Expand("*.json", root.FullName, maxMatches: 10);
+            IReadOnlyList<string>? matches = PathWildcards.Expand("*.json", root.FullName, maxMatches: 10, new DirectoryReads());
 
             Assert.NotNull(matches);
             Assert.Equal(["a.json"], matches.Select(Path.GetFileName));
-            Assert.Null(PathWildcards.Expand("*", root.FullName, maxMatches: 1));
+            Assert.Null(PathWildcards.Expand("*", root.FullName, maxMatches: 1, new DirectoryReads()));
         }
         finally
         {
