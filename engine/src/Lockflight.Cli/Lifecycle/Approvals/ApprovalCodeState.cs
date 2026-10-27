@@ -14,4 +14,7 @@ internal enum ApprovalCodeState
 
     /// <summary>The typed code is not the waiting one.</summary>
     WrongCode = 4,
+
+    /// <summary>The typed code is wrong, and so were the attempts before it, up to the limit: the waiting code is discarded.</summary>
+    TooManyAttempts = 5,
 }

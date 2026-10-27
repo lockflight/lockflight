@@ -11,10 +11,14 @@ namespace Lockflight.Cli.Hooks;
 /// <summary>
 /// <c>lockflight hook &lt;event&gt;</c> with the hook JSON on stdin. Outside a Lockflight project every event is a silent no-op,
 /// so an install never blocks unrelated work. Fails closed: an engine error blocks a tool call, and is reported but
-/// does not block the events that must never brick a session (Stop, SessionStart, …).
+/// does not block the events that must never brick a session (Stop, SessionStart, …). A typed <c>/lockflight:approve</c> is never
+/// passed on to the agent after an error either.
 /// </summary>
 internal sealed class HookCommand(CliContext context)
 {
+    /// <summary>Whether the event is the expansion of <c>/lockflight:approve</c>, as far as the payload was read before an error.</summary>
+    private bool expandsApproval;
+
     public async Task<ExitCode> RunAsync(HookEvent hookEvent, CancellationToken cancellationToken)
     {
         try
@@ -23,6 +27,12 @@ internal sealed class HookCommand(CliContext context)
         }
         catch (Exception exception)
         {
+            if (expandsApproval)
+            {
+                await context.Error.WriteLineAsync($"lockflight: nothing was approved: internal error: {exception.Message}. Run lockflight approve {HumanOnlyCommands.WhereToRun}.");
+                return ExitCode.HookBlock;
+            }
+
             await context.Error.WriteLineAsync($"lockflight: internal error: {exception.Message}");
             bool guardsAToolCall = hookEvent is HookEvent.PreToolUse or HookEvent.Unknown;
             return guardsAToolCall ? ExitCode.HookBlock : ExitCode.Pass;
@@ -32,9 +42,12 @@ internal sealed class HookCommand(CliContext context)
     private async Task<ExitCode> DecideAndReportAsync(HookEvent hookEvent, CancellationToken cancellationToken)
     {
         string rawInput = await context.Input.ReadToEndAsync(cancellationToken);
+        // Until the payload is parsed, any mention of the command counts: an error then must not hand it to the agent.
+        expandsApproval = hookEvent == HookEvent.UserPromptExpansion && rawInput.Contains(SessionApproval.CommandName, StringComparison.OrdinalIgnoreCase);
         await new HookPayloadLog(context.Time, context.Environment, context.Error).AppendAsync(hookEvent, rawInput, cancellationToken);
 
         HookInput? input = HookInput.Parse(rawInput);
+        expandsApproval &= input is null || SessionApproval.Handles(input);
         if (input is null)
         {
             return await ReportAsync(HookDecision.Block("invalid-hook-input", "lockflight: hook input is not valid JSON"), hookEvent, projectRoot: null, input: null, cancellationToken);

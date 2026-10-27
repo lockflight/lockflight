@@ -12,7 +12,7 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 /// One-time codes for approving inside a Claude Code session, one per phase, in
 /// <c>.lockflight/local/session-approvals/&lt;phase&gt;.json</c> (git-ignored, protected). A code binds the feature and the artifact
 /// hashes the person was shown with it. Only a slow salted hash of the code is stored: the agent can read the file, and a fast hash
-/// of a short code could be reversed within its lifetime.
+/// of a short code could be reversed within its lifetime. A code survives <see cref="MaxAttempts"/> wrong codes at most.
 /// </summary>
 internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource random)
 {
@@ -22,6 +22,9 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
     public const string Alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
 
     public const int CodeLength = 6;
+
+    /// <summary>Wrong codes typed for a phase after which its waiting code is discarded.</summary>
+    public const int MaxAttempts = 5;
 
     private const string Schema = "lockflight.session-approval/v1";
     private const int SaltLength = 16;
@@ -80,7 +83,8 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
     /// <summary>
     /// Checks a typed code (ignoring case and surrounding space). An unreadable entry, or one written for another phase, is
     /// discarded as if none were waiting; an expired one, or one that expires further ahead than a code lives (the clock went
-    /// back by more than a time sync would), is discarded as expired.
+    /// back by more than a time sync would), is discarded as expired. A wrong code is counted; the last allowed one discards the
+    /// waiting code.
     /// </summary>
     public ApprovalCodeCheck Check(ApprovalPhase phase, string typedCode)
     {
@@ -104,9 +108,20 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
         }
 
         byte[] typedHash = HashOf(typedCode.Trim().ToLowerInvariant(), waiting.Salt);
-        return CryptographicOperations.FixedTimeEquals(typedHash, waiting.CodeHash)
-            ? new ApprovalCodeCheck(ApprovalCodeState.Matched, waiting.FeatureId, waiting.Artifacts)
-            : ApprovalCodeCheck.Of(ApprovalCodeState.WrongCode);
+        if (CryptographicOperations.FixedTimeEquals(typedHash, waiting.CodeHash))
+        {
+            return new ApprovalCodeCheck(ApprovalCodeState.Matched, waiting.FeatureId, waiting.Artifacts);
+        }
+
+        if (waiting.Attempts + 1 >= MaxAttempts)
+        {
+            Discard(phase);
+            return ApprovalCodeCheck.Of(ApprovalCodeState.TooManyAttempts);
+        }
+
+        waiting.Entry["attempts"] = waiting.Attempts + 1;
+        Write(path, waiting.Entry);
+        return ApprovalCodeCheck.Of(ApprovalCodeState.WrongCode);
     }
 
     /// <summary>Removes the phase's waiting code: once used, or when what it was shown for has changed.</summary>
@@ -142,7 +157,8 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
             }
 
             (string Name, string Hash)[] hashes = [.. artifacts.Select(artifact => (artifact.Key, Text(artifact.Value) ?? string.Empty))];
-            return new WaitingCode(feature, hashes, Convert.FromHexString(salt), Convert.FromHexString(codeHash), expiresAt);
+            int attempts = entry["attempts"] is JsonValue counted && counted.TryGetValue(out int count) ? count : 0;
+            return new WaitingCode(entry, feature, hashes, Convert.FromHexString(salt), Convert.FromHexString(codeHash), expiresAt, attempts);
         }
         catch (Exception exception) when (exception is JsonException or FormatException or IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
         {
@@ -152,5 +168,6 @@ internal sealed class ApprovalCodes(string root, TimeProvider time, RandomSource
 
     private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue(out string? text) ? text : null;
 
-    private sealed record WaitingCode(string FeatureId, IReadOnlyList<(string Name, string Hash)> Artifacts, byte[] Salt, byte[] CodeHash, DateTimeOffset ExpiresAt);
+    private sealed record WaitingCode(
+        JsonObject Entry, string FeatureId, IReadOnlyList<(string Name, string Hash)> Artifacts, byte[] Salt, byte[] CodeHash, DateTimeOffset ExpiresAt, int Attempts);
 }

@@ -126,18 +126,20 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest)
             return Refuse("no-feature", lookup.Error!, words);
         }
 
-        string primary = Path.Combine(feature.SpecDirectory, ApprovalPhaseNames.ArtifactsOf(phase)[0]);
-        if (!File.Exists(primary))
+        // Each artifact is read once: the code binds the hashes of exactly the bytes the digest describes.
+        ApprovalStore store = new(feature);
+        IReadOnlyList<ArtifactSnapshot> snapshot = store.Snapshot(phase);
+        if (snapshot[0].Content is null)
         {
+            string primary = Path.Combine(feature.SpecDirectory, snapshot[0].Name);
             return Refuse("nothing-to-approve", $"{Path.GetRelativePath(manifest.Root, primary)} does not exist; nothing to approve", words);
         }
 
-        ApprovalStore store = new(feature);
-        (string Name, string Hash)[] artifacts = [.. store.CurrentHashes(phase)];
+        (string Name, string Hash)[] artifacts = [.. snapshot.Select(artifact => (artifact.Name, artifact.Hash))];
         string code = Codes().Issue(feature.Id, phase, artifacts);
         string typedOptions = (options.Flag("--sign") ? " --sign" : string.Empty)
             + (options.Value("--key") is string key ? $" --key {key}" : string.Empty);
-        return SessionApprovalResult.Shown(ApprovalDigest.Render(feature, phase, artifacts, store.Check(phase), code, typedOptions));
+        return SessionApprovalResult.Shown(ApprovalDigest.Render(feature, phase, snapshot, store.Check(phase, artifacts), code, typedOptions));
     }
 
     private async Task<SessionApprovalResult> RecordAsync(ApprovalPhase phase, string code, CommandOptions options, string[] words, CancellationToken cancellationToken)
@@ -154,6 +156,8 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest)
                 return Refuse("code-expired", $"the code expired (codes last {ApprovalCodes.Lifetime.TotalMinutes:0} minutes); {again}", words);
             case ApprovalCodeState.WrongCode:
                 return Refuse("wrong-code", $"that is not the code shown with the {phaseName}; type the code exactly, or {again}", words);
+            case ApprovalCodeState.TooManyAttempts:
+                return Refuse("too-many-attempts", $"that is not the code shown with the {phaseName}, and after {ApprovalCodes.MaxAttempts} wrong codes it was discarded; {again}", words);
         }
 
         if (options.Value("--feature") is string requested && requested != check.FeatureId)
