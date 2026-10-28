@@ -281,7 +281,7 @@ stderr: lockflight: unknown command 'foo'. Run 'lockflight --help'.
 $ lockflight redgreen xyz
 exit: 4 Config
 stdout: 
-stderr: lockflight: no active feature: pass --feature <id> (Spec Kit's .specify/feature.json is missing and specs/ holds zero or several features)
+stderr: lockflight: no active feature: pass --feature <id> (no .specify/feature.json, Spec Kit variable or feature branch names one, and specs/ holds zero or several features)
 
 $ lockflight redgreen start extra
 exit: 4 Config
@@ -291,7 +291,7 @@ stderr: lockflight redgreen start: unexpected argument 'extra'; use --feature. R
 $ lockflight phase check xyz
 exit: 4 Config
 stdout: 
-stderr: lockflight: no active feature: pass --feature <id> (Spec Kit's .specify/feature.json is missing and specs/ holds zero or several features)
+stderr: lockflight: no active feature: pass --feature <id> (no .specify/feature.json, Spec Kit variable or feature branch names one, and specs/ holds zero or several features)
 
 $ lockflight phase check specify extra
 exit: 4 Config
