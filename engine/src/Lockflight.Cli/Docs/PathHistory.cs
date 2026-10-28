@@ -54,7 +54,7 @@ internal sealed class PathHistory(IReadOnlyDictionary<string, PathRemoval> remov
 
         ProcessResult log = await ProcessRunner.RunAsync(
             "git",
-            ["-c", "core.quotePath=false", "log", "--first-parent", "--diff-filter=DR", "-M", "--name-status", $"--format={CommitMarker}%h", $"--max-count={MaxCommits}", "HEAD", "--"],
+            ["-c", "core.quotePath=false", "log", "--first-parent", "--diff-filter=DR", "-M", "--relative", "--name-status", $"--format={CommitMarker}%h", $"--max-count={MaxCommits}", "HEAD", "--"],
             root, TimeLimit, cancellationToken);
         if (log.TimedOut)
         {

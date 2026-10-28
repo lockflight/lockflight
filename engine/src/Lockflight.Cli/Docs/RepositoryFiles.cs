@@ -14,7 +14,7 @@ internal sealed class RepositoryFiles(string root, IReadOnlyList<string> tracked
 
     private readonly ILookup<string, string> byName = present.ToLookup(RepoPath.FileName, StringComparer.Ordinal);
 
-    /// <summary>The repository's top-level directory.</summary>
+    /// <summary>The directory scanned, inside a git working tree; every path is relative to it.</summary>
     public string Root => root;
 
     public IReadOnlyList<string> Tracked => tracked;
@@ -28,16 +28,19 @@ internal sealed class RepositoryFiles(string root, IReadOnlyList<string> tracked
     /// <summary>The present files named <paramref name="fileName"/>, in any directory.</summary>
     public IEnumerable<string> Named(string fileName) => byName[fileName];
 
-    /// <summary>The working tree that holds <paramref name="directory"/>; null outside a git repository or when git is missing.</summary>
+    /// <summary>The files at and below <paramref name="directory"/>; null outside a git working tree or when git is missing.</summary>
     public static async Task<RepositoryFiles?> LoadAsync(string directory, CancellationToken cancellationToken)
     {
         try
         {
-            ProcessResult topLevel = await ProcessRunner.RunAsync(Git, ["rev-parse", "--show-toplevel"], directory, cancellationToken);
-            if (topLevel.ExitCode != 0 || topLevel.Output.Trim() is not { Length: > 0 } root)
+            ProcessResult inside = await ProcessRunner.RunAsync(Git, ["rev-parse", "--is-inside-work-tree"], directory, cancellationToken);
+            if (inside.ExitCode != 0 || inside.Output.Trim() != "true")
             {
                 return null;
             }
+
+            // Paths are relative to the directory, and only files below it count: a project inside a larger repository is scanned alone.
+            string root = Path.GetFullPath(directory);
 
             ProcessResult trackedFiles = await ProcessRunner.RunAsync(Git, ["-c", "core.quotePath=false", "ls-files", "-z"], root, cancellationToken);
             ProcessResult others = await ProcessRunner.RunAsync(Git, ["-c", "core.quotePath=false", "ls-files", "-z", "--others", "--exclude-standard"], root, cancellationToken);

@@ -181,6 +181,23 @@ public sealed class DocsDriftTests : IDisposable
     }
 
     [Fact]
+    public async Task AProjectInsideALargerRepositoryIsScannedAloneWithPathsRelativeToIt()
+    {
+        Write("README.md", "[gone](gone.md)\n");
+        Write("app/scripts/build.sh", "echo build\n");
+        await CommitAsync("add");
+        File.Delete(Path.Combine(root.FullName, "app/scripts/build.sh"));
+        Write("app/CLAUDE.md", "Build with `scripts/build.sh`; see [notes](NOTES.md).\n");
+        Write("app/NOTES.md", "# Notes\n");
+        await CommitAsync("remove");
+
+        DocsDriftReport report = await DocsDrift.FindAsync(Path.Combine(root.FullName, "app"), TestContext.Current.CancellationToken);
+
+        DriftFinding finding = Assert.Single(report.Findings);
+        Assert.Equal(("CLAUDE.md", "scripts/build.sh"), (finding.File, finding.Reference));
+    }
+
+    [Fact]
     public async Task OutsideAGitRepositoryNothingIsScanned()
     {
         Write("CLAUDE.md", "[gone](gone.md)\n");
