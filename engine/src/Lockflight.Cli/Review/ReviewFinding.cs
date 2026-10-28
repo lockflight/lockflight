@@ -9,7 +9,7 @@ namespace Lockflight.Cli.Review;
 /// <see cref="SpecQuote"/> is the requirement sentence the reviewer says the finding encodes, and <see cref="SpecAnchor"/> whether the
 /// engine found it in the spec (recorded only; it does not change the outcome). <see cref="Fix"/> is the reviewer's minimal fix (a
 /// unified diff of production files), and <see cref="FixCheck"/> what checking it against the change's own tests showed
-/// (<see cref="FixChecks"/>); <see cref="ConflictingTests"/> are the change's own tests it broke.
+/// (<see cref="FixChecks"/>); <see cref="ConflictingTests"/> are the change's own tests it broke (<c>Class.Method</c>), or the own test files whose build it broke.
 /// </summary>
 internal sealed record ReviewFinding(
     FindingSeverity Severity,

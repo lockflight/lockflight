@@ -141,7 +141,7 @@ public sealed class ReviewReproductionTests : IDisposable
     }
 
     [Fact]
-    public async Task AFixThatStillDoesNotApplyAfterItsRepairContestsTheFinding()
+    public async Task AFixThatStillDoesNotApplyAfterItsRepairLeavesTheFindingConfirmedButNotFixChecked()
     {
         await RepositoryAsync();
         string stale = SubtractTheDiscount.Replace("discount) => price;", "discount) => price * 1;", StringComparison.Ordinal);
@@ -149,10 +149,12 @@ public sealed class ReviewReproductionTests : IDisposable
 
         (ExitCode exitCode, string output) = await RunAsync();
 
-        Assert.True(exitCode == ExitCode.NotEarned, output);
+        Assert.True(exitCode == ExitCode.Fail, output);
         JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single());
-        Assert.Equal("contested", finding.GetProperty("outcome").GetString());
+        Assert.Equal("confirmed", finding.GetProperty("outcome").GetString());
         Assert.Equal("did-not-apply", finding.GetProperty("fixCheck").GetString());
+        Assert.False(finding.GetProperty("fixChecked").GetBoolean());
+        Assert.Contains("not fix-checked: the reviewer's fix did not apply", output, StringComparison.Ordinal);
         Assert.Equal(2, finding.GetProperty("fixAttempts").GetInt32());
         Assert.Contains("src/Shop/PriceCalculator.cs", finding.GetProperty("fixCheckErrors").GetString(), StringComparison.Ordinal);
         Assert.Equal(2, claude.Calls.Count(arguments => arguments.Contains("-p")));

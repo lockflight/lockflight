@@ -15,19 +15,22 @@ internal static partial class ChangeTests
     public static IReadOnlyList<TestCase> Find(string diff, string root, IReadOnlyList<TestApp> apps, IReadOnlyList<TestCase> tests)
     {
         HashSet<(string Class, string Method)> changed = [];
-        foreach ((string path, IReadOnlySet<int> added) in AddedLines(diff))
+        Dictionary<string, IReadOnlySet<int>> added = AddedLines(diff);
+        foreach (string path in Files(diff, root, apps))
         {
-            string full = Path.GetFullPath(Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar)));
-            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || !File.Exists(full) || !apps.Any(app => IsUnder(full, app.ProjectDirectory)))
-            {
-                continue;
-            }
-
-            changed.UnionWith(ChangedMethods(File.ReadAllText(full), added));
+            changed.UnionWith(ChangedMethods(File.ReadAllText(Full(root, path)), added[path]));
         }
 
         return [.. tests.Where(test => changed.Contains((ShortName(test.Class), test.Method)))];
     }
+
+    /// <summary>The C# files of test projects the diff adds lines to and that still exist, relative to the root, '/'-separated.</summary>
+    public static IReadOnlyList<string> Files(string diff, string root, IReadOnlyList<TestApp> apps) =>
+        [.. AddedLines(diff).Keys
+            .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && File.Exists(Full(root, path)) && apps.Any(app => IsUnder(Full(root, path), app.ProjectDirectory)))
+            .Order(StringComparer.Ordinal)];
+
+    private static string Full(string root, string path) => Path.GetFullPath(Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar)));
 
     /// <summary>Each file's added lines on the new side, by the file's path relative to the root.</summary>
     private static Dictionary<string, IReadOnlySet<int>> AddedLines(string diff)

@@ -20,9 +20,9 @@ independent.
 3. Read the findings. Each has an id, an outcome and, for blocker/major, a state:
    - **confirmed** — the reproduction fails on the current code: the defect is real. Fix it in production code, add the
      reproduction as a regression test in the next red/green cycle, and re-run the review.
-   - **contested** — the reproduction fails, but the reviewer's own fix for it breaks one of the change's own tests (named in
-     the output), or that fix did not apply or build. The reviewer's expectation and the author's tests disagree, or the
-     evidence is incomplete: show the finding and the named test to the user and let them decide which is right. Change the
+   - **contested** — the reproduction fails, but the reviewer's own fix for it breaks one of the change's own tests, or breaks
+     only the build of the change's own test files (the output names the tests or files). The reviewer's expectation and the
+     author's tests disagree: show the finding and the named tests to the user and let them decide which is right. Change the
      named test only when the user decides the test is the one that is wrong.
    - **unverified** — no usable reproduction: show it to the user and let them decide. A reproduction that did not compile was
      already sent back to the reviewer once with the compiler errors; the evidence file lists them under `compileErrors`.
@@ -31,7 +31,7 @@ independent.
    - **reported** (minor/nit findings are not reproduced) — fix when cheap, otherwise list them in the PR body.
 
    A confirmed finding says "fix-checked" when the reviewer's fix made its reproduction pass and kept the change's own tests
-   green; that checks the reviewer's evidence, it does not prove the finding. A finding without a fix is "not fix-checked".
+   green; that checks the reviewer's evidence, it does not prove the finding. A finding without a fix, or whose fix did not apply or build, is "not fix-checked" and still confirmed.
    A blocker/major finding also says whether the requirement sentence it quotes was found in the spec ("spec quote
    anchored"), was not ("not anchored"), or was not given ("no spec quote"). It does not change the outcome. When a confirmed
    finding's quote is not anchored, tell the user: its test may encode the reviewer's expectation rather than the spec.

@@ -17,7 +17,7 @@ internal enum FindingOutcome
 
     /// <summary>
     /// The reproduction failed, but the reviewer's own fix contradicts the change: it makes the reproduction pass and breaks one of
-    /// the change's own tests, or it does not apply or build after one repair. A person must judge it.
+    /// the change's own tests, or its build fails only in the change's own test files. A person must judge it.
     /// </summary>
     Contested = 5,
 }

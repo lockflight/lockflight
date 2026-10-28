@@ -8,8 +8,10 @@ namespace Lockflight.Cli.Review;
 /// (<see cref="ReviewBuildFolder.FixName"/>), and the reproduction runs with the change's own tests in its test project
 /// (<see cref="ChangeTests"/>). When the fix makes the reproduction pass and breaks one of those tests, the reviewer's expectation
 /// contradicts what the author's tests encode: the finding is <see cref="FindingOutcome.Contested"/> and names the test. A fix that
-/// does not apply or build goes back to the reviewer once, within the run's budget; if it still does not, the finding is contested
-/// too. A fix that holds leaves the finding confirmed and fix-checked. Anything else (the reproduction still fails, the run did not
+/// does not apply or build goes back to the reviewer once, within the run's budget. If it still does not, the finding stays
+/// confirmed and unchecked, because a broken diff says the reviewer got the diff wrong, not that the finding is; except when every
+/// error of the fixed build is in the change's own test files, which the fix contradicts: then it is contested and names them. A
+/// fix that holds leaves the finding confirmed and fix-checked. Anything else (the reproduction still fails, the run did not
 /// report) leaves it confirmed and unchecked, as without a fix. This is a guardrail on the reviewer's evidence, not a proof: the
 /// fix and the reproduction are both the reviewer's, and the author's tests can be wrong too. At most one check (and one repair)
 /// per finding, each build and run within the gates' time limit.
@@ -23,6 +25,7 @@ internal static class FixChecks
         IReadOnlyList<ReviewFinding> findings,
         IReadOnlyList<TestApp> apps,
         IReadOnlyList<TestCase> ownTests,
+        IReadOnlyList<string> ownTestFiles,
         string root,
         TimeSpan timeLimit,
         ReproductionRepairer? repairer,
@@ -45,11 +48,11 @@ internal static class FixChecks
             TestApp app = NearestTestProject.Choose(apps, root, finding.File);
             string[] own = [.. ownTests.Where(test => test.Assembly == app.AssemblyName).Select(test => test.MethodFilter)];
             ReproductionCandidate candidate = new(index, Reproductions.MethodName(finding.Reproduction!)!, finding.Reproduction!);
-            FixCheckVerdict verdict = await CheckOnceAsync(app, candidate, finding.Fix!, own, root, folder.FixName, timeLimit, cancellationToken);
+            FixCheckVerdict verdict = await CheckOnceAsync(app, candidate, finding.Fix!, own, ownTestFiles, root, folder.FixName, timeLimit, cancellationToken);
             int attempts = 1;
-            if (verdict.Result is FixCheckResult.DidNotApply or FixCheckResult.DidNotBuild && repairer is not null)
+            if (verdict.Result is FixCheckResult.DidNotApply or FixCheckResult.DidNotBuild or FixCheckResult.BreaksOwnTestBuild && repairer is not null)
             {
-                FixRepair repair = await repairer.RepairFixAsync(new FixRepairRequest(finding, verdict.Result, verdict.Errors ?? string.Empty), cancellationToken);
+                FixRepair repair = await repairer.RepairFixAsync(new FixRepairRequest(finding, verdict.Result == FixCheckResult.DidNotApply ? FixCheckResult.DidNotApply : FixCheckResult.DidNotBuild, verdict.Errors ?? string.Empty), cancellationToken);
                 if (repair.Asked)
                 {
                     attempts = 2;
@@ -58,7 +61,7 @@ internal static class FixChecks
                 if (repair.Fix is string repaired)
                 {
                     finding = finding with { Fix = repaired };
-                    verdict = await CheckOnceAsync(app, candidate, repaired, own, root, folder.FixName, timeLimit, cancellationToken);
+                    verdict = await CheckOnceAsync(app, candidate, repaired, own, ownTestFiles, root, folder.FixName, timeLimit, cancellationToken);
                 }
             }
 
@@ -96,10 +99,25 @@ internal static class FixChecks
             : new FixCheckVerdict(FixCheckResult.Held, [], null) { OwnTestsChecked = ran };
     }
 
-    /// <summary>The finding with the check's result: contested when the fix breaks an own test or does not apply or build, else as it was.</summary>
+    /// <summary>
+    /// The verdict of a fixed build that did not compile: <see cref="FixCheckResult.BreaksOwnTestBuild"/>, naming the files, when every
+    /// error is in one of the change's own test files (matched by file name, as compiler errors carry no directory), else
+    /// <see cref="FixCheckResult.DidNotBuild"/>.
+    /// </summary>
+    public static FixCheckVerdict BuildFailure(IReadOnlyList<CompileError> errors, IReadOnlyList<string> ownTestFiles)
+    {
+        string summary = CompileErrors.Summary(errors);
+        string[] broken = [.. ownTestFiles.Where(file => errors.Any(error => string.Equals(error.File, Path.GetFileName(file), StringComparison.OrdinalIgnoreCase)))];
+        bool onlyOwnTests = errors.Count > 0 && errors.All(error => error.File.Length > 0 && ownTestFiles.Any(file => string.Equals(error.File, Path.GetFileName(file), StringComparison.OrdinalIgnoreCase)));
+        return onlyOwnTests
+            ? new FixCheckVerdict(FixCheckResult.BreaksOwnTestBuild, broken, summary)
+            : new FixCheckVerdict(FixCheckResult.DidNotBuild, [], summary);
+    }
+
+    /// <summary>The finding with the check's result: contested when the fix breaks one of the change's own tests or their build, else as it was.</summary>
     public static ReviewFinding Apply(ReviewFinding finding, FixCheckVerdict verdict) => finding with
     {
-        Outcome = verdict.Result is FixCheckResult.BreaksOwnTest or FixCheckResult.DidNotApply or FixCheckResult.DidNotBuild ? FindingOutcome.Contested : finding.Outcome,
+        Outcome = verdict.Result is FixCheckResult.BreaksOwnTest or FixCheckResult.BreaksOwnTestBuild ? FindingOutcome.Contested : finding.Outcome,
         FixCheck = verdict.Result,
         ConflictingTests = verdict.ConflictingTests,
         FixCheckErrors = verdict.Errors,
@@ -107,7 +125,7 @@ internal static class FixChecks
     };
 
     private static async Task<FixCheckVerdict> CheckOnceAsync(
-        TestApp app, ReproductionCandidate candidate, string fix, string[] own, string root, string outputFolder, TimeSpan timeLimit, CancellationToken cancellationToken)
+        TestApp app, ReproductionCandidate candidate, string fix, string[] own, IReadOnlyList<string> ownTestFiles, string root, string outputFolder, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         FixPatchResult patch = FixPatch.Prepare(fix, root);
         if (patch.Error is string error)
@@ -131,7 +149,7 @@ internal static class FixChecks
             int[] unresolved = [.. build.Errors.Select(compileError => ReproductionBuild.UsingAt(compileError, usings.Count)).OfType<int>().Distinct().OrderDescending()];
             if (unresolved.Length == 0 || usingRepairs >= MaxUsingRepairs)
             {
-                return new FixCheckVerdict(FixCheckResult.DidNotBuild, [], CompileErrors.Summary(build.Errors));
+                return BuildFailure(build.Errors, ownTestFiles);
             }
 
             foreach (int index in unresolved)

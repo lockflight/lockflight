@@ -281,7 +281,15 @@ internal sealed class ReviewCommand(CliContext context)
 
         DateTimeOffset started = context.Time.GetUtcNow();
         IReadOnlyList<ReviewFinding> fixChecked = await FixChecks.CheckAsync(
-            judged, workspace.Apps, ChangeTests.Find(diff, manifest.Root, workspace.Apps, listed), manifest.Root, timeLimit, repairer, repairable, cancellationToken);
+            judged,
+            workspace.Apps,
+            ChangeTests.Find(diff, manifest.Root, workspace.Apps, listed),
+            ChangeTests.Files(diff, manifest.Root, workspace.Apps),
+            manifest.Root,
+            timeLimit,
+            repairer,
+            repairable,
+            cancellationToken);
         return (fixChecked, new FixCheckSpend(fixChecks, (long)(context.Time.GetUtcNow() - started).TotalMilliseconds));
     }
 
@@ -346,8 +354,8 @@ internal sealed class ReviewCommand(CliContext context)
         if (outcome.FixChecks.Count > 0)
         {
             await context.Output.WriteLineAsync(
-                $"Fix checks: {outcome.FixChecks.Count}, {outcome.FixChecks.WallTimeMs / 1000.0:0.0} s. A contested finding's fix contradicts the change's own tests or could not be "
-                + "applied: a person decides whether the finding or the test is right.");
+                $"Fix checks: {outcome.FixChecks.Count}, {outcome.FixChecks.WallTimeMs / 1000.0:0.0} s. A contested finding's fix contradicts the change's own tests: "
+                + "a person decides whether the finding or the test is right.");
         }
 
         await context.Output.WriteLineAsync(run.OfRecord

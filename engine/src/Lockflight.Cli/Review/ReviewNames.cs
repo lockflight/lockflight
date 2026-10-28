@@ -87,6 +87,7 @@ internal static class ReviewNames
         FixCheckResult.DidNotBuild => "did-not-build",
         FixCheckResult.DidNotFix => "did-not-fix",
         FixCheckResult.NotRun => "not-run",
+        FixCheckResult.BreaksOwnTestBuild => "breaks-own-test-build",
         _ => throw new ArgumentOutOfRangeException(nameof(result), result, null),
     };
 
@@ -98,6 +99,7 @@ internal static class ReviewNames
         "did-not-build" => FixCheckResult.DidNotBuild,
         "did-not-fix" => FixCheckResult.DidNotFix,
         "not-run" => FixCheckResult.NotRun,
+        "breaks-own-test-build" => FixCheckResult.BreaksOwnTestBuild,
         _ => FixCheckResult.None,
     };
 
@@ -111,8 +113,9 @@ internal static class ReviewNames
         {
             FixCheckResult.Held => "fix-checked",
             FixCheckResult.BreaksOwnTest => $"the reviewer's fix breaks the change's own test{(finding.ConflictingTests.Count == 1 ? string.Empty : "s")} {string.Join(", ", finding.ConflictingTests)}",
-            FixCheckResult.DidNotApply => "the reviewer's fix did not apply",
-            FixCheckResult.DidNotBuild => "the reviewer's fix did not build",
+            FixCheckResult.BreaksOwnTestBuild => $"the reviewer's fix breaks the build of the change's own test file{(finding.ConflictingTests.Count == 1 ? string.Empty : "s")} {string.Join(", ", finding.ConflictingTests)}",
+            FixCheckResult.DidNotApply => "not fix-checked: the reviewer's fix did not apply",
+            FixCheckResult.DidNotBuild => "not fix-checked: the reviewer's fix did not build",
             FixCheckResult.DidNotFix => "not fix-checked: the reviewer's fix left the reproduction failing",
             FixCheckResult.NotRun => "not fix-checked: the fixed build did not run",
             _ => "not fix-checked",

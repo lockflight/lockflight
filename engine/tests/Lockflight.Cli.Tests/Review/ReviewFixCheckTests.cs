@@ -151,6 +151,27 @@ public sealed class ReviewFixCheckTests : IDisposable
         Assert.False(finding.GetProperty("fixChecked").GetBoolean());
     }
 
+    [Fact]
+    public async Task AFixThatOnlyBreaksTheBuildOfTheChangesOwnTestsIsContestedAndNamesTheirFile()
+    {
+        await RepositoryAsync();
+        string sumTheQuotes = "--- a/src/Quotes/QuoteCollector.cs\n+++ b/src/Quotes/QuoteCollector.cs\n@@ -5 +5 @@\n"
+            + "-    public static async Task<IReadOnlyList<decimal>> CollectAsync(IReadOnlyList<ISupplier> suppliers, CancellationToken cancellationToken)\n"
+            + "+    public static async Task<decimal> CollectAsync(IReadOnlyList<ISupplier> suppliers, CancellationToken cancellationToken)\n"
+            + "@@ -18,2 +18,3 @@\n \n+        cancellationToken.ThrowIfCancellationRequested();\n-        return quotes;\n+        return quotes.Sum();\n";
+        claude.Answers(Finding(sumTheQuotes)).Answers(Finding(sumTheQuotes));
+
+        (ExitCode exitCode, string output) = await RunAsync(["review"]);
+
+        Assert.True(exitCode == ExitCode.NotEarned, output);
+        JsonElement finding = SingleFinding();
+        Assert.Equal("contested", finding.GetProperty("outcome").GetString());
+        Assert.Equal("breaks-own-test-build", finding.GetProperty("fixCheck").GetString());
+        Assert.Equal(2, finding.GetProperty("fixAttempts").GetInt32());
+        Assert.Equal(["tests/Quotes.Tests/QuoteCollectorTests.cs"], finding.GetProperty("conflictingTests").EnumerateArray().Select(file => file.GetString()!));
+        Assert.Contains("breaks the build of the change's own test file tests/Quotes.Tests/QuoteCollectorTests.cs", output, StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         TempDirectories.DeleteRecursively(root);

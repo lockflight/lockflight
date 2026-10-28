@@ -38,17 +38,47 @@ public sealed class FixChecksTests
     }
 
     [Fact]
-    public void AFixThatDoesNotApplyContestsTheFinding()
+    public void AFixThatDoesNotApplyLeavesTheFindingConfirmedButNotFixChecked()
     {
-        ReviewFinding contested = FixChecks.Apply(Confirmed, new FixCheckVerdict(FixCheckResult.DidNotApply, [], "src/Quotes.cs: hunk 1 does not match the file"));
+        ReviewFinding finding = FixChecks.Apply(Confirmed, new FixCheckVerdict(FixCheckResult.DidNotApply, [], "src/Quotes.cs: hunk 1 does not match the file"));
 
-        Assert.Equal(FindingOutcome.Contested, contested.Outcome);
-        Assert.Equal("src/Quotes.cs: hunk 1 does not match the file", contested.FixCheckErrors);
+        Assert.Equal(FindingOutcome.Confirmed, finding.Outcome);
+        Assert.Equal(FixCheckResult.DidNotApply, finding.FixCheck);
+        Assert.False(finding.FixChecked);
+        Assert.Equal("src/Quotes.cs: hunk 1 does not match the file", finding.FixCheckErrors);
     }
 
     [Fact]
-    public void AFixThatDoesNotBuildContestsTheFinding() =>
-        Assert.Equal(FindingOutcome.Contested, FixChecks.Apply(Confirmed, new FixCheckVerdict(FixCheckResult.DidNotBuild, [], "CS0103")).Outcome);
+    public void AFixThatDoesNotBuildLeavesTheFindingConfirmedButNotFixChecked()
+    {
+        FixCheckVerdict verdict = FixChecks.BuildFailure([new CompileError("Quotes.cs", 4, 9, "CS0103", "x")], ["tests/Quotes.Tests/QuoteTests.cs"]);
+
+        ReviewFinding finding = FixChecks.Apply(Confirmed, verdict);
+
+        Assert.Equal(FixCheckResult.DidNotBuild, verdict.Result);
+        Assert.Equal(FindingOutcome.Confirmed, finding.Outcome);
+        Assert.False(finding.FixChecked);
+    }
+
+    [Fact]
+    public void AFixWhoseBuildFailsOnlyInTheChangesOwnTestFilesContestsTheFindingAndNamesThem()
+    {
+        FixCheckVerdict verdict = FixChecks.BuildFailure(
+            [new CompileError("QuoteTests.cs", 12, 9, "CS0029", "x"), new CompileError("QuoteTests.cs", 20, 9, "CS1503", "y")],
+            ["tests/Quotes.Tests/QuoteTests.cs", "tests/Quotes.Tests/OtherTests.cs"]);
+
+        ReviewFinding contested = FixChecks.Apply(Confirmed, verdict);
+
+        Assert.Equal(FixCheckResult.BreaksOwnTestBuild, verdict.Result);
+        Assert.Equal(FindingOutcome.Contested, contested.Outcome);
+        Assert.Equal(["tests/Quotes.Tests/QuoteTests.cs"], contested.ConflictingTests);
+    }
+
+    [Fact]
+    public void AFixWhoseBuildAlsoFailsElsewhereIsNotContested() =>
+        Assert.Equal(
+            FixCheckResult.DidNotBuild,
+            FixChecks.BuildFailure([new CompileError("QuoteTests.cs", 12, 9, "CS0029", "x"), new CompileError("Finding1.cs", 3, 1, "CS0029", "y")], ["tests/Quotes.Tests/QuoteTests.cs"]).Result);
 
     [Fact]
     public void AFixThatLeavesTheReproductionFailingKeepsTheFindingConfirmedButNotFixChecked()
