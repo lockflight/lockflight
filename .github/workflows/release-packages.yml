@@ -60,6 +60,11 @@ jobs:
               echo "::error::$plugin declares $declared, the tag is $TAG"; exit 1
             fi
           done
+          preset=plugins/lockflight/speckit-preset/preset.yml
+          declared=$(sed -n 's/^  version: *"\([^"]*\)".*/\1/p' "$preset" | head -n 1)
+          if [ "$declared" != "$version" ]; then
+            echo "::error::$preset declares ${declared:-no version}, the tag is $TAG"; exit 1
+          fi
           publish=false
           if [ "$EVENT" = push ] || [ "$PUBLISH_INPUT" = true ]; then publish=true; fi
           echo "version=$version" >> "$GITHUB_OUTPUT"

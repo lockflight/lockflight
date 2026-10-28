@@ -6,7 +6,8 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and drafts a
 ## What the workflow does
 
 1. **Checks the version.** The workflow runs only from a tag `vX.Y.Z[-pre]`. The version is the tag without the `v`, must be
-   SemVer 2.0 without build metadata, and must equal the `version` of every `plugins/*/.claude-plugin/plugin.json`.
+   SemVer 2.0 without build metadata, and must equal the `version` of every `plugins/*/.claude-plugin/plugin.json` and of
+   the Spec Kit preset (`plugins/lockflight/speckit-preset/preset.yml`).
 2. **Builds and tests every platform** (osx-arm64, osx-x64, linux-x64, linux-arm64, win-x64), each on its own runner: build
    with warnings as errors, `dotnet test`, pack the Native AOT package, install it with `dotnet tool install` from a local
    feed, check that `lockflight version` prints the version, `lockflight link` it into a scratch project, run the linked
@@ -64,8 +65,10 @@ Claude Code version and the results in it:
 
 ## Cutting a release
 
-1. Raise the version in both `plugin.json` files (and `plugins/lockflight/min-engine-version` when the plugin needs the new
-   engine), and draft the CHANGELOG entries in a release pull request. Merge it.
+1. Raise the version in both `plugin.json` files and in the Spec Kit preset's `preset.yml` (and
+   `plugins/lockflight/min-engine-version` when the plugin needs the new engine), and draft the CHANGELOG entries in a release
+   pull request. When the minor or major version changes, also widen the crew plugin's `dependencies` range on `lockflight`
+   (`^0.2.0-0` covers every 0.2 prerelease and release). Merge it.
 2. Tag the merge commit and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
 3. Approve the `publish` job when the build and smoke tests are green.
 4. Edit and publish the draft GitHub Release.

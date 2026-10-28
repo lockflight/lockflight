@@ -78,7 +78,7 @@ internal sealed class StatusLineCommand(CliContext context)
         if (record.Type == LedgerEventTypeNames.HookBlocked)
         {
             return record.Signature.StartsWith("stop:", StringComparison.Ordinal)
-                ? (MascotPose.Fail, $"Stop gate FAIL · {age}")
+                ? (MascotPose.Fail, $"stop gate FAIL · {age}")
                 : (MascotPose.Blocked, $"guard blocked {Subject(record.Summary)} · {age}");
         }
 
