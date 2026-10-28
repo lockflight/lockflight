@@ -5,6 +5,67 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0-alpha.8] — 2026-10-28
+
+### What to do after upgrading
+- **Update the engine in every project.** The plugin now needs engine 0.2.0-alpha.8 or later, because the review and
+  red/green changes below are in the engine. In a separate terminal window (not with `!` in Claude Code), run
+  `lockflight update` from the project root and commit what it lists. It installs the newest engine, re-pins the project to
+  it and links it again, which also writes the engine's hash record. Until then, Claude Code tells you at session start
+  that the plugin needs a newer engine.
+- **A linked engine without a hash record is now refused.** An engine linked before 0.2.0-alpha.7, or copied into
+  `.lockflight/bin/` by hand, has no record. The hook shim no longer runs it: reads still pass, but writes and a typed
+  `/lockflight:approve` (or baseline, reset, amend) are blocked, and `doctor` fails it without running it. The session start
+  message and each refusal say to run `lockflight update` in a separate terminal, which fixes both the version and the record.
+- **The review's default model is now `sonnet`**, unless your `lockflight.yaml` sets `review.model`. A project without the
+  setting runs its next review of record with `sonnet`; a project that sets it (including `opus`) keeps its model. On our
+  review benchmark of seeded defects in a small sample project, `sonnet` found the same defects as `opus`, at about half the
+  cost; that is not yet measured on large real codebases. To keep Opus, set `review.model: opus`. Runs already recorded keep
+  their model and record status.
+- **Commit before you review.** A review over changed, staged or untracked files in the reviewed paths is no longer the
+  review of record. It still runs and records its findings, but the output says which files to commit, or to stash with
+  `git stash -u`, before reviewing again.
+- **A test project whose evaluation fails is NOT-EARNED.** If `dotnet msbuild -getProperty` fails or times out on a
+  project, `redgreen start`, `red`, `green`, the amend re-check and `trace` now end NOT-EARNED and name the project, instead
+  of leaving it out silently. Fix the project or remove it; for a timeout, raise `gates.timeoutSeconds`. Review runs no
+  reproduction while that is so.
+- **The linked engine is read-only after a passed check (outside Windows).** Writing into `.lockflight/bin/lockflight` in
+  place, for example with `cp -p`, now fails with "Permission denied". Replace it with `lockflight link` or
+  `lockflight update`, which put a new file in its place.
+- **The plugins are served from release tags.** The marketplace now serves each plugin at the last release tag instead of
+  `main`, so `claude plugin update` and auto-update follow releases and a change merged to `main` no longer reaches you
+  before its release (and its engine on nuget.org). If you installed from the marketplace before, your copy moves to this
+  release with the next `claude plugin update`. To try `main`, use the install from source (`scripts/dev-install.sh`), which
+  adds a development marketplace from your checkout.
+
+### Added
+- **The plugins are served from the release tag.** Each entry in the marketplace is pinned to the last release tag and its
+  commit; the pin moves only after a release is published.
+- **The hook shim refuses a linked engine with no hash record**, or an empty one, like a replaced engine. At session start
+  it tells you to run `lockflight update`, because the engine that would tell you is not run. `doctor --canaries` plants
+  such an engine and checks that `doctor` fails it.
+- **`sonnet` is the default review model** (`review.model`); the configuration guide explains the choice and how to pin
+  `opus`.
+
+### Changed
+- `lockflight:init` asks you to install the engine from nuget.org in a separate terminal
+  (`cd ~ && dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin`) and recommends the `pr` CI
+  trigger, since the project then pins a release. An engine built from source still gets the manual trigger.
+- The README and the getting-started guide describe the install from nuget.org as the one that works, with the install
+  from source for working on Lockflight or trying `main`; the README shows the current package on nuget.org.
+
+### Fixed
+- **A passed engine check is reused only for the very file that was checked.** The shim keeps a hard link to the checked
+  engine and, outside Windows, makes it read-only, so an engine moved into place with an older modification time, or copied
+  over with `cp -p`, is checked again. Where no hard link can be made, every call hashes the engine.
+- **A review over uncommitted or untracked changes is not of record.** The reviewer was shown `git diff` of the working
+  tree, so a change no commit held could become the review of record, and an untracked file was never shown at all. Files
+  git ignores, `.lockflight/`, and untracked `bin/` and `obj/` folders do not count; when git cannot list the changes, the
+  run is not of record either.
+- **A project whose evaluation fails or times out is NOT-EARNED, not skipped**, in red/green, the amend re-check, `trace`
+  and review. A project that evaluates and is not a test project is never reported. `doctor --canaries=full` plants a
+  project that fails to evaluate.
+
 ## [0.2.0-alpha.7] — 2026-10-28
 
 ### What to do after upgrading
@@ -275,7 +336,8 @@ The first public release. Earlier versions were private previews; this entry sum
 - Levi, the pixel lock-keeper, in your terminal and, if you like, in Claude Code's status line (`lockflight statusline`). Only
   people see him.
 
-[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.7...HEAD
+[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.8...HEAD
+[0.2.0-alpha.8]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.7...v0.2.0-alpha.8
 [0.2.0-alpha.7]: https://github.com/lockflight/lockflight/compare/70afe89...v0.2.0-alpha.7
 [0.2.0-alpha.6]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.5...70afe89
 [0.2.0-alpha.5]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.4...v0.2.0-alpha.5
