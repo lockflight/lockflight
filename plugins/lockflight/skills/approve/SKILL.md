@@ -39,7 +39,8 @@ is the engine the hooks run, and it works whatever way Lockflight was installed.
    approval is recorded, and continue with the next step of the workflow.
 3. **If it fails**, help the user decide, then hand the decision back:
    - Run the matching phase check — `phase check specify` for `spec`, `phase check tasks` for `tasks` — and show the result.
-     If it fails, say what is missing and stop: approving a failing artifact is pointless.
+     If it fails, say what is missing and stop: the engine refuses to approve an artifact that fails its phase check, in
+     the session and in a terminal alike.
    - Summarise what would be approved, briefly and faithfully: for `spec` the requirements (FR IDs and one line each) and
      the user stories; for `tasks` the stories, their tests-first order and which requirements each covers. Mention anything
      that looks unclear or risky — the user approves the content, not your summary.

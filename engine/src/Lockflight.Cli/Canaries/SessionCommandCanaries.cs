@@ -50,7 +50,7 @@ internal static class SessionCommandCanaries
     {
         string specDirectory = scratch.PathOf($"specs/{FeatureId}");
         Directory.CreateDirectory(specDirectory);
-        await File.WriteAllTextAsync(Path.Combine(specDirectory, "spec.md"), "# Canary\n\n- **FR-001**: Orders are archived\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(specDirectory, "spec.md"), "# Canary\n\n### User Story 1 - Archive orders\n\n1. **Given** an old order, **When** a day passes, **Then** it is archived\n\n- **FR-001**: Orders are archived\n", cancellationToken);
 
         List<CanaryReport> reports =
         [

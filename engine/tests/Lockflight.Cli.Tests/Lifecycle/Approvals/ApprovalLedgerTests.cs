@@ -25,7 +25,7 @@ public sealed class ApprovalLedgerTests : IDisposable
         string specDirectory = Path.Combine(root.FullName, "specs", "001-orders");
         Directory.CreateDirectory(specDirectory);
         string spec = Path.Combine(specDirectory, "spec.md");
-        await File.WriteAllTextAsync(spec, "- **FR-001**: A\n", cancellationToken);
+        await File.WriteAllTextAsync(spec, ApprovableArtifacts.Spec, cancellationToken);
 
         (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["approve", "spec", "--feature", "001-orders"], string.Empty, root.FullName);
 
@@ -52,7 +52,7 @@ public sealed class ApprovalLedgerTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n", cancellationToken);
         string specDirectory = Path.Combine(root.FullName, "specs", "001-orders");
         Directory.CreateDirectory(specDirectory);
-        await File.WriteAllTextAsync(Path.Combine(specDirectory, "spec.md"), "- **FR-001**: A\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(specDirectory, "spec.md"), ApprovableArtifacts.Spec, cancellationToken);
 
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(
             ["approve", "spec", "--feature", "001-orders", "--sign", "--key", Path.Combine(root.FullName, "missing-key")], string.Empty, root.FullName);

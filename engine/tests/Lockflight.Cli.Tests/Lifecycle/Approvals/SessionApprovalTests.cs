@@ -108,7 +108,7 @@ public sealed class SessionApprovalTests : IDisposable
         Assert.Contains($"spec.md    {ArtifactHash.Of(SpecPath)[..12]}", error, StringComparison.Ordinal);
         Assert.Contains("Requirements (2): FR-001, FR-002", error, StringComparison.Ordinal);
         Assert.Contains("User stories (1): 1 Place an order", error, StringComparison.Ordinal);
-        Assert.Contains("Open [NEEDS CLARIFICATION] markers: spec.md line 6", error, StringComparison.Ordinal);
+        Assert.Contains("Open [NEEDS CLARIFICATION] markers: none", error, StringComparison.Ordinal);
         Assert.Contains("Current approval: none", error, StringComparison.Ordinal);
         Assert.Contains($"Type within 10 minutes: /lockflight:approve spec {Code}\n", error, StringComparison.Ordinal);
         string waiting = await File.ReadAllTextAsync(WaitingCodePath("spec"), TestContext.Current.CancellationToken);
@@ -244,10 +244,8 @@ public sealed class SessionApprovalTests : IDisposable
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await CreateProjectAsync();
         await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
-        await File.WriteAllTextAsync(
-            Path.Combine(SpecDirectory, "tasks.md"),
-            "### Tests for User Story 1\n- [ ] T001 [US1] (FR-001) Test placing an order\n\n### Implementation\n- [ ] T002 [US1] (FR-001, FR-002) Place the order\n",
-            cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, cancellationToken);
+        await ApproveSpecInATerminalAsync();
 
         (ExitCode showExit, _, string digest) = await TypeAsync($"tasks --feature {FeatureId}");
 
@@ -484,7 +482,8 @@ public sealed class SessionApprovalTests : IDisposable
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await CreateProjectAsync();
         await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), "- [ ] T001 [US1] (FR-001) Test placing an order\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, cancellationToken);
+        await ApproveSpecInATerminalAsync();
         await TypeAsync("tasks");
         File.Delete(Path.Combine(SpecDirectory, "plan.md"));
 
@@ -701,6 +700,60 @@ public sealed class SessionApprovalTests : IDisposable
         Assert.Contains("hook.blocked", ledger, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ASpecThatFailsItsPhaseCheckIsRefusedBeforeACodeIsShown()
+    {
+        await CreateProjectAsync();
+        await File.WriteAllTextAsync(
+            SpecPath, "# Orders\n\n### User Story 1 - Place an order\n\n- **FR-001**: Customers place orders\n", TestContext.Current.CancellationToken);
+
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.StartsWith($"lockflight: nothing was approved: the spec of {FeatureId} does not pass the phase check an approval needs (specify):", error, StringComparison.Ordinal);
+        Assert.Contains("  FAIL spec.stories: no Given/When/Then scenario in: User Story 1\n", error, StringComparison.Ordinal);
+        Assert.Contains(".specify/templates/spec-template.md", error, StringComparison.Ordinal);
+        Assert.Contains($"phase check specify --feature {FeatureId}` until it passes, and approve again.", error, StringComparison.Ordinal);
+        Assert.DoesNotContain(Code, error, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(WaitingCodePath("spec")));
+        Assert.False(File.Exists(RecordPath("spec")));
+        Assert.Contains("session-approval:phase-check", Ledger(), StringComparison.Ordinal);
+        Assert.DoesNotContain("hook.blocked", Ledger(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TasksAreRefusedBeforeTheSpecIsApproved()
+    {
+        await CreateProjectAsync();
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, TestContext.Current.CancellationToken);
+
+        (ExitCode exitCode, _, string error) = await TypeAsync("tasks");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("does not pass the phase check an approval needs (tasks):", error, StringComparison.Ordinal);
+        Assert.Contains("  FAIL spec.approved: spec is not approved", error, StringComparison.Ordinal);
+        Assert.Contains($"phase check tasks --feature {FeatureId}`", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(WaitingCodePath("tasks")));
+        Assert.False(File.Exists(RecordPath("tasks")));
+    }
+
+    [Fact]
+    public async Task TasksWhoseCheckFailsByTheSecondStepAreNotApproved()
+    {
+        await CreateProjectAsync();
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, TestContext.Current.CancellationToken);
+        await ApproveSpecInATerminalAsync();
+        await TypeAsync("tasks");
+        File.Delete(RecordPath("spec"));
+
+        (ExitCode exitCode, _, string error) = await TypeAsync($"tasks {Code}");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("FAIL spec.approved", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("tasks")));
+        Assert.False(File.Exists(WaitingCodePath("tasks")));
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(root);
 
     /// <summary>An environment whose every read past the session markers fails, as an engine fault outside the approval would.</summary>
@@ -733,9 +786,17 @@ public sealed class SessionApprovalTests : IDisposable
         Directory.CreateDirectory(SpecDirectory);
         await File.WriteAllTextAsync(
             SpecPath,
-            "# Orders\n\n### User Story 1 - Place an order (Priority: P1)\n\n- **FR-001**: Customers place orders\n- **FR-002**: Totals [NEEDS CLARIFICATION: currency?]\n",
+            ApprovableArtifacts.Spec,
             cancellationToken);
     }
+
+    private async Task ApproveSpecInATerminalAsync()
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["approve", "spec", "--feature", FeatureId], string.Empty, root.FullName);
+        Assert.True(exitCode == ExitCode.Pass, error);
+    }
+
+    private string Ledger() => string.Concat(Directory.GetFiles(Path.Combine(root.FullName, ".lockflight", "ledger")).Select(File.ReadAllText));
 
     private Task<(ExitCode ExitCode, string Output, string Error)> TypeAsync(string arguments) => TypeAsync(arguments, AttendedSession);
 

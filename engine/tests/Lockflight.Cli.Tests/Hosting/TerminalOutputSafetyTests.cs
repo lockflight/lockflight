@@ -155,7 +155,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
         WriteManifest();
         string spec = Path.Combine(root.FullName, "specs", "001-orders", "spec.md");
         Directory.CreateDirectory(Path.GetDirectoryName(spec)!);
-        File.WriteAllText(spec, $"# Orders\n\n### User Story 1 - Pay{Hostile} (Priority: P1)\n\n- **FR-001**: Pay\n");
+        File.WriteAllText(spec, $"# Orders\n\n### User Story 1 - Pay{Hostile} (Priority: P1)\n\n1. **Given** a cart, **When** paying, **Then** it is paid\n\n- **FR-001**: Pay\n");
         string payload = JsonSerializer.Serialize(new Dictionary<string, string>
         {
             ["cwd"] = root.FullName,

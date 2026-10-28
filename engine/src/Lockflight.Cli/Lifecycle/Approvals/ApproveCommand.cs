@@ -6,9 +6,10 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
 /// <c>lockflight approve spec|tasks [--feature id] [--sign] [--key file]</c> records a person's approval of the feature's artifacts
-/// (human-only). <c>lockflight approve verify (--feature id | --base ref) [--allowed-signers file] [--require spec,tasks]</c> checks
-/// records, hashes and — with an allowed-signers file read from the base branch — SSH signatures for the named feature or every
-/// feature the change touches; every phase is required unless <c>--require</c> narrows it. It is what CI runs.
+/// (human-only), once the matching phase check passes (<see cref="ApprovalReadiness"/>). <c>lockflight approve verify (--feature id
+/// | --base ref) [--allowed-signers file] [--require spec,tasks]</c> checks records, hashes and — with an allowed-signers file read
+/// from the base branch — SSH signatures for the named feature or every feature the change touches; every phase is required unless
+/// <c>--require</c> narrows it. It is what CI runs.
 /// </summary>
 internal sealed class ApproveCommand(CliContext context)
 {
@@ -63,6 +64,12 @@ internal sealed class ApproveCommand(CliContext context)
         {
             await context.Error.WriteLineAsync($"lockflight: {Path.GetRelativePath(manifest.Root, primary)} does not exist; nothing to approve");
             return ExitCode.Config;
+        }
+
+        if (ApprovalReadiness.Of(manifest, feature, phase) is { Ready: false } readiness)
+        {
+            await context.Error.WriteLineAsync($"lockflight: nothing was approved: {readiness.Explanation}.");
+            return ExitCode.Fail;
         }
 
         ApprovalStore store = new(feature);

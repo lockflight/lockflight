@@ -126,7 +126,8 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
 ```
 
 - **Phase checks** (`phase check specify|tasks`) verify structure deterministically: unique requirement IDs, no open
-  clarifications, every requirement covered by a task, tests before implementation.
+  clarifications, every requirement covered by a task, tests before implementation. An approval runs the matching check first
+  and records nothing while it fails.
 - **Approvals** bind the SHA-256 of the approved files to a person. Any later edit makes the approval stale, and the steps that
   depend on it refuse to run. They can be SSH-signed and verified in CI against signers read from the base branch.
 - **Red/green.** The plan declares new signatures; stubs throw `NotImplementedException`. `redgreen red` accepts a cycle only
