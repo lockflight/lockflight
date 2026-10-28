@@ -158,7 +158,7 @@ internal sealed class SessionAmend(CliContext context, Manifest manifest) : ISes
         }
 
         string person = await Git.ConfigValueAsync(manifest.Root, "user.email", cancellationToken) ?? UnknownPerson;
-        RedGreenSession session = new(context, manifest, feature, TestWorkspaces.For(manifest, feature));
+        RedGreenSession session = new(context, manifest, feature, TestWorkspaces.For(manifest, feature, context.Time));
         await AmendStep.RecordAsync(session, snapshot.Record!, target, person, reason, cancellationToken);
         codes.Discard(Slot);
         return SessionCommandResult.Recorded(

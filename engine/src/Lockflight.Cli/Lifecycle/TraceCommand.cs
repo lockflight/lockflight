@@ -104,7 +104,7 @@ internal sealed class TraceCommand(CliContext context) : ICommand
     private async Task<IReadOnlyList<TestCase>?> CurrentInventoryAsync(Manifest manifest, Feature feature, CancellationToken cancellationToken)
     {
         await context.Error.WriteLineAsync("lockflight: building to list the current tests (no tests run)…");
-        TestWorkspace workspace = TestWorkspaces.For(manifest, feature);
+        TestWorkspace workspace = TestWorkspaces.For(manifest, feature, context.Time);
         if (await workspace.BuildAsync(cancellationToken) is not null)
         {
             await context.Output.WriteLineAsync("NOT-EARNED the build fails, so the current tests cannot be listed; trace re-checks red/green tests against them. Fix the build, then run trace again.");

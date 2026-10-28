@@ -23,28 +23,11 @@ internal sealed class CoverageStep : IGateStep
 
     public string CacheKey => StepName;
 
-    /// <summary>
-    /// Test arguments that make the configured collector write Cobertura; empty when coverage is not configured. On VSTest the
-    /// collectors are data collectors (<c>--collect</c>): coverlet.collector, or Microsoft's collector that Microsoft.NET.Test.Sdk brings.
-    /// </summary>
-    public static IReadOnlyList<string> TestArguments(CoverageCollector collector, TestRunnerKind runner) => (collector, runner) switch
-    {
-        (CoverageCollector.Microsoft, TestRunnerKind.MicrosoftTestingPlatform) => ["--coverage", "--coverage-output-format", "cobertura"],
-        (CoverageCollector.Coverlet, TestRunnerKind.MicrosoftTestingPlatform) => ["--coverlet", "--coverlet-output-format", "cobertura"],
-        (CoverageCollector.Microsoft, TestRunnerKind.VSTest) => ["--collect", "Code Coverage;Format=cobertura"],
-        (CoverageCollector.Coverlet, TestRunnerKind.VSTest) => ["--collect", "XPlat Code Coverage"],
-        _ => [],
-    };
+    /// <summary>Test arguments that make the configured collector write Cobertura; empty when coverage is not configured (<see cref="TestPlatforms"/>).</summary>
+    public static IReadOnlyList<string> TestArguments(CoverageCollector collector, TestRunnerKind runner) => TestPlatforms.For(runner).CoverageArguments(collector);
 
     /// <summary>The NuGet package every test project must reference for the collector to run; null for none.</summary>
-    public static string? PackageOf(CoverageCollector collector, TestRunnerKind runner) => (collector, runner) switch
-    {
-        (CoverageCollector.Microsoft, TestRunnerKind.MicrosoftTestingPlatform) => "Microsoft.Testing.Extensions.CodeCoverage",
-        (CoverageCollector.Coverlet, TestRunnerKind.MicrosoftTestingPlatform) => "coverlet.MTP",
-        (CoverageCollector.Microsoft, TestRunnerKind.VSTest) => "Microsoft.NET.Test.Sdk",
-        (CoverageCollector.Coverlet, TestRunnerKind.VSTest) => "coverlet.collector",
-        _ => null,
-    };
+    public static string? PackageOf(CoverageCollector collector, TestRunnerKind runner) => TestPlatforms.For(runner).CoveragePackage(collector);
 
     /// <summary>What to do when the test applications reject the collector's options (exit 5, invalid command line).</summary>
     public static string MissingExtension(CoverageCollector collector, TestRunnerKind runner) =>

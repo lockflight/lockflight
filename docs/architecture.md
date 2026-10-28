@@ -8,7 +8,8 @@ see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
 **On this page:** [Principles](#principles) · [The parts](#the-parts) ·
 [The engine on every hook call](#the-engine-on-every-hook-call) · [The guard](#the-guard) · [Gates](#gates) ·
 [The lifecycle](#the-lifecycle-standard-profile) · [Topologies](#topologies) · [Adoption](#adoption) ·
-[The ledger](#the-ledger) · [Where the trust comes from](#where-the-trust-comes-from)
+[The ledger](#the-ledger) · [Where the trust comes from](#where-the-trust-comes-from) ·
+[Extending the engine](#extending-the-engine)
 
 ## Principles
 
@@ -200,6 +201,25 @@ keeps the summary and SHA-256 of each amend's diff since the red.
 
 The in-session controls make the right path the easy one and catch accidents early. The pull request is where the verdict
 counts.
+
+## Extending the engine
+
+Each kind of extension point in the engine (`engine/src/Lockflight.Cli/`) is an interface with one ordered registry, so a
+contributor implements the interface and adds one line; dispatch, the catalog, the human-only refusal and the step order are
+computed from the registry. Registration is explicit code: the engine is Native AOT, loads no assemblies at run time and runs no
+code from the repository it judges.
+
+| To add | Implement | Register in |
+|---|---|---|
+| A command | `ICommand` | `Hosting/CommandRegistry.cs` (words, audience, options, operands); the help text in `CliApplication` is written by hand and tested against the registry |
+| A hook event | `IHookHandler` | `Hooks/Events/HookHandlers.cs` |
+| A guard rule | `IGuardRule` (it can block, never allow) | `Hooks/Guard/GuardRules.cs`, once per call or per root |
+| A gate step | `IGateStep` | `Gates/GateProfiles.cs`, per profile: root first, per unit, root last |
+| A lifecycle test runner | `ITestRunner` | `Testing/TestRunners.cs`, with its place in the probe order |
+| An in-session command | `ISessionDecider` | its `SessionCommandSpec` in `Hooks/SessionCommands.cs` |
+
+Tests hold the registries to their contracts: every hook event has a handler, every human-only command is refused and known to
+the guard, and every profile's steps have distinct names and the right scope.
 
 ## Next
 

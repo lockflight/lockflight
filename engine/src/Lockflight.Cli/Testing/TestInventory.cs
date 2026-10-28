@@ -1,45 +1,13 @@
 using System.Text.Json;
-using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Testing;
 
 /// <summary>
-/// Lists a test application's tests (no tests run) with <c>-list full/json</c>, or <c>--xunit-list full/json</c> when the app only
-/// accepts MTP options; the result says which mode worked so the runner uses the same one.
+/// Reads a test application's listing (no tests run): xUnit's <c>-list full/json</c>, or MTP's <c>--xunit-list full</c> text for an
+/// app that only accepts MTP options. <see cref="TestRunners"/> decides which runner lists an app.
 /// </summary>
 internal static class TestInventory
 {
-    public static async Task<(IReadOnlyList<TestCase> Tests, RunnerMode Mode)?> ListAsync(TestApp app, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
-    {
-        if (app.Mode == RunnerMode.VSTest)
-        {
-            try
-            {
-                return (AssemblyTestMetadata.Read(app.AssemblyPath), RunnerMode.VSTest);
-            }
-            catch (Exception exception) when (exception is BadImageFormatException or IOException or InvalidOperationException)
-            {
-                return null;
-            }
-        }
-
-        if (app.Mode != RunnerMode.Mtp)
-        {
-            ProcessResult native = await ProcessRunner.RunAsync(
-                "dotnet", [app.AssemblyPath, "-list", "full/json", "-noColor"], workingDirectory, timeLimit, cancellationToken);
-            if (native.ExitCode == 0 && Parse(app.AssemblyName, native.Output) is IReadOnlyList<TestCase> tests)
-            {
-                return (tests, RunnerMode.Native);
-            }
-        }
-
-        // MTP's --xunit-list has no JSON format; its "full" listing is text.
-        ProcessResult mtp = await ProcessRunner.RunAsync(
-            "dotnet", [app.AssemblyPath, "--xunit-list", "full", "--no-ansi", "--no-progress"], workingDirectory, timeLimit, cancellationToken);
-        // Listing runs no tests, so MTP exits 8 ("zero tests ran"), which is success here.
-        return mtp.ExitCode is 0 or 8 ? (ParseText(app.AssemblyName, mtp.Output), RunnerMode.Mtp) : null;
-    }
-
     /// <summary>
     /// Reads MTP's text listing: <c>- Display name: "…"</c>, then indented <c>Test method:  Class.Method</c>, optional
     /// <c>Skip reason:  "…"</c>, <c>Explicit:     true</c> and a <c>Traits:</c> block of <c>"Name": ["v1", "v2"]</c> lines. Theory rows repeat a method.
