@@ -46,6 +46,9 @@ The agent works with your credentials, so CI is where an independent check happe
   4. `security.deps` — no new High/Critical advisories;
   5. `security.secrets` — gitleaks over the PR's commits, uncommitted changes, and untracked files that git does not ignore.
      False positives go to `.gitleaksignore`, reviewed by a human. An added inline `gitleaks:allow` comment fails the step.
+     The engine's own recorded hashes are not findings: a generic-key hit in a red/green, approval or review record under
+     `.lockflight/features/<id>/` whose whole match is a JSON name and a bare 40- or 64-digit lowercase hex value (a commit id
+     or SHA-256). Everything else in those files is scanned as usual.
 
 Only the PR's own commits are scanned for secrets, so existing history in a brownfield repo does not block adoption.
 
