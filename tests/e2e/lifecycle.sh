@@ -278,6 +278,9 @@ expect 0 "format passes a clean change in a file with other line endings" "end-o
 perl -0pi -e 's/\}\s*\z/\n  public decimal Twice(decimal value) => value * 2;\n}\n/' "$calc"
 expect 1 "format fails a badly indented changed line" "src/Shop.Api/PriceCalculator.cs:" -- "$E" gate run --profile edit
 git checkout -q -- "$calc"
+# A person's reset discards the evidence and the refs that keep its cycles' red-time snapshots.
+expect 0 "a person's reset deletes the cycles' snapshot refs" "Deleted the red-time snapshot refs refs/lockflight/red/" -- human redgreen reset
+expect 0 "no snapshot ref is left" -- sh -c 'test -z "$(git for-each-ref refs/lockflight)"'
 echo
 if [ "$failures" -ne 0 ]; then echo "lifecycle e2e: $failures failed"; exit 1; fi
 echo "lifecycle e2e: all checks passed"
