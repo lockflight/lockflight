@@ -111,7 +111,7 @@ public sealed class PathSpellingGuardTests : IDisposable
         {
             ["cwd"] = projectRoot.FullName,
             ["tool_name"] = toolName,
-            ["tool_input"] = toolName == "Bash" ? new Dictionary<string, string> { ["command"] = command } : new Dictionary<string, string> { ["file_path"] = command },
+            ["tool_input"] = toolName == "Write" ? new Dictionary<string, string> { ["file_path"] = command } : new Dictionary<string, string> { ["command"] = command },
         });
         return TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
     }
