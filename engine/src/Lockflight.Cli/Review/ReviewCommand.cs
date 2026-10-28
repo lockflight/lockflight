@@ -15,8 +15,9 @@ namespace Lockflight.Cli.Review;
 /// <c>lockflight review [--feature id] [--base ref] [--model name] [--budget usd]</c> — the review: the engine builds the prompt from
 /// the spec and the diff, runs a read-only <c>claude -p</c> with a JSON schema, confirms blocker/major findings by running their
 /// reproductions (and re-runs those of findings still open from earlier runs; a new finding's reproduction that does not compile is
-/// sent back to the reviewer once, within the run's budget), and stores the run. A run counts as the review of record only when
-/// the reviewer was shown the whole diff (at most <c>review.maxDiffCharacters</c>; generated files are listed, not shown), with the manifest's model, budget and diff limit, against a base whose commit is the merge base of
+/// sent back to the reviewer once, within the run's budget), raises a minor or nit finding to major when its anchored spec quote is
+/// a MUST or SHALL sentence and its reproduction fails (<see cref="Escalations"/>), and stores the run. A run counts as the review
+/// of record only when the reviewer was shown the whole diff (at most <c>review.maxDiffCharacters</c>; generated files are listed, not shown), with the manifest's model, budget and diff limit, against a base whose commit is the merge base of
 /// HEAD and the target branch (<c>review.target</c>, else <c>origin/HEAD</c>'s branch, else <c>main</c>; also the default base); others are recorded and say why not.
 /// A new confirmed finding with a fix is checked against the change's own tests (<see cref="FixChecks"/>) and contested when its fix
 /// contradicts them. Exit 1 when an open blocker/major finding is confirmed, 5 (NOT-EARNED) when one is unverified or contested or
@@ -288,9 +289,11 @@ internal sealed class ReviewCommand(CliContext context)
     }
 
     /// <summary>
-    /// Runs the reproductions of blocker/major findings when there are any and the tests build and list; otherwise blocker/major
-    /// findings stay unverified, because a finding nobody could check is not a pass. Then checks the fix of each new confirmed
-    /// finding that has one against the change's own tests (<see cref="FixChecks"/>), and says how many checks ran and how long they took.
+    /// Runs the reproductions of blocker/major findings, and of the minor and nit findings that may be raised to major
+    /// (<see cref="Escalations"/>), when there are any and the tests build and list; otherwise blocker/major findings stay
+    /// unverified, because a finding nobody could check is not a pass, and the candidates keep their severity. Then checks the fix
+    /// of each new confirmed finding that has one against the change's own tests (<see cref="FixChecks"/>), and says how many
+    /// checks ran and how long they took.
     /// </summary>
     private async Task<(IReadOnlyList<ReviewFinding> Findings, FixCheckSpend FixChecks)> ConfirmFindingsAsync(
         Manifest manifest,
@@ -301,34 +304,12 @@ internal sealed class ReviewCommand(CliContext context)
         IReadOnlySet<string> repairable,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<ReviewFinding> checks = FindingLifecycle.WithEarlierReproductions(findings);
-        if (!checks.Any(Reproductions.IsRunnable))
-        {
-            return (FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]), FixCheckSpend.None);
-        }
-
-        TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
-        TestWorkspace workspace = TestWorkspaces.For(manifest, feature);
-        if (await workspace.BuildAsync(cancellationToken) is not null)
-        {
-            return (FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]), FixCheckSpend.None);
-        }
-
-        if (workspace.DiscoveryProblem is string incomplete)
-        {
-            await context.Error.WriteLineAsync($"lockflight: the reproductions are not run, so their findings stay unverified: {incomplete}");
-            return (FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]), FixCheckSpend.None);
-        }
-
-        if (await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> listed || workspace.Apps.Count == 0)
-        {
-            return (FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]), FixCheckSpend.None);
-        }
-
-        IReadOnlyList<ReviewFinding> judged = FindingLifecycle.CombineReproductions(
-            findings, await Reproductions.ConfirmAsync(checks, workspace.Apps, manifest.Root, timeLimit, repairer, repairable, cancellationToken));
+        IReadOnlyList<ReviewFinding> proposed = [.. findings.Select(Escalations.Propose)];
+        (IReadOnlyList<ReviewFinding> reproduced, TestWorkspace? workspace, IReadOnlyList<TestCase>? listed) =
+            await ReproduceAsync(manifest, feature, proposed, repairer, repairable, cancellationToken);
+        IReadOnlyList<ReviewFinding> judged = [.. reproduced.Select(finding => Escalations.Settle(finding, repairable))];
         int fixChecks = judged.Count(finding => FixChecks.IsCheckable(finding, repairable));
-        if (fixChecks == 0)
+        if (workspace is null || listed is null || fixChecks == 0)
         {
             return (judged, FixCheckSpend.None);
         }
@@ -340,11 +321,53 @@ internal sealed class ReviewCommand(CliContext context)
             ChangeTests.Find(diff, manifest.Root, workspace.Apps, listed),
             ChangeTests.Files(diff, manifest.Root, workspace.Apps),
             manifest.Root,
-            timeLimit,
+            TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds),
             repairer,
             repairable,
             cancellationToken);
         return (fixChecked, new FixCheckSpend(fixChecks, (long)(context.Time.GetUtcNow() - started).TotalMilliseconds));
+    }
+
+    /// <summary>
+    /// The findings with their reproductions judged, and the test workspace and its tests when the reproductions ran; without them
+    /// (nothing runnable, or the tests do not build or list), every finding as <see cref="Reproductions.Unjudged"/> leaves it.
+    /// </summary>
+    private async Task<(IReadOnlyList<ReviewFinding> Findings, TestWorkspace? Workspace, IReadOnlyList<TestCase>? Listed)> ReproduceAsync(
+        Manifest manifest,
+        Feature feature,
+        IReadOnlyList<ReviewFinding> findings,
+        ReproductionRepairer repairer,
+        IReadOnlySet<string> repairable,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<ReviewFinding> checks = FindingLifecycle.WithEarlierReproductions(findings);
+        IReadOnlyList<ReviewFinding> unjudged = FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]);
+        if (!checks.Any(Reproductions.IsRunnable))
+        {
+            return (unjudged, null, null);
+        }
+
+        TestWorkspace workspace = TestWorkspaces.For(manifest, feature);
+        if (await workspace.BuildAsync(cancellationToken) is not null)
+        {
+            return (unjudged, null, null);
+        }
+
+        if (workspace.DiscoveryProblem is string incomplete)
+        {
+            await context.Error.WriteLineAsync($"lockflight: the reproductions are not run, so their findings stay unverified: {incomplete}");
+            return (unjudged, null, null);
+        }
+
+        if (await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> listed || workspace.Apps.Count == 0)
+        {
+            return (unjudged, null, null);
+        }
+
+        TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
+        IReadOnlyList<ReviewFinding> judged = FindingLifecycle.CombineReproductions(
+            findings, await Reproductions.ConfirmAsync(checks, workspace.Apps, manifest.Root, timeLimit, repairer, repairable, cancellationToken));
+        return (judged, workspace, listed);
     }
 
     /// <summary>Records the run and every finding it fixed in the ledger, and turns the open findings into the exit code.</summary>
@@ -393,7 +416,8 @@ internal sealed class ReviewCommand(CliContext context)
             string state = finding.State is FindingState findingState ? $", {ReviewNames.ToName(findingState)}" : string.Empty;
             string requirement = finding.Requirement is null ? string.Empty : $" ({finding.Requirement})";
             string carried = finding.Carried ? ", carried from an earlier run" : string.Empty;
-            string notes = finding.NeedsReproduction ? $"; {string.Join("; ", ReviewSummary.Notes(finding))}" : string.Empty;
+            string notes = finding.NeedsReproduction ? $"; {string.Join("; ", ReviewSummary.Notes(finding))}"
+                : ReviewNames.Describe(finding) is string escalation ? $"; {escalation}" : string.Empty;
             await context.Output.WriteLineAsync(
                 $"- {ReviewNames.ToName(finding.Severity)} [{ReviewNames.ToName(finding.Outcome)}{state}] {finding.File}:{finding.Line}{requirement} {finding.Title} ({finding.Id}{carried}{notes})");
             if (finding.Outcome == FindingOutcome.Contested && finding.FixCheckErrors is string errors)
@@ -421,9 +445,12 @@ internal sealed class ReviewCommand(CliContext context)
             + "dismisses them; 'lockflight review status' shows them and the pull request summary.");
     }
 
-    /// <summary>A blocker/major finding with its spec quote checked against the spec it was reviewed against; others as they are.</summary>
+    /// <summary>
+    /// A blocker/major finding, or one of any severity that gives a spec quote, with its quote checked against the spec it was
+    /// reviewed against; others as they are.
+    /// </summary>
     private static ReviewFinding Anchor(ReviewFinding finding, string requirements) =>
-        finding.NeedsReproduction ? finding with { SpecAnchor = SpecQuotes.Check(finding.SpecQuote, requirements) } : finding;
+        finding.NeedsReproduction || finding.SpecQuote is not null ? finding with { SpecAnchor = SpecQuotes.Check(finding.SpecQuote, requirements) } : finding;
 
     private static string Cost(ReviewOutcome outcome) => outcome.CostUsd.ToString("0.000", CultureInfo.InvariantCulture);
 

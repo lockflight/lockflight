@@ -48,7 +48,16 @@ internal static class ReviewSummary
         $"`{finding.Id}` {ReviewNames.ToName(finding.Severity)}, {ReviewNames.ToName(finding.Outcome)}: `{finding.File}:{finding.Line}` {finding.Title}"
         + (finding.NeedsReproduction ? $" ({string.Join("; ", Notes(finding))})" : string.Empty);
 
-    /// <summary>What a person reads next to a blocker/major finding: its spec anchor and, when it was reproduced, its fix check.</summary>
+    /// <summary>
+    /// What a person reads next to a blocker/major finding: its spec anchor, whether the engine raised it from the reviewer's severity
+    /// and, when it was reproduced, its fix check.
+    /// </summary>
     public static IReadOnlyList<string> Notes(ReviewFinding finding) =>
-        [ReviewNames.Describe(finding.SpecAnchor), .. ReviewNames.DescribeFixCheck(finding) is string fixCheck ? [fixCheck] : Array.Empty<string>()];
+        [
+            ReviewNames.Describe(finding.SpecAnchor),
+            .. finding.OriginalSeverity is FindingSeverity original && ReviewNames.Describe(finding) is string escalation
+                ? [$"{escalation} (the reviewer rated it {ReviewNames.ToName(original)})"]
+                : Array.Empty<string>(),
+            .. ReviewNames.DescribeFixCheck(finding) is string fixCheck ? [fixCheck] : Array.Empty<string>(),
+        ];
 }

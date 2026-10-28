@@ -43,11 +43,11 @@ internal static class ReviewPrompt
                   "file": { "type": "string" },
                   "line": { "type": "integer" },
                   "requirement": { "type": "string" },
-                  "specQuote": { "type": "string", "description": "For blocker/major: the requirement sentence the reproduction's assertion encodes, copied word for word from the requirements" },
+                  "specQuote": { "type": "string", "description": "For blocker/major (and any finding that violates a requirement sentence): the requirement sentence the reproduction's assertion encodes, copied word for word from the requirements" },
                   "title": { "type": "string" },
                   "evidence": { "type": "string" },
-                  "reproduction": { "type": "string", "description": "For blocker/major: one complete xUnit v3 [Fact] method (attribute and body, no class, no usings) that fails on the current code and would pass once the defect is fixed" },
-                  "fix": { "type": "string", "description": "For blocker/major: the smallest fix, as a unified diff of existing non-test C# files (--- a/<path> and +++ b/<path> from the repository root, @@ hunks with context lines)" }
+                  "reproduction": { "type": "string", "description": "For blocker/major, and for any finding with a specQuote: one complete xUnit v3 [Fact] method (attribute and body, no class, no usings) that fails on the current code and would pass once the defect is fixed" },
+                  "fix": { "type": "string", "description": "For blocker/major, and for any finding with a specQuote: the smallest fix, as a unified diff of existing non-test C# files (--- a/<path> and +++ b/<path> from the repository root, @@ hunks with context lines)" }
                 }
               }
             }
@@ -80,9 +80,13 @@ internal static class ReviewPrompt
             requirements are silent on the behaviour and no existing test defines it, report it as minor and say in `evidence` that
             the spec does not cover it.
 
-            For every blocker or major finding also include `fix`: the smallest change to production code that fixes the defect, as a
-            unified diff (`--- a/<path>` and `+++ b/<path>` lines with paths from the repository root, then `@@` hunks whose context
-            and removed lines are copied exactly from the file). Change only existing C# files that are not tests; never edit a test.
+            A finding that violates a requirement sentence containing MUST or SHALL is at least major, never minor or nit. Any
+            finding that carries a `specQuote` must also include a `reproduction` as above, whatever its severity.
+
+            For every blocker or major finding, and every finding with a `specQuote`, also include `fix`: the smallest change to
+            production code that fixes the defect, as a unified diff (`--- a/<path>` and `+++ b/<path>` lines with paths from the
+            repository root, then `@@` hunks whose context and removed lines are copied exactly from the file). Change only
+            existing C# files that are not tests; never edit a test.
 
             {ReproductionRules}
 

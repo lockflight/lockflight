@@ -121,6 +121,25 @@ internal static class ReviewNames
             _ => "not fix-checked",
         };
 
+    /// <summary>
+    /// How the run file and the output say what was decided about raising a minor or nit finding to major
+    /// (<see cref="Escalations"/>): "escalated: anchored MUST, reproduced", "not escalated: anchored MUST, but the reproduction
+    /// passes on the current code", …; null for a finding that was not a candidate.
+    /// </summary>
+    public static string? Describe(ReviewFinding finding)
+    {
+        string anchored = $"anchored {Escalations.Keyword(finding.SpecQuote) ?? "MUST"}";
+        return finding.Escalation switch
+        {
+            SeverityEscalation.Escalated => $"escalated: {anchored}, reproduced",
+            SeverityEscalation.ReproductionPassed => $"not escalated: {anchored}, but the reproduction passes on the current code",
+            SeverityEscalation.ReproductionDidNotCompile => $"not escalated: {anchored}, but the reproduction did not compile",
+            SeverityEscalation.BudgetExhausted => $"not escalated: {anchored}, but the reproduction did not compile and the run's budget was spent before it could be repaired",
+            SeverityEscalation.ReproductionNotRun => $"not escalated: {anchored}, but the reproduction did not run (the tests did not build or list, or the time limit was hit)",
+            _ => null,
+        };
+    }
+
     public static string ToName(FindingState state) => state switch
     {
         FindingState.Open => "open",

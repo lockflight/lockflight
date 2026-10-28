@@ -8,7 +8,9 @@ namespace Lockflight.Cli.Review;
 /// was repaired after it did not compile), <see cref="CompileErrors"/> holds a bounded summary of the errors of each attempt that did not compile, and
 /// <see cref="ReproductionProject"/> is the test project the reproduction was built in (relative to the repository root; null when none was built).
 /// <see cref="SpecQuote"/> is the requirement sentence the reviewer says the finding encodes, and <see cref="SpecAnchor"/> whether the
-/// engine found it in the spec (recorded only; it does not change the outcome). <see cref="Fix"/> is the reviewer's minimal fix (a
+/// engine found it in the spec. A minor or nit finding whose anchored quote is a MUST or SHALL sentence and whose reproduction fails
+/// is raised to major (<see cref="Escalations"/>): <see cref="OriginalSeverity"/> keeps the reviewer's severity and
+/// <see cref="Escalation"/> says what was decided. <see cref="Fix"/> is the reviewer's minimal fix (a
 /// unified diff of production files), and <see cref="FixCheck"/> what checking it against the change's own tests showed
 /// (<see cref="FixChecks"/>); <see cref="ConflictingTests"/> are the change's own tests it broke (<c>Class.Method</c>), or the own test files whose build it broke.
 /// </summary>
@@ -43,6 +45,11 @@ internal sealed record ReviewFinding(
     public string? SpecQuote { get; init; }
 
     public SpecAnchor SpecAnchor { get; init; } = SpecAnchor.None;
+
+    /// <summary>The reviewer's severity of a finding the engine raised to major; null when the severity is the reviewer's own.</summary>
+    public FindingSeverity? OriginalSeverity { get; init; }
+
+    public SeverityEscalation Escalation { get; init; } = SeverityEscalation.None;
 
     public string? Fix { get; init; }
 

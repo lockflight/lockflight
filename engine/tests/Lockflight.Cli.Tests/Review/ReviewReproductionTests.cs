@@ -14,6 +14,8 @@ public sealed class ReviewReproductionTests : IDisposable
     private const string Broken = """{"severity":"major","file":"src/Shop/PriceCalculator.cs","line":5,"title":"Discount ignored","evidence":"Total returns the price","reproduction":"[Fact]\npublic void TotalAppliesTheDiscount() => Assert.Equal(90m, PriceCalculator.Totl(100m, 10m));"}""";
     private const string Repaired = """{"severity":"major","file":"src/Shop/PriceCalculator.cs","line":5,"title":"Discount ignored","evidence":"Total returns the price","reproduction":"[Fact]\npublic void TotalAppliesTheDiscount() => Assert.Equal(90m, PriceCalculator.Total(100m, 10m));"}""";
 
+    private const string MustSpec = "- **FR-001**: The total MUST apply the discount.\n";
+
     private const string SubtractTheDiscount =
         "--- a/src/Shop/PriceCalculator.cs\n+++ b/src/Shop/PriceCalculator.cs\n@@ -5 +5 @@\n-    public static decimal Total(decimal price, decimal discount) => price;\n+    public static decimal Total(decimal price, decimal discount) => price - discount;\n";
 
@@ -195,13 +197,118 @@ public sealed class ReviewReproductionTests : IDisposable
         Assert.Contains("price - discount", finding.GetProperty("fix").GetString(), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AMinorFindingThatBreaksAnAnchoredMustAndReproducesIsEscalatedAndFixChecked()
+    {
+        await RepositoryAsync(MustSpec);
+        claude.Answers(WithFix(MinorMust(), SubtractTheDiscount));
+
+        (ExitCode exitCode, string output) = await RunAsync();
+
+        Assert.True(exitCode == ExitCode.Fail, output);
+        JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single());
+        Assert.Equal("major", finding.GetProperty("severity").GetString());
+        Assert.Equal("minor", finding.GetProperty("originalSeverity").GetString());
+        Assert.Equal("escalated: anchored MUST, reproduced", finding.GetProperty("escalation").GetString());
+        Assert.Equal("confirmed", finding.GetProperty("outcome").GetString());
+        Assert.Equal("open", finding.GetProperty("state").GetString());
+        Assert.Equal("anchored", finding.GetProperty("specAnchor").GetString());
+        Assert.Equal("held", finding.GetProperty("fixCheck").GetString());
+        Assert.Contains("escalated: anchored MUST, reproduced (the reviewer rated it minor)", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AMinorFindingWhoseReproductionPassesStaysMinor()
+    {
+        await RepositoryAsync(MustSpec);
+        claude.Answers(MinorMust("Assert.Equal(100m, PriceCalculator.Total(100m, 10m))"));
+
+        (ExitCode exitCode, string output) = await RunAsync();
+
+        Assert.True(exitCode != ExitCode.Fail, output);
+        JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single());
+        Assert.Equal("minor", finding.GetProperty("severity").GetString());
+        Assert.Equal(JsonValueKind.Null, finding.GetProperty("originalSeverity").ValueKind);
+        Assert.Equal("reported", finding.GetProperty("outcome").GetString());
+        Assert.Equal("passed", finding.GetProperty("reproductionResult").GetString());
+        Assert.Equal(JsonValueKind.Null, finding.GetProperty("state").ValueKind);
+        Assert.Contains("the reproduction passes on the current code", finding.GetProperty("escalation").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AMinorFindingWhoseReproductionCannotBeRepairedWithinTheBudgetStaysMinorAndSaysSo()
+    {
+        await RepositoryAsync(MustSpec);
+        claude.Answers(MinorMust("Assert.Equal(90m, PriceCalculator.Totl(100m, 10m))"));
+
+        (ExitCode exitCode, string output) = await RunAsync("review", "--budget", "0.25");
+
+        Assert.True(exitCode != ExitCode.Fail, output);
+        Assert.Single(claude.Calls, arguments => arguments.Contains("-p"));
+        JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single());
+        Assert.Equal("minor", finding.GetProperty("severity").GetString());
+        Assert.Equal("did-not-compile", finding.GetProperty("reproductionResult").GetString());
+        Assert.Contains("the run's budget was spent before it could be repaired", finding.GetProperty("escalation").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AMinorFindingWhoseQuoteIsNotInTheSpecIsNotEscalatedOrRun()
+    {
+        await RepositoryAsync(MustSpec);
+        claude.Answers(MinorMust().Replace("MUST apply the discount", "MUST round the discount", StringComparison.Ordinal));
+
+        (ExitCode exitCode, string output) = await RunAsync();
+
+        Assert.True(exitCode != ExitCode.Fail, output);
+        JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single());
+        Assert.Equal("minor", finding.GetProperty("severity").GetString());
+        Assert.Equal("not-anchored", finding.GetProperty("specAnchor").GetString());
+        Assert.Equal(JsonValueKind.Null, finding.GetProperty("escalation").ValueKind);
+        Assert.Equal("none", finding.GetProperty("reproductionResult").GetString());
+        Assert.False(Directory.Exists(Path.Combine(root.FullName, "tests", "Shop.Tests", "bin", "lockflight-review")));
+    }
+
+    [Fact]
+    public async Task AMinorFindingWhoseAnchoredQuoteHasNoMustIsNotEscalated()
+    {
+        await RepositoryAsync("- **FR-001**: The total applies the discount.\n");
+        claude.Answers(MinorMust().Replace("The total MUST apply the discount.", "The total applies the discount.", StringComparison.Ordinal));
+
+        (ExitCode exitCode, string output) = await RunAsync();
+
+        Assert.True(exitCode != ExitCode.Fail, output);
+        JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single());
+        Assert.Equal("minor", finding.GetProperty("severity").GetString());
+        Assert.Equal("anchored", finding.GetProperty("specAnchor").GetString());
+        Assert.Equal(JsonValueKind.Null, finding.GetProperty("escalation").ValueKind);
+        Assert.Equal("none", finding.GetProperty("reproductionResult").GetString());
+    }
+
+    [Fact]
+    public async Task AnEscalatedFindingCanBeDismissedAndStaysDismissedWhenRaisedAgain()
+    {
+        await RepositoryAsync(MustSpec);
+        claude.Answers(MinorMust()).Answers(MinorMust());
+        await RunAsync();
+        string id = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single()).GetProperty("id").GetString()!;
+
+        (ExitCode dismissed, string dismissOutput) = await RunAsync("review", "dismiss", id, "--reason", "The discount is applied upstream");
+        time.Advance(TimeSpan.FromMinutes(5));
+        (ExitCode exitCode, string output) = await RunAsync();
+
+        Assert.True(dismissed == ExitCode.Pass, dismissOutput);
+        Assert.True(exitCode != ExitCode.Fail, output);
+        JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Order(StringComparer.Ordinal).Last());
+        Assert.Equal("dismissed", finding.GetProperty("state").GetString());
+    }
+
     public void Dispose()
     {
         TempDirectories.DeleteRecursively(root);
         TempDirectories.DeleteRecursively(tools);
     }
 
-    private async Task RepositoryAsync()
+    private async Task RepositoryAsync(string spec = "- **FR-001**: The total applies the discount.\n")
     {
         await GitAsync("init", "-q", "-b", "main");
         await GitAsync("config", "user.email", "reviewer@example.com");
@@ -209,7 +316,7 @@ public sealed class ReviewReproductionTests : IDisposable
         await GitAsync("config", "commit.gpgsign", "false");
         Write(Manifest.FileName, "version: 1\n");
         Write(".gitignore", "bin/\nobj/\n");
-        Write($"specs/{Feature}/spec.md", "- **FR-001**: The total applies the discount.\n");
+        Write($"specs/{Feature}/spec.md", spec);
         Write("Shop.slnx", "<Solution>\n  <Project Path=\"src/Billing/Billing.csproj\" />\n  <Project Path=\"src/Shop/Shop.csproj\" />\n  <Project Path=\"tests/Billing.Tests/Billing.Tests.csproj\" />\n  <Project Path=\"tests/Shop.Tests/Shop.Tests.csproj\" />\n</Solution>\n");
         Write("src/Billing/Billing.csproj", Library);
         Write("src/Billing/Invoice.cs", "namespace Billing;\n\npublic sealed record Invoice(decimal Amount);\n");
@@ -252,6 +359,9 @@ public sealed class ReviewReproductionTests : IDisposable
     private async Task GitAsync(params string[] arguments) =>
         await ProcessRunner.RunAsync("git", arguments, root.FullName, TestContext.Current.CancellationToken);
 
+    private static string MinorMust(string assertion = "Assert.Equal(90m, PriceCalculator.Total(100m, 10m))") =>
+        $$"""{"severity":"minor","file":"src/Shop/PriceCalculator.cs","line":5,"title":"Discount ignored","evidence":"Total returns the price","specQuote":"The total MUST apply the discount.","reproduction":"[Fact]\npublic void TotalAppliesTheDiscount() => {{assertion}};"}""";
+
     private static string WithFix(string finding, string fix) => finding[..^1] + $",\"fix\":{JsonSerializer.Serialize(fix)}}}";
 
     private static JsonElement SingleFinding(string runFile)
@@ -262,7 +372,7 @@ public sealed class ReviewReproductionTests : IDisposable
 
     private string ReviewsDirectory() => Path.Combine(root.FullName, ".lockflight", "features", Feature, "reviews");
 
-    private async Task<(ExitCode ExitCode, string Output)> RunAsync()
+    private async Task<(ExitCode ExitCode, string Output)> RunAsync(params string[] arguments)
     {
         using StringWriter output = new();
         using StringWriter error = new();
@@ -271,7 +381,7 @@ public sealed class ReviewReproductionTests : IDisposable
             Environment = EnvironmentReader.Of(new Dictionary<string, string> { [EnvironmentVariables.Path] = tools.FullName }),
             Claude = claude.RunAsync,
         };
-        ExitCode exitCode = await CliApplication.RunAsync(["review"], context, TestContext.Current.CancellationToken);
+        ExitCode exitCode = await CliApplication.RunAsync(arguments.Length == 0 ? ["review"] : arguments, context, TestContext.Current.CancellationToken);
         return (exitCode, output.ToString() + error.ToString());
     }
 }
