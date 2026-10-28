@@ -69,6 +69,17 @@ public sealed class ReviewOfRecordTests
     }
 
     [Fact]
+    public void TextFilesShownAsBinaryAreNotOfRecordAndNamed()
+    {
+        ReviewDiff hidden = Whole.WithTextShownAsBinary(["src/Orders.cs", "src/Prices.cs"]);
+
+        string reason = Assert.Single(ReviewOfRecord.Reasons(ReviewSettings.Default, "sonnet", 3m, new ReviewBase("main", Commit, "main", Commit), hidden, ReviewedTree.Clean));
+
+        Assert.Contains("git showed 2 text files as binary (src/Orders.cs, src/Prices.cs), so the reviewer did not see their change", reason, StringComparison.Ordinal);
+        Assert.Contains("read them: src/Orders.cs, src/Prices.cs]", hidden.Shown, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void UncommittedChangesAreNotOfRecordAndSayToCommitOrStash()
     {
         ReviewedTree dirty = new(true, ["src/Orders.cs", "src/Prices.cs", "src/Stock.cs", "src/Tax.cs"], []);

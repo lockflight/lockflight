@@ -40,8 +40,8 @@ internal static class Templates
         # Lockflight project manifest — https://github.com/lockflight/lockflight
         # Built-in protected paths always apply: this file, the tool pin, .lockflight/, Claude settings, .NET build-control files
         # (Directory.Build.*, Directory.Packages.props, global.json, NuGet.config), code-style and analyzer policy (.editorconfig,
-        # .globalconfig, *.ruleset, stylecop.json, BannedSymbols.txt), gitleaks policy and the Lockflight CI workflow. The full list:
-        # https://github.com/lockflight/lockflight/blob/main/docs/guides/configuration.md
+        # .globalconfig, *.ruleset, stylecop.json, BannedSymbols.txt), .gitattributes, gitleaks policy and the Lockflight CI workflow.
+        # The full list: https://github.com/lockflight/lockflight/blob/main/docs/guides/configuration.md
         version: 1
 
         # Extra paths the agent must not change.

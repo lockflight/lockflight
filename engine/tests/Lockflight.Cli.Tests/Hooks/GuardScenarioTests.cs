@@ -22,6 +22,8 @@ public sealed class GuardScenarioTests : IDisposable
     [InlineData("src/Shop.Api/.editorconfig")]
     [InlineData("analyzers.globalconfig")]
     [InlineData("src/BannedSymbols.txt")]
+    [InlineData(".gitattributes")]
+    [InlineData("src/Shop.Api/.gitattributes")]
     public async Task BuiltInProtectedPathsAreBlockedWithoutBeingListed(string relativePath)
     {
         string payload = HookPayloads.ToolCall("Edit", Path.Combine(projectRoot.FullName, relativePath), projectRoot.FullName);

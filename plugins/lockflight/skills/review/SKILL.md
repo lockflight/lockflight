@@ -23,6 +23,8 @@ independent.
    user edits it; at most 400,000, and a larger diff may need a higher `review.maxUsd`). Its findings still count, but no run
    of the whole change at the current limit can be the review of record. Generated files (lock files, EF Core snapshots and
    migration designers) are listed rather than shown and do not count toward the limit.
+   If it says git showed a text file as binary, a git attribute (`-diff`, `binary` or a diff driver) hides that file's change
+   from the reviewer: tell the user and name the file; `.gitattributes` is protected, so the user changes it, not you.
 3. Read the findings. Each has an id, an outcome and, for blocker/major, a state:
    - **confirmed** — the reproduction fails on the current code: the defect is real. Fix it in production code, add the
      reproduction as a regression test in the next red/green cycle, and re-run the review.

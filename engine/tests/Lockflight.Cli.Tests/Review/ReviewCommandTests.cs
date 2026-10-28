@@ -253,6 +253,85 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task AGeneratedFileShownAsBinaryIsNotOfRecord()
+    {
+        await ProjectAsync();
+        File.WriteAllText(Path.Combine(root.FullName, ".gitattributes"), "packages.lock.json -diff\n");
+        File.WriteAllText(Path.Combine(root.FullName, "src", "packages.lock.json"), "{ \"version\": 1, \"dependencies\": {} }\n");
+        await GitAsync("add", ".");
+        await GitAsync("commit", "-q", "-m", "lock");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.NotEarned, exitCode);
+        Assert.Contains("git showed 1 text file as binary (src/packages.lock.json)", output, StringComparison.Ordinal);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Assert.False(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AnAttributeThatShowsTextAsBinaryHidesNothingFromTheRecord()
+    {
+        await ProjectAsync();
+        File.WriteAllText(Path.Combine(root.FullName, ".gitattributes"), "*.cs -diff\n");
+        File.WriteAllText(Path.Combine(root.FullName, "src", "Orders.cs"), "namespace Shop;\n\npublic static class Orders { public static decimal Total(decimal price) => 0m; }\n");
+        await GitAsync("add", ".");
+        await GitAsync("commit", "-q", "-m", "hide");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.NotEarned, exitCode);
+        Assert.Contains("Warning: this run will not be the review of record: git showed 1 text file as binary", output, StringComparison.Ordinal);
+        string marker = Regex.Match(Assert.Single(claude.Prompts), @"<(data-[0-9a-f]{16}) kind=""diff""").Groups[1].Value;
+        Assert.Contains("[git showed these text files as binary, so their change is not above; read them: src/Orders.cs]", Fenced(claude.Prompts[0], marker, "diff"), StringComparison.Ordinal);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Assert.False(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
+        Assert.Contains("git showed 1 text file as binary", evidence.RootElement.GetProperty("notOfRecord")[0].GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ATextConversionDoesNotChangeTheDiffTheReviewerReads()
+    {
+        await ProjectAsync();
+        File.WriteAllText(Path.Combine(root.FullName, ".gitattributes"), "*.cs diff=hide\n");
+        await GitAsync("config", "diff.hide.textconv", "sh -c 'echo nothing to see'");
+        File.WriteAllText(Path.Combine(root.FullName, "src", "Orders.cs"), "namespace Shop;\n\npublic static class Orders { public static decimal Total(decimal price) => 0m; }\n");
+        await GitAsync("add", ".");
+        await GitAsync("commit", "-q", "-m", "convert");
+        claude.Answers();
+
+        (ExitCode exitCode, _, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        string marker = Regex.Match(Assert.Single(claude.Prompts), @"<(data-[0-9a-f]{16}) kind=""diff""").Groups[1].Value;
+        string shown = Fenced(claude.Prompts[0], marker, "diff");
+        Assert.Contains("+public static class Orders { public static decimal Total(decimal price) => 0m; }", shown, StringComparison.Ordinal);
+        Assert.DoesNotContain("nothing to see", shown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ABinaryFileStaysBinaryAndTheReviewIsOfRecord()
+    {
+        await ProjectAsync();
+        Directory.CreateDirectory(Path.Combine(root.FullName, "assets"));
+        File.WriteAllBytes(Path.Combine(root.FullName, "assets", "logo.png"), [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52]);
+        await GitAsync("add", ".");
+        await GitAsync("commit", "-q", "-m", "logo");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.DoesNotContain("not be the review of record", output, StringComparison.Ordinal);
+        string marker = Regex.Match(Assert.Single(claude.Prompts), @"<(data-[0-9a-f]{16}) kind=""diff""").Groups[1].Value;
+        Assert.Contains("Binary files /dev/null and b/assets/logo.png differ", Fenced(claude.Prompts[0], marker, "diff"), StringComparison.Ordinal);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Assert.True(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
+    }
+
+    [Fact]
     public async Task AReviewOfUncommittedOrUntrackedChangesRunsButIsNotOfRecord()
     {
         await ProjectAsync();

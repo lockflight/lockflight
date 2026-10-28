@@ -13,6 +13,7 @@ public sealed class HighRiskFilesTests
     [InlineData("src/.globalconfig")]
     [InlineData("rules/Team.ruleset")]
     [InlineData("BannedSymbols.txt")]
+    [InlineData("src/.gitattributes")]
     [InlineData(".claude/hooks/guard.sh")]
     [InlineData(".claude/settings.json")]
     [InlineData(".claude/settings.local.json")]

@@ -63,7 +63,10 @@ review:                         # what the review of record runs with (all optio
 
 **Review of record.** A `lockflight review` run counts as the review of record only when it uses `review.model` and
 `review.maxUsd` (or the defaults), the reviewer was shown the whole diff within `review.maxDiffCharacters`, its base commit is the merge base of HEAD and `review.target` (neither an older base nor a
-recent commit on the branch, which would review only part of the change), and everything it reads is committed. The base defaults to the target. A run with `--model`, `--budget`, an outdated base or uncommitted or untracked files in the reviewed paths is still recorded, says why it is not of record, and
+recent commit on the branch, which would review only part of the change), and everything it reads is committed. The diff runs
+without external diff tools or text conversions (`--no-ext-diff --no-textconv`), and a file git shows as binary whose content is
+text (no NUL byte in its first 8,000 bytes, as git judges without attributes) makes the run not of record and is named for the
+reviewer to read, so an attribute cannot hide a change from the review; a real binary file such as an image stays a one-line entry. The base defaults to the target. A run with `--model`, `--budget`, an outdated base or uncommitted or untracked files in the reviewed paths is still recorded, says why it is not of record, and
 exits NOT-EARNED when it finds nothing.
 
 **Diff limit.** `review.maxDiffCharacters` (default 120,000) is how much of the diff the reviewer is shown; a longer diff is
@@ -174,6 +177,7 @@ These always apply; `protected:` can add paths but never remove these.
 | `.claude/hooks/**`, `.claude/agents/**`, `.claude/skills/**`, `.claude/commands/**` | the team's own controls: a guard hook edited to exit 0 would be a silent bypass |
 | `**/Directory.Build.props`, `**/Directory.Build.targets`, `**/Directory.Build.rsp`, `**/Directory.Packages.props`, `global.json` | .NET build control |
 | `**/.editorconfig`, `**/.globalconfig`, `**/*.globalconfig`, `**/*.ruleset`, `**/stylecop.json`, `**/BannedSymbols.txt` | code-style and analyzer policy the build gate enforces |
+| `**/.gitattributes` | what git diffs show: a `-diff` or `binary` line, or a diff driver, can show a text change as "Binary files … differ" (attributes set outside the tree, in `.git/info/attributes` or `core.attributesFile`, are not covered; the review's own check below is) |
 | `**/NuGet.config`, `**/nuget.config` | package sources |
 | `.gitleaks.toml`, `.gitleaksignore` | secret-scanning policy |
 | `.github/workflows/lockflight-gates.yml` | the CI job that judges pull requests |
