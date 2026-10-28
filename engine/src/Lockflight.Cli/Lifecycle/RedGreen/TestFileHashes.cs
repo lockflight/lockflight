@@ -10,7 +10,7 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 /// file changed, appeared or disappeared behind the guard (another editor, a script, a write the guard did not see). Left out, because
 /// builds, test runs and editors write them: <c>bin/</c>, <c>obj/</c> and <c>node_modules/</c>; files in <c>TestResults/</c> and
 /// snapshot-test <c>.received.</c> files that are not C# sources; dot-files and dot-folders; editor and IDE files (<c>*.user</c>,
-/// <c>*.swp</c>, <c>Thumbs.db</c>). A symbolic link is recorded by its target, not followed. A test project at the root is not
+/// <c>*.swp</c>, <c>Thumbs.db</c>). Line endings do not count: CRLF reads as LF. A symbolic link is recorded by its target, not followed. A test project at the root is not
 /// hashed: it would cover the production code too.
 /// </summary>
 internal static class TestFileHashes
@@ -124,13 +124,35 @@ internal static class TestFileHashes
                 return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"link:{target}")));
             }
 
-            using FileStream stream = File.OpenRead(path);
-            return Convert.ToHexStringLower(SHA256.HashData(stream));
+            return Convert.ToHexStringLower(SHA256.HashData(WithoutCarriageReturns(File.ReadAllBytes(path))));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             return UnreadableHash;
         }
+    }
+
+    /// <summary>
+    /// A text file with its CRLF line endings read as LF, so a checkout that converts line endings (<c>core.autocrlf</c> on Windows) is
+    /// not a change; a file with a NUL byte is binary and kept as it is.
+    /// </summary>
+    private static byte[] WithoutCarriageReturns(byte[] content)
+    {
+        if (Array.IndexOf(content, (byte)0) >= 0)
+        {
+            return content;
+        }
+
+        List<byte> normalized = new(content.Length);
+        for (int index = 0; index < content.Length; index++)
+        {
+            if (content[index] != '\r' || index + 1 >= content.Length || content[index + 1] != '\n')
+            {
+                normalized.Add(content[index]);
+            }
+        }
+
+        return [.. normalized];
     }
 
     private static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');

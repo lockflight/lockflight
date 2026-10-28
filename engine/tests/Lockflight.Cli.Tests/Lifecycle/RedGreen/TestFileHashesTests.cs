@@ -97,6 +97,15 @@ public sealed class TestFileHashesTests : IDisposable
     }
 
     [Fact]
+    public void ALineEndingConversionIsNoChange()
+    {
+        IReadOnlyDictionary<string, string> atRed = TestFileHashes.Compute(root.FullName, [Project]);
+        Write(HelperFile, "static class Prices {}\r\n");
+
+        Assert.False(TestFileHashes.Compare(atRed, TestFileHashes.Compute(root.FullName, [Project])).Any);
+    }
+
+    [Fact]
     public void UnchangedFilesAreNoChange()
     {
         IReadOnlyDictionary<string, string> atRed = TestFileHashes.Compute(root.FullName, [Project]);
