@@ -5,6 +5,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Lifecycle;
+using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Processes;
 using Lockflight.Cli.Testing;
 
@@ -50,6 +51,12 @@ internal sealed class ReviewCommand(CliContext context)
         {
             await context.Error.WriteLineAsync($"lockflight: {Path.GetRelativePath(manifest.Root, feature.SpecPath)} does not exist; write the spec first");
             return ExitCode.Config;
+        }
+
+        if (RedGreenRecord.Load(RedGreenRecord.PathFor(feature)) is RedGreenRecord record && TestFileHashes.Refusal(manifest.Root, record) is string changed)
+        {
+            await context.Error.WriteLineAsync($"lockflight: no review: {changed}");
+            return ExitCode.Fail;
         }
 
         decimal budget = manifest.Review.BudgetUsd;

@@ -107,6 +107,17 @@ internal sealed record RedGreenRecord
                 saved["snapshot"] = snapshot;
             }
 
+            if (cycle.TestFiles.Count > 0)
+            {
+                JsonObject testFiles = new();
+                foreach ((string file, string hash) in cycle.TestFiles)
+                {
+                    testFiles[file] = hash;
+                }
+
+                saved["testFiles"] = testFiles;
+            }
+
             if (cycle.Amends.Count > 0)
             {
                 saved["amends"] = AmendsArray(cycle.Amends);
@@ -138,7 +149,7 @@ internal sealed record RedGreenRecord
         JsonArray saved = [];
         foreach (RedGreenAmend amend in amends)
         {
-            saved.Add((JsonNode)new JsonObject
+            JsonObject entry = new()
             {
                 ["test"] = amend.TestKey,
                 ["method"] = amend.MethodFilter,
@@ -147,7 +158,13 @@ internal sealed record RedGreenRecord
                 ["at"] = amend.At.ToString("O", CultureInfo.InvariantCulture),
                 ["reason"] = amend.Reason,
                 ["recheckedAt"] = amend.RecheckedAt?.ToString("O", CultureInfo.InvariantCulture),
-            });
+            };
+            if (amend.Diff is AmendDiff diff)
+            {
+                entry["diff"] = new JsonObject { ["summary"] = diff.Summary, ["sha256"] = diff.Sha256, ["text"] = diff.Text };
+            }
+
+            saved.Add((JsonNode)entry);
         }
 
         return saved;
@@ -162,6 +179,9 @@ internal sealed record RedGreenRecord
         amend["reason"]?.GetValue<string>() ?? string.Empty)
     {
         RecheckedAt = amend["recheckedAt"]?.GetValue<string>() is string rechecked ? DateTimeOffset.Parse(rechecked, CultureInfo.InvariantCulture) : null,
+        Diff = amend["diff"] is JsonObject diff
+            ? new AmendDiff(diff["text"]?.GetValue<string>() ?? string.Empty, diff["sha256"]?.GetValue<string>() ?? string.Empty, diff["summary"]?.GetValue<string>() ?? string.Empty)
+            : null,
     };
 
     private static RedGreenCycle ReadCycle(JsonObject cycle) => new(
@@ -180,6 +200,8 @@ internal sealed record RedGreenRecord
     {
         Amends = [.. (cycle["amends"] as JsonArray ?? []).OfType<JsonObject>().Select(ReadAmend)],
         Snapshot = cycle["snapshot"]?.GetValue<string>(),
+        TestFiles = (cycle["testFiles"] as JsonObject ?? new JsonObject()).Where(entry => entry.Value is not null)
+            .ToDictionary(entry => entry.Key, entry => entry.Value!.GetValue<string>(), StringComparer.Ordinal),
     };
 
     private static string[] Strings(JsonNode? node) =>

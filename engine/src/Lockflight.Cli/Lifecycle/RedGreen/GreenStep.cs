@@ -8,7 +8,8 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 /// <summary>
 /// <c>lockflight redgreen green</c>: closes the open cycle when its tests pass with nothing deleted, skipped, made explicit or broken
 /// (<see cref="SuiteChecks"/>), the runner finished normally and every known test actually ran — a run that crashed half-way, with
-/// the rest of the suite missing from its report, is not a green.
+/// the rest of the suite missing from its report, is not a green. The locked test files must be the ones the red accepted, or the
+/// ones an amend's red re-checked (<see cref="TestFileHashes"/>).
 /// </summary>
 internal sealed class GreenStep(RedGreenSession session)
 {
@@ -25,6 +26,11 @@ internal sealed class GreenStep(RedGreenSession session)
             return await session.FailAsync(
                 $"{amended} {(waiting.Length == 1 ? "was" : "were")} amended and not re-checked; run '{EngineCommand.Linked} redgreen red' first: the amended tests must fail in production code again before a green",
                 cancellationToken);
+        }
+
+        if (TestFileHashes.Refusal(session.Manifest.Root, record) is string changed)
+        {
+            return await RejectAsync(open, [changed], cancellationToken);
         }
 
         if (session.UnapprovedArtifacts() is string unapproved)
