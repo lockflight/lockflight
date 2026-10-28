@@ -53,7 +53,7 @@ units:                          # workspace shell or monorepo; omit for a single
     kind: none
 
 review:                         # what the review of record runs with (both optional)
-  model: opus                   # Claude Code model name (default opus)
+  model: sonnet                 # Claude Code model name (default sonnet; opus to review with Opus)
   maxUsd: 3.00                  # the reviewer's --max-budget-usd, above 0 and at most 100 (default 3.00); on a
                                 #   subscription an estimate at API prices, not a bill
   target: origin/main           # the branch the change targets (default: the branch origin/HEAD points at, else main)
@@ -63,6 +63,20 @@ review:                         # what the review of record runs with (both opti
 `review.maxUsd` (or the defaults), its base commit is the merge base of HEAD and `review.target` (neither an older base nor a
 recent commit on the branch, which would review only part of the change), and everything it reads is committed. The base defaults to the target. A run with `--model`, `--budget`, an outdated base or uncommitted or untracked files in the reviewed paths is still recorded, says why it is not of record, and
 exits NOT-EARNED when it finds nothing.
+
+**Choosing the review model.** The default is `sonnet`. On our review benchmark of seeded defects in a small sample
+project, `sonnet` and `opus` found the same defects, with no false FAIL on clean changes for either, while `sonnet` cost about
+half as much, ran faster and filed fewer minor findings; `opus` more often cited every location of a defect that spans several
+files. That is detection on seeded cases, not yet measured on large real codebases. To review with Opus, set it in the manifest:
+
+```yaml
+review:
+  model: opus
+```
+
+A manifest that sets `review.model` keeps that model when the default changes; a project without the setting follows the
+default. Runs already recorded keep the model and the record status they were run with. `--model` on a single run is still
+recorded but not of record (above).
 
 **How the reviewer runs.** `lockflight review` starts `claude -p` with every mode set explicitly, so a change of Claude Code's
 defaults does not change the reviewer: no user, project or local settings (so no hooks and no plugins), no MCP servers, only the
