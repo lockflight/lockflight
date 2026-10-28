@@ -273,7 +273,18 @@ internal sealed class ReviewCommand(CliContext context)
 
         TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
         TestWorkspace workspace = TestWorkspaces.For(manifest, feature);
-        if (await workspace.BuildAsync(cancellationToken) is not null || await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> listed || workspace.Apps.Count == 0)
+        if (await workspace.BuildAsync(cancellationToken) is not null)
+        {
+            return (FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]), FixCheckSpend.None);
+        }
+
+        if (workspace.DiscoveryProblem is string incomplete)
+        {
+            await context.Error.WriteLineAsync($"lockflight: the reproductions are not run, so their findings stay unverified: {incomplete}");
+            return (FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]), FixCheckSpend.None);
+        }
+
+        if (await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> listed || workspace.Apps.Count == 0)
         {
             return (FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]), FixCheckSpend.None);
         }

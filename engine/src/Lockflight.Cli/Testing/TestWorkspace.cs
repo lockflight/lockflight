@@ -11,6 +11,12 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
 {
     public IReadOnlyList<TestApp> Apps { get; private set; } = [];
 
+    /// <summary>After a build: the projects whose evaluation failed or timed out, so it is unknown whether <see cref="Apps"/> is complete.</summary>
+    public IReadOnlyList<UnevaluatedProject> Unevaluated { get; private set; } = [];
+
+    /// <summary>After a build: why the test applications found may be incomplete, with what to do; null when every project was evaluated.</summary>
+    public string? DiscoveryProblem => Unevaluated.Count == 0 ? null : UnevaluatedProjects.Describe(root, Unevaluated, timeLimit);
+
     /// <summary>The test application whose listing or run failed last, for the error message.</summary>
     public string? FailedApp { get; private set; }
 
@@ -29,10 +35,14 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
     public TestWorkspace MovedTo(string otherRoot) =>
         new(otherRoot, [.. targets.Select(target => target with { Directory = Path.GetFullPath(Path.Combine(otherRoot, Path.GetRelativePath(root, target.Directory))) })], timeLimit);
 
-    /// <summary>Builds; returns the build output when the build fails, null on success.</summary>
+    /// <summary>
+    /// Builds and finds the test applications; returns the build output when the build fails, null on success (then check
+    /// <see cref="DiscoveryProblem"/>: a project that could not be evaluated may be a test project left out).
+    /// </summary>
     public async Task<string?> BuildAsync(CancellationToken cancellationToken)
     {
         List<TestApp> apps = [];
+        List<UnevaluatedProject> unevaluated = [];
         foreach (BuildTarget target in targets)
         {
             ProcessResult build = await ProcessRunner.RunAsync(
@@ -42,10 +52,13 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
                 return build.Combined;
             }
 
-            apps.AddRange(await TestApps.FindAsync(target.Directory, target.PreferredFramework, timeLimit, cancellationToken));
+            TestAppDiscovery discovery = await TestApps.FindAsync(target.Directory, target.PreferredFramework, timeLimit, cancellationToken);
+            apps.AddRange(discovery.Apps);
+            unevaluated.AddRange(discovery.Unevaluated);
         }
 
         Apps = apps;
+        Unevaluated = unevaluated;
         return null;
     }
 

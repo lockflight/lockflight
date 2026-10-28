@@ -113,6 +113,12 @@ internal sealed class TraceCommand(CliContext context)
             return null;
         }
 
+        if (workspace.DiscoveryProblem is string incomplete)
+        {
+            await context.Output.WriteLineAsync($"NOT-EARNED the current tests cannot all be listed: {incomplete}");
+            return null;
+        }
+
         if (workspace.Apps.Count == 0)
         {
             await context.Output.WriteLineAsync("NOT-EARNED no xUnit test project found (v3 on Microsoft.Testing.Platform, or v2 on VSTest) to list the current tests from");

@@ -44,6 +44,13 @@ internal sealed class RedGreenSession(CliContext context, Manifest manifest, Fea
         return ExitCode.Fail;
     }
 
+    /// <summary>The step cannot judge the tests it was given, so nothing is earned (exit 5); the message says what to do.</summary>
+    public async Task<ExitCode> NotEarnedAsync(string message, CancellationToken cancellationToken)
+    {
+        await context.Output.WriteLineAsync($"NOT-EARNED {message}".AsMemory(), cancellationToken);
+        return ExitCode.NotEarned;
+    }
+
     /// <summary>A tool the step needs could not list, build or run the tests: no verdict about them (exit 3).</summary>
     public async Task<ExitCode> BrokenAsync(string message, CancellationToken cancellationToken)
     {

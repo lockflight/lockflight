@@ -53,6 +53,11 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
             return ExitCode.Fail;
         }
 
+        if (workspace.DiscoveryProblem is string incomplete)
+        {
+            return await session.NotEarnedAsync($"the red cannot be judged: {incomplete}", cancellationToken);
+        }
+
         if (await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> inventory)
         {
             return await session.BrokenAsync($"the test runner could not list the tests of {workspace.FailedApp}", cancellationToken);
