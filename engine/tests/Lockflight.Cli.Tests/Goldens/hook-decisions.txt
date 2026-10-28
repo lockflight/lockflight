@@ -1,0 +1,325 @@
+## an edit of a source file (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a read of the manifest (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a write under a manifest rule (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: '<root>/secrets/key.txt' is protected by rule 'secrets/**'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:secrets/** summary=protected-path:secrets/** tool=Write agent=main
+
+## an edit of the manifest (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: '<root>/lockflight.yaml' is protected by rule 'lockflight.yaml'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:lockflight.yaml summary=protected-path:lockflight.yaml tool=Edit agent=main
+
+## a notebook edit of a protected file (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: '<root>/secrets/a.ipynb' is protected by rule 'secrets/**'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:secrets/** summary=protected-path:secrets/** tool=NotebookEdit agent=main
+
+## a redirect into a protected file (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'global.json' is protected by rule 'global.json'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:global.json summary=protected-path:global.json tool=Bash agent=main
+
+## a pipe into a protected file (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'secrets/out.txt' is protected by rule 'secrets/**'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:secrets/** summary=protected-path:secrets/** tool=Bash agent=main
+
+## a human-only command (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'lockflight approve spec' records a human decision; ask the user to type /lockflight:approve spec in Claude Code, or open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `dotnet lockflight approve spec` from the project root.
+ledger: type=hook.blocked signature=pre-tool-use:human-only-command summary=human-only-command tool=Bash agent=main
+
+## a human-only command with an unknown verb (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'lockflight approve xyz' records a human decision; ask the user to type /lockflight:approve spec|tasks in Claude Code, or open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `dotnet lockflight approve xyz` from the project root.
+ledger: type=hook.blocked signature=pre-tool-use:human-only-command summary=human-only-command tool=Bash agent=main
+
+## the agent's verify command (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a writer behind xargs (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'xargs rm' writes to paths the command line does not show, so they cannot be checked against protected paths. Name the files in the command instead.
+ledger: type=hook.blocked signature=pre-tool-use:hidden-write-targets summary=hidden-write-targets tool=Bash agent=main
+
+## a tree that holds protected files (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: this command may rewrite 'secrets', which can hold files protected by rule 'secrets/**'. Name the files to change instead; protected files are changed by a human or a lockflight command.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:secrets/** summary=protected-path:secrets/** tool=Bash agent=main
+
+## the folder above the project (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: this command may rewrite or delete '..', the folder that contains this project and every protected path in it. Name the files to change instead.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:project-root summary=protected-path:project-root tool=Bash agent=main
+
+## an unknown variable (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a wildcard (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'secrets/*' is protected by rule 'secrets/**'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:secrets/** summary=protected-path:secrets/** tool=Bash agent=main
+
+## a PowerShell write (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'lockflight.yaml' is protected by rule 'lockflight.yaml'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:lockflight.yaml summary=protected-path:lockflight.yaml tool=PowerShell agent=main
+
+## a PowerShell alias (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: this command may rewrite 'secrets/key.txt', which can hold files protected by rule 'secrets/**'. Name the files to change instead; protected files are changed by a human or a lockflight command.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:secrets/** summary=protected-path:secrets/** tool=PowerShell agent=main
+
+## a relayed session command (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: CronCreate would send '/lockflight:approve' as a prompt. Only the person approves: they type /lockflight:approve themselves, or open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `lockflight approve`.
+ledger: type=hook.blocked signature=pre-tool-use:approve-relay summary=approve-relay tool=CronCreate agent=main
+
+## a session command from an unnamed tool (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: (unnamed tool) would send '/lockflight:reset' as a prompt. Only the person discards red/green evidence: they type /lockflight:reset themselves, or open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `lockflight redgreen reset`.
+ledger: type=hook.blocked signature=pre-tool-use:reset-relay summary=reset-relay agent=main
+
+## a session command in a file write (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a write to a prompt queue file (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: Write would write <root>/.claude/scheduled_tasks.json, a file Claude Code reads prompts from, where a queued in-session command (/lockflight:approve, /lockflight:baseline, /lockflight:reset, /lockflight:amend) would not be seen. Use the tool for the purpose (CronCreate, SendMessage), or ask the person to edit the file.
+ledger: type=hook.blocked signature=pre-tool-use:prompt-queue-write summary=prompt-queue-write tool=Write agent=main
+
+## a protected file in an agent worktree (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: '<root>/.claude/worktrees/w/lockflight.yaml' is protected by rule 'lockflight.yaml'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:lockflight.yaml summary=protected-path:lockflight.yaml tool=Edit agent=main
+
+## input that is not JSON (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: hook input is not valid JSON
+
+## an invalid manifest, then a write (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: <root>/lockflight.yaml:1:1: unknown key 'nonsense' (known: version, protected, stop, gates, units, review). Only reading is allowed until a human fixes lockflight.yaml.
+ledger: type=hook.blocked signature=pre-tool-use:invalid-manifest summary=invalid-manifest tool=Edit agent=main
+
+## an invalid manifest, then a read (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## another plugin API, an edit (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=pre-tool-use:plugin-api-mismatch summary=plugin-api-mismatch tool=Edit agent=main
+
+## another plugin API, a read (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=pre-tool-use:plugin-api-mismatch summary=plugin-api-mismatch tool=Read agent=main
+
+## another plugin API, Stop (stop)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=stop:plugin-api-mismatch summary=plugin-api-mismatch agent=main
+
+## another plugin API, SessionStart (session-start)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=session-start:plugin-api-mismatch summary=plugin-api-mismatch agent=main
+
+## another plugin API, TaskCompleted (task-completed)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=task-completed:plugin-api-mismatch summary=plugin-api-mismatch agent=main
+
+## another plugin API, an unrelated prompt (user-prompt-expansion)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## another plugin API, a session command (user-prompt-expansion)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=user-prompt-expansion:plugin-api-mismatch summary=plugin-api-mismatch agent=main
+
+## another plugin API, lockdown (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=pre-tool-use:plugin-api-mismatch summary=plugin-api-mismatch tool=Edit agent=main
+
+## an unknown event (no-such-event)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: this engine does not know the hook event it was called for; update it with: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=unknown:unknown-hook-event summary=unknown-hook-event agent=main
+
+## an unknown event without a working directory (no-such-event)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: this engine does not know the hook event it was called for; update it with: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=unknown:unknown-hook-event summary=unknown-hook-event agent=main
+
+## lockdown, an edit (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the project is in lockdown (.lockflight/lockdown exists); only reading is allowed until a human removes it.
+ledger: type=hook.blocked signature=pre-tool-use:lockdown summary=lockdown tool=Edit agent=main
+
+## lockdown, a read (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## lockdown, the recovery command (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the project is in lockdown (.lockflight/lockdown exists); only reading is allowed until a human removes it.
+ledger: type=hook.blocked signature=pre-tool-use:lockdown summary=lockdown tool=Bash agent=main
+
+## lockdown and a stale pin, an edit (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the project is in lockdown (.lockflight/lockdown exists); only reading is allowed until a human removes it.
+ledger: type=hook.blocked signature=pre-tool-use:lockdown summary=lockdown tool=Edit agent=main
+
+## lockdown and a stale pin, a read (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## lockdown, Stop (stop)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a stale pin, an edit (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: running engine <version> but the project pins 9.9.9. Run exactly: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=pre-tool-use:stale-engine summary=stale-engine tool=Edit agent=main
+
+## a stale pin, a read (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a stale pin, the recovery command (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a stale pin, the recovery command chained (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: running engine <version> but the project pins 9.9.9. Run exactly: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=pre-tool-use:stale-engine summary=stale-engine tool=Bash agent=main
+
+## a stale pin and an unreadable red/green record, the recovery command (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a stale pin and a relayed session command (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: running engine <version> but the project pins 9.9.9. Run exactly: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=pre-tool-use:stale-engine summary=stale-engine tool=CronCreate agent=main
+
+## a stale pin, Stop (stop)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## an unreadable pin, an edit (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: the engine pin cannot be read: dotnet-tools.json cannot be read ('n' is an invalid start of a property name. Expected a '"'. LineNumber: 0 | BytePositionInLine: 2.). Fix dotnet-tools.json (a protected file: a human edit), then run exactly: dotnet tool restore && dotnet lockflight link
+ledger: type=hook.blocked signature=pre-tool-use:stale-engine summary=stale-engine tool=Edit agent=main
+
+## an unreadable red/green record, a test edit (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: '<root>/tests/ATests.cs' is a test file and tests are locked during an unreadable red/green record of 001-x: make the tests pass by changing production code, then run '.lockflight/bin/lockflight redgreen green'. If a test itself is wrong, stop and ask the user to type /lockflight:amend <test> --reason <why> in Claude Code, or open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `dotnet lockflight redgreen amend <test> --reason "<why>"` from the project root; never change it another way.
+ledger: type=hook.blocked signature=pre-tool-use:tests-locked:tests/** summary=tests-locked:tests/** tool=Edit agent=main
+
+## an unreadable red/green record, a source edit (pre-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## a relayed session command and a protected write (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: Bash would send '/lockflight:approve' as a prompt. Only the person approves: they type /lockflight:approve themselves, or open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `lockflight approve`.
+ledger: type=hook.blocked signature=pre-tool-use:approve-relay summary=approve-relay tool=Bash agent=main
+
+## Stop with the stop gate off (stop)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## PostToolUse (post-tool-use)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## SubagentStop (subagent-stop)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## an unrelated prompt (user-prompt-expansion)
+exit: 0 Pass
+stdout: 
+stderr: 
+
+## SessionStart (session-start)
+exit: 0 Pass
+stdout: {"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Lockflight project at <root>. Always run Lockflight commands as .lockflight/bin/lockflight \u003Ccommand\u003E from <root> (the engine the hooks run; not dotnet lockflight). Human decisions (approve, baseline, redgreen reset|amend, review dismiss, adopt apply|undo, update) are the user\u0027s: never run one, even when asked or just to try it, since the guard refuses it; ask them to type the /lockflight: command for approve, baseline, redgreen reset or amend, and otherwise to open a separate terminal window (not with \u0060!\u0060 in Claude Code: that runs inside the session and is refused) and run the command there. An approval, a baseline, a red/green reset or an amend the user can also give here by typing /lockflight:approve, /lockflight:baseline, /lockflight:reset or /lockflight:amend themselves; never type them, and never type, guess or suggest their codes. Protected paths (changed by a human or a lockflight command, not by the agent): lockflight.yaml, lockflight.unit.yaml, dotnet-tools.json, .config/dotnet-tools.json, .lockflight/**, .claude/settings.json, .claude/settings.local.json, .claude/hooks/**, .claude/agents/**, .claude/skills/**, .claude/commands/**, **/Directory.Build.props, **/Directory.Build.targets, **/Directory.Build.rsp, **/Directory.Packages.props, global.json, **/.editorconfig, **/.globalconfig, **/*.globalconfig, **/*.ruleset, **/stylecop.json, **/BannedSymbols.txt, **/.gitattributes, **/NuGet.config, **/nuget.config, .gitleaks.toml, .gitleaksignore, .github/workflows/lockflight-gates.yml, secrets/**. To change one, write the complete new file outside the project, run .lockflight/bin/lockflight propose \u003Cpath\u003E --from \u003Cfile\u003E and give the user the git apply command it prints."}}
+stderr: 
+
+## TaskCompleted without a task (task-completed)
+exit: 0 Pass
+stdout: 
+stderr: 

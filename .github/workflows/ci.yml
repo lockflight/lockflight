@@ -77,6 +77,10 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" sh tests/compat/probe-suite.sh
+      - name: Gate step order and run policies (stand-in SDK)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ENGINE="$PWD/out/lockflight" bash tests/gates/step-order.sh
       - name: Lifecycle end to end (spec → approvals → red/green → trace)
         shell: bash
         run: |

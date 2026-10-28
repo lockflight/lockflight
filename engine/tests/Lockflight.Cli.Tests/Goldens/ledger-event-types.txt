@@ -1,0 +1,10 @@
+1 HookBlocked: hook.blocked
+2 GateCompleted: gate.completed
+3 ConfigWritten: config.written
+4 EvidenceRecorded: evidence.recorded
+5 ApprovalRecorded: approval.recorded
+6 ProposalCreated: proposal.created
+7 ReviewCompleted: review.completed
+8 FindingDismissed: finding.dismissed
+9 FindingFixed: finding.fixed
+10 SessionCommandAnswered: session-command.answered
