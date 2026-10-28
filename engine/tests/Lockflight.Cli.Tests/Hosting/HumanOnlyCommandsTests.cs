@@ -31,6 +31,34 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("echo approve && lockflight phase check tasks")]
     public void OtherCommandsPass(string command) => Assert.Null(HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 
+    [Theory]
+    [InlineData("lockflight approve --help")]
+    [InlineData("lockflight approve spec -h")]
+    [InlineData("lockflight approve spec --help --feature 001-orders")]
+    [InlineData(".lockflight/bin/lockflight redgreen amend --help")]
+    [InlineData("dotnet lockflight baseline tests --help")]
+    [InlineData("cd src && \"/opt/tools/lockflight\" review dismiss -h")]
+    [InlineData("LOCKFLIGHT_DEBUG=1 lockflight update --help")]
+    [InlineData("bash -c 'lockflight adopt apply --help'")]
+    public void AskingAReservedCommandForHelpPasses(string command) => Assert.Null(HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
+
+    [Theory]
+    [InlineData("lockflight approve spec --help=no", "approve spec")]
+    [InlineData("lockflight approve spec # --help", "approve spec")]
+    [InlineData("lockflight approve spec > --help", "approve spec")]
+    [InlineData("lockflight approve spec; lockflight --help", "approve spec")]
+    [InlineData("echo --help | lockflight approve spec", "approve spec")]
+    [InlineData("H=--help; lockflight approve spec $H", "approve spec")]
+    [InlineData("find . -maxdepth 0 -exec lockflight approve spec \\; -name --help", "approve spec")]
+    [InlineData("xargs lockflight approve spec --help", "approve spec")]
+    [InlineData("env lockflight approve spec --help", "approve spec")]
+    [InlineData("lockflight approve --help lockflight approve spec", "approve spec")]
+    [InlineData("lockflight() { command lockflight \"${@/--help/}\"; }; lockflight approve spec --help", "approve spec")]
+    [InlineData("function lockflight { command lockflight \"${@/--help/}\"; }; lockflight approve spec -h", "approve spec")]
+    [InlineData("bash -c 'lockflight() { command lockflight \"${@/--help/}\"; }; lockflight approve spec --help'", "approve spec")]
+    public void HelpThatMayNotReachTheEngineIsNoExemption(string command, string expected) =>
+        Assert.Equal(expected, HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
+
     [Fact]
     public void TheRefusalNamesTheSeparateTerminalBeforeTheCommandAndPointsAtTheSessionCommand()
     {
