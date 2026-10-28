@@ -17,6 +17,7 @@ internal sealed class ShellWritesBuilder
     private readonly List<string> floatingTrees = [];
     private string? hidden;
     private string? humanOnly;
+    private string? humanOnlyIgnoringHelp;
 
     public void Add(CommandWrites writes, ShellLocations locations)
     {
@@ -31,7 +32,13 @@ internal sealed class ShellWritesBuilder
 
     public void Hide(string description) => hidden ??= description;
 
-    public void AddHumanOnly(string? command) => humanOnly ??= command;
+    /// <param name="command">The reserved command, a request for help not counting as one.</param>
+    /// <param name="ignoringHelp">The reserved command, a request for help counting like any other option.</param>
+    public void AddHumanOnly(string? command, string? ignoringHelp)
+    {
+        humanOnly ??= command;
+        humanOnlyIgnoringHelp ??= ignoringHelp;
+    }
 
     public ShellWrites Build() =>
         new(Distinct(files), Distinct(trees), Distinct(sourceTrees), Distinct(floatingFiles), Distinct(floatingTrees), hidden)
@@ -39,6 +46,7 @@ internal sealed class ShellWritesBuilder
             PatternFiles = Distinct(patternFiles),
             ComputedFiles = Distinct(computedFiles),
             HumanOnly = humanOnly,
+            HumanOnlyIgnoringHelp = humanOnlyIgnoringHelp,
         };
 
     /// <summary>Adds each path under every location; one with a substitution inside literal text goes to <paramref name="computed"/>.</summary>

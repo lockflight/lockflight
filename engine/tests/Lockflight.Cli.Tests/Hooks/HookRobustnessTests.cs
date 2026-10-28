@@ -183,6 +183,34 @@ public sealed class HookRobustnessTests : IDisposable
         Assert.Contains($"cd '{projectRoot.FullName}' && dotnet lockflight approve spec", error, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("approve", "--help")]
+    [InlineData("approve", "spec", "--help", "--feature", "001-orders")]
+    [InlineData("redgreen", "reset", "-h")]
+    [InlineData("baseline", "tests", "--help")]
+    public async Task AReservedCommandAskedForHelpPrintsTheUsageUnderTheAgentAndRecordsNothing(params string[] args)
+    {
+        Dictionary<string, string> environment = new() { [EnvironmentVariables.ClaudeCode] = "1" };
+        string[] before = [.. Directory.EnumerateFileSystemEntries(projectRoot.FullName, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)];
+
+        (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(args, string.Empty, projectRoot.FullName, environment);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("Usage: lockflight <command>", output, StringComparison.Ordinal);
+        Assert.Empty(error);
+        Assert.Equal(before, Directory.EnumerateFileSystemEntries(projectRoot.FullName, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("lockflight approve --help", true)]
+    [InlineData("lockflight approve spec --feature 001-orders", false)]
+    public async Task TheGuardLetsTheAgentAskAReservedCommandForHelp(string command, bool allowed)
+    {
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], BashPayload(command), projectRoot.FullName);
+
+        Assert.Equal(allowed ? ExitCode.Pass : ExitCode.HookBlock, exitCode);
+    }
+
     private string BashPayload(string command) => JsonSerializer.Serialize(new Dictionary<string, object>
     {
         ["cwd"] = projectRoot.FullName,
