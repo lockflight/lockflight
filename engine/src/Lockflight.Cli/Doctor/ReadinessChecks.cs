@@ -61,6 +61,11 @@ internal static class ReadinessChecks
         }
 
         checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root)]);
+        if (DenyRulesCheck.Check(root) is DoctorCheck denyRules)
+        {
+            checks.Add(denyRules);
+        }
+
         if (SandboxCheck.Check(root, userHome) is DoctorCheck sandbox)
         {
             checks.Add(sandbox);

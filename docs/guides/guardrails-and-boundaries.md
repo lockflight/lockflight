@@ -254,7 +254,7 @@ credentials, a person can turn it off, and hooks, MCP servers and the built-in f
 the team's rules without duplicates. Deny rules are evaluated before allow rules in every settings scope, so an allow rule
 cannot open a protected path again. An `Edit` rule covers every built-in tool that edits files (Claude Code never matches a
 `Write(path)` rule), and `/path` is relative to the session's working directory in project settings. Run `init` again to add
-rules for protected files created since.
+rules for protected files created since; `doctor` warns, and names the rule, when one is missing (**deny rules**).
 
 ```json
 { "permissions": { "deny": ["Edit(/**/Directory.Build.props)", "Edit(/.claude/settings.json)", "Edit(/.lockflight/bin/**)", "Edit(/lockflight.yaml)"] } }
@@ -326,13 +326,20 @@ A control that silently stopped working looks exactly like one that never had an
 plants a violation in front of each control and reports it as caught or missed, so every safeguard has been seen saying no:
 
 - the guard blocks an Edit of `lockflight.yaml`, a Bash redirect into `.lockflight/`, `bash -ce "rm lockflight.yaml"` and a hard
-  link to `lockflight.yaml`, and the relay guard blocks a CronCreate that would send `/lockflight:approve` and a Write of `.claude/scheduled_tasks.json`;
+  link to `lockflight.yaml`, and the relay guard blocks a CronCreate that would send `/lockflight:approve`, a subagent prompt
+  that would send `/lockflight:baseline`, a SendMessage that would send `/lockflight:reset`, a `claude -p` that would send
+  `/lockflight:amend`, and a Write of `.claude/scheduled_tasks.json`;
 - every human-only command refuses with `CLAUDECODE=1`;
+- an in-session `/lockflight:approve` is refused in a headless session and from another source than the plugin, and its second
+  step is refused with a wrong code, a used code and an expired code (every in-session command shares these checks);
 - the test gate does not PASS a failing test, a run with every test skipped, or a run with no test, on Microsoft.Testing.Platform
   and on VSTest;
-- red rejects a test that fails by `Assert.Fail`.
+- red rejects a test that fails by `Assert.Fail`;
+- the TaskCompleted hook refuses a task marked completed when the stop gate's PASS no longer covers the tree (it needs git).
 
-Each guard canary has a harmless twin (an ordinary write, an ordinary redirect) that must be allowed, and the test gate and red
+Each guard canary has a harmless twin (an ordinary write, an ordinary redirect, a doc that mentions `/lockflight:reset`) that
+must be allowed; the in-session canaries have the person's own two steps, which must show a code and record with it; the
+TaskCompleted canary has the same completion right after a passing stop gate, which must be allowed; and the test gate and red
 canaries have one that must pass; when a twin is refused too the canary is **BROKEN**, because a control that refuses everything
 proves nothing. Everything happens in a temporary scratch project that is deleted afterwards, never in your project.
 `--canaries=full` also generates a small .NET project and runs the real test gate, a real red, an amend whose amended test
@@ -340,7 +347,11 @@ passes on the red-time snapshot, and a green after a test file was edited behind
 xUnit packages). CI runs `--canaries=full` with the published engine on Linux, Windows and macOS.
 
 The canaries check the engine's decisions, not Claude Code's: whether Claude Code still calls the hooks is what the
-[real-hook canary](../../tests/README.md) checks. A caught canary shows that a control works on the planted case, not that
+[real-hook canary](../../tests/README.md) checks. Two controls sit outside the engine's own decisions and are checked elsewhere:
+the hook shim's refusal of a linked engine that no longer matches its recorded SHA-256 runs before the engine, so an engine cannot
+judge it about itself, and the [compatibility suite](../../tests/README.md) replaces the engine after linking and checks that writes are
+refused (its twin, the engine as linked, must be allowed); the `.claude/settings.json` deny rules and sandbox write denials are
+configuration, not a refusal, so `doctor` reports a missing one (**deny rules**, **sandbox**) and its tests remove one after `init`. A caught canary shows that a control works on the planted case, not that
 nothing can get around it: the labels above still apply. Editing an existing hard link to a protected file is not caught by
 the guard (the guard sees paths, and hard links share none); CI with the base branch's policy catches the change.
 

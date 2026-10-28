@@ -1,5 +1,7 @@
+using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Doctor;
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
 using Lockflight.Cli.Linking;
 
@@ -182,6 +184,53 @@ public sealed class ReadinessChecksTests : IDisposable
         Write(".claude/settings.json", """{ "enabledPlugins": { "lockflight@lockflight": false }, "extraKnownMarketplaces": { "lockflight": {} } }""");
 
         Assert.Equal(CheckStatus.Warn, (await CheckAsync("claude settings")).Status);
+    }
+
+    [Fact]
+    public async Task AfterInitEveryProtectedPathHasAnEditDenyRuleAndASandboxWriteDenial()
+    {
+        await InitAsync();
+
+        Assert.Equal(CheckStatus.Pass, (await CheckAsync("deny rules")).Status);
+        Assert.Equal(CheckStatus.Pass, (await CheckAsync("sandbox")).Status);
+    }
+
+    [Fact]
+    public async Task AnEditDenyRuleRemovedAfterInitIsNamedWithTheFix()
+    {
+        await InitAsync();
+        RemoveFromSettings("permissions", "deny", "Edit(/lockflight.yaml)");
+
+        DoctorCheck check = await CheckAsync("deny rules");
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("1 protected paths have no Edit deny rule: Edit(/lockflight.yaml)", check.Detail, StringComparison.Ordinal);
+        Assert.Contains("init", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ASandboxWriteDenialRemovedAfterInitIsNamedWithTheFix()
+    {
+        await InitAsync();
+        RemoveFromSettings("sandbox", "filesystem", "denyWrite", "./lockflight.yaml");
+
+        DoctorCheck check = await CheckAsync("sandbox");
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("./lockflight.yaml", check.Detail, StringComparison.Ordinal);
+        Assert.Contains("init", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SettingsWithoutEditDenyRulesWarnWithTheFix()
+    {
+        Write(".claude/settings.json", "{}");
+
+        DoctorCheck check = await CheckAsync("deny rules");
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("lists no Edit deny rules", check.Detail, StringComparison.Ordinal);
+        Assert.Contains("init", check.Fix, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -407,6 +456,22 @@ public sealed class ReadinessChecksTests : IDisposable
     {
         IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, TestContext.Current.CancellationToken);
         return Assert.Single(checks, check => check.Name == name);
+    }
+
+    private async Task InitAsync()
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--no-link"], string.Empty, root.FullName);
+        Assert.True(exitCode == ExitCode.Pass, error);
+    }
+
+    /// <summary>Removes one entry from the list at <paramref name="path"/> in the project's Claude Code settings, as a teammate might.</summary>
+    private void RemoveFromSettings(params string[] path)
+    {
+        string settingsPath = Path.Combine(root.FullName, ClaudeSettingsMerger.RelativePath);
+        JsonNode settings = JsonNode.Parse(File.ReadAllText(settingsPath))!;
+        JsonArray list = path[..^1].Aggregate(settings, (node, key) => node[key]!).AsArray();
+        Assert.True(list.Remove(list.Single(entry => entry!.GetValue<string>() == path[^1])));
+        File.WriteAllText(settingsPath, settings.ToJsonString());
     }
 
     private void Write(string relativePath, string content)

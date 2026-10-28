@@ -12,6 +12,9 @@ internal sealed class CanaryScratch : IDisposable
 {
     private const string MinimalManifest = "version: 1\n";
 
+    /// <summary>What an agent's shell has: <c>CLAUDECODE=1</c> and nothing that says a person attends the session.</summary>
+    private static readonly Dictionary<string, string> AgentSession = new(StringComparer.Ordinal) { [EnvironmentVariables.ClaudeCode] = "1" };
+
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-canary-");
 
     public CanaryScratch(TimeProvider time)
@@ -33,11 +36,18 @@ internal sealed class CanaryScratch : IDisposable
 
     /// <summary>Runs an engine command in the scratch project as an agent's session would: <c>CLAUDECODE=1</c>.</summary>
     public Task<CanaryRun> RunAsAgentAsync(string[] args, string input, CancellationToken cancellationToken) =>
-        RunAsync(args, input, underAgent: true, cancellationToken);
+        RunAsync(args, input, AgentSession, Time, cancellationToken);
 
     /// <summary>Runs an engine command in the scratch project as a person in their own terminal.</summary>
     public Task<CanaryRun> RunAsPersonAsync(string[] args, CancellationToken cancellationToken) =>
-        RunAsync(args, string.Empty, underAgent: false, cancellationToken);
+        RunAsync(args, string.Empty, new Dictionary<string, string>(StringComparer.Ordinal), Time, cancellationToken);
+
+    /// <summary>
+    /// Runs an engine command in the scratch project inside a Claude Code session described by <paramref name="session"/> (the
+    /// variables Claude Code sets, <c>CLAUDECODE=1</c> among them), on the clock <paramref name="clock"/>.
+    /// </summary>
+    public Task<CanaryRun> RunInSessionAsync(string[] args, string input, IReadOnlyDictionary<string, string> session, TimeProvider clock, CancellationToken cancellationToken) =>
+        RunAsync(args, input, session, clock, cancellationToken);
 
     public string PathOf(string relativePath) => Path.Combine(Project, relativePath.Replace('/', Path.DirectorySeparatorChar));
 
@@ -53,21 +63,17 @@ internal sealed class CanaryScratch : IDisposable
         }
     }
 
-    private async Task<CanaryRun> RunAsync(string[] args, string input, bool underAgent, CancellationToken cancellationToken)
+    private async Task<CanaryRun> RunAsync(string[] args, string input, IReadOnlyDictionary<string, string> session, TimeProvider clock, CancellationToken cancellationToken)
     {
-        Dictionary<string, string> variables = new(StringComparer.Ordinal)
+        Dictionary<string, string> variables = new(session, StringComparer.Ordinal)
         {
             [EnvironmentVariables.Home] = Home,
             [EnvironmentVariables.UserProfile] = Home,
         };
-        if (underAgent)
-        {
-            variables[EnvironmentVariables.ClaudeCode] = "1";
-        }
 
         await using StringWriter output = new();
         await using StringWriter error = new();
-        CliContext context = new(new StringReader(input), output, error, Project, Time) { Environment = EnvironmentReader.Of(variables) };
+        CliContext context = new(new StringReader(input), output, error, Project, clock) { Environment = EnvironmentReader.Of(variables) };
         ExitCode exitCode = await CliApplication.RunAsync(args, context, cancellationToken);
         return new CanaryRun(exitCode, output.ToString().Trim(), error.ToString().Trim());
     }

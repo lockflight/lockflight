@@ -187,6 +187,13 @@ git -C "$cloned" rm -q --cached "${committed#"$cloned"/}"
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1"; else shasum -a 256 < "$1"; fi | cut -d' ' -f1; }
 sha "$committed" > "$cloned/.lockflight/bin/lockflight.sha256"
 check "recorded engine: Write allowed"       0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+# The engine itself replaced after link recorded it, the record left as it was: not run, so writes are refused. The last passed
+# check is dated back, as it is when the engine is replaced later: the shim's -nt compares whole seconds on some shells.
+cp "$committed" "$WORK/engine-linked" && touch -t 200001010000 "$cloned/.git/lockflight-engine-checked" && printf 'replaced' >> "$committed"
+check "engine replaced after link: Write blocked" 2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+check "engine replaced after link: Read allowed"  0 "$cloned" "$(json "$cloned" Read "$(fp "$cloned/src/a.cs")")"
+cp "$WORK/engine-linked" "$committed"
+check "engine restored: Write allowed"        0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 printf '%064d\n' 0 > "$cloned/.lockflight/bin/lockflight.sha256"
 touch -t 200001010000 "$cloned/.git/lockflight-engine-checked"
 check "replaced engine: Write blocked"       2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"

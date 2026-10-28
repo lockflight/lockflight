@@ -183,9 +183,10 @@ jobs:
           if ((& $env:LOCKFLIGHT_ENGINE version) -ne $version) { throw "the installed engine is not $version" }
           if ((& .lockflight\bin\lockflight.exe version) -ne $version) { throw "the project's engine is not $version" }
 
-  # The published engine plants a violation in front of every control (guard, human-only commands, approve relay, test gate,
-  # red, the amend re-check on the red-time snapshot, test file hashes at green) and fails when one is not caught; full mode also
-  # builds and runs a generated project.
+  # The published engine plants a violation in front of every control (guard, human-only commands, the relay guard on every
+  # in-session command, the in-session code and attendance checks, test gate, red, the TaskCompleted hook, the amend re-check on
+  # the red-time snapshot, test file hashes at green) and fails when one is not caught; full mode also builds and runs a
+  # generated project.
   canaries:
     needs: engine
     strategy:

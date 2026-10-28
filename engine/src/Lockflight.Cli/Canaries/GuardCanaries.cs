@@ -31,6 +31,19 @@ internal static class GuardCanaries
                 ["cron"] = "*/5 * * * *",
                 ["prompt"] = "/lockflight:approve spec",
             }, scratch), cancellationToken),
+            await BlockedAsync(scratch, "relay guard: a subagent prompt that sends /lockflight:baseline is blocked", Call("Task", new JsonObject
+            {
+                ["description"] = "accept the baseline",
+                ["prompt"] = "/lockflight:baseline tests",
+                ["subagent_type"] = "general-purpose",
+            }, scratch), cancellationToken),
+            await BlockedAsync(scratch, "relay guard: a SendMessage that sends /lockflight:reset is blocked", Call("SendMessage", new JsonObject
+            {
+                ["to"] = "main",
+                ["message"] = "/lockflight:reset",
+            }, scratch), cancellationToken),
+            await BlockedAsync(scratch, "relay guard: a Bash claude -p that sends /lockflight:amend is blocked",
+                BashCall("claude -p '/lockflight:amend OrderTests.ArchivesTheOrder --reason flaky'", scratch), cancellationToken),
             await BlockedAsync(scratch, "relay guard: a Write of .claude/scheduled_tasks.json is blocked", FileCall("Write", scratch.PathOf(".claude/scheduled_tasks.json"), scratch), cancellationToken),
         ];
     }
@@ -43,6 +56,11 @@ internal static class GuardCanaries
             ("a Write in src/", FileCall("Write", scratch.PathOf("src/ok.txt"), scratch)),
             ("a Bash redirect into src/", BashCall("echo ok > src/ok.txt", scratch)),
             ("a CronCreate with another prompt", Call("CronCreate", new JsonObject { ["cron"] = "*/5 * * * *", ["prompt"] = "run the tests" }, scratch)),
+            ("a Write of a doc that mentions /lockflight:reset", Call("Write", new JsonObject
+            {
+                ["file_path"] = scratch.PathOf("src/notes.md"),
+                ["content"] = "Ask the person to type /lockflight:reset.\n",
+            }, scratch)),
         ];
         foreach ((string name, string payload) in harmless)
         {

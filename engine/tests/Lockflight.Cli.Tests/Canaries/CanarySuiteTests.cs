@@ -22,6 +22,10 @@ public sealed class CanarySuiteTests : IDisposable
         Assert.Contains(lines, line => line.Contains("human-only: 'update --source' refuses under CLAUDECODE=1", StringComparison.Ordinal));
         Assert.Contains(lines, line => line.Contains("test gate (VSTest): every test skipped is not a PASS", StringComparison.Ordinal));
         Assert.Contains(lines, line => line.Contains("red: a test failing by Assert.Fail is rejected", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains("relay guard: a SendMessage that sends /lockflight:reset is blocked", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains("session command: an expired code is refused", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains("session command: /lockflight:approve in a headless session is refused", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains(TaskCompletedCanaries.Name, StringComparison.Ordinal));
         Assert.Contains("canaries caught.", output, StringComparison.Ordinal);
         Assert.Empty(root.EnumerateFileSystemInfos());
     }
