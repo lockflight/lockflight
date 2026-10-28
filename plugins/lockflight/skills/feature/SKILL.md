@@ -56,10 +56,13 @@ Never approve for them.
       | COMPILE_RED | the tests do not build | declare the missing members as stubs |
       | RED_IN_TEST | the test, its fixture, constructor or `Assert.Fail` throws | call the production code and let it fail there |
       | RED_OTHER | another exception, or one thrown by the runtime or a library | stub the member, or assert on its result |
-      | RED_NO_PRODUCTION | an assertion fails but the test never calls production code | call the member under test |
+      | RED_NO_PRODUCTION | an assertion fails but the test reaches no production member (a type argument such as `Deserialize<T>`, or `typeof`, is not a call; a method, a constructor or a property read is) | call the member under test |
       | GREEN_BEFORE | the test passes before the code exists | test behaviour that is still missing |
       | SKIPPED | skipped or not run | remove `Skip` / `Explicit` |
       | FLAKY | repeated runs disagree | make the test deterministic |
+
+      Under each test, `redgreen red` says why it got its class; `redgreen red --verbose` adds the exception, the deciding
+      stack frame with its line, and the production member the test reaches.
 
       Assertions recognised: xUnit `Assert` (v2 and v3), Shouldly, FluentAssertions, AwesomeAssertions, NSubstitute
       `Received`, Moq `Verify`, Verify snapshots. Their other exceptions (misusing the library) are not assertions.

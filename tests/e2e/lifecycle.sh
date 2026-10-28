@@ -151,6 +151,7 @@ public sealed class FakeRedTests
 }
 CS
 expect 1 "an assertion without a production call is rejected" "RED_NO_PRODUCTION" -- "$E" redgreen red
+expect 1 "a rejected red says why" "fails, but no production call found" -- "$E" redgreen red
 expect 1 "an exception from the runtime is rejected" "RED_OTHER" -- "$E" redgreen red
 expect 1 "Assert.Fail and a throwing fixture are rejected" "RED_IN_TEST" -- "$E" redgreen red
 write_shipping_tests() {
@@ -172,7 +173,7 @@ public sealed class ShippingTests
 CS
 }
 write_shipping_tests
-expect 0 "an honest stub red is accepted" -- "$E" redgreen red
+expect 0 "an honest stub red is accepted, its deciding frame shown" "PriceCalculator.cs:" -- "$E" redgreen red --verbose
 expect 2 "test edits are blocked during red" "tests are locked during red cycle 1" -- hook tests/Shop.Tests/ShippingTests.cs
 expect 0 "production edits are allowed during red" -- hook src/Shop.Api/PriceCalculator.cs
 expect 2 "git checkout of a locked test file is blocked" "red cycle 1" -- bash_hook "git checkout HEAD -- tests/Shop.Tests/ShippingTests.cs"

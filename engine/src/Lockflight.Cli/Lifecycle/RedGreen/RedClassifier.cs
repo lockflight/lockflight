@@ -51,44 +51,81 @@ internal static class RedClassifier
     /// </summary>
     private static readonly string[] AssertionLibraryFrames = ["FluentAssertions.Execution.", "AwesomeAssertions.Execution."];
 
+    /// <summary>The order in which one failing row decides a theory's class: the worst row wins.</summary>
+    private static readonly RedClass[] Precedence = [RedClass.RedInTest, RedClass.RedNoProduction, RedClass.RedOther, RedClass.RedAssert, RedClass.RedStub];
+
     public static RedClass Classify(
-        IReadOnlyList<ExecutedTest> rows, IReadOnlySet<string> testClasses, IReadOnlyList<string> testDirectories, ProductionCode production, bool callsProduction)
+        IReadOnlyList<ExecutedTest> rows, IReadOnlySet<string> testClasses, IReadOnlyList<string> testDirectories, ProductionCode production, bool callsProduction) =>
+        Judge(rows, testClasses, testDirectories, production, callsProduction ? "production code" : null).Class;
+
+    /// <param name="productionCall">The first production member the test reaches (<see cref="TestCodeScanner.ProductionCall"/>); null for none.</param>
+    public static RedVerdict Judge(
+        IReadOnlyList<ExecutedTest> rows, IReadOnlySet<string> testClasses, IReadOnlyList<string> testDirectories, ProductionCode production, string? productionCall)
     {
+        string calls = productionCall is null ? "no production call found" : $"calls {productionCall}";
         if (rows.Count == 0 || rows.Any(row => row.Outcome is TestOutcome.Skip or TestOutcome.NotRun))
         {
-            return RedClass.Skipped;
+            return new RedVerdict(RedClass.Skipped, "skipped or not run", calls);
         }
 
         if (rows.Any(row => row.Outcome == TestOutcome.Pass))
         {
-            return RedClass.GreenBefore;
+            return new RedVerdict(RedClass.GreenBefore, "passed before the implementation exists", calls);
         }
 
-        RedClass[] reds = [.. rows.Select(row => ClassifyFailure(row, testClasses, testDirectories, production, callsProduction))];
-        return reds.Contains(RedClass.RedInTest) ? RedClass.RedInTest
-            : reds.Contains(RedClass.RedNoProduction) ? RedClass.RedNoProduction
-            : reds.Contains(RedClass.RedOther) ? RedClass.RedOther
-            : reds.Contains(RedClass.RedAssert) ? RedClass.RedAssert
-            : RedClass.RedStub;
+        RedVerdict[] reds = [.. rows.Select(row => JudgeFailure(row, testClasses, testDirectories, production, productionCall))];
+        return Precedence.Select(redClass => reds.FirstOrDefault(red => red.Class == redClass)).OfType<RedVerdict>().First();
     }
 
-    private static RedClass ClassifyFailure(
-        ExecutedTest row, IReadOnlySet<string> testClasses, IReadOnlyList<string> testDirectories, ProductionCode production, bool callsProduction)
+    private static RedVerdict JudgeFailure(
+        ExecutedTest row, IReadOnlySet<string> testClasses, IReadOnlyList<string> testDirectories, ProductionCode production, string? productionCall)
     {
+        string exception = ShortType(row.ExceptionType);
+        string detail = $"{row.ExceptionType ?? "no exception type"} at {row.TopFrame ?? "no stack frame"}"
+            + (row.TopFrameFile is null ? string.Empty : $" in {row.TopFrameFile}{(row.TopFrameLine is int line ? $":{line}" : string.Empty)}")
+            + $"; {(productionCall is null ? "no production call found" : $"calls {productionCall}")}";
         if (IsAssertion(row.ExceptionType, row.TopFrame))
         {
-            return callsProduction ? RedClass.RedAssert : RedClass.RedNoProduction;
+            exception = row.ExceptionType is null ? "the assertion" : exception;
+            return productionCall is null
+                ? new RedVerdict(RedClass.RedNoProduction, $"{exception} fails, but no production call found: naming a production type (a type argument such as Deserialize<T>, typeof) is not a call; call a method or constructor, or read a property", detail)
+                : new RedVerdict(RedClass.RedAssert, $"{exception} fails; calls {productionCall}", detail);
         }
 
-        if (row.ExceptionType?.StartsWith(XunitNamespace, StringComparison.Ordinal) == true || row.TopFrame is null
-            || IsInDirectory(row.TopFrameFile, testDirectories) || IsInType(row.TopFrame, testClasses.Select(testClass => testClass.Replace('+', '.'))))
+        if (row.ExceptionType?.StartsWith(XunitNamespace, StringComparison.Ordinal) == true)
         {
-            return RedClass.RedInTest;
+            return new RedVerdict(RedClass.RedInTest, $"{exception} from the test framework (Assert.Fail, a throwing fixture or constructor, a timeout)", detail);
+        }
+
+        if (row.TopFrame is null)
+        {
+            return new RedVerdict(RedClass.RedInTest, $"{exception} with no stack frame to tell where it was thrown", detail);
+        }
+
+        if (IsInDirectory(row.TopFrameFile, testDirectories) || IsInType(row.TopFrame, testClasses.Select(testClass => testClass.Replace('+', '.'))))
+        {
+            return new RedVerdict(RedClass.RedInTest, $"{exception} thrown in test code at {ShortFrame(row.TopFrame)}", detail);
         }
 
         bool inProduction = IsInDirectory(row.TopFrameFile, production.ProjectDirectories) || IsInType(row.TopFrame, production.TypeNames);
-        return inProduction && row.ExceptionType == "System.NotImplementedException" ? RedClass.RedStub : RedClass.RedOther;
+        if (inProduction && row.ExceptionType == "System.NotImplementedException")
+        {
+            return new RedVerdict(RedClass.RedStub, $"NotImplementedException from production code at {ShortFrame(row.TopFrame)}", detail);
+        }
+
+        return new RedVerdict(
+            RedClass.RedOther,
+            inProduction
+                ? $"{exception} from production code at {ShortFrame(row.TopFrame)}, not a NotImplementedException"
+                : $"{exception} thrown outside production code, at {ShortFrame(row.TopFrame)}",
+            detail);
     }
+
+    /// <summary><c>System.NotImplementedException</c> → <c>NotImplementedException</c>; "an exception" when the type is unknown.</summary>
+    private static string ShortType(string? exceptionType) => exceptionType is null ? "an exception" : exceptionType.Split('.')[^1];
+
+    /// <summary><c>Shop.Api.PriceCalculator.ShippingCost(Decimal w)</c> → <c>PriceCalculator.ShippingCost</c>.</summary>
+    private static string ShortFrame(string frame) => TraceMatrix.ShortName(frame.Split('(')[0]);
 
     private static bool IsAssertion(string? exceptionType, string? topFrame) => exceptionType is null
         ? topFrame is not null && AssertionLibraryFrames.Any(frame => topFrame.StartsWith(frame, StringComparison.Ordinal))

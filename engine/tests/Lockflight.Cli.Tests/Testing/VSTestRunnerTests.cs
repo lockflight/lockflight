@@ -48,7 +48,7 @@ public sealed class VSTestRunnerTests
         IReadOnlyList<ExecutedTest> results = VSTestRunner.Parse("App.Tests", Trx);
 
         Assert.Equal(new ExecutedTest("App.Tests:App.Tests.CalcTests.DividesNumbers", "App.Tests.CalcTests.DividesNumbers", TestOutcome.Fail,
-            "System.NotImplementedException", "App.Calc.Div(Int32 a, Int32 b)", "/src/App/Calc.cs"), results[0]);
+            "System.NotImplementedException", "App.Calc.Div(Int32 a, Int32 b)", "/src/App/Calc.cs") { TopFrameLine = 5 }, results[0]);
         Assert.Equal(VSTestRunner.AssertionException, results[1].ExceptionType);
         Assert.Equal(("App.Tests:App.Tests.CalcTests.Theory", TestOutcome.Pass), (results[2].Key, results[2].Outcome));
         Assert.Equal(("App.Tests:App.Tests.CalcTests+Nested.Inner", TestOutcome.Skip), (results[5].Key, results[5].Outcome));
