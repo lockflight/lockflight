@@ -51,7 +51,7 @@ cannot run them; a maintainer runs them on the release candidate on `main` befor
 Claude Code version and the results in it:
 
 1. **The plugin evals**, all three suites, as [CONTRIBUTING](../../CONTRIBUTING.md#skill-evals) shows
-   (`claude plugin eval plugins/lockflight …`, `plugins/lockflight-crew …` and `plugins …`). Read every failing case: a skill
+   (`claude plugin eval plugins/lockflight …`, `plugins/lockflight-crew …` and `plugins/evals …`). Read every failing case: a skill
    that regressed blocks the release until it is fixed.
 2. **The real-hook canary** on an engine built from the same commit:
    `dotnet publish engine/src/Lockflight.Cli -c Release -r <rid> -o out`, then
@@ -67,8 +67,7 @@ Claude Code version and the results in it:
 
 1. Raise the version in both `plugin.json` files and in the Spec Kit preset's `preset.yml` (and
    `plugins/lockflight/min-engine-version` when the plugin needs the new engine), and draft the CHANGELOG entries in a release
-   pull request. When the minor or major version changes, also widen the crew plugin's `dependencies` range on `lockflight`
-   (`^0.2.0-0` covers every 0.2 prerelease and release). Merge it.
+   pull request. Merge it.
 2. Tag the merge commit and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
 3. Approve the `publish` job when the build and smoke tests are green.
 4. Edit and publish the draft GitHub Release.
