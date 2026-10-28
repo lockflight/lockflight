@@ -15,6 +15,12 @@ internal static class EnvironmentVariables
     /// <summary>Path of the gitleaks binary for the secrets gate; when unset, gitleaks is looked up on PATH.</summary>
     public const string Gitleaks = "LOCKFLIGHT_GITLEAKS";
 
+    /// <summary>Spec Kit's active feature directory (relative to the project root, or absolute); it outranks <c>.specify/feature.json</c>.</summary>
+    public const string SpecifyFeatureDirectory = "SPECIFY_FEATURE_DIRECTORY";
+
+    /// <summary>Spec Kit's active feature name (<c>006-weak-spots</c>), read like a feature branch name.</summary>
+    public const string SpecifyFeature = "SPECIFY_FEATURE";
+
     /// <summary>The hook API version the plugin shim speaks; unset for direct invocations.</summary>
     public const string PluginApi = "LOCKFLIGHT_PLUGIN_API";
 
