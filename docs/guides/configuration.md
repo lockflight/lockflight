@@ -52,17 +52,29 @@ units:                          # workspace shell or monorepo; omit for a single
   - path: web/admin
     kind: none
 
-review:                         # what the review of record runs with (both optional)
+review:                         # what the review of record runs with (all optional)
   model: sonnet                 # Claude Code model name (default sonnet; opus to review with Opus)
   maxUsd: 3.00                  # the reviewer's --max-budget-usd, above 0 and at most 100 (default 3.00); on a
                                 #   subscription an estimate at API prices, not a bill
   target: origin/main           # the branch the change targets (default: the branch origin/HEAD points at, else main)
+  maxDiffCharacters: 120000     # the most diff characters the reviewer is shown, 10000 to 400000 (default 120000);
+                                #   generated files are listed, not shown, and do not count
 ```
 
 **Review of record.** A `lockflight review` run counts as the review of record only when it uses `review.model` and
-`review.maxUsd` (or the defaults), its base commit is the merge base of HEAD and `review.target` (neither an older base nor a
+`review.maxUsd` (or the defaults), the reviewer was shown the whole diff within `review.maxDiffCharacters`, its base commit is the merge base of HEAD and `review.target` (neither an older base nor a
 recent commit on the branch, which would review only part of the change), and everything it reads is committed. The base defaults to the target. A run with `--model`, `--budget`, an outdated base or uncommitted or untracked files in the reviewed paths is still recorded, says why it is not of record, and
 exits NOT-EARNED when it finds nothing.
+
+**Diff limit.** `review.maxDiffCharacters` (default 120,000) is how much of the diff the reviewer is shown; a longer diff is
+cut, the reviewer is told which files to read, and the run is not of record. Raise it for a change that cannot be split, up to
+the engine's ceiling of 400,000 (a value outside 10,000 to 400,000 is a configuration error). A larger diff costs more tokens,
+so `review.maxUsd` may need raising with it. Generated files (package lock files, EF Core model snapshots and migration
+designer files, chosen by path and, for the EF files, by the shape of their content) are listed by path, size and hash instead
+of shown and do not count toward the limit; see [`review`](commands.md). The run file records the limit under `settings`.
+`lockflight.yaml` is a protected path, so the guard hooks refuse an agent's edit to the limit; that is a guardrail, not a
+boundary. The boundary is on the server: the [CI workflow](ci-hardening.md) takes `lockflight.yaml` from the base branch, and
+CODEOWNERS makes a change to it need a maintainer's review, so a pull request does not raise its own limit unseen.
 
 **Choosing the review model.** The default is `sonnet`. On our review benchmark of seeded defects in a small sample
 project, `sonnet` and `opus` found the same defects, with no false FAIL on clean changes for either, while `sonnet` cost about

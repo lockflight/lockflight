@@ -205,6 +205,54 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task ARaisedDiffLimitInTheManifestLetsALargerDiffBeTheReviewOfRecord()
+    {
+        await ProjectAsync("version: 1\nreview:\n  maxDiffCharacters: 250000\n");
+        File.WriteAllText(Path.Combine(root.FullName, "src", "Catalog.cs"), "namespace Shop;\n" + string.Concat(Enumerable.Repeat("// a generated catalog line\n", 6_000)));
+        await GitAsync("add", "src/Catalog.cs");
+        await GitAsync("commit", "-q", "-m", "catalog");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.DoesNotContain("will not be the review of record", output, StringComparison.Ordinal);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Assert.True(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
+        Assert.Equal(250_000, evidence.RootElement.GetProperty("settings").GetProperty("maxDiffCharacters").GetInt32());
+        Assert.Equal("manifest", evidence.RootElement.GetProperty("settings").GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public async Task AGeneratedFileIsListedForTheReviewerAndRecordedAsNotReviewed()
+    {
+        await ProjectAsync();
+        string lockFile = "{ \"version\": 1, \"dependencies\": {} }\n" + string.Concat(Enumerable.Repeat("  \"package\": \"1.0.0\",\n", 6_000));
+        File.WriteAllText(Path.Combine(root.FullName, "src", "packages.lock.json"), lockFile);
+        await GitAsync("add", "src/packages.lock.json");
+        await GitAsync("commit", "-q", "-m", "lock");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("Generated files listed, not reviewed (the reviewer gets their path, size and hash): src/packages.lock.json.", output, StringComparison.Ordinal);
+        string marker = Regex.Match(Assert.Single(claude.Prompts), @"<(data-[0-9a-f]{16}) kind=""diff""").Groups[1].Value;
+        string shown = Fenced(claude.Prompts[0], marker, "diff");
+        Assert.DoesNotContain("\"package\": \"1.0.0\"", shown, StringComparison.Ordinal);
+        Assert.Contains("- src/packages.lock.json (", shown, StringComparison.Ordinal);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Assert.True(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
+        Assert.Equal(ReviewSettings.DefaultMaxDiffCharacters, evidence.RootElement.GetProperty("settings").GetProperty("maxDiffCharacters").GetInt32());
+        JsonElement generated = evidence.RootElement.GetProperty("generatedFiles");
+        Assert.Equal("listed, not reviewed", generated.GetProperty("status").GetString());
+        JsonElement file = Assert.Single(generated.GetProperty("files").EnumerateArray().ToArray());
+        Assert.Equal("src/packages.lock.json", file.GetProperty("path").GetString());
+        Assert.Equal(lockFile.Length, file.GetProperty("bytes").GetInt64());
+        Assert.Equal(64, file.GetProperty("sha256").GetString()!.Length);
+    }
+
+    [Fact]
     public async Task AReviewOfUncommittedOrUntrackedChangesRunsButIsNotOfRecord()
     {
         await ProjectAsync();

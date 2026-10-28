@@ -8,7 +8,8 @@ public sealed class ReviewOfRecordTests
     private const string Commit = "1111111111111111111111111111111111111111";
     private const string OtherCommit = "2222222222222222222222222222222222222222";
 
-    private static readonly ReviewDiff Whole = ReviewDiff.Fit("diff --git a/src/Orders.cs b/src/Orders.cs\n+line\n", 1_000);
+    private static readonly string NoTree = Path.Combine(Path.GetTempPath(), "lockflight-no-tree");
+    private static readonly ReviewDiff Whole = ReviewDiff.Fit("diff --git a/src/Orders.cs b/src/Orders.cs\n+line\n", ReviewSettings.DefaultMaxDiffCharacters, NoTree);
 
     [Fact]
     public void TheManifestsModelAndBudgetAgainstTheMergeBaseMakeTheReviewOfRecord() =>
@@ -37,13 +38,34 @@ public sealed class ReviewOfRecordTests
     [Fact]
     public void ADiffTheReviewerDidNotSeeWholeIsNotOfRecord()
     {
-        ReviewDiff cut = ReviewDiff.Fit("diff --git a/src/Orders.cs b/src/Orders.cs\n+line\ndiff --git a/src/Prices.cs b/src/Prices.cs\n" + new string('+', 100) + "\n", 50);
+        ReviewDiff cut = ReviewDiff.Fit("diff --git a/src/Orders.cs b/src/Orders.cs\n+line\ndiff --git a/src/Prices.cs b/src/Prices.cs\n" + new string('+', 100) + "\n", 50, NoTree);
 
-        string reason = Assert.Single(ReviewOfRecord.Reasons(ReviewSettings.Default, "sonnet", 3m, new ReviewBase("main", Commit, "main", Commit), cut, ReviewedTree.Clean));
+        string reason = Assert.Single(ReviewOfRecord.Reasons(ReviewSettings.Default with { MaxDiffCharacters = 50 }, "sonnet", 3m, new ReviewBase("main", Commit, "main", Commit), cut, ReviewedTree.Clean));
 
         Assert.Contains("the reviewer did not see the whole change", reason, StringComparison.Ordinal);
         Assert.Contains("1 of 2 changed files not shown in full: src/Prices.cs", reason, StringComparison.Ordinal);
         Assert.Contains("split the change", reason, StringComparison.Ordinal);
+        Assert.Contains("raise review.maxDiffCharacters (at most 400000", reason, StringComparison.Ordinal);
+        Assert.Contains("review.maxUsd may need raising", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADiffFittedToAnotherLimitThanTheManifestsIsNotOfRecord()
+    {
+        ReviewSettings settings = ReviewSettings.Default with { MaxDiffCharacters = 200_000 };
+
+        string reason = Assert.Single(ReviewOfRecord.Reasons(settings, "sonnet", 3m, new ReviewBase("main", Commit, "main", Commit), Whole, ReviewedTree.Clean));
+
+        Assert.Contains("at most 120000 characters of the diff, not the review limit 200000 (review.maxDiffCharacters)", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADiffFittedToTheManifestsRaisedLimitIsOfRecord()
+    {
+        ReviewSettings settings = ReviewSettings.Default with { MaxDiffCharacters = 200_000 };
+        ReviewDiff fitted = ReviewDiff.Fit("diff --git a/src/Orders.cs b/src/Orders.cs\n+line\n", settings.MaxDiffCharacters, NoTree);
+
+        Assert.Empty(ReviewOfRecord.Reasons(settings, "sonnet", 3m, new ReviewBase("main", Commit, "main", Commit), fitted, ReviewedTree.Clean));
     }
 
     [Fact]

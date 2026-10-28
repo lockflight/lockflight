@@ -4,8 +4,8 @@ using Lockflight.Cli.Config;
 namespace Lockflight.Cli.Review;
 
 /// <summary>
-/// Whether a run counts as the review of record: only when the reviewer was shown the whole diff of a clean tree (everything it
-/// reads committed), with the manifest's (or the default) model and budget, against a base whose
+/// Whether a run counts as the review of record: only when the reviewer was shown the whole diff (generated files listed aside) of
+/// a clean tree (everything it reads committed), with the manifest's (or the default) model, budget and diff limit, against a base whose
 /// commit is the merge base of HEAD and the target branch (so a recent commit on the branch cannot narrow the diff, and an outdated
 /// base cannot widen it). Any other run is recorded too, with the reasons it is not of record, so a re-roll with a
 /// cheaper model or an old base is visible rather than quietly replacing the review.
@@ -26,6 +26,11 @@ internal static class ReviewOfRecord
         if (!tree.IsClean)
         {
             reasons.Add(NotCommitted(tree));
+        }
+
+        if (diff.Limit != settings.MaxDiffCharacters)
+        {
+            reasons.Add($"the reviewer was shown at most {diff.Limit} characters of the diff, not the review limit {settings.MaxDiffCharacters} (review.maxDiffCharacters)");
         }
 
         if (!string.Equals(model, settings.Model, StringComparison.Ordinal))
@@ -56,9 +61,11 @@ internal static class ReviewOfRecord
     {
         string named = string.Join(", ", diff.NotShown.Take(MaxNamedFiles));
         string more = diff.NotShown.Count > MaxNamedFiles ? $" and {diff.NotShown.Count - MaxNamedFiles} more" : string.Empty;
-        return $"the diff ({diff.Length} characters) is larger than the {diff.Limit} the reviewer is shown, so the reviewer did not see the whole change "
+        string generated = diff.Generated.Count > 0 ? $" without the {diff.Generated.Count} generated files listed" : string.Empty;
+        return $"the diff ({diff.ReviewedLength} characters{generated}) is larger than the {diff.Limit} the reviewer is shown (review.maxDiffCharacters), so the reviewer did not see the whole change "
             + $"({diff.NotShown.Count} of {diff.Files} changed files not shown in full: {named}{more}): split the change into smaller pull requests "
-            + "and review each; a review against a later commit of this branch (--base <commit>) checks only the commits after it and is not of record";
+            + $"and review each, or raise review.maxDiffCharacters (at most {ReviewSettings.DiffCharactersCeiling}; a larger diff costs more, so review.maxUsd may need "
+            + "raising too); a review against a later commit of this branch (--base <commit>) checks only the commits after it and is not of record";
     }
 
     /// <summary>Why a run over changes no commit holds is not of record, and how to make the tree clean.</summary>

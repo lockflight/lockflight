@@ -98,7 +98,18 @@ internal static class ReviewEvidence
                 ["model"] = run.Settings.Model,
                 ["maxUsd"] = run.Settings.BudgetUsd,
                 ["target"] = run.Settings.Target,
+                ["maxDiffCharacters"] = run.Settings.MaxDiffCharacters,
                 ["source"] = run.Settings.FromManifest ? "manifest" : "default",
+            },
+            ["generatedFiles"] = new JsonObject
+            {
+                ["status"] = GeneratedFiles.Status,
+                ["files"] = new JsonArray([.. run.Generated.Select(file => (JsonNode)new JsonObject
+                {
+                    ["path"] = file.Path,
+                    ["bytes"] = file.Bytes,
+                    ["sha256"] = file.Sha256,
+                })]),
             },
             ["claudeCodeVersion"] = run.ClaudeCodeVersion,
             ["usage"] = new JsonObject
