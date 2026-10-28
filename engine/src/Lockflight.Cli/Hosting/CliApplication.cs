@@ -70,7 +70,7 @@ internal static class CliApplication
           trace [--feature <id>]                        requirement → red/green tests matrix
           review [--feature <id>] [--base <ref>] [--model <name>] [--budget <usd>]
                                                         review bound to evidence (defaults: the target branch,
-                                                        the manifest's review model and budget, else opus, 3.00);
+                                                        the manifest's review model and budget, else sonnet, 3.00);
                                                         open findings carry forward until fixed or dismissed
           review status [--feature <id>]                review runs, open, fixed and dismissed findings, and
                                                         the summary for the pull request (read only)

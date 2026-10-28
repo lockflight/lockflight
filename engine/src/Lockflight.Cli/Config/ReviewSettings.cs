@@ -7,7 +7,7 @@ namespace Lockflight.Cli.Config;
 /// </summary>
 internal sealed record ReviewSettings(string Model, decimal BudgetUsd)
 {
-    public const string DefaultModel = "opus";
+    public const string DefaultModel = "sonnet";
     public const decimal DefaultBudgetUsd = 3.00m;
     public const decimal MaxBudgetUsd = 100m;
 

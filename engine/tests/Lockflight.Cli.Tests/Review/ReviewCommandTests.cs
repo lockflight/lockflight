@@ -34,7 +34,7 @@ public sealed class ReviewCommandTests : IDisposable
         Assert.Equal("main", run.GetProperty("base").GetProperty("ref").GetString());
         Assert.True(run.GetProperty("base").GetProperty("isMergeBase").GetBoolean());
         Assert.Equal(run.GetProperty("base").GetProperty("commit").GetString(), run.GetProperty("base").GetProperty("mergeBase").GetString());
-        Assert.Equal("opus", run.GetProperty("model").GetString());
+        Assert.Equal("sonnet", run.GetProperty("model").GetString());
         Assert.Equal(3.00m, run.GetProperty("budgetUsd").GetDecimal());
         Assert.Equal("default", run.GetProperty("settings").GetProperty("source").GetString());
         Assert.Equal(FakeClaude.Version, run.GetProperty("claudeCodeVersion").GetString());
@@ -51,14 +51,14 @@ public sealed class ReviewCommandTests : IDisposable
     [Fact]
     public async Task TheReviewerRunsWithTheManifestsModelAndBudget()
     {
-        await ProjectAsync("version: 1\nreview:\n  model: sonnet\n  maxUsd: 1.50\n");
+        await ProjectAsync("version: 1\nreview:\n  model: opus\n  maxUsd: 1.50\n");
         claude.Answers();
 
         (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
 
         Assert.Equal(ExitCode.Pass, exitCode);
         IReadOnlyList<string> call = claude.Calls.Single(arguments => arguments.Contains("-p"));
-        Assert.Equal("sonnet", call[call.ToList().IndexOf("--model") + 1]);
+        Assert.Equal("opus", call[call.ToList().IndexOf("--model") + 1]);
         Assert.Equal("1.50", call[call.ToList().IndexOf("--max-budget-usd") + 1]);
         Assert.Contains("review of record", output, StringComparison.Ordinal);
     }
@@ -172,13 +172,13 @@ public sealed class ReviewCommandTests : IDisposable
         await ProjectAsync();
         claude.Answers();
 
-        (ExitCode exitCode, string output, _) = await RunAsync(["review", "--model", "sonnet"]);
+        (ExitCode exitCode, string output, _) = await RunAsync(["review", "--model", "opus"]);
 
         Assert.Equal(ExitCode.NotEarned, exitCode);
-        Assert.Contains("not the review of record: model sonnet is not the review model opus", output, StringComparison.Ordinal);
+        Assert.Contains("not the review of record: model opus is not the review model sonnet", output, StringComparison.Ordinal);
         using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
         Assert.False(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
-        Assert.Contains("model sonnet", evidence.RootElement.GetProperty("notOfRecord")[0].GetString(), StringComparison.Ordinal);
+        Assert.Contains("model opus", evidence.RootElement.GetProperty("notOfRecord")[0].GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

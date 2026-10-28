@@ -39,6 +39,19 @@ public sealed class ManifestParserTests
     public void WithoutAReviewSectionTheDefaultsApply() =>
         Assert.Equal(ReviewSettings.Default, Parse("version: 1\n").Manifest!.Review);
 
+    [Fact]
+    public void TheDefaultReviewModelIsSonnet() =>
+        Assert.Equal(new ReviewSettings("sonnet", 3.00m), ReviewSettings.Default);
+
+    [Fact]
+    public void AManifestThatPinsOpusKeepsOpusForTheReviewOfRecord()
+    {
+        ManifestLoadResult result = Parse("version: 1\nreview:\n  model: opus\n");
+
+        Assert.Equal(ManifestLoadStatus.Loaded, result.Status);
+        Assert.Equal(new ReviewSettings("opus", ReviewSettings.DefaultBudgetUsd) { FromManifest = true }, result.Manifest!.Review);
+    }
+
     [Theory]
     [InlineData("review:\n  maxUsd: free\n", "'review.maxUsd'")]
     [InlineData("review:\n  maxUsd: 0\n", "'review.maxUsd'")]
