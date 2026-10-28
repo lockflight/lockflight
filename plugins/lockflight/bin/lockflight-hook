@@ -87,9 +87,22 @@ engine="$root/.lockflight/bin/lockflight"
 # The engine runs on every hook, so it must be the copy `lockflight link` made for this user. Never a file committed to the
 # repository: a cloned project could ship any program under that name. Never one another user owns: a lockflight.yaml in a
 # shared folder such as /tmp would otherwise run their binary in every project below it. Ownership is not checked under Git
-# Bash, which reports every file as the current user's. Asking git costs a process (10-20 ms), so a passed check is
-# remembered in .git, which no commit can write, until the engine file changes.
+# Bash, which reports every file as the current user's. Never one replaced after linking: link records its SHA-256 beside it,
+# and an engine with a record must match it (one linked before link wrote records has none and is not compared). Asking git
+# and hashing cost a process each (10-20 ms), so a passed check is remembered until the engine or its record changes: in .git,
+# which no commit can write, or beside the engine outside a git checkout.
 untrusted=""; untrusted_fix=""
+record="$root/.lockflight/bin/lockflight.sha256"
+# engine_differs: whether the engine's SHA-256 is not the recorded one; a missing hash tool counts as different.
+engine_differs() {
+  IFS= read -r recorded < "$record" || [ -n "${recorded:-}" ] || return 0
+  if command -v sha256sum >/dev/null 2>&1; then actual=$(sha256sum < "$engine")
+  elif command -v shasum >/dev/null 2>&1; then actual=$(shasum -a 256 < "$engine")
+  else untrusted="neither sha256sum nor shasum is installed to compare it with the SHA-256 lockflight link recorded"; untrusted_fix="install one of them"; return 0
+  fi
+  actual="${actual%% *}"
+  [ -z "$actual" ] || [ "$actual" != "${recorded%% *}" ]
+}
 if [ -x "$engine" ]; then
   # test -O and -nt are not in POSIX but dash, bash and BusyBox have them; OSTYPE is set by bash only (Git Bash: msys).
   # shellcheck disable=SC3028,SC3067
@@ -97,13 +110,18 @@ if [ -x "$engine" ]; then
     msys*|cygwin*) ;;
     *) [ -O "$engine" ] || { untrusted="it belongs to another user"; untrusted_fix="check where it came from and delete it"; } ;;
   esac
-  checked="$root/.git/lockflight-engine-checked"
+  if [ -d "$root/.git" ]; then checked="$root/.git/lockflight-engine-checked"
+  elif [ -e "$root/.git" ]; then checked=""
+  else checked="$root/.lockflight/bin/lockflight.checked"
+  fi
   # shellcheck disable=SC3013
-  if [ -z "$untrusted" ] && [ -e "$root/.git" ] && ! { [ -f "$checked" ] && ! [ "$engine" -nt "$checked" ]; }; then
-    if git -C "$root" ls-files --error-unmatch -- "${engine#"$root"/}" >/dev/null 2>&1; then
+  if [ -z "$untrusted" ] && ! { [ -n "$checked" ] && [ -f "$checked" ] && ! [ "$engine" -nt "$checked" ] && ! [ "$record" -nt "$checked" ]; }; then
+    if [ -e "$root/.git" ] && git -C "$root" ls-files --error-unmatch -- "${engine#"$root"/}" >/dev/null 2>&1; then
       untrusted="it is committed to the repository"
       untrusted_fix="remove it from the repository (git rm --cached, and add .lockflight/bin/ to .gitignore)"
-    elif [ -d "$root/.git" ]; then
+    elif [ -f "$record" ] && engine_differs; then
+      [ -n "$untrusted" ] || { untrusted="its SHA-256 is not the one lockflight link recorded in .lockflight/bin/lockflight.sha256: it was replaced after linking"; untrusted_fix="check what replaced it"; }
+    elif [ -n "$checked" ]; then
       : > "$checked" 2>/dev/null || true
     fi
   fi
