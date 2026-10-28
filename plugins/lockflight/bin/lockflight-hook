@@ -92,7 +92,11 @@ engine="$root/.lockflight/bin/lockflight"
 # and hashing cost a process each (10-20 ms), so a passed check is remembered until the engine or its record changes: in .git,
 # which no commit can write, or beside the engine outside a git checkout. The marker counts only while it is strictly newer than
 # both, and it is dated from before the check: macOS /bin/sh compares -nt to the whole second, and Linux dates files to the
-# clock tick, so an engine replaced in the same second or tick as a passed check, or while it ran, is checked again.
+# clock tick, so an engine replaced in the same second or tick as a passed check, or while it ran, is checked again. A pass
+# also holds a hard link to the very file it checked and, outside Windows, makes that file read-only; it is reused only while
+# the engine is still that file (-ef) and not writable. So a file moved into place keeping an older modification time, or
+# one copied over the engine with cp -p (which cannot write into a read-only file), is checked again. Where no hard link
+# can be made nothing is remembered and every call checks: the modification time alone cannot tell such a replacement.
 untrusted=""; untrusted_fix=""
 record="$root/.lockflight/bin/lockflight.sha256"
 # engine_differs: whether the engine's SHA-256 is not the recorded one; a missing hash tool counts as different.
@@ -107,9 +111,10 @@ engine_differs() {
 }
 if [ -x "$engine" ]; then
   # test -O and -nt are not in POSIX but dash, bash and BusyBox have them; OSTYPE is set by bash only (Git Bash: msys).
+  windows=""
   # shellcheck disable=SC3028,SC3067
   case "${OSTYPE:-}" in
-    msys*|cygwin*) ;;
+    msys*|cygwin*) windows=1 ;;
     *) [ -O "$engine" ] || { untrusted="it belongs to another user"; untrusted_fix="check where it came from and delete it"; } ;;
   esac
   if [ -d "$root/.git" ]; then checked="$root/.git/lockflight-engine-checked"
@@ -117,19 +122,27 @@ if [ -x "$engine" ]; then
   else checked="$root/.lockflight/bin/lockflight.checked"
   fi
   # shellcheck disable=SC3013
-  if [ -z "$untrusted" ] && ! { [ -n "$checked" ] && [ "$checked" -nt "$engine" ] && { ! [ -e "$record" ] || [ "$checked" -nt "$record" ]; }; }; then
-    # The new marker is created before the checks and moved into place only when they pass, so no hook reads it early.
-    pending=""
+  if [ -z "$untrusted" ] && ! { [ -n "$checked" ] && [ "$checked" -nt "$engine" ] && [ "$engine" -ef "$checked.engine" ] \
+      && { [ -n "$windows" ] || ! [ -w "$engine" ]; } && { ! [ -e "$record" ] || [ "$checked" -nt "$record" ]; }; }; then
+    # The new marker and hard link are made before the checks and moved into place only when they pass, so no hook reads them
+    # early, and the link is to the file that was hashed: one renamed over the engine meanwhile is not that file.
+    pending=""; held=""
     if [ -n "$checked" ] && : > "$checked.$$" 2>/dev/null; then pending="$checked.$$"; fi
     if [ -e "$root/.git" ] && git -C "$root" ls-files --error-unmatch -- "${engine#"$root"/}" >/dev/null 2>&1; then
       untrusted="it is committed to the repository"
       untrusted_fix="remove it from the repository (git rm --cached, and add .lockflight/bin/ to .gitignore)"
-    elif [ -f "$record" ] && engine_differs; then
-      [ -n "$untrusted" ] || { untrusted="its SHA-256 is not the one lockflight link recorded in .lockflight/bin/lockflight.sha256: it was replaced after linking"; untrusted_fix="check what replaced it"; }
-    elif [ -n "$pending" ] && mv -f "$pending" "$checked" 2>/dev/null; then
-      pending=""
+    else
+      if [ -n "$pending" ] && ln -f "$engine" "$checked.engine.$$" 2>/dev/null; then
+        held="$checked.engine.$$"
+        [ -n "$windows" ] || chmod a-w "$engine" 2>/dev/null || held=""
+      fi
+      if [ -f "$record" ] && engine_differs; then
+        [ -n "$untrusted" ] || { untrusted="its SHA-256 is not the one lockflight link recorded in .lockflight/bin/lockflight.sha256: it was replaced after linking"; untrusted_fix="check what replaced it"; }
+      elif [ -n "$held" ] && mv -f "$held" "$checked.engine" 2>/dev/null && mv -f "$pending" "$checked" 2>/dev/null; then
+        pending=""
+      fi
     fi
-    [ -z "$pending" ] || rm -f "$pending"
+    [ -z "$pending" ] || rm -f "$pending" "$checked.engine.$$"
   fi
 fi
 untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Ask the user to $untrusted_fix, then run: dotnet tool restore && dotnet lockflight link"
