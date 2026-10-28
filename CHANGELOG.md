@@ -13,6 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   `!` in Claude Code), run `lockflight update` from the project root and commit what it lists. It re-pins and re-links the
   engine, which also writes the hash record. Until then, Claude Code tells you at session start that the plugin needs a
   newer engine.
+- **`lockflight update` also refreshes the Lockflight block in `CLAUDE.md`**, which now tells the agent never to try a
+  human decision and how to propose a protected change. Until you run it, the block is reported as outdated (`adopt plan`
+  lists it to be replaced). Commit the new block with the rest.
 - **Run `lockflight init` again** in a project set up before this release, to add the new `Edit` deny rules and sandbox
   write denials to `.claude/settings.json`. Your own entries are kept; `--no-sandbox` leaves out the sandbox list. Run it
   again after adding protected files; `doctor` names any it misses.
@@ -55,8 +58,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   for you: the guide shows how a developer or a team turns it on, and what that costs builds and tests. `doctor` has a new
   `sandbox` check.
 - **The linked engine is pinned by its hash.** `link` records the engine's SHA-256 beside it. The hook shim and `doctor`
-  refuse an engine replaced after linking: reads still pass, writes and in-session commands are blocked, and the message
-  says how to link again.
+  refuse an engine replaced after linking, even in the same second as the last passed check: reads still pass, writes and
+  in-session commands are blocked, and the message says how to link again.
 - **Windows install and update.** `scripts/dev-install.ps1` installs from source on Windows, and `lockflight update` works
   there, including replacing the engine while it runs. Both installers put `~/.lockflight/bin` on `PATH` for new terminals,
   so `lockflight` works by name (`--no-modify-path` or `-NoModifyPath` skips that).
@@ -68,6 +71,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 - Every hand-off to a person names the place first: the in-session command to type, or a separate terminal window (not
   `!` in Claude Code), with the command inside the sentence rather than on a line of its own.
+- The session banner and the `CLAUDE.md` block tell the agent never to run a human decision, even when asked or just to
+  try it, and how to change a protected file: write the new version outside the project, run `propose`, and give you the
+  `git apply` command.
 - `adopt plan` says when `CLAUDE.md` will be created or is empty, instead of "about 0 tokens".
 - The Spec Kit preset carries the release version, like the plugins and the engine.
 - `workspace sync` says when it rewrites a unit's edited CI workflow (it is generated policy).
