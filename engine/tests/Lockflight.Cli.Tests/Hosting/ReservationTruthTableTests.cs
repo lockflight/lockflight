@@ -43,7 +43,7 @@ public sealed class ReservationTruthTableTests
             string line = string.Join(' ', words);
             rendered.Append($"{(line.Length == 0 ? "(nothing)" : line)}: ");
             rendered.Append($"reserved={HumanOnlyCommands.IsReserved(words)} ");
-            rendered.Append($"words={HumanOnlyCommands.FindInWords(["lockflight", .. words]) ?? "-"} ");
+            rendered.Append($"words={HumanOnlyCommands.FindInWords(["lockflight", .. words], honorHelp: true) ?? "-"} ");
             rendered.Append($"shell={HumanOnlyCommands.FindIn($"dotnet lockflight {line}", ShellDialect.Posix) ?? "-"} ");
             rendered.Append($"powershell={HumanOnlyCommands.FindIn($".lockflight/bin/lockflight.exe {line}", ShellDialect.PowerShell) ?? "-"} ");
             rendered.Append($"rule={RuleStatusFor(line)}\n");
