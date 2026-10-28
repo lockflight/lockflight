@@ -28,6 +28,9 @@ internal sealed record ShellWrites(
     /// <summary>A command reserved for a person found inside a nested command string (<c>approve spec</c>); null when none is.</summary>
     public string? HumanOnly { get; init; }
 
+    /// <summary>As <see cref="HumanOnly"/>, with a request for help (<c>--help</c>, <c>-h</c>) counting like any other option.</summary>
+    public string? HumanOnlyIgnoringHelp { get; init; }
+
     /// <summary>Whether the command writes anything the guard sees, or hides what it writes.</summary>
     public bool HasTargets =>
         Hidden is not null || Files.Count + Trees.Count + SourceTrees.Count + FloatingFiles.Count + FloatingTrees.Count + PatternFiles.Count + ComputedFiles.Count > 0;

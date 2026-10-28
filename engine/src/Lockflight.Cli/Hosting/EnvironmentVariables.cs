@@ -15,6 +15,12 @@ internal static class EnvironmentVariables
     /// <summary>Path of the gitleaks binary for the secrets gate; when unset, gitleaks is looked up on PATH.</summary>
     public const string Gitleaks = "LOCKFLIGHT_GITLEAKS";
 
+    /// <summary>Spec Kit's active feature directory (relative to the project root, or absolute); it outranks <c>.specify/feature.json</c>.</summary>
+    public const string SpecifyFeatureDirectory = "SPECIFY_FEATURE_DIRECTORY";
+
+    /// <summary>Spec Kit's active feature name (<c>006-weak-spots</c>), read like a feature branch name.</summary>
+    public const string SpecifyFeature = "SPECIFY_FEATURE";
+
     /// <summary>The hook API version the plugin shim speaks; unset for direct invocations.</summary>
     public const string PluginApi = "LOCKFLIGHT_PLUGIN_API";
 
@@ -23,6 +29,15 @@ internal static class EnvironmentVariables
     /// unset otherwise.
     /// </summary>
     public const string PluginMinimumEngine = "LOCKFLIGHT_PLUGIN_MIN_ENGINE";
+
+    /// <summary>
+    /// The directory of the plugin a Claude Code session loaded; the plugin's SessionStart hook writes it, with
+    /// <see cref="PluginMinimumEngine"/>, into the session's environment file so that commands the agent runs see them.
+    /// </summary>
+    public const string PluginRoot = "LOCKFLIGHT_PLUGIN_ROOT";
+
+    /// <summary>The plugin's directory, set by Claude Code for the plugin's hooks and commands.</summary>
+    public const string ClaudePluginRoot = "CLAUDE_PLUGIN_ROOT";
 
     /// <summary>Set to <c>1</c> by Claude Code in every shell the agent starts.</summary>
     public const string ClaudeCode = "CLAUDECODE";

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Lockflight.Cli.Doctor;
+using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Tests.Doctor;
 
@@ -17,7 +18,7 @@ public sealed class PluginEngineCheckTests : IDisposable
         PinEngine("0.2.0-alpha.3");
         InstallPlugin(("user", null, "0.2.0-alpha.4"));
 
-        DoctorCheck check = PluginEngineCheck.Check(Project, Home)!;
+        DoctorCheck check = PluginEngineCheck.Check(Project, Home, NoVariables)!;
 
         Assert.Equal(CheckStatus.Fail, check.Status);
         Assert.Contains("needs engine 0.2.0-alpha.4 or newer; the project pins 0.2.0-alpha.3", check.Detail, StringComparison.Ordinal);
@@ -33,7 +34,7 @@ public sealed class PluginEngineCheckTests : IDisposable
         PinEngine(pinned);
         InstallPlugin(("user", null, "0.2.0-alpha.4"));
 
-        Assert.Equal(CheckStatus.Pass, PluginEngineCheck.Check(Project, Home)!.Status);
+        Assert.Equal(CheckStatus.Pass, PluginEngineCheck.Check(Project, Home, NoVariables)!.Status);
     }
 
     [Fact]
@@ -42,23 +43,82 @@ public sealed class PluginEngineCheckTests : IDisposable
         PinEngine("0.2.0-alpha.4");
         InstallPlugin(("user", null, "0.2.0-alpha.3"), ("project", Project, "0.2.0-alpha.5"));
 
-        Assert.Equal(CheckStatus.Fail, PluginEngineCheck.Check(Project, Home)!.Status);
+        Assert.Equal(CheckStatus.Fail, PluginEngineCheck.Check(Project, Home, NoVariables)!.Status);
     }
 
     [Fact]
     public void WithoutAPluginRecordOrRequirementThereIsNothingToCheck()
     {
         PinEngine("0.2.0-alpha.4");
-        Assert.Null(PluginEngineCheck.Check(Project, Home));
+        Assert.Null(PluginEngineCheck.Check(Project, Home, NoVariables));
 
         InstallPlugin(("user", null, null));
-        Assert.Null(PluginEngineCheck.Check(Project, Home));
+        Assert.Null(PluginEngineCheck.Check(Project, Home, NoVariables));
 
         File.WriteAllText(Path.Combine(Home, ".claude", "plugins", "installed_plugins.json"), "{ not json");
-        Assert.Null(PluginEngineCheck.Check(Project, Home));
+        Assert.Null(PluginEngineCheck.Check(Project, Home, NoVariables));
+    }
+
+    [Fact]
+    public void TheInstalledPluginIsNamedAsTheCopyChecked()
+    {
+        PinEngine("0.2.0-alpha.4");
+        InstallPlugin(("user", null, "0.2.0-alpha.4"));
+
+        DoctorCheck check = PluginEngineCheck.Check(Project, Home, NoVariables)!;
+
+        Assert.StartsWith($"the installed plugin at {InstallPathOf(0)} (Claude Code's install record", check.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThePluginThisSessionLoadedWinsOverTheInstalledOne()
+    {
+        PinEngine("0.2.0-alpha.4");
+        InstallPlugin(("user", null, "0.2.0-alpha.3"));
+        string loaded = Path.Combine(root.FullName, "checkout", "plugins", "lockflight");
+
+        DoctorCheck check = PluginEngineCheck.Check(Project, Home, Variables(
+            (EnvironmentVariables.PluginMinimumEngine, "0.2.0-alpha.5"), (EnvironmentVariables.PluginRoot, loaded)))!;
+
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.Contains($"the plugin this session loaded ({loaded}) needs engine 0.2.0-alpha.5 or newer", check.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ThePluginRootClaudeCodeGivesWinsOverTheInstalledOne()
+    {
+        PinEngine("0.2.0-alpha.4");
+        InstallPlugin(("user", null, "0.2.0-alpha.3"));
+        string pluginRoot = Path.Combine(root.FullName, "checkout", "plugins", "lockflight");
+        Directory.CreateDirectory(pluginRoot);
+        File.WriteAllText(Path.Combine(pluginRoot, "min-engine-version"), "0.2.0-alpha.5\n");
+
+        DoctorCheck check = PluginEngineCheck.Check(Project, Home, Variables((EnvironmentVariables.ClaudePluginRoot, pluginRoot)))!;
+
+        Assert.Equal(CheckStatus.Fail, check.Status);
+        Assert.Contains($"the plugin at {pluginRoot} (CLAUDE_PLUGIN_ROOT) needs engine 0.2.0-alpha.5 or newer", check.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnAnnouncedRequirementThatIsNotAVersionFallsBackToTheInstalledPlugin()
+    {
+        PinEngine("0.2.0-alpha.4");
+        InstallPlugin(("user", null, "0.2.0-alpha.4"));
+
+        DoctorCheck check = PluginEngineCheck.Check(Project, Home, Variables((EnvironmentVariables.PluginMinimumEngine, "soon")))!;
+
+        Assert.Equal(CheckStatus.Pass, check.Status);
+        Assert.StartsWith("the installed plugin at", check.Detail, StringComparison.Ordinal);
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(root);
+
+    private static EnvironmentReader NoVariables => EnvironmentReader.Of(new Dictionary<string, string>());
+
+    private static EnvironmentReader Variables(params (string Name, string Value)[] variables) =>
+        EnvironmentReader.Of(variables.ToDictionary(variable => variable.Name, variable => variable.Value));
+
+    private string InstallPathOf(int index) => Path.Combine(Home, ".claude", "plugins", "cache", "lockflight", "lockflight", $"install-{index}");
 
     private void PinEngine(string version)
     {
@@ -71,7 +131,7 @@ public sealed class PluginEngineCheckTests : IDisposable
         List<Dictionary<string, string>> records = [];
         foreach ((string scope, string? projectPath, string? minimumEngine) in installs)
         {
-            string installPath = Path.Combine(Home, ".claude", "plugins", "cache", "lockflight", "lockflight", $"install-{records.Count}");
+            string installPath = InstallPathOf(records.Count);
             Directory.CreateDirectory(installPath);
             if (minimumEngine is not null)
             {
