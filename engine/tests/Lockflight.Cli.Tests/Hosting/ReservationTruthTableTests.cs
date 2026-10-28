@@ -56,6 +56,6 @@ public sealed class ReservationTruthTableTests
     {
         string command = $"lockflight {line}".TrimEnd();
         RuleSentence rule = new("CLAUDE.md", 1, $"Never run `{command}` yourself.", [command]);
-        return RuleMapping.Map(rule, protectedGlobs: [], new Dictionary<string, IReadOnlyList<string>>()).Status;
+        return RuleMapping.Map(rule, new ProjectChecks(ProtectedGlobs: [], new Dictionary<string, IReadOnlyList<string>>(), new Dictionary<string, AnalyzerSetting>(), [])).Status;
     }
 }
