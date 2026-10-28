@@ -100,11 +100,22 @@ Never approve for them.
       user what changed and ask them to approve again (see Approvals). Wait.
 7. **Verify.** `.lockflight/bin/lockflight trace` (every requirement covered by a test that went red, then green) and
    `.lockflight/bin/lockflight gate run --profile pr --base <base branch>`.
-8. **Review.** Run the review of record as the `review` skill describes (`.lockflight/bin/lockflight review`; leave out
-   `--base`, `--model` and `--budget`). Fix confirmed findings in a new red/green cycle and review again; show unverified
-   ones to the user. Then run `.lockflight/bin/lockflight review status`: only its output says which findings are open.
-9. **Deliver.** Open the PR. Its body holds the trace table, the gate summary and the "Pull request summary" from
-   `review status`, unchanged. Merging is always the user's decision.
+8. **Commit.** The review of record judges committed work only, so commit the feature on its branch now, the way the user
+   commits (their branch and message conventions; commit locally, never push here). The commit holds:
+   - the production code and the tests;
+   - the feature's Spec Kit files under `specs/<id>/` (`spec.md`, `plan.md`, `tasks.md` and the rest);
+   - the engine's evidence under `.lockflight/features/<id>/`: `approvals/*.json` (and any `.sig` next to them),
+     `redgreen.json` and `reviews/`. CI's `approve verify` and the pull request read them there; never leave them untracked.
+   Git ignores the engine's local state (`.lockflight/bin/`, `ledger/`, `local/`, `backup/`, `adopt/`); never force-add it.
+   Run `git status` afterwards: nothing of the feature may stay changed or untracked.
+9. **Review.** Run the review of record as the `review` skill describes (`.lockflight/bin/lockflight review`; leave out
+   `--base`, `--model` and `--budget`). Fix confirmed findings in a new red/green cycle, commit as in step 8, and review again;
+   show unverified ones to the user. Then run `.lockflight/bin/lockflight review status`: only its output says which findings
+   are open. Commit the new records under `.lockflight/features/<id>/reviews/` (the review leaves `.lockflight/` out of the
+   change it judges, so this commit does not touch the review).
+10. **Deliver.** Push the branch and open the PR when the user's flow has you do it; otherwise tell the user it is ready.
+    Its body holds the trace table, the gate summary and the "Pull request summary" from `review status`, unchanged.
+    Merging is always the user's decision.
 
 If the project has no xUnit tests, `redgreen` reports NOT-EARNED (it could not judge): say so, follow the steps without
 red/green, and rely on the gates.
