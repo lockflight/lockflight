@@ -32,6 +32,7 @@ internal static class DefaultProtectedPaths
         "**/*.ruleset",
         "**/stylecop.json",
         "**/BannedSymbols.txt",
+        "**/CodeMetricsConfig.txt",
         // Git attributes decide what git diffs show: '*.cs -diff' would hide a change from the review and the gates' diffs.
         "**/.gitattributes",
         "**/NuGet.config",
