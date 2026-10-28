@@ -182,9 +182,11 @@ internal sealed class InitCommand(CliContext context)
         ExitCode linkResult = await new LinkCommand(rootContext).RunAsync(cancellationToken);
         if (linkResult == ExitCode.Pass)
         {
-            bool hasSpecKit = Directory.Exists(Path.Combine(root, ".specify"));
-            string? preset = profile == InitProfile.Standard && !hasSpecKit ? PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root) : null;
-            foreach (string line in InitNextSteps.For(profile, hasSpecKit, preset))
+            SpecKitSetup specKit = !Directory.Exists(Path.Combine(root, ".specify")) ? SpecKitSetup.None
+                : LockflightPresetRegistry.IsInstalled(root) ? SpecKitSetup.WithPreset
+                : SpecKitSetup.WithoutPreset;
+            string? preset = profile == InitProfile.Standard && specKit == SpecKitSetup.None ? PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root) : null;
+            foreach (string line in InitNextSteps.For(profile, specKit, preset))
             {
                 await context.Output.WriteLineAsync(line);
             }
