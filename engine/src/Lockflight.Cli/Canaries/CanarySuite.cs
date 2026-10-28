@@ -19,9 +19,12 @@ internal static class CanarySuite
         {
             reports.AddRange(await GuardCanaries.RunAsync(scratch, cancellationToken));
             reports.AddRange(await HumanOnlyCanaries.RunAsync(scratch, cancellationToken));
+            reports.AddRange(await SessionCommandCanaries.RunAsync(scratch, cancellationToken));
             reports.AddRange(TestGateCanaries.Run(scratch));
             reports.Add(RedCanaries.Run());
         }
+
+        reports.Add(await TaskCompletedCanaries.RunAsync(time, cancellationToken));
 
         if (mode == CanaryMode.Full)
         {

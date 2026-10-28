@@ -177,8 +177,8 @@ or a **development pin** warning once a release is installed ([fix](#doctor-repo
   cannot be trusted with that control: do not rely on it, run the same command with the released engine
   (`~/.lockflight/bin/lockflight doctor --canaries`), and [report it](../../SECURITY.md) privately if the release misses it too.
 - **BROKEN**: the canary could not judge. Either the harmless twin was refused as well (for example the scratch project ended up
-  in lockdown, or the guard blocks every write), or, with `--canaries=full`, the generated project did not build: the line says
-  which. `--canaries=full` needs the .NET SDK 10 and the xUnit packages from NuGet (or the local cache); without network, run
+  in lockdown, or the guard blocks every write), the TaskCompleted canary found no `git` to make its scratch repository, or,
+  with `--canaries=full`, the generated project did not build: the line says which. `--canaries=full` needs the .NET SDK 10 and the xUnit packages from NuGet (or the local cache); without network, run
   `doctor --canaries` without `=full`.
 
 ## A gate says NOT-EARNED
