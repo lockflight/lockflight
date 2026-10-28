@@ -57,6 +57,10 @@ The shim found an engine at `.lockflight/bin/` but refused to run it, and is in 
 - **"because it belongs to another user":** the `lockflight.yaml` the shim found is in a folder another account wrote (for
   example `/tmp`). Check where it came from, delete it, and link the engine in your own project.
 
+Outside Windows, the hooks make `.lockflight/bin/lockflight` read-only once they have checked it, so a copy into it fails with
+"Permission denied". That is on purpose: a file written into the engine in place could keep its old modification time and go
+unnoticed. Replace the engine with `dotnet lockflight link`, which puts a new file in its place.
+
 ## A fresh clone does not offer the Lockflight plugin
 
 The repository's `.claude/settings.json` names the Lockflight marketplace, but Claude Code reads that entry
