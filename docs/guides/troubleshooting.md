@@ -12,7 +12,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a shell command after `cd`](#a-shell-command-is-blocked-after-a-cd) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --canaries` reports MISSED or BROKEN](#doctor---canaries-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
-| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) |
+| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) |
 
 ## Every tool call is blocked: "engine not installed in this project"
 
@@ -193,6 +193,7 @@ The gate could not judge, and NOT-EARNED is never a pass. The line under the ste
 - gitleaks is not installed (set `LOCKFLIGHT_GITLEAKS` or put it on `PATH`);
 - `claude` is not on `PATH` for `review`;
 - red/green found no xUnit test project (xUnit v3, or xUnit v2 on VSTest; other test frameworks get the gates only);
+- red/green or `trace` says a project "could not be evaluated": see [below](#redgreen-or-trace-says-a-project-could-not-be-evaluated);
 - `format` could not list the changed lines (with `--base`, a shallow checkout: use `fetch-depth: 0`).
 
 A step that says **N/A** did not apply (for example `coverage.patch` without `gates.coverage.collector`). It is neither a pass
@@ -215,6 +216,22 @@ also rewrites the rest of the file, which an upstream pull request may not want.
 (or `--coverlet`) is an unknown option and the test application exits 5. Add `Microsoft.Testing.Extensions.CodeCoverage`
 (collector `microsoft`) or `coverlet.MTP` (collector `coverlet`) to every test project, or remove the setting.
 `.lockflight/bin/lockflight doctor` lists the projects that miss it.
+
+## Red/green or trace says a project "could not be evaluated"
+
+After the build, the engine evaluates every `.csproj` under the root (or the unit) with `dotnet msbuild -getProperty` to find
+the xUnit test projects. When one of those evaluations fails or times out, the engine cannot tell whether the project holds
+tests, and a test project left out would make the run look complete when it is not. So the step is NOT-EARNED, and the line
+names the project with the first line of msbuild's error, or says it timed out.
+
+- **Evaluation failed:** run `dotnet msbuild <project> -getProperty:IsTestProject` from the project root to see the whole error
+  (a missing import, an SDK that is not installed, a `Directory.Build.props` that fails), and fix it. A project that is not meant
+  to build (a leftover, a template) has to be removed or moved out of the repository: no setting excludes a project from
+  discovery. A directory whose name starts with `.`, and `bin/`, `obj/` and `node_modules/`, are never searched.
+- **Evaluation timed out:** all the evaluations share `gates.timeoutSeconds` (default 600). Raise it in `lockflight.yaml`, or
+  find out why one project evaluates so slowly (often a restore or a network share).
+
+A project that evaluates and simply is not a test project is never reported.
 
 ## `redgreen green` says "other tests fail" for tests the feature never touched
 

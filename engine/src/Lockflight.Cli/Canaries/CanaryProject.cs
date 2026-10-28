@@ -15,6 +15,9 @@ internal sealed class CanaryProject(CanaryScratch scratch)
 
     public const string FeatureDirectory = "specs/20260101-000000-canary";
 
+    /// <summary>A project outside the solution (so the build still succeeds) whose evaluation fails: it imports a file that does not exist.</summary>
+    public const string UnevaluatedProjectFile = "tests/Canary.Broken.Tests/Canary.Broken.Tests.csproj";
+
     private const string GitName = "Lockflight canary";
 
     private const string GitEmail = "canary@example.com";
@@ -107,6 +110,17 @@ internal sealed class CanaryProject(CanaryScratch scratch)
             """);
         return await CommitAsync("canary feature", cancellationToken);
     }
+
+    /// <summary>Plants <see cref="UnevaluatedProjectFile"/>.</summary>
+    public void WriteUnevaluatedProject() => Write(UnevaluatedProjectFile, """
+        <Project Sdk="Microsoft.NET.Sdk">
+          <Import Project="missing.props" />
+        </Project>
+
+        """);
+
+    /// <summary>Removes <see cref="UnevaluatedProjectFile"/> and its directory.</summary>
+    public void RemoveUnevaluatedProject() => Directory.Delete(Path.GetDirectoryName(scratch.PathOf(UnevaluatedProjectFile))!, recursive: true);
 
     /// <summary>Replaces the test class's members.</summary>
     public void WriteTests(string members) => Write(TestsFile, Tests(members));

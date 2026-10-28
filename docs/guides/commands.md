@@ -81,6 +81,15 @@ Profiles and steps are described in the [configuration reference](configuration.
 A red/green step whose tools cannot build-and-list, list or run the tests ends ERROR (exit 3): that says nothing about the
 tests. A build that fails is a verdict (FAIL, or COMPILE_RED for a red).
 
+After the build, red/green, `trace` and `review` find the test projects by evaluating every `.csproj` under the root (or the
+unit) with `dotnet msbuild -getProperty`, all within `gates.timeoutSeconds` together. A project that evaluates and is not an
+xUnit test project is left out. A project whose evaluation fails or times out might be a test project whose tests would be
+left out, so `redgreen start`, `red` and `green` and `trace` end NOT-EARNED (exit 5), naming the project and the first line
+of the error (or the timeout); an amend's re-check does the same, and the amend stays open. `review` still runs, but it runs no
+reproduction, so its blocker and major findings stay unverified. Fix the project so `dotnet msbuild <project>
+-getProperty:IsTestProject` succeeds, remove it if it is not meant to build, or, for a timeout, raise `gates.timeoutSeconds`.
+No setting excludes a project from discovery. The `test` gate runs `dotnet test` and does not use this discovery.
+
 ## Human decisions
 
 > [!IMPORTANT]
