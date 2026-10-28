@@ -1,0 +1,414 @@
+$ lockflight 
+exit: 4 Config
+stdout: <usage>
+stderr: 
+
+$ lockflight --help
+exit: 0 Pass
+stdout: <usage>
+stderr: 
+
+$ lockflight -h
+exit: 0 Pass
+stdout: <usage>
+stderr: 
+
+$ lockflight gate run --help
+exit: 0 Pass
+stdout: <usage>
+stderr: 
+
+$ lockflight nonsense -h
+exit: 0 Pass
+stdout: <usage>
+stderr: 
+
+$ lockflight version
+exit: 0 Pass
+stdout: <version>
+stderr: 
+
+$ lockflight --version
+exit: 0 Pass
+stdout: <version>
+stderr: 
+
+$ lockflight version x
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'version x'. Run 'lockflight --help'.
+
+$ lockflight --version x
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command '--version x'. Run 'lockflight --help'.
+
+$ lockflight link x
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'link x'. Run 'lockflight --help'.
+
+$ lockflight statusline x
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'statusline x'. Run 'lockflight --help'.
+
+$ lockflight hook
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'hook'. Run 'lockflight --help'.
+
+$ lockflight hook a b
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'hook a b'. Run 'lockflight --help'.
+
+$ lockflight redgreen
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'redgreen'. Run 'lockflight --help'.
+
+$ lockflight redgreen xyz
+exit: 4 Config
+stdout: 
+stderr: lockflight: no lockflight.yaml from <dir> upwards; run 'dotnet lockflight init' first
+
+$ lockflight approve
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'approve'. Run 'lockflight --help'.
+
+$ lockflight approve xyz
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown approval 'xyz'; use spec, tasks or verify
+
+$ lockflight baseline
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'baseline'. Run 'lockflight --help'.
+
+$ lockflight baseline xyz
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'baseline xyz'. Run 'lockflight --help'.
+
+$ lockflight adopt
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'adopt'. Run 'lockflight --help'.
+
+$ lockflight adopt xyz
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'adopt xyz'. Run 'lockflight --help'.
+
+$ lockflight gate
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'gate'. Run 'lockflight --help'.
+
+$ lockflight gate check
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'gate check'. Run 'lockflight --help'.
+
+$ lockflight docs
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'docs'. Run 'lockflight --help'.
+
+$ lockflight docs x
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'docs x'. Run 'lockflight --help'.
+
+$ lockflight rules
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'rules'. Run 'lockflight --help'.
+
+$ lockflight phase
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'phase'. Run 'lockflight --help'.
+
+$ lockflight phase check
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'phase check'. Run 'lockflight --help'.
+
+$ lockflight ledger
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'ledger'. Run 'lockflight --help'.
+
+$ lockflight workspace
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'workspace'. Run 'lockflight --help'.
+
+$ lockflight review xyz
+exit: 4 Config
+stdout: 
+stderr: lockflight review: unexpected argument 'xyz'; use --feature, --base, --model, --budget. Run 'lockflight --help' for its options.
+
+$ lockflight trace x
+exit: 4 Config
+stdout: 
+stderr: lockflight trace: unexpected argument 'x'; use --feature. Run 'lockflight --help' for its options.
+
+$ lockflight propose
+exit: 4 Config
+stdout: 
+stderr: lockflight propose: name a project file and its new content: propose <path> --from <file>, or <path> --delete. Run 'lockflight --help' for its options.
+
+$ lockflight init x
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown init option 'x'; use --profile lite|standard, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --no-link or --no-sandbox
+
+$ lockflight update x
+exit: 4 Config
+stdout: 
+stderr: lockflight: update takes only --source <feed> (a package source URL or folder)
+
+$ lockflight foo
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'foo'. Run 'lockflight --help'.
+
+$ lockflight Gate run
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'Gate run'. Run 'lockflight --help'.
+
+$ lockflight approve spec --help (CLAUDECODE=1)
+exit: 0 Pass
+stdout: <usage>
+stderr: 
+
+$ lockflight approve (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'approve' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight approve`. Or type /lockflight:approve spec|tasks in Claude Code.
+
+$ lockflight approve spec (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'approve spec' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight approve spec`. Or type /lockflight:approve spec in Claude Code.
+
+$ lockflight approve tasks --feature 001-x (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'approve tasks' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight approve tasks --feature 001-x`. Or type /lockflight:approve tasks in Claude Code.
+
+$ lockflight approve xyz (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'approve xyz' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight approve xyz`. Or type /lockflight:approve spec|tasks in Claude Code.
+
+$ lockflight approve verify (CLAUDECODE=1)
+exit: 4 Config
+stdout: 
+stderr: lockflight: no lockflight.yaml from <dir> upwards; run 'dotnet lockflight init' first
+
+$ lockflight baseline (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'baseline' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight baseline`. Or type /lockflight:baseline build|tests|deps in Claude Code.
+
+$ lockflight baseline build (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'baseline build' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight baseline build`. Or type /lockflight:baseline build in Claude Code.
+
+$ lockflight baseline xyz (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'baseline xyz' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight baseline xyz`. Or type /lockflight:baseline build|tests|deps in Claude Code.
+
+$ lockflight redgreen reset (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'redgreen reset' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight redgreen reset`. Or type /lockflight:reset in Claude Code.
+
+$ lockflight redgreen amend A.B --reason why not (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'redgreen amend' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight redgreen amend A.B --reason 'why not'`. Or type /lockflight:amend <test> --reason <why> in Claude Code.
+
+$ lockflight redgreen xyz (CLAUDECODE=1)
+exit: 4 Config
+stdout: 
+stderr: lockflight: no lockflight.yaml from <dir> upwards; run 'dotnet lockflight init' first
+
+$ lockflight review dismiss 0123 --reason r (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'review dismiss' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight review dismiss 0123 --reason r`.
+
+$ lockflight adopt apply (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'adopt apply' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight adopt apply`.
+
+$ lockflight adopt undo (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'adopt undo' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight adopt undo`.
+
+$ lockflight adopt xyz (CLAUDECODE=1)
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'adopt xyz'. Run 'lockflight --help'.
+
+$ lockflight update (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'update' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight update`.
+
+$ lockflight update --source feed (CLAUDECODE=1)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: 'update --source' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight update --source feed`.
+
+$ lockflight foo (CLAUDECODE=1)
+exit: 4 Config
+stdout: 
+stderr: lockflight: unknown command 'foo'. Run 'lockflight --help'.
+
+$ lockflight redgreen xyz
+exit: 4 Config
+stdout: 
+stderr: lockflight: no active feature: pass --feature <id> (Spec Kit's .specify/feature.json is missing and specs/ holds zero or several features)
+
+$ lockflight redgreen start extra
+exit: 4 Config
+stdout: 
+stderr: lockflight redgreen start: unexpected argument 'extra'; use --feature. Run 'lockflight --help' for its options.
+
+$ lockflight phase check xyz
+exit: 4 Config
+stdout: 
+stderr: lockflight: no active feature: pass --feature <id> (Spec Kit's .specify/feature.json is missing and specs/ holds zero or several features)
+
+$ lockflight phase check specify extra
+exit: 4 Config
+stdout: 
+stderr: lockflight phase check: unexpected argument 'extra'; use --feature. Run 'lockflight --help' for its options.
+
+$ lockflight review dismiss
+exit: 4 Config
+stdout: 
+stderr: lockflight review dismiss: name the finding to dismiss: lockflight review dismiss <finding-id> --reason "<why it is not a defect>" [--feature <id>]
+
+$ lockflight redgreen amend
+exit: 4 Config
+stdout: 
+stderr: lockflight redgreen amend: name the test to amend: lockflight redgreen amend <test> --reason "<why the test must change>" [--feature <id>]
+
+$ lockflight approve spec --sign --sign
+exit: 4 Config
+stdout: 
+stderr: lockflight approve spec: --sign is given more than once. Run 'lockflight --help' for its options.
+
+$ lockflight approve verify --feature a --base b
+exit: 4 Config
+stdout: 
+stderr: lockflight: approve verify needs exactly one of --feature <id> or --base <ref> (verifies every feature the change touches)
+
+<usage>:
+lockflight — gated delivery engine for Claude Code agents
+
+Usage: lockflight <command> [options]   (in a project, from its root: .lockflight/bin/lockflight <command> [options])
+
+Setup
+  init [--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab]
+       [--quality] [--architecture-tests] [--no-link] [--no-sandbox]
+                                                onboard: manifest, tool pin, settings, CI job, link; --ci:
+                                                the job runs on pull requests, only by hand, or is not written;
+                                                --ci-platform: the CI service the job is for (default github);
+                                                --quality: recommended analyzers and code metrics rules (an
+                                                existing file gets a proposal); --architecture-tests: a layer
+                                                dependency test project
+  doctor [--canaries[=full]]                    readiness report with fixes; --canaries: plant a violation
+                                                before every control in a scratch project and report each
+                                                as caught or missed (=full also builds and runs one)
+  docs check                                    references in CLAUDE.md, rules, skills, the constitution
+                                                and docs/ that no longer resolve (links, anchors, deleted or
+                                                moved paths, engine and plugin commands) and instruction
+                                                files over Claude Code's size targets (read only)
+  rules audit                                   each rule in CLAUDE.md, rules, skills and the constitution
+                                                with what backs it: checked by a guardrail, related, or
+                                                guidance only (read only)
+  statusline                                    Claude Code status line: Levi and the last verdict
+  update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
+                                                package feed), re-pin this project
+  adopt plan                                    inventory an existing Claude Code / Spec Kit setup into
+                                                .lockflight/adopt/plan.md (read only)
+  workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
+                                                engine pin, baselines, workflow); --check reports drift
+  link                                          copy the pinned engine to .lockflight/bin/ for the hooks
+  version                                       print the engine version
+
+Gates
+  gate run [--profile edit|stop|pr] [--path <dir>] [--unit <path>[,…]] [--base <ref>] [--result <file>]
+                                                run the quality gates (default profile: stop; --base also
+                                                scopes format and coverage to the branch's changes; at a
+                                                workspace root, every changed unit or the --unit ones)
+  hook <event>                                  Claude Code hook decision, hook JSON on stdin; events:
+                                                pre-tool-use, post-tool-use, stop, subagent-stop, session-start, user-prompt-expansion, task-completed
+
+Lifecycle (agent)
+  phase check specify|tasks [--feature <id>]    deterministic phase-exit checks
+  redgreen start|red|green|status [--feature <id>]
+                                                test-first cycles: baseline, accepted red, green;
+                                                red --verbose also prints each test's deciding
+                                                stack frame and the production call found
+  trace [--feature <id>]                        requirement → red/green tests matrix
+  review [--feature <id>] [--base <ref>] [--model <name>] [--budget <usd>]
+                                                review bound to evidence (defaults: the target branch,
+                                                the manifest's review model and budget, else sonnet, 3.00);
+                                                open findings carry forward until fixed or dismissed
+  review status [--feature <id>]                review runs, open, fixed and dismissed findings, and
+                                                the summary for the pull request (read only)
+  ledger retro [--days 30] [--min 2]            recurring incidents → suggested remedies
+  propose <path> (--from <file> | --delete) [<path> …]
+                                                a protected change as one patch per file in
+                                                .lockflight/local/proposals/ for a person to review and
+                                                git apply; applies nothing itself
+
+Human decisions (approve, redgreen reset|amend, review dismiss, baseline, adopt apply|undo and update refuse to run inside a
+Claude Code session, a `!` command included: run them in a separate terminal window)
+  approve spec|tasks [--feature <id>] [--sign [--key <file>]]
+                                                approve the feature's artifacts, optionally SSH-signed;
+                                                in Claude Code, type /lockflight:approve spec|tasks instead
+  redgreen reset [--feature <id>]               discard the feature's red/green evidence
+  redgreen amend <test> --reason "<text>" [--feature <id>]
+                                                let one test of the open red cycle change: its file is
+                                                writable until the next red re-checks it
+  review dismiss <finding-id> --reason "<text>" [--feature <id>]
+                                                close an open review finding, recording who, when and why
+  baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories
+  adopt apply [--speckit-preset <dir>] [--skip-speckit] [--no-sandbox]
+                                                apply the reviewed adoption plan (backs up first)
+  adopt undo [--backup <id>] [--force]          revert what apply changed; files changed since are kept
+                                                unless --force
+
+CI
+  approve verify (--feature <id> | --base <ref>) [--allowed-signers <file>] [--require spec,tasks]
+                                                check approval records, artifact hashes and signatures;
+                                                exactly one of --feature or --base (never the active feature)
+  gate run --profile pr [--base <ref>] [--result <file>]
+                                                stop steps plus policy, patch coverage, dependencies, secrets
+
+Exit codes
+  0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)
+  1  FAIL
+  2  blocked: a hook decision, or a human-only command run by the agent
+  3  ERROR: the engine or a tool it ran broke; not a verdict about the code
+  4  configuration: invalid command line (unknown option, missing value), manifest or target
+  5  NOT-EARNED: nothing to judge (e.g. zero tests)
+
+Any command with --help or -h prints this text.

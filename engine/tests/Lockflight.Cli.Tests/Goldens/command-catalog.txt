@@ -1,0 +1,34 @@
+global: --help -h --version
+version: []
+link: []
+init: [--profile --ci --ci-platform --quality --architecture-tests --no-link --no-sandbox]
+doctor: [--canaries --canaries=full]
+statusline: []
+update: [--source --project]
+docs check: []
+rules audit: []
+hook: [] arguments
+baseline build: [--path]
+baseline tests: [--path]
+baseline deps: [--path]
+gate run: [--profile --path --unit --base --result]
+phase check: [--feature] arguments
+redgreen start: [--feature]
+redgreen red: [--feature --verbose]
+redgreen green: [--feature]
+redgreen status: [--feature]
+redgreen reset: [--feature]
+redgreen amend: [--feature --reason] arguments
+review: [--feature --base --model --budget]
+review status: [--feature]
+review dismiss: [--reason --feature] arguments
+ledger retro: [--days --min]
+propose: [--from --delete] arguments
+trace: [--feature]
+approve spec: [--feature --key --sign]
+approve tasks: [--feature --key --sign]
+approve verify: [--feature --base --allowed-signers --require]
+workspace sync: [--check]
+adopt plan: []
+adopt apply: [--speckit-preset --skip-speckit --no-sandbox]
+adopt undo: [--backup --force]

@@ -1,0 +1,288 @@
+## single: edit runs format only
+$ lockflight gate run --profile edit
+format: N/A (N ms)
+  no changed C# lines
+Scope: nothing judged
+Result: N/A
+exit: 0
+
+## single: stop runs format, build, test
+$ lockflight gate run --profile stop
+format: N/A (N ms)
+  no changed C# lines
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+Scope: 1 tests
+Result: PASS
+exit: 0
+
+## single: a changed file is formatted first
+$ lockflight gate run --profile stop
+format: PASS (N ms)
+  1 files checked
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+Scope: 1 tests
+Result: PASS
+exit: 0
+
+## single: a format error stops the run
+$ lockflight gate run --profile stop
+format: ERROR (N ms)
+  dotnet format exited 3
+Scope: 1 changed C# files (format)
+Result: ERROR
+exit: 3
+
+## single: a build failure stops the run
+$ lockflight gate run --profile stop
+format: N/A (N ms)
+  no changed C# lines
+build: FAIL (N ms)
+  Program.cs(1,1): error CS1002: ; expected
+Scope: nothing judged
+Result: FAIL
+exit: 1
+
+## single: a test failure ends the run
+$ lockflight gate run --profile stop
+format: N/A (N ms)
+  no changed C# lines
+build: PASS (N ms)
+test: FAIL (N ms)
+  1 failed: Shop.Tests.OrderTotal
+Scope: 1 tests
+Result: FAIL
+exit: 1
+
+## single: pr runs every step
+$ lockflight gate run --profile pr --base HEAD
+policy.protected: PASS (N ms)
+format: N/A (N ms)
+  no changed C# lines
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+coverage.patch: N/A (N ms)
+  not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
+security.deps: PASS (N ms)
+security.secrets: PASS (N ms)
+Scope: 1 tests
+Result: PASS
+exit: 0
+
+## single: pr stops at a test failure
+$ lockflight gate run --profile pr --base HEAD
+policy.protected: PASS (N ms)
+format: N/A (N ms)
+  no changed C# lines
+build: PASS (N ms)
+test: FAIL (N ms)
+  1 failed: Shop.Tests.OrderTotal
+Scope: 1 tests
+Result: FAIL
+exit: 1
+
+## single: pr stops at a dependency error, before secrets
+$ lockflight gate run --profile pr --base HEAD
+policy.protected: PASS (N ms)
+format: N/A (N ms)
+  no changed C# lines
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+coverage.patch: N/A (N ms)
+  not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
+security.deps: ERROR (N ms)
+  dotnet package list exited 1 without a report
+Scope: 1 tests
+Result: ERROR
+exit: 3
+
+## single: pr without gitleaks
+$ lockflight gate run --profile pr --base HEAD
+policy.protected: PASS (N ms)
+format: N/A (N ms)
+  no changed C# lines
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+coverage.patch: N/A (N ms)
+  not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
+security.deps: PASS (N ms)
+security.secrets: NOT-EARNED (N ms)
+  gitleaks not found; install it on PATH or set LOCKFLIGHT_GITLEAKS
+Scope: 1 tests
+Result: NOT-EARNED
+exit: 5
+
+## single: pr without a base
+$ lockflight gate run --profile pr
+policy.protected: N/A (N ms)
+  not applicable without --base
+format: N/A (N ms)
+  no changed C# lines
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+coverage.patch: N/A (N ms)
+  not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
+security.deps: PASS (N ms)
+security.secrets: PASS (N ms)
+  uncommitted changes and 0 untracked files scanned (pass --base to scan the branch's commits)
+Scope: 1 tests
+Result: PASS
+exit: 0
+
+## workspace: edit
+$ lockflight gate run --profile edit
+missing: N/A (N ms)
+  not present in this checkout: not built
+web: N/A (N ms)
+  no changes, not run
+Scope: nothing judged
+Result: N/A
+exit: 0
+
+## workspace: stop judges every unit never judged
+$ lockflight gate run --profile stop
+missing: N/A (N ms)
+  not present in this checkout: not built
+web: N/A (N ms)
+  no changes, not run
+services/orders: build: PASS (N ms)
+services/orders: test: PASS (N ms)
+  total 1
+services/billing: build: PASS (N ms)
+services/billing: test: PASS (N ms)
+  total 1
+Scope: 2 tests
+Result: PASS
+exit: 0
+
+## workspace: one unit's build failure, the other unit still runs
+$ lockflight gate run --profile stop
+missing: N/A (N ms)
+  not present in this checkout: not built
+web: N/A (N ms)
+  no changes, not run
+services/orders: build: FAIL (N ms)
+  Program.cs(1,1): error CS1002: ; expected
+services/billing: build: PASS (N ms)
+services/billing: test: PASS (N ms)
+  total 1
+Scope: 1 tests
+Result: FAIL
+exit: 1
+
+## workspace: pr
+$ lockflight gate run --profile pr --base HEAD
+missing: N/A (N ms)
+  not present in this checkout: not built
+web: N/A (N ms)
+  not a .NET unit: guarded, not built
+policy.protected: PASS (N ms)
+format: N/A (N ms)
+  no changed C# lines
+services/orders: build: PASS (N ms)
+services/orders: test: PASS (N ms)
+  total 1
+services/orders: coverage.patch: N/A (N ms)
+  not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
+services/orders: security.deps: PASS (N ms)
+services/billing: build: PASS (N ms)
+services/billing: test: PASS (N ms)
+  total 1
+services/billing: coverage.patch: N/A (N ms)
+  not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
+services/billing: security.deps: PASS (N ms)
+security.secrets: PASS (N ms)
+Scope: 2 tests
+Result: PASS
+exit: 0
+
+## workspace: pr with a test failure runs no secrets scan
+$ lockflight gate run --profile pr --base HEAD
+missing: N/A (N ms)
+  not present in this checkout: not built
+web: N/A (N ms)
+  not a .NET unit: guarded, not built
+policy.protected: PASS (N ms)
+format: N/A (N ms)
+  no changed C# lines
+services/orders: build: PASS (N ms)
+services/orders: test: PASS (N ms)
+  total 1
+services/orders: coverage.patch: N/A (N ms)
+  not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
+services/orders: security.deps: PASS (N ms)
+services/billing: build: PASS (N ms)
+services/billing: test: FAIL (N ms)
+  1 failed: Shop.Tests.OrderTotal
+Scope: 2 tests
+Result: FAIL
+exit: 1
+
+## workspace: pr with a dependency error
+$ lockflight gate run --profile pr --base HEAD
+missing: N/A (N ms)
+  not present in this checkout: not built
+web: N/A (N ms)
+  not a .NET unit: guarded, not built
+policy.protected: PASS (N ms)
+format: N/A (N ms)
+  no changed C# lines
+services/orders: build: PASS (N ms)
+services/orders: test: PASS (N ms)
+  total 1
+services/orders: coverage.patch: N/A (N ms)
+  not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
+services/orders: security.deps: ERROR (N ms)
+  dotnet package list exited 1 without a report
+services/billing: build: PASS (N ms)
+services/billing: test: PASS (N ms)
+  total 1
+services/billing: coverage.patch: N/A (N ms)
+  not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
+services/billing: security.deps: PASS (N ms)
+Scope: 2 tests
+Result: ERROR
+exit: 3
+
+## workspace: a format error at the root
+$ lockflight gate run --profile stop
+missing: N/A (N ms)
+  not present in this checkout: not built
+web: N/A (N ms)
+  no changes, not run
+format: ERROR (N ms)
+  dotnet format exited 3
+Scope: 1 changed C# files (format)
+Result: ERROR
+exit: 3
+
+## workspace: a unit unchanged since its PASS is not run again
+$ lockflight gate run --profile stop
+services/orders: N/A (N ms)
+  unchanged since its last PASS
+missing: N/A (N ms)
+  not present in this checkout: not built
+services/billing: N/A (N ms)
+  unchanged since its last PASS
+web: N/A (N ms)
+  no changes, not run
+Scope: nothing judged
+Result: N/A
+exit: 0
+
+## workspace: --unit runs one unit
+$ lockflight gate run --profile stop --unit services/billing
+services/billing: build: PASS (N ms)
+services/billing: test: PASS (N ms)
+  total 1
+Scope: 1 tests
+Result: PASS
+exit: 0
+
