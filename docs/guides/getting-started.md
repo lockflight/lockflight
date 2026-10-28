@@ -36,11 +36,14 @@ scripts/dev-install.sh            # packs the engine into ~/.lockflight/feed, in
 
 Then set up your project: the [lite profile](#lite-profile-target-first-green-in-under-15-minutes) below.
 
-- **Plugin from the checkout:** the script adds the checkout itself as the `lockflight` marketplace (an existing one, such
-  as the GitHub marketplace, is pointed there), so the plugin and the engine come from the same commit. Claude Code reads the
-  plugin from the checkout's folder: a `git pull` reaches it at the next session start or `/reload-plugins`, and
-  `lockflight update` pulls it together with the engine. To go back to the published plugin, run
-  `claude plugin marketplace add lockflight/lockflight`.
+- **Plugin from the checkout:** the script adds the checkout's development marketplace (`plugins/`, which lists the plugins
+  in the checkout) as the `lockflight` marketplace (an existing one, such as the GitHub marketplace, is pointed there), so
+  the plugin and the engine come from the same commit. Claude Code reads the plugin from the checkout's folder: a `git pull`
+  reaches it at the next session start or `/reload-plugins`, and `lockflight update` pulls it together with the engine. The
+  GitHub marketplace serves the last release instead (see [install from a package](#install-from-a-package)). To go back to
+  it, remove the development marketplace (Claude Code does not point a folder marketplace back at GitHub, and removing it
+  uninstalls its plugins), then add the GitHub one and install again:
+  `claude plugin marketplace remove lockflight && claude plugin marketplace add lockflight/lockflight && claude plugin install lockflight@lockflight --scope user`.
 
 - **`lockflight` by name:** the script puts `~/.lockflight/bin` on your `PATH` for new terminals, with one line marked
   `# added by Lockflight: its engine on PATH` in your shell's startup file: `~/.zshrc` for zsh, `~/.bashrc` for bash (and
@@ -123,6 +126,10 @@ claude plugin install lockflight@lockflight --scope user
 Then set up your project as below. This install does not change your `PATH`: run the engine as `~/.lockflight/bin/lockflight`,
 or add `~/.lockflight/bin` to `PATH` yourself.
 
+- **Release, not `main`:** the marketplace serves each plugin from the latest release tag, at its commit, so the plugin you
+  install is the one released with the engine on nuget.org. Changes merged to `main` reach you with the next release; to try
+  them earlier, [install from source](#install-from-source).
+
 - **Why `--tool-path` and not `dotnet tool install --local` in the project:** the engine package is built for each platform,
   and only the .NET 10 SDK can install such a package. In a repository whose `global.json` pins an older SDK, a local tool
   install or `dotnet tool restore` fails. Installed into `~/.lockflight/bin` from your home directory, the engine is a native
@@ -132,7 +139,8 @@ or add `~/.lockflight/bin` to `PATH` yourself.
   engine from nuget.org into `~/.lockflight/tools/<version>` (from `~/.lockflight`, outside any project), points
   `~/.lockflight/bin/lockflight` at it, then re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it
   lists. An engine installed as a prerelease follows prereleases. `--source <feed>` replaces the NuGet sources (a mirror, or a
-  folder of packages). The plugin updates from its marketplace; `claude plugin update lockflight@lockflight` updates it now.
+  folder of packages). The plugin updates from its marketplace when a release moves it to a new version: by itself with
+  auto-update on for the marketplace (in `/plugin`), or now with `claude plugin update lockflight@lockflight`.
 - **Plugin and engine versions:** the plugin names the oldest engine it works with (`min-engine-version` in the plugin). When
   the plugin has updated past the engine a project pins, Claude Code tells you at session start and `doctor` reports
   **plugin engine** as FAIL; `update` fixes both.
