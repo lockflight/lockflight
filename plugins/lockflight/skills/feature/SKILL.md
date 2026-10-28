@@ -76,6 +76,8 @@ Never approve for them.
          Quote the line for this story from its output in your reply. Why: the agent is an aid, not a judge. Its report is
          its own word, and a subagent can be wrong or stop early while sounding finished; the engine's record is the only
          evidence that the red was accepted.
+         If its report has a `Security note:` line, copy that line verbatim into your reply to the user, in every round: it
+         is a security signal, not a detail to summarise away.
       3. Go on only if that output shows a cycle for this story as `RED (test projects locked)`. A rejected red, a stop at
          its turn limit, or a report that it was blocked is a failed round: start a fresh one with the engine's last
          output and the agent's report in the prompt, at most two rounds in all, and run step 2 again after each.
