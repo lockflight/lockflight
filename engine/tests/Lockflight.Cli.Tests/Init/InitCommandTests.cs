@@ -215,6 +215,111 @@ public sealed class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task AzureGetsAPipelineOfItsOwnAndNoGitHubWorkflow()
+    {
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", "azure"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.True(File.Exists(Path.Combine(projectRoot.FullName, AzurePipelinesTemplate.Path)));
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, Templates.WorkflowPath)));
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, "azure-pipelines.yml")));
+        Assert.Contains("build validation policy", output, StringComparison.Ordinal);
+        Assert.Contains("Edit(/.azure-pipelines/lockflight-gates.yml)", File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json")), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GitLabGetsTheJobAndARootPipelineThatIncludesIt()
+    {
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", "gitlab"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.True(File.Exists(Path.Combine(projectRoot.FullName, GitLabCiTemplate.Path)));
+        Assert.True(GitLabCiTemplate.IsIncludedBy(File.ReadAllText(Path.Combine(projectRoot.FullName, GitLabCiTemplate.RootPath))));
+        string settings = File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json"));
+        Assert.Contains("Edit(/.gitlab/ci/lockflight-gates.yml)", settings, StringComparison.Ordinal);
+        Assert.Contains("Edit(/.gitlab-ci.yml)", settings, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnExistingGitLabPipelineIsKeptAndInitSaysHowToIncludeTheJob()
+    {
+        const string teamPipeline = "build:\n  script: [make]\n";
+        File.WriteAllText(Path.Combine(projectRoot.FullName, GitLabCiTemplate.RootPath), teamPipeline);
+
+        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", "gitlab"], "", projectRoot.FullName);
+        (_, string again, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", "gitlab"], "", projectRoot.FullName);
+
+        Assert.Equal(teamPipeline, File.ReadAllText(Path.Combine(projectRoot.FullName, GitLabCiTemplate.RootPath)));
+        Assert.True(File.Exists(Path.Combine(projectRoot.FullName, GitLabCiTemplate.Path)));
+        Assert.Contains("- local: /" + GitLabCiTemplate.Path, output, StringComparison.Ordinal);
+        Assert.Contains("- local: /" + GitLabCiTemplate.Path, again, StringComparison.Ordinal);
+        Assert.DoesNotContain("created", again, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BitbucketGetsThePipelineFileWhenThereIsNone()
+    {
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", "bitbucket"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains(CiShellScripts.GateCommand, File.ReadAllText(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.Path)), StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.FragmentPath)));
+        Assert.Contains("Premium", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnExistingBitbucketPipelineIsKeptAndTheJobGoesToACopyToMerge()
+    {
+        const string teamPipeline = "pipelines:\n  default:\n    - step:\n        script: [make]\n";
+        File.WriteAllText(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.Path), teamPipeline);
+
+        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", "bitbucket"], "", projectRoot.FullName);
+        (_, string again, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", "bitbucket"], "", projectRoot.FullName);
+
+        Assert.Equal(teamPipeline, File.ReadAllText(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.Path)));
+        Assert.Contains(CiShellScripts.GateCommand, File.ReadAllText(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.FragmentPath)), StringComparison.Ordinal);
+        Assert.Contains($"merge the lockflight-gates step and its pipelines from {BitbucketPipelinesTemplate.FragmentPath}", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("created", again, StringComparison.Ordinal);
+        Assert.DoesNotContain("CI:", again, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("azure")]
+    [InlineData("bitbucket")]
+    [InlineData("gitlab")]
+    public async Task InitTwiceOnAnotherPlatformChangesNothingTheSecondTime(string platform)
+    {
+        await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", platform], "", projectRoot.FullName);
+
+        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", platform], "", projectRoot.FullName);
+
+        Assert.DoesNotContain("created", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("updated", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NoCiOnAnotherPlatformWritesNoPipeline()
+    {
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "none", "--ci-platform", "gitlab"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, GitLabCiTemplate.RootPath)));
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, GitLabCiTemplate.Path)));
+    }
+
+    [Theory]
+    [InlineData("--ci-platform")]
+    [InlineData("--ci-platform", "jenkins")]
+    public async Task AMissingOrUnknownCiPlatformIsAUsageError(params string[] options)
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--no-link", .. options], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains(CiPlatformNames.Choices, error, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, "lockflight.yaml")));
+    }
+
+    [Fact]
     public async Task InitTwiceChangesNothingTheSecondTime()
     {
         await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);

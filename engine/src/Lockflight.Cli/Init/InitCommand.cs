@@ -14,13 +14,14 @@ namespace Lockflight.Cli.Init;
 /// </summary>
 internal sealed class InitCommand(CliContext context)
 {
-    /// <summary><c>[--profile lite|standard] [--ci pr|manual|none] [--no-link] [--no-sandbox]</c> in any order.</summary>
+    /// <summary><c>[--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab] [--no-link] [--no-sandbox]</c> in any order.</summary>
     public async Task<ExitCode> RunAsync(string[] options, CancellationToken cancellationToken)
     {
         bool link = true;
         bool sandbox = true;
         InitProfile profile = InitProfile.Lite;
         CiTrigger? requestedCi = null;
+        CiPlatform platform = CiPlatform.GitHub;
         for (int index = 0; index < options.Length; index++)
         {
             switch (options[index])
@@ -53,15 +54,25 @@ internal sealed class InitCommand(CliContext context)
                     break;
                 case "--ci":
                     return await RefuseAsync("--ci needs a value: pr, manual or none");
+                case "--ci-platform" when index + 1 < options.Length:
+                    string platformName = options[++index];
+                    if (!CiPlatformNames.TryParse(platformName, out platform))
+                    {
+                        return await RefuseAsync($"unknown CI platform '{platformName}'; use {CiPlatformNames.Choices}");
+                    }
+
+                    break;
+                case "--ci-platform":
+                    return await RefuseAsync($"--ci-platform needs a value: {CiPlatformNames.Choices}");
                 default:
-                    return await RefuseAsync($"unknown init option '{options[index]}'; use --profile lite|standard, --ci pr|manual|none, --no-link or --no-sandbox");
+                    return await RefuseAsync($"unknown init option '{options[index]}'; use --profile lite|standard, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --no-link or --no-sandbox");
             }
         }
 
-        return await InitializeAsync(link, sandbox, profile, requestedCi, cancellationToken);
+        return await InitializeAsync(link, sandbox, profile, requestedCi, platform, cancellationToken);
     }
 
-    private async Task<ExitCode> InitializeAsync(bool link, bool sandbox, InitProfile profile, CiTrigger? requestedCi, CancellationToken cancellationToken)
+    private async Task<ExitCode> InitializeAsync(bool link, bool sandbox, InitProfile profile, CiTrigger? requestedCi, CiPlatform platform, CancellationToken cancellationToken)
     {
         // The pin init writes is this engine's version: a newer pin is refused below and an older one is raised to it.
         bool developmentPin = EngineVersion.IsDevelopmentBuild(ToolPin.RunningVersion);
@@ -85,10 +96,16 @@ internal sealed class InitCommand(CliContext context)
             await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, cancellationToken),
             await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), cancellationToken),
         ];
+        List<InitStep> ciSteps = [];
         if (ci != CiTrigger.None)
         {
-            steps.Add(await WriteIfMissingAsync(root, Templates.WorkflowPath, Templates.Workflow(dotnetChannels, ci, developmentPin), cancellationToken));
+            foreach (CiFile file in CiPipeline.Files(platform, root, dotnetChannels, ci, developmentPin))
+            {
+                ciSteps.Add(await WriteIfMissingAsync(root, file.RelativePath, file.Content, cancellationToken));
+            }
         }
+
+        steps.AddRange(ciSteps);
 
         if (profile == InitProfile.Standard)
         {
@@ -104,12 +121,17 @@ internal sealed class InitCommand(CliContext context)
             await context.Output.WriteLineAsync($"{Describe(step.Outcome),-10} {step.RelativePath}");
         }
 
-        if (steps.SingleOrDefault(step => step.RelativePath == Templates.WorkflowPath) is InitStep workflow)
+        if (ciSteps.FirstOrDefault() is InitStep pipeline)
         {
-            await ExplainDotnetChannelsAsync(workflow.Outcome, testFrameworks, dotnetChannels);
-            if (workflow.Outcome == FileOutcome.Created && developmentPin)
+            await ExplainDotnetChannelsAsync(pipeline, testFrameworks, dotnetChannels);
+            if (pipeline.Outcome == FileOutcome.Created && developmentPin)
             {
-                await ExplainPreviewCiAsync(ci);
+                await ExplainPreviewCiAsync(pipeline.RelativePath, ci);
+            }
+
+            foreach (string line in CiPipeline.NextSteps(platform, root, ciSteps))
+            {
+                await context.Output.WriteLineAsync(line);
             }
         }
 
@@ -135,8 +157,8 @@ internal sealed class InitCommand(CliContext context)
         return linkResult;
     }
 
-    /// <summary>Says why CI installs more than the engine's SDK, or that an existing workflow may need it.</summary>
-    private async Task ExplainDotnetChannelsAsync(FileOutcome workflow, string[] testFrameworks, IReadOnlyList<string> dotnetChannels)
+    /// <summary>Says why CI installs more than the engine's SDK, or that an existing pipeline may need it.</summary>
+    private async Task ExplainDotnetChannelsAsync(InitStep pipeline, string[] testFrameworks, IReadOnlyList<string> dotnetChannels)
     {
         if (dotnetChannels.Count < 2)
         {
@@ -145,16 +167,16 @@ internal sealed class InitCommand(CliContext context)
 
         string channels = string.Join(", ", dotnetChannels);
         string frameworks = string.Join(", ", testFrameworks);
-        await context.Output.WriteLineAsync(workflow == FileOutcome.Created
+        await context.Output.WriteLineAsync(pipeline.Outcome == FileOutcome.Created
             ? $"CI installs .NET {channels}: the test projects target {frameworks}, and tests need each runtime. Locally, gates.test.framework in {Manifest.FileName} picks one target when a runtime is missing."
-            : $"Note: the test projects target {frameworks}; {Templates.WorkflowPath} already existed, so check that its setup-dotnet installs {channels}.");
+            : $"Note: the test projects target {frameworks}; {pipeline.RelativePath} already existed, so check that it installs .NET {channels}.");
     }
 
-    /// <summary>Says what a development pin means for the workflow just written: no package feed has the engine it installs.</summary>
-    private async Task ExplainPreviewCiAsync(CiTrigger ci) =>
+    /// <summary>Says what a development pin means for the pipeline just written: no package feed has the engine it installs.</summary>
+    private async Task ExplainPreviewCiAsync(string pipeline, CiTrigger ci) =>
         await context.Output.WriteLineAsync(ci == CiTrigger.Manual
-            ? $"CI: {Templates.WorkflowPath} runs only when started by hand. This engine is a development build ({ToolPin.RunningVersion}) that no package feed has, so a job that installs it would fail on every pull request. Once the project pins a published release, switch the workflow to pull requests (its comment says how); --ci pr writes the pull-request trigger now."
-            : $"Note: {Templates.WorkflowPath} runs on every pull request, but this engine is a development build ({ToolPin.RunningVersion}) that no package feed has: the job fails at the engine install until the project pins a published release.");
+            ? $"CI: {pipeline} runs only when started by hand. This engine is a development build ({ToolPin.RunningVersion}) that no package feed has, so a job that installs it would fail on every pull request. Once the project pins a published release, switch it to pull requests (its comment says how); --ci pr writes the pull-request trigger now."
+            : $"Note: {pipeline} runs on every pull request, but this engine is a development build ({ToolPin.RunningVersion}) that no package feed has: the job fails at the engine install until the project pins a published release.");
 
     /// <summary>What init cannot merge into, checked before it writes anything so a refusal leaves the project as it was.</summary>
     private static async Task<string?> PreflightProblemAsync(string root, CancellationToken cancellationToken)
