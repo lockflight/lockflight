@@ -156,7 +156,8 @@ public sealed class DocsDriftTests : IDisposable
     public async Task HistoryDocumentsSpecKitSkillsAndIgnoredLinesAreNotScanned()
     {
         Write("CHANGELOG.md", "[gone](gone.md)\n");
-        Write("docs/decisions/0001.md", "[gone](gone.md)\n");
+        Write("docs/handbook/decisions/0001.md", "[gone](gone.md)\n");
+        Write("docs/adr/0002.md", "[gone](gone.md)\n");
         Write(".claude/skills/speckit-plan/SKILL.md", "[gone](gone.md)\n");
         Write("docs/guide.md", "[gone](gone.md) <!-- lockflight: drift-ignore -->\n");
         Write("src/notes.md", "[gone](gone.md)\n");
