@@ -13,8 +13,8 @@ internal static class FindingLifecycle
 {
     /// <summary>
     /// The run's own findings (one per id, the most severe first) plus every open finding it did not raise again. An open finding
-    /// raised again keeps the higher of its two severities, and its reproduction when the new one has none, so a reviewer that
-    /// re-raises a confirmed major as minor cannot close it.
+    /// raised again keeps the higher of its two severities (with the escalation that raised the open one, when it did), and its
+    /// reproduction when the new one has none, so a reviewer that re-raises a confirmed major as minor cannot close it.
     /// </summary>
     public static IReadOnlyList<ReviewFinding> Carry(IReadOnlyList<ReviewFinding> fresh, ReviewHistory history)
     {
@@ -66,9 +66,12 @@ internal static class FindingLifecycle
     private static ReviewFinding RaisedAgain(ReviewFinding finding, ReviewFinding open)
     {
         string? reproduction = finding.Reproduction ?? open.Reproduction;
+        bool keepsOpenSeverity = open.Severity < finding.Severity;
         return finding with
         {
-            Severity = finding.Severity < open.Severity ? finding.Severity : open.Severity,
+            Severity = keepsOpenSeverity ? open.Severity : finding.Severity,
+            OriginalSeverity = keepsOpenSeverity ? open.OriginalSeverity : finding.OriginalSeverity,
+            Escalation = keepsOpenSeverity ? open.Escalation : finding.Escalation,
             Reproduction = reproduction,
             SpecQuote = finding.SpecQuote ?? open.SpecQuote,
             EarlierReproductions = [.. open.EarlierReproductions.Append(open.Reproduction).OfType<string>().Where(earlier => earlier != reproduction).Distinct(StringComparer.Ordinal)],

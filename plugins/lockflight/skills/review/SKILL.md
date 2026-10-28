@@ -45,6 +45,10 @@ independent.
    A blocker/major finding also says whether the requirement sentence it quotes was found in the spec ("spec quote
    anchored"), was not ("not anchored"), or was not given ("no spec quote"). It does not change the outcome. When a confirmed
    finding's quote is not anchored, tell the user: its test may encode the reviewer's expectation rather than the spec.
+   A minor or nit finding whose quote is an anchored MUST or SHALL sentence and whose reproduction fails on the current code
+   is raised to major ("escalated: anchored MUST, reproduced"; the evidence keeps the reviewer's severity under
+   `originalSeverity`) and is then treated like any other major finding. When its reproduction passes, does not compile or
+   does not run, it stays minor and the evidence says why it was not escalated.
 
    A confirmed, contested or unverified blocker/major finding is **open** and stays open in every later review, also when that review
    does not raise it again ("carried from an earlier run") or raises it again at a lower severity. It closes only when a

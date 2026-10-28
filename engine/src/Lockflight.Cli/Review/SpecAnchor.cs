@@ -1,12 +1,13 @@
 namespace Lockflight.Cli.Review;
 
 /// <summary>
-/// Whether a blocker/major finding's <c>specQuote</c> is text of the spec. Recorded for a person to read; it does not change the
-/// finding's outcome or the run's exit.
+/// Whether a finding's <c>specQuote</c> is text of the spec. Recorded for a person to read; it does not change a blocker/major
+/// finding's outcome or the run's exit. An anchored MUST or SHALL quote lets a minor or nit finding whose reproduction fails be
+/// raised to major (<see cref="Escalations"/>).
 /// </summary>
 internal enum SpecAnchor
 {
-    /// <summary>The finding gives no spec quote (or is minor or nit, which need none).</summary>
+    /// <summary>The finding gives no spec quote.</summary>
     None = 1,
 
     /// <summary>The quote appears word for word in the spec, after runs of whitespace are made one space.</summary>

@@ -20,6 +20,16 @@ public sealed class ReviewPromptTests
     }
 
     [Fact]
+    public void ThePromptRatesAMustViolationAtLeastMajorAndAsksForAReproductionWithEverySpecQuote()
+    {
+        string prompt = ReviewPrompt.Build(new ReviewPromptData("FR-001", "specs/001/spec.md", "+x", null, string.Empty, string.Empty, Marker)).ReplaceLineEndings(" ");
+
+        Assert.Matches(@"violates a requirement sentence\s+containing MUST or SHALL is at least major", prompt);
+        Assert.Matches(@"carries a `specQuote` must also include a `reproduction`[^.]*whatever its severity", prompt);
+        Assert.Contains("for any finding with a specQuote", ReviewPrompt.Schema, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheReproductionContextIsFencedAsData()
     {
         string prompt = ReviewPrompt.Build(new ReviewPromptData("FR-001", "specs/001/spec.md", "+x", null, string.Empty, "- tests/Shop.Tests/Shop.Tests.csproj: net10.0", Marker));

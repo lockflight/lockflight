@@ -48,6 +48,8 @@ internal static class ReviewEvidence
                 ["id"] = finding.Id,
                 ["dimension"] = finding.Dimension,
                 ["severity"] = ReviewNames.ToName(finding.Severity),
+                ["originalSeverity"] = finding.OriginalSeverity is FindingSeverity original ? ReviewNames.ToName(original) : null,
+                ["escalation"] = ReviewNames.Describe(finding),
                 ["outcome"] = ReviewNames.ToName(finding.Outcome),
                 ["reproductionResult"] = ReviewNames.ToName(finding.Reproduced),
                 ["state"] = finding.State is FindingState state ? ReviewNames.ToName(state) : null,
@@ -289,6 +291,8 @@ internal static class ReviewEvidence
             State = ReviewNames.ParseState(Text(element, "state")),
             SpecQuote = OptionalText(element, "specQuote"),
             SpecAnchor = ReviewNames.ParseSpecAnchor(Text(element, "specAnchor")),
+            OriginalSeverity = OptionalText(element, "originalSeverity") is string original ? ReviewNames.ParseSeverity(original) : null,
+            Escalation = OptionalText(element, "originalSeverity") is null ? SeverityEscalation.None : SeverityEscalation.Escalated,
             Fix = OptionalText(element, "fix"),
             FixCheck = ReviewNames.ParseFixCheck(Text(element, "fixCheck")),
             ConflictingTests = element.TryGetProperty("conflictingTests", out JsonElement conflicting) && conflicting.ValueKind == JsonValueKind.Array

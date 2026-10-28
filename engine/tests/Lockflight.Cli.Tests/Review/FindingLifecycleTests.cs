@@ -41,6 +41,37 @@ public sealed class FindingLifecycleTests
     }
 
     [Fact]
+    public void AnEscalatedOpenFindingRaisedAgainAsMinorKeepsItsEscalation()
+    {
+        ReviewFinding open = Major("Discount off by one", FindingOutcome.Confirmed) with
+        {
+            State = FindingState.Open, OriginalSeverity = FindingSeverity.Minor, Escalation = SeverityEscalation.Escalated,
+        };
+
+        ReviewFinding raised = Assert.Single(FindingLifecycle.Carry(
+            [open with { Severity = FindingSeverity.Minor, OriginalSeverity = null, Escalation = SeverityEscalation.None, State = null }], History(open)));
+
+        Assert.Equal(FindingSeverity.Major, raised.Severity);
+        Assert.Equal(FindingSeverity.Minor, raised.OriginalSeverity);
+        Assert.Equal(SeverityEscalation.Escalated, raised.Escalation);
+    }
+
+    [Fact]
+    public void AnEscalatedOpenFindingTheReviewerNowRatesMajorItselfIsNoLongerMarkedEscalated()
+    {
+        ReviewFinding open = Major("Discount off by one", FindingOutcome.Confirmed) with
+        {
+            State = FindingState.Open, OriginalSeverity = FindingSeverity.Minor, Escalation = SeverityEscalation.Escalated,
+        };
+
+        ReviewFinding raised = Assert.Single(FindingLifecycle.Carry(
+            [open with { OriginalSeverity = null, Escalation = SeverityEscalation.None, State = null }], History(open)));
+
+        Assert.Null(raised.OriginalSeverity);
+        Assert.Equal(SeverityEscalation.None, raised.Escalation);
+    }
+
+    [Fact]
     public void AnOpenFindingRaisedAgainAsBlockerBecomesABlocker()
     {
         ReviewFinding open = Major("Discount off by one", FindingOutcome.Unverified) with { State = FindingState.Open };
