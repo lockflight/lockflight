@@ -1,7 +1,7 @@
 schema_version: "1.1"
 name: status-after-test-author
 description: "In the feature workflow, the agent's next step after the test author returns is redgreen status, whatever the test author reported."
-tags: [boundary]
+tags: [boundary, both-plugins]
 plugins: [../../lockflight, ../../lockflight-crew]
 context:
   scaffold_script: scaffold.sh

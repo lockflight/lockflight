@@ -1,6 +1,6 @@
 ---
 max_turns: 8
-tags: [boundary]
+tags: [boundary, both-plugins]
 allowed_tools: [Skill, Agent, Read, Glob, Grep, Bash]
 ---
 

@@ -8,7 +8,7 @@ public sealed class EvalStandInSyncTests
     private const string NotWithBangVariable = "$notbang";
 
     [Fact]
-    public void EveryEvalStandInEngineGivesTheRealBannersNoteOnHumanDecisions()
+    public void EveryEvalStandInEngineGivesTheRealBannersNotesOnHumanDecisionsAndProposals()
     {
         string plugins = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(ShimLocation.Path)!, "..", ".."));
         string[] standIns = [.. Directory.EnumerateFiles(plugins, "scaffold.sh", SearchOption.AllDirectories)
@@ -22,6 +22,7 @@ public sealed class EvalStandInSyncTests
             string text = File.ReadAllText(scaffold);
             Assert.Contains(note, text, StringComparison.Ordinal);
             Assert.Contains(notWithBang, text, StringComparison.Ordinal);
+            Assert.Contains(SessionBanner.ProposeNote, text, StringComparison.Ordinal);
         });
     }
 }

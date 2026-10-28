@@ -51,7 +51,7 @@ cannot run them; a maintainer runs them on the release candidate on `main` befor
 Claude Code version and the results in it:
 
 1. **The plugin evals**, all three suites, as [CONTRIBUTING](../../CONTRIBUTING.md#skill-evals) shows
-   (`claude plugin eval plugins/lockflight …`, `plugins/lockflight-crew …` and `plugins/evals …`). Read every failing case: a skill
+   (`claude plugin eval plugins/lockflight …`, `plugins/lockflight-crew …` and `plugins --tag both-plugins …`). Read every failing case: a skill
    that regressed blocks the release until it is fixed.
 2. **The real-hook canary** on an engine built from the same commit:
    `dotnet publish engine/src/Lockflight.Cli -c Release -r <rid> -o out`, then
