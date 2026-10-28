@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Lockflight.Cli.Hooks;
 
 namespace Lockflight.Cli.Hosting;
@@ -8,7 +9,7 @@ namespace Lockflight.Cli.Hosting;
 /// (<c>CLAUDECODE</c> is set in every shell the agent starts). Both are guardrails, not boundaries: a determined agent can strip the
 /// variable or hide the call; signed approvals checked in CI are the boundary.
 /// </summary>
-internal static class HumanOnlyCommands
+internal static partial class HumanOnlyCommands
 {
     /// <summary>
     /// Where a person runs a reserved command. A <c>!</c> command in Claude Code runs inside the session (with <c>CLAUDECODE</c> set),
@@ -22,12 +23,15 @@ internal static class HumanOnlyCommands
     /// <summary>A command and its verb (<c>approve spec</c>, <c>redgreen reset</c>): what a refusal names.</summary>
     private const int CommandWords = 2;
 
-    /// <summary>Command words (subcommand, optional sub-subcommand) reserved for a person.</summary>
-    private static readonly string[][] Reserved = [["baseline"], ["approve"], ["redgreen", "reset"], ["redgreen", "amend"], ["review", "dismiss"], ["adopt", "apply"], ["adopt", "undo"], ["update"]];
+    private const string DotnetHost = "dotnet";
 
+    /// <summary>
+    /// Whether the command line is reserved for a person: its command is registered for <see cref="CommandAudience.Human"/>, or it
+    /// starts with a reserved group (<see cref="CommandRegistry.ReservedGroups"/>) and its verb is not one of the group's agent verbs.
+    /// </summary>
     public static bool IsReserved(IReadOnlyList<string> args) =>
-        Reserved.Any(words => args.Count >= words.Length && words.Select((word, index) => args[index] == word).All(match => match))
-        && !(args.Count >= 2 && args[0] == "approve" && args[1] == "verify");
+        CommandRegistry.Match(args) is { Audience: CommandAudience.Human }
+        || CommandRegistry.ReservedGroups.Any(group => args.Count >= 1 && args[0] == group.Word && !(args.Count >= 2 && group.AgentVerbs.Contains(args[1])));
 
     public static bool RunsUnderAgent(EnvironmentReader environment) => environment.Get(EnvironmentVariables.ClaudeCode) == "1";
 
@@ -82,10 +86,13 @@ internal static class HumanOnlyCommands
 
     /// <summary>
     /// Finds a reserved command in a shell command line: <c>lockflight …</c>, <c>dotnet lockflight …</c> or a path to the binary,
-    /// also inside the command strings it runs (<c>bash -c "…"</c>, <c>eval</c>, a here-document fed to <c>sh</c>).
+    /// also inside the command strings it runs (<c>bash -c "…"</c>, <c>eval</c>, a here-document fed to <c>sh</c>). A request for
+    /// help passes (<see cref="FindInWords"/>) unless the command line defines a function or an alias, which could take the help
+    /// option away before the engine sees it.
     /// </summary>
     public static string? FindIn(string command, ShellDialect dialect)
     {
+        bool honorHelp = !CommandDefinition().IsMatch(command);
         List<string> words = [];
         foreach (ShellToken token in ShellTokenizer.Tokenize(command, dialect).Append(new ShellToken(ShellTokenKind.Separator, ";")))
         {
@@ -93,7 +100,7 @@ internal static class HumanOnlyCommands
             {
                 words.Add(token.Text);
             }
-            else if (FindInWords(words) is string found)
+            else if (FindInWords(words, honorHelp) is string found)
             {
                 return found;
             }
@@ -103,15 +110,27 @@ internal static class HumanOnlyCommands
             }
         }
 
-        return ShellWriteTargets.Find(command, dialect).HumanOnly;
+        ShellWrites nested = ShellWriteTargets.Find(command, dialect);
+        return honorHelp ? nested.HumanOnly : nested.HumanOnlyIgnoringHelp;
     }
 
-    /// <summary>The reserved command (<c>approve spec</c>) the words of one simple command start, or null.</summary>
-    public static string? FindInWords(IReadOnlyList<string> words)
+    /// <summary>
+    /// The reserved command (<c>approve spec</c>) the words of one simple command start, or null. With <paramref name="honorHelp"/>,
+    /// a request for help is not one: the
+    /// engine prints its usage for any command line with <c>--help</c> or <c>-h</c> before it parses or runs anything. That holds
+    /// only when every word after the engine reaches it, so help counts only when the engine is the program itself (after variable
+    /// assignments, or <c>dotnet</c>), never under a wrapper (<c>find -exec</c>, <c>xargs</c>, <c>env</c>) that may pass on fewer words.
+    /// </summary>
+    public static string? FindInWords(IReadOnlyList<string> words, bool honorHelp)
     {
         for (int index = 0; index < words.Count; index++)
         {
             if (!IsEngine(words[index]))
+            {
+                continue;
+            }
+
+            if (honorHelp && IsProgram(words, index) && words.Skip(index + 1).Any(IsHelp))
             {
                 continue;
             }
@@ -129,9 +148,25 @@ internal static class HumanOnlyCommands
     /// <summary>The phrase as the start of a sentence.</summary>
     public static string Sentence(string phrase) => phrase.Length == 0 ? phrase : char.ToUpperInvariant(phrase[0]) + phrase[1..];
 
+    /// <summary>Whether the engine word at <paramref name="index"/> is the program the command runs, so it receives every later word.</summary>
+    private static bool IsProgram(IReadOnlyList<string> words, int index)
+    {
+        int start = index > 0 && words[index - 1] == DotnetHost ? index - 1 : index;
+        return words.Take(start).All(word => Assignment().IsMatch(word));
+    }
+
+    private static bool IsHelp(string word) => word is "--help" or "-h";
+
     private static bool IsEngine(string token)
     {
         string name = Path.GetFileName(token.Replace('\\', '/'));
         return name.Equals("lockflight", StringComparison.OrdinalIgnoreCase) || name.Equals("lockflight.exe", StringComparison.OrdinalIgnoreCase);
     }
+
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_]*=")]
+    private static partial Regex Assignment();
+
+    /// <summary>A function or alias definition anywhere in the text, nested command strings included (<c>name()</c>, <c>function</c>, <c>alias</c>, <c>Set-Alias</c>).</summary>
+    [GeneratedRegex(@"[\w.-]\s*\(\s*\)|\b(?:function|filter|alias|Set-Alias|New-Alias|sal|nal)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex CommandDefinition();
 }

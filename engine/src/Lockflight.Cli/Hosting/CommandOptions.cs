@@ -47,6 +47,10 @@ internal sealed class CommandOptions(IReadOnlyDictionary<string, string> values,
         return CommandOptionsParse.Parsed(new CommandOptions(parsedValues, parsedFlags));
     }
 
+    /// <summary>Parses what follows a command's words against the options its descriptor accepts, like the overload below.</summary>
+    public static Task<CommandOptions?> ParseOrReportAsync(CommandArguments arguments, TextWriter error, CancellationToken cancellationToken) =>
+        ParseOrReportAsync(arguments.Command.Name, arguments.Rest, arguments.Command.ValueOptions, arguments.Command.FlagOptions, error, cancellationToken);
+
     /// <summary>Parses like <see cref="Parse"/>; on a usage error writes it to <paramref name="error"/> and returns null (exit 4).</summary>
     public static async Task<CommandOptions?> ParseOrReportAsync(
         string command, IReadOnlyList<string> args, IReadOnlyCollection<string> valueOptions, IReadOnlyCollection<string> flagOptions, TextWriter error, CancellationToken cancellationToken)

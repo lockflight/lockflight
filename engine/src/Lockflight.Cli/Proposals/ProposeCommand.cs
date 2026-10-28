@@ -12,13 +12,13 @@ namespace Lockflight.Cli.Proposals;
 /// the person reads the patch and applies it, and the guard still blocks the agent's own <c>git apply</c>. Every request is
 /// checked before any patch is written, so a refused pair leaves no partial set behind.
 /// </summary>
-internal sealed class ProposeCommand(CliContext context)
+internal sealed class ProposeCommand(CliContext context) : ICommand
 {
     private const string Command = "propose";
 
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        ProposalArgumentsParse parse = ProposalArguments.Parse(args);
+        ProposalArgumentsParse parse = ProposalArguments.Parse(arguments.RestArray);
         if (parse.Requests is not IReadOnlyList<ProposalRequest> requests)
         {
             await context.Error.WriteLineAsync($"lockflight {Command}: {parse.Error}. Run 'lockflight --help' for its options.".AsMemory(), cancellationToken);

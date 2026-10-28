@@ -7,11 +7,11 @@ namespace Lockflight.Cli.Rules;
 /// <c>lockflight rules audit</c>: every rule in the project's instruction files with what backs it, grouped per file. A report:
 /// exit 0 whatever it finds; no gate reads it.
 /// </summary>
-internal sealed class RulesAuditCommand(CliContext context)
+internal sealed class RulesAuditCommand(CliContext context) : ICommand
 {
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("rules audit", args, [], [], context.Error, cancellationToken) is null)
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is null)
         {
             return ExitCode.Config;
         }

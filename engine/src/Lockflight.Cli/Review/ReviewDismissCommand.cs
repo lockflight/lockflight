@@ -11,22 +11,20 @@ namespace Lockflight.Cli.Review;
 /// dismissal records who (git <c>user.email</c>), when and why. Human-only like <c>approve</c>: refused inside a Claude Code session
 /// (a guardrail; the variable can be unset), so the agent cannot drop a finding it would rather not fix.
 /// </summary>
-internal sealed class ReviewDismissCommand(CliContext context)
+internal sealed class ReviewDismissCommand(CliContext context) : ICommand
 {
     private const string UnknownPerson = "unknown";
     private const string Usage = "lockflight review dismiss <finding-id> --reason \"<why it is not a defect>\" [--feature <id>]";
 
-    private static readonly string[] ValueOptions = ["--reason", "--feature"];
-
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (args is not [string id, .. string[] rest] || id.StartsWith('-'))
+        if (arguments.RestArray is not [string id, .. string[] rest] || id.StartsWith('-'))
         {
             await context.Error.WriteLineAsync($"lockflight review dismiss: name the finding to dismiss: {Usage}");
             return ExitCode.Config;
         }
 
-        if (await CommandOptions.ParseOrReportAsync("review dismiss", rest, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options)
+        if (await CommandOptions.ParseOrReportAsync(arguments.Command.Name, rest, arguments.Command.ValueOptions, arguments.Command.FlagOptions, context.Error, cancellationToken) is not CommandOptions options)
         {
             return ExitCode.Config;
         }

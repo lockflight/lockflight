@@ -17,12 +17,13 @@ namespace Lockflight.Cli.Updating;
 /// (<c>update --project</c>): it re-pins and links the current project and refreshes the CLAUDE.md block. The tool pin and the
 /// block are protected, so the agent cannot run this: updating the engine changes the judge.
 /// </summary>
-internal sealed class UpdateCommand(CliContext context)
+internal sealed class UpdateCommand(CliContext context) : ICommand
 {
     private const string SourceOption = "--source";
 
-    public async Task<ExitCode> RunAsync(string[] options, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
+        string[] options = arguments.RestArray;
         string? feed;
         switch (options)
         {

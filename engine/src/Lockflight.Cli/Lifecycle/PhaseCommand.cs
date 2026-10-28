@@ -4,13 +4,14 @@ using Lockflight.Cli.Hosting;
 namespace Lockflight.Cli.Lifecycle;
 
 /// <summary><c>lockflight phase check specify|tasks [--feature id]</c>: deterministic phase-exit checks; exit 0 pass, 1 fail.</summary>
-internal sealed class PhaseCommand(CliContext context)
+internal sealed class PhaseCommand(CliContext context) : ICommand
 {
-    private static readonly string[] ValueOptions = ["--feature"];
-
-    public async Task<ExitCode> CheckAsync(string phase, string[] args, CancellationToken cancellationToken)
+    /// <param name="arguments">The phase (<c>specify</c>, <c>tasks</c>) first, then the options.</param>
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("phase check", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options
+        string phase = arguments.Rest[0];
+        CommandDescriptor command = arguments.Command;
+        if (await CommandOptions.ParseOrReportAsync(command.Name, [.. arguments.Rest.Skip(1)], command.ValueOptions, command.FlagOptions, context.Error, cancellationToken) is not CommandOptions options
             || await ManifestRequirement.LoadAsync(context, context.WorkingDirectory, cancellationToken) is not Manifest manifest)
         {
             return ExitCode.Config;

@@ -19,18 +19,16 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 /// discards the evidence. A step whose tools cannot build, list or run the tests ends ERROR (exit 3), not FAIL. Runtime evidence and a guardrail,
 /// not proof.
 /// </summary>
-internal sealed class RedGreenCommand(CliContext context)
+internal sealed class RedGreenCommand(CliContext context) : ICommand
 {
     private const string ResetVerb = "reset";
     private const string AmendVerb = "amend";
     private const string RedVerb = "red";
     private const string VerboseFlag = "--verbose";
 
-    private static readonly string[] ValueOptions = ["--feature"];
-    private static readonly string[] AmendValueOptions = ["--feature", "--reason"];
-
-    public async Task<ExitCode> RunAsync(string verb, string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
+        (string verb, string[] args) = arguments.Verb();
         string? test = null;
         if (verb == AmendVerb)
         {
@@ -43,9 +41,8 @@ internal sealed class RedGreenCommand(CliContext context)
             (test, args) = (named, rest);
         }
 
-        string[] valueOptions = verb == AmendVerb ? AmendValueOptions : ValueOptions;
-        string[] flags = verb == RedVerb ? [VerboseFlag] : [];
-        if (await CommandOptions.ParseOrReportAsync($"redgreen {verb}", args, valueOptions, flags, context.Error, cancellationToken) is not CommandOptions options)
+        if (await CommandOptions.ParseOrReportAsync($"redgreen {verb}", args, arguments.Command.ValueOptions, arguments.Command.FlagOptions, context.Error, cancellationToken)
+            is not CommandOptions options)
         {
             return ExitCode.Config;
         }

@@ -1,23 +1,7 @@
-using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
-using Lockflight.Cli.Docs;
-using Lockflight.Cli.Doctor;
-using Lockflight.Cli.Gates;
-using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Hooks;
-using Lockflight.Cli.Init;
-using Lockflight.Cli.Learning;
-using Lockflight.Cli.Lifecycle;
-using Lockflight.Cli.Lifecycle.Approvals;
-using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Linking;
-using Lockflight.Cli.Mascot;
 using Lockflight.Cli.Processes;
-using Lockflight.Cli.Proposals;
-using Lockflight.Cli.Review;
-using Lockflight.Cli.Rules;
-using Lockflight.Cli.Updating;
-using Lockflight.Cli.Workspace;
 
 namespace Lockflight.Cli.Hosting;
 
@@ -137,34 +121,16 @@ internal static class CliApplication
             return ExitCode.HookBlock;
         }
 
+        // `--version` is the conventional spelling of `version`; an unknown command is reported as it was typed.
+        string[] words = args is ["--version", ..] ? ["version", .. args[1..]] : args;
+        if (CommandRegistry.Match(words) is not CommandDescriptor command || !command.AcceptsRest(words.Length - command.Words.Count))
+        {
+            return await ReportUnknownAsync(args, context);
+        }
+
         try
         {
-            return args switch
-            {
-                ["version" or "--version"] => await PrintVersionAsync(context),
-                ["link"] => await new LinkCommand(context).RunAsync(cancellationToken),
-                ["init", .. string[] initOptions] => await new InitCommand(context).RunAsync(initOptions, cancellationToken),
-                ["doctor", .. string[] doctorOptions] => await new DoctorCommand(context).RunAsync(doctorOptions, cancellationToken),
-                ["docs", "check", .. string[] docsOptions] => await new DocsCheckCommand(context).RunAsync(docsOptions, cancellationToken),
-                ["rules", "audit", .. string[] rulesOptions] => await new RulesAuditCommand(context).RunAsync(rulesOptions, cancellationToken),
-                ["statusline"] => await new StatusLineCommand(context).RunAsync(cancellationToken),
-                ["update", .. string[] updateOptions] => await new UpdateCommand(context).RunAsync(updateOptions, cancellationToken),
-                ["hook", string eventName] => await new HookCommand(context).RunAsync(HookEventNames.Parse(eventName), cancellationToken),
-                ["baseline", "build" or "tests" or "deps", .. string[] baselineOptions] => await new BaselineCommand(context).RunAsync(args[1], baselineOptions, cancellationToken),
-                ["gate", "run", .. string[] options] => await new GateCommand(context).RunAsync(options, cancellationToken),
-                ["phase", "check", string phase, .. string[] phaseOptions] => await new PhaseCommand(context).CheckAsync(phase, phaseOptions, cancellationToken),
-                ["redgreen", string verb, .. string[] redGreenOptions] => await new RedGreenCommand(context).RunAsync(verb, redGreenOptions, cancellationToken),
-                ["review", "status", .. string[] statusOptions] => await new ReviewStatusCommand(context).RunAsync(statusOptions, cancellationToken),
-                ["review", "dismiss", .. string[] dismissArguments] => await new ReviewDismissCommand(context).RunAsync(dismissArguments, cancellationToken),
-                ["review", .. string[] reviewOptions] => await new ReviewCommand(context).RunAsync(reviewOptions, cancellationToken),
-                ["ledger", "retro", .. string[] retroOptions] => await new RetroCommand(context).RunAsync(retroOptions, cancellationToken),
-                ["propose", .. string[] proposeArguments] => await new ProposeCommand(context).RunAsync(proposeArguments, cancellationToken),
-                ["trace", .. string[] traceOptions] => await new TraceCommand(context).RunAsync(traceOptions, cancellationToken),
-                ["approve", _, ..] => await new ApproveCommand(context).RunAsync(args[1..], cancellationToken),
-                ["workspace", "sync", .. string[] syncOptions] => await new WorkspaceSyncCommand(context).RunAsync(syncOptions, cancellationToken),
-                ["adopt", "plan" or "apply" or "undo", .. string[] adoptOptions] => await new AdoptCommand(context).RunAsync(args[1], adoptOptions, cancellationToken),
-                _ => await ReportUnknownAsync(args, context),
-            };
+            return await command.Create(context).RunAsync(new CommandArguments(command, words[command.Words.Count..]), cancellationToken);
         }
         catch (ExecutableNotFoundException exception)
         {
@@ -190,12 +156,6 @@ internal static class CliApplication
 
     private static IEnumerable<string> HookEvents() =>
         Enum.GetValues<HookEvent>().Where(hookEvent => hookEvent != HookEvent.Unknown).Select(HookEventNames.ToName);
-
-    private static async Task<ExitCode> PrintVersionAsync(CliContext context)
-    {
-        await context.Output.WriteLineAsync(ToolPin.RunningVersion);
-        return ExitCode.Pass;
-    }
 
     private static async Task<ExitCode> ReportUnknownAsync(string[] args, CliContext context)
     {

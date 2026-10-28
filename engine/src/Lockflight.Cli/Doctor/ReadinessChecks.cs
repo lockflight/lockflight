@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
@@ -16,7 +17,6 @@ namespace Lockflight.Cli.Doctor;
 internal static class ReadinessChecks
 {
     private const string RestoreAndLink = "dotnet tool restore && dotnet lockflight link";
-    private const string PresetId = "lockflight";
 
     private const string PresetCheck = "lockflight preset";
     private const string AddPreset = "uvx --from specify-cli==1.1.3 specify preset add --dev <plugin>/speckit-preset (https://github.com/lockflight/lockflight/blob/main/docs/guides/getting-started.md)";
@@ -36,7 +36,7 @@ internal static class ReadinessChecks
     private static readonly TimeSpan ClaudeVersionTimeLimit = TimeSpan.FromSeconds(30);
 
     public static Task<IReadOnlyList<DoctorCheck>> RunAsync(string root, CancellationToken cancellationToken) =>
-        RunAsync(root, userHome: null, nugetPackages: null, gitleaks: null, TimeProvider.System, cancellationToken);
+        RunAsync(root, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, cancellationToken);
 
     /// <param name="userHome">
     /// The user's home, for the user-scope plugin check of a workspace and for the local feed and tools cache of the pin check; null
@@ -44,9 +44,10 @@ internal static class ReadinessChecks
     /// </param>
     /// <param name="nugetPackages">The NuGet global packages folder (<c>NUGET_PACKAGES</c>); null for its default under the home.</param>
     /// <param name="gitleaks">The gitleaks the secrets step runs (<c>LOCKFLIGHT_GITLEAKS</c>, else the one on PATH); null when there is none.</param>
+    /// <param name="environment">The variables the plugin and Claude Code give the session, for the plugin engine check.</param>
     /// <param name="time">The clock, for the window of Stop timings read from the ledger.</param>
     public static async Task<IReadOnlyList<DoctorCheck>> RunAsync(
-        string root, string? userHome, string? nugetPackages, string? gitleaks, TimeProvider time, CancellationToken cancellationToken)
+        string root, string? userHome, string? nugetPackages, string? gitleaks, EnvironmentReader environment, TimeProvider time, CancellationToken cancellationToken)
     {
         List<DoctorCheck> checks = [CheckManifest(root), CheckPin(root)];
         if (CheckDevelopmentPin(root, userHome, nugetPackages) is DoctorCheck developmentPin)
@@ -55,7 +56,7 @@ internal static class ReadinessChecks
         }
 
         checks.Add(await CheckLinkAsync(root, cancellationToken));
-        if (PluginEngineCheck.Check(root, userHome) is DoctorCheck pluginEngine)
+        if (PluginEngineCheck.Check(root, userHome, environment) is DoctorCheck pluginEngine)
         {
             checks.Add(pluginEngine);
         }
@@ -108,14 +109,7 @@ internal static class ReadinessChecks
             return true;
         }
 
-        try
-        {
-            return IsEnabled(RegisteredPreset(root));
-        }
-        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
-        {
-            return false;
-        }
+        return LockflightPresetRegistry.IsInstalled(root);
     }
 
     private static DoctorCheck CheckManifest(string root) => ManifestLocator.Discover(root) switch
@@ -338,27 +332,17 @@ internal static class ReadinessChecks
         JsonNode? preset;
         try
         {
-            preset = RegisteredPreset(root);
+            preset = LockflightPresetRegistry.Entry(root);
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException)
         {
             return new(PresetCheck, missing, ".specify/presets/.registry is not readable JSON", AddPreset);
         }
 
-        return IsEnabled(preset)
+        return LockflightPresetRegistry.IsEnabled(preset)
             ? new(PresetCheck, CheckStatus.Pass, $"installed (version {preset!["version"]?.ToString() ?? "unknown"})", null)
             : new(PresetCheck, missing, "the Lockflight Spec Kit preset is not installed or is disabled; tasks written from Spec Kit's stock template fail 'phase check tasks'", AddPreset);
     }
-
-    /// <summary>The Lockflight entry in Spec Kit's preset registry (<c>.specify/presets/.registry</c>); null when there is none.</summary>
-    /// <exception cref="JsonException">The registry is not JSON.</exception>
-    private static JsonNode? RegisteredPreset(string root)
-    {
-        string registryPath = Path.Combine(root, ".specify", "presets", ".registry");
-        return File.Exists(registryPath) ? JsonNode.Parse(File.ReadAllText(registryPath))?["presets"]?[PresetId] : null;
-    }
-
-    private static bool IsEnabled(JsonNode? preset) => preset is JsonObject && preset["enabled"]?.GetValueKind() != JsonValueKind.False;
 
     /// <summary>
     /// Every test project (or a Directory.Build file above it) must reference the configured collector's package — the MTP extension

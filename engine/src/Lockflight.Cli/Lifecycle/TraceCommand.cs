@@ -14,15 +14,13 @@ namespace Lockflight.Cli.Lifecycle;
 /// <see cref="TraceMatrix"/>). Listing needs current assemblies, so trace builds (incrementally) and lists the tests; it runs none.
 /// Prints a Markdown matrix for the PR body.
 /// </summary>
-internal sealed class TraceCommand(CliContext context)
+internal sealed class TraceCommand(CliContext context) : ICommand
 {
     private const int MaxRequirementsPerTest = 3;
 
-    private static readonly string[] ValueOptions = ["--feature"];
-
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("trace", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options
             || await ManifestRequirement.LoadAsync(context, context.WorkingDirectory, cancellationToken) is not Manifest manifest)
         {
             return ExitCode.Config;
