@@ -19,7 +19,10 @@ independent.
    not committed, commit them (or ask the user to; `git stash -u` sets aside what should not be in the change) and run it
    again. If it says the reviewer did not see the whole
    change, the diff is too large for one review: tell the user, and offer to split the change into smaller pull requests,
-   each reviewed on its own. Its findings still count, but no run of the whole change can be the review of record.
+   each reviewed on its own, or to have them raise `review.maxDiffCharacters` in `lockflight.yaml` (a protected file: the
+   user edits it; at most 400,000, and a larger diff may need a higher `review.maxUsd`). Its findings still count, but no run
+   of the whole change at the current limit can be the review of record. Generated files (lock files, EF Core snapshots and
+   migration designers) are listed rather than shown and do not count toward the limit.
 3. Read the findings. Each has an id, an outcome and, for blocker/major, a state:
    - **confirmed** — the reproduction fails on the current code: the defect is real. Fix it in production code, add the
      reproduction as a regression test in the next red/green cycle, and re-run the review.

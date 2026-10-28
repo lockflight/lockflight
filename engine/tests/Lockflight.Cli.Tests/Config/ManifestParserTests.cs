@@ -52,6 +52,38 @@ public sealed class ManifestParserTests
         Assert.Equal(new ReviewSettings("opus", ReviewSettings.DefaultBudgetUsd) { FromManifest = true }, result.Manifest!.Review);
     }
 
+    [Fact]
+    public void TheDefaultDiffLimitIsOneHundredTwentyThousandCharacters() =>
+        Assert.Equal(120_000, Parse("version: 1\n").Manifest!.Review.MaxDiffCharacters);
+
+    [Theory]
+    [InlineData("10000", 10_000)]
+    [InlineData("250000", 250_000)]
+    [InlineData("400000", 400_000)]
+    public void TheReviewSectionSetsTheDiffLimitUpToTheEngineCeiling(string value, int expected)
+    {
+        ManifestLoadResult result = Parse($"version: 1\nreview:\n  maxDiffCharacters: {value}\n");
+
+        Assert.Equal(ManifestLoadStatus.Loaded, result.Status);
+        Assert.Equal(ReviewSettings.Default with { FromManifest = true, MaxDiffCharacters = expected }, result.Manifest!.Review);
+    }
+
+    [Theory]
+    [InlineData("400001")]
+    [InlineData("1000000")]
+    [InlineData("9999")]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("12.5")]
+    [InlineData("lots")]
+    public void ADiffLimitOutsideTheEngineBoundsIsAnErrorNamingThem(string value)
+    {
+        ManifestLoadResult result = Parse($"version: 1\nreview:\n  maxDiffCharacters: {value}\n");
+
+        Assert.Equal(ManifestLoadStatus.Invalid, result.Status);
+        Assert.Contains("'review.maxDiffCharacters' must be a whole number of characters from 10000 to 400000", result.Error!.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("review:\n  maxUsd: free\n", "'review.maxUsd'")]
     [InlineData("review:\n  maxUsd: 0\n", "'review.maxUsd'")]

@@ -16,7 +16,7 @@ namespace Lockflight.Cli.Review;
 /// the spec and the diff, runs a read-only <c>claude -p</c> with a JSON schema, confirms blocker/major findings by running their
 /// reproductions (and re-runs those of findings still open from earlier runs; a new finding's reproduction that does not compile is
 /// sent back to the reviewer once, within the run's budget), and stores the run. A run counts as the review of record only when
-/// the reviewer was shown the whole diff, with the manifest's model and budget, against a base whose commit is the merge base of
+/// the reviewer was shown the whole diff (at most <c>review.maxDiffCharacters</c>; generated files are listed, not shown), with the manifest's model, budget and diff limit, against a base whose commit is the merge base of
 /// HEAD and the target branch (<c>review.target</c>, else <c>origin/HEAD</c>'s branch, else <c>main</c>; also the default base); others are recorded and say why not.
 /// A new confirmed finding with a fix is checked against the change's own tests (<see cref="FixChecks"/>) and contested when its fix
 /// contradicts them. Exit 1 when an open blocker/major finding is confirmed, 5 (NOT-EARNED) when one is unverified or contested or
@@ -24,7 +24,6 @@ namespace Lockflight.Cli.Review;
 /// </summary>
 internal sealed class ReviewCommand(CliContext context)
 {
-    private const int MaxDiffCharacters = 120_000;
     private const int MaxGuidanceCharacters = 8_000;
     private const string GuidanceFile = "CLAUDE.md";
     private const string DefaultTarget = "main";
@@ -90,7 +89,7 @@ internal sealed class ReviewCommand(CliContext context)
             baseRef, await Git.CommitOfAsync(manifest.Root, baseRef, cancellationToken), target, await Git.MergeBaseAsync(manifest.Root, target, cancellationToken));
         ReviewedTree tree = await ReviewedTrees.FindAsync(manifest.Root, feature.SpecPath, cancellationToken);
         return await ReviewAsync(
-            manifest, feature, claude, reviewBase, ReviewDiff.Fit(diff, MaxDiffCharacters), tree, options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
+            manifest, feature, claude, reviewBase, ReviewDiff.Fit(diff, manifest.Review.MaxDiffCharacters, manifest.Root), tree, options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
     }
 
     /// <summary>Asks the reviewer, confirms its findings and the open ones, stores the run and turns the outcome into the exit code.</summary>
@@ -116,6 +115,12 @@ internal sealed class ReviewCommand(CliContext context)
         if (!tree.IsClean)
         {
             await context.Output.WriteLineAsync($"Warning: this run will not be the review of record: {ReviewOfRecord.NotCommitted(tree)}.");
+        }
+
+        if (diff.Generated.Count > 0)
+        {
+            await context.Output.WriteLineAsync(
+                $"Generated files {GeneratedFiles.Status} (the reviewer gets their path, size and hash): {string.Join(", ", diff.Generated.Select(file => file.Path))}.");
         }
 
         string requirements = await File.ReadAllTextAsync(feature.SpecPath, cancellationToken);
@@ -178,7 +183,10 @@ internal sealed class ReviewCommand(CliContext context)
             manifest.Review,
             claudeVersion,
             (long)(context.Time.GetUtcNow() - started).TotalMilliseconds,
-            ReviewOfRecord.Reasons(manifest.Review, model, budget, reviewBase, diff, tree));
+            ReviewOfRecord.Reasons(manifest.Review, model, budget, reviewBase, diff, tree))
+        {
+            Generated = diff.Generated,
+        };
         string evidence = ReviewEvidence.Save(feature.RecordDirectory, run, outcome);
         await PrintAsync(run, outcome, manifest.Root, evidence);
         return await RecordAsync(manifest, run, outcome, cancellationToken);

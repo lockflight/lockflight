@@ -5,7 +5,7 @@ namespace Lockflight.Cli.Review;
 /// <summary>
 /// What one review run is bound to besides the reviewer's answer: the feature, the base, HEAD, hashes of the diff and of the prompt,
 /// the model and budget it ran with, the manifest's review settings, the Claude Code version, the wall time of the whole run, and why
-/// it is not the review of record (empty when it is).
+/// it is not the review of record (empty when it is), and the generated files the reviewer was given as a listing, not a diff.
 /// </summary>
 internal sealed record ReviewRun(
     string Id,
@@ -23,4 +23,7 @@ internal sealed record ReviewRun(
     IReadOnlyList<string> NotOfRecord)
 {
     public bool OfRecord => NotOfRecord.Count == 0;
+
+    /// <summary>The generated files listed instead of shown (<see cref="GeneratedFiles"/>): not reviewed.</summary>
+    public IReadOnlyList<GeneratedFile> Generated { get; init; } = [];
 }

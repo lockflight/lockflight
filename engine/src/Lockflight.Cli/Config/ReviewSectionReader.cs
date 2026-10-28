@@ -4,14 +4,14 @@ using YamlDotNet.RepresentationModel;
 
 namespace Lockflight.Cli.Config;
 
-/// <summary>Reads the <c>review</c> section of <c>lockflight.yaml</c>: model, budget and target branch.</summary>
+/// <summary>Reads the <c>review</c> section of <c>lockflight.yaml</c>: model, budget, target branch and diff limit.</summary>
 internal sealed partial class ReviewSectionReader(ManifestErrors errors)
 {
     public ManifestError? Read(YamlNode valueNode, ref ReviewSettings review)
     {
         if (valueNode is not YamlMappingNode section)
         {
-            return errors.At(valueNode.Start, "'review' must be a mapping (known keys: model, maxUsd, target)");
+            return errors.At(valueNode.Start, "'review' must be a mapping (known keys: model, maxUsd, target, maxDiffCharacters)");
         }
 
         ReviewSettings settings = review with { FromManifest = true };
@@ -39,10 +39,19 @@ internal sealed partial class ReviewSectionReader(ManifestErrors errors)
                     break;
                 case "target":
                     return errors.At(value.Start, "'review.target' must be a branch name such as main or origin/main");
+                case "maxDiffCharacters" when int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out int limit)
+                    && limit is >= ReviewSettings.MinDiffCharacters and <= ReviewSettings.DiffCharactersCeiling:
+                    settings = settings with { MaxDiffCharacters = limit };
+                    break;
+                case "maxDiffCharacters":
+                    return errors.At(
+                        value.Start,
+                        $"'review.maxDiffCharacters' must be a whole number of characters from {ReviewSettings.MinDiffCharacters} to {ReviewSettings.DiffCharactersCeiling} "
+                        + $"(the engine's ceiling; default {ReviewSettings.DefaultMaxDiffCharacters}), such as 200000; split a larger change into smaller pull requests");
                 case "maxUsd":
                     return errors.At(value.Start, $"'review.maxUsd' must be an amount in US dollars above 0 and at most {ReviewSettings.MaxBudgetUsd}, such as 3.00");
                 default:
-                    return errors.At(keyNode.Start, $"unknown key 'review.{key}' (known: model, maxUsd, target)");
+                    return errors.At(keyNode.Start, $"unknown key 'review.{key}' (known: model, maxUsd, target, maxDiffCharacters)");
             }
         }
 
