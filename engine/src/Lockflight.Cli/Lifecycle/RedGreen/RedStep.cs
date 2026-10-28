@@ -46,6 +46,7 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         RedSnapshot snapshot = record.OpenCycle is null
             ? await RedSnapshots.TakeAsync(session.Manifest.Root, workspace.Directories, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), cancellationToken)
             : RedSnapshot.Skipped("a re-check keeps the cycle's own snapshot");
+        IReadOnlyDictionary<string, string> testFilesAtStart = TestFileHashes.Compute(session.Manifest.Root, record.TestProjects);
         if (await workspace.BuildAsync(cancellationToken) is string buildOutput)
         {
             await session.Output.WriteLineAsync($"COMPILE_RED the tests do not compile; declare the members they use as stubs ('throw new NotImplementedException();').\n{RedGreenSession.Tail(buildOutput)}");
@@ -73,7 +74,7 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
             return await session.BrokenAsync($"the test runner produced no report for {workspace.FailedApp}", cancellationToken);
         }
 
-        return await JudgeAsync(record, inventory, fresh, results, snapshot, deadline, cancellationToken);
+        return await JudgeAsync(record, inventory, fresh, results, snapshot, testFilesAtStart, deadline, cancellationToken);
     }
 
     /// <summary>
@@ -102,16 +103,17 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         }
 
         HashSet<string> amendedKeys = [.. open.OpenAmends.Select(amend => amend.TestKey)];
+        RecheckedFiles files = new(session.Manifest.Root, open);
         if (open.Snapshot is string snapshot)
         {
-            return await RecheckOnSnapshotAsync(record, open, snapshot, amendedKeys, deadline, cancellationToken);
+            return await RecheckOnSnapshotAsync(record, open, snapshot, amendedKeys, files, deadline, cancellationToken);
         }
 
         await session.Output.WriteLineAsync(
             $"Note: cycle {open.Number} has no red-time snapshot, so the amended tests are re-checked on the current tree: an implementation written since the red makes them pass (GREEN_BEFORE). "
             + $"If it does, a person can move the implementation aside for this red, or discard the cycle with '{EngineCommand.Linked} redgreen reset'.");
         return await JudgeRecheckAsync(
-            record, open, session.Workspace, session.Manifest.Root, inventory, [.. inventory.Where(test => amendedKeys.Contains(test.Key))], deadline, cancellationToken);
+            record, open, session.Workspace, session.Manifest.Root, inventory, [.. inventory.Where(test => amendedKeys.Contains(test.Key))], files, deadline, cancellationToken);
     }
 
     /// <summary>
@@ -120,7 +122,13 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
     /// removed.
     /// </summary>
     private async Task<ExitCode> RecheckOnSnapshotAsync(
-        RedGreenRecord record, RedGreenCycle open, string snapshot, HashSet<string> amendedKeys, DateTimeOffset deadline, CancellationToken cancellationToken)
+        RedGreenRecord record,
+        RedGreenCycle open,
+        string snapshot,
+        HashSet<string> amendedKeys,
+        RecheckedFiles files,
+        DateTimeOffset deadline,
+        CancellationToken cancellationToken)
     {
         string root = session.Manifest.Root;
         TimeSpan timeLimit = TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds);
@@ -165,7 +173,7 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
                     cancellationToken);
             }
 
-            return await JudgeRecheckAsync(record, open, workspace, worktree.Root, inventory, amended, deadline, cancellationToken);
+            return await JudgeRecheckAsync(record, open, workspace, worktree.Root, inventory, amended, files, deadline, cancellationToken);
         }
         finally
         {
@@ -215,6 +223,7 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         string root,
         IReadOnlyList<TestCase> inventory,
         TestCase[] amended,
+        RecheckedFiles files,
         DateTimeOffset deadline,
         CancellationToken cancellationToken)
     {
@@ -247,15 +256,31 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
             return ExitCode.Fail;
         }
 
+        if (files.ChangedSince() is { Count: > 0 } changedMeanwhile)
+        {
+            return await session.FailAsync(
+                $"{string.Join(", ", changedMeanwhile)} changed while the amended tests were re-checked; run '{EngineCommand.Linked} redgreen red' again. The amend stays open",
+                cancellationToken);
+        }
+
         Dictionary<string, RedGreenTest> replaced = classified.ToDictionary(test => test.Key, StringComparer.Ordinal);
         DateTimeOffset now = session.Context.Time.GetUtcNow();
+        List<RedGreenAmend> amends = [];
+        foreach (RedGreenAmend amend in open.Amends)
+        {
+            amends.Add(amend.IsOpen ? amend with { RecheckedAt = now, Diff = await DiffSinceRedAsync(open, amend, cancellationToken) } : amend);
+        }
+
         RedGreenCycle rechecked = open with
         {
             Tests = [.. open.Tests.Select(test => replaced.GetValueOrDefault(test.Key) ?? test)],
-            Amends = [.. open.Amends.Select(amend => amend.IsOpen ? amend with { RecheckedAt = now } : amend)],
+            Amends = amends,
+            TestFiles = files.Rehash(open.TestFiles),
         };
         session.Save(record with { Cycles = [.. record.Cycles.Select(cycle => cycle.Number == open.Number ? rechecked : cycle)] });
-        await session.RecordAsync(LedgerSignatures.RedAmendRechecked, $"{session.Feature.Id}: cycle {open.Number}, {classified.Count} amended tests", cancellationToken);
+        string diffs = string.Join("; ", amends.Where(amend => amend.RecheckedAt == now).Select(amend =>
+            $"{TraceMatrix.ShortName(amend.MethodFilter)}: {(amend.Diff is AmendDiff diff ? $"{diff.Summary} (sha256 {diff.Sha256})" : (open.Snapshot is null ? "no diff (no red-time snapshot)" : "no diff (git could not compare it with the snapshot)"))}"));
+        await session.RecordAsync(LedgerSignatures.RedAmendRechecked, $"{session.Feature.Id}: cycle {open.Number}, {classified.Count} amended tests", diffs, cancellationToken);
         await session.Output.WriteLineAsync(
             $"Red accepted for the amended tests: cycle {open.Number} stays red and its test files are locked again until '{EngineCommand.Linked} redgreen green' passes.");
         return ExitCode.Pass;
@@ -300,12 +325,20 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         return false;
     }
 
+    /// <summary>What the amend's files changed since the red-time snapshot; null without a snapshot, or when git cannot tell.</summary>
+    private async Task<AmendDiff?> DiffSinceRedAsync(RedGreenCycle open, RedGreenAmend amend, CancellationToken cancellationToken) =>
+        open.Snapshot is string snapshot
+            && await RedSnapshots.DiffAsync(session.Manifest.Root, snapshot, amend.Files, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), cancellationToken) is string diff
+            ? AmendDiff.From(diff, amend.Files)
+            : null;
+
     private async Task<ExitCode> JudgeAsync(
         RedGreenRecord record,
         IReadOnlyList<TestCase> inventory,
         TestCase[] fresh,
         IReadOnlyList<ExecutedTest> results,
         RedSnapshot snapshot,
+        IReadOnlyDictionary<string, string> testFilesAtStart,
         DateTimeOffset deadline,
         CancellationToken cancellationToken)
     {
@@ -341,7 +374,7 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
             return ExitCode.Fail;
         }
 
-        return await AcceptAsync(record, classified, snapshot, cancellationToken);
+        return await AcceptAsync(record, classified, snapshot, testFilesAtStart, cancellationToken);
     }
 
     private async Task WarnAssertionFreeAsync(List<RedGreenTest> classified)
@@ -436,20 +469,31 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         return new NewTestScan(calls, assertionFree);
     }
 
-    private async Task<ExitCode> AcceptAsync(RedGreenRecord record, List<RedGreenTest> classified, RedSnapshot taken, CancellationToken cancellationToken)
+    private async Task<ExitCode> AcceptAsync(
+        RedGreenRecord record, List<RedGreenTest> classified, RedSnapshot taken, IReadOnlyDictionary<string, string> testFilesAtStart, CancellationToken cancellationToken)
     {
+        // The files this red judged are the ones it locks: a test file changed while it ran was not judged.
+        if (TestFileHashes.Compare(testFilesAtStart, TestFileHashes.Compute(session.Manifest.Root, record.TestProjects)) is { Any: true } changedMeanwhile)
+        {
+            return await session.FailAsync(
+                $"{changedMeanwhile.Describe()} changed while the red ran, so this red did not judge that content; run '{EngineCommand.Linked} redgreen red' again",
+                cancellationToken);
+        }
+
         int number = record.Cycles.Count + 1;
         RedSnapshot snapshot = taken.Commit is string commit
             && await RedSnapshots.KeepAsync(session.Manifest.Root, session.Feature.Id, number, commit, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), cancellationToken) is null
             ? RedSnapshot.Skipped($"git could not keep the snapshot under {RedSnapshots.RefFor(session.Feature.Id, number, commit)}")
             : taken;
-        RedGreenCycle cycle = new(number, session.Context.Time.GetUtcNow(), GreenAt: null, classified) { Snapshot = snapshot.Commit };
-        RedGreenRecord accepted = record with
+
+        // Test projects added since the start are locked too.
+        string[] testProjects = [.. record.TestProjects.Union(session.RelativeProjects(), StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+        RedGreenCycle cycle = new(number, session.Context.Time.GetUtcNow(), GreenAt: null, classified)
         {
-            // Test projects added since the start are locked too.
-            TestProjects = [.. record.TestProjects.Union(session.RelativeProjects(), StringComparer.Ordinal).Order(StringComparer.Ordinal)],
-            Cycles = [.. record.Cycles, cycle],
+            Snapshot = snapshot.Commit,
+            TestFiles = TestFileHashes.Compute(session.Manifest.Root, testProjects),
         };
+        RedGreenRecord accepted = record with { TestProjects = testProjects, Cycles = [.. record.Cycles, cycle] };
         session.Save(accepted);
         await session.RecordAsync(LedgerSignatures.RedAccepted, $"{session.Feature.Id}: cycle {cycle.Number}, {classified.Count} tests", cancellationToken);
         await session.Output.WriteLineAsync($"Red accepted: cycle {cycle.Number} with {classified.Count} tests. The test projects ({string.Join(", ", accepted.TestProjects)}) are locked until '{EngineCommand.Linked} redgreen green' passes.");

@@ -78,7 +78,8 @@ internal sealed class ReviewStatusCommand(CliContext context)
             await output.WriteLineAsync(line);
         }
 
-        foreach (string line in ReviewSummary.Amends(AmendsOf(feature)))
+        RedGreenRecord? redGreen = RedGreenRecordOf(feature);
+        foreach (string line in redGreen is null ? [] : ReviewSummary.Amends(RedGreenAmends.Lines(redGreen), RedGreenAmends.Diffs(redGreen)))
         {
             await output.WriteLineAsync(line);
         }
@@ -86,16 +87,16 @@ internal sealed class ReviewStatusCommand(CliContext context)
         return ExitCode.Pass;
     }
 
-    /// <summary>The amends in the feature's red/green record; none when there is no record or it cannot be read (red/green says so itself).</summary>
-    private static IReadOnlyList<string> AmendsOf(Feature feature)
+    /// <summary>The feature's red/green record, for its amends; null when there is none or it cannot be read (red/green says so itself).</summary>
+    private static RedGreenRecord? RedGreenRecordOf(Feature feature)
     {
         try
         {
-            return RedGreenRecord.Load(RedGreenRecord.PathFor(feature)) is RedGreenRecord record ? RedGreenAmends.Lines(record) : [];
+            return RedGreenRecord.Load(RedGreenRecord.PathFor(feature));
         }
         catch (Exception exception) when (exception is IOException or JsonException or FormatException or InvalidOperationException)
         {
-            return [];
+            return null;
         }
     }
 }

@@ -9,6 +9,8 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 internal static class RedGreenAmends
 {
     private const int MaxTestsListed = 5;
+    private const int ShortHashLength = 12;
+    private const int MinFenceLength = 3;
 
     /// <summary>
     /// Resolves <paramref name="test"/> (<c>Namespace.Class.Method</c>, <c>Class.Method</c>, the method name or the test key) among the
@@ -84,7 +86,24 @@ internal static class RedGreenAmends
     public static IReadOnlyList<string> Lines(RedGreenRecord record) =>
         [.. record.Cycles.SelectMany(cycle => cycle.Amends.Select(amend =>
             $"{TraceMatrix.ShortName(amend.MethodFilter)} in cycle {cycle.Number}, by {amend.By} on {Date(amend.At)}: {amend.Reason} "
-            + (amend.RecheckedAt is DateTimeOffset rechecked ? $"(red again on {Date(rechecked)})" : "(waiting for its red)")))];
+            + (amend.RecheckedAt is DateTimeOffset rechecked ? $"(red again on {Date(rechecked)})" : "(waiting for its red)")
+            + (amend.Diff is AmendDiff diff ? $"; diff since the red: {diff.Summary} (sha256 {diff.Sha256[..Math.Min(ShortHashLength, diff.Sha256.Length)]})" : string.Empty)))];
+
+    /// <summary>Each recorded amend diff as a collapsed Markdown block, for the pull request summary; empty when there are none.</summary>
+    public static IReadOnlyList<string> Diffs(RedGreenRecord record)
+    {
+        List<string> lines = [];
+        foreach (RedGreenAmend amend in record.Amends.Where(amend => amend.Diff is not null))
+        {
+            string text = amend.Diff!.Text.TrimEnd('\n');
+            string fence = new('`', Math.Max(MinFenceLength, LongestBacktickRun(text) + 1));
+            lines.AddRange([string.Empty, "<details>", $"<summary>Diff of {TraceMatrix.ShortName(amend.MethodFilter)} since its red</summary>", string.Empty, $"{fence}diff"]);
+            lines.AddRange(text.Split('\n'));
+            lines.AddRange([fence, string.Empty, "</details>"]);
+        }
+
+        return lines;
+    }
 
     private static bool Names(RedGreenTest candidate, string test) =>
         candidate.Key == test
@@ -102,6 +121,19 @@ internal static class RedGreenAmends
         string[] all = [.. names];
         string listed = string.Join(", ", all.Take(MaxTestsListed));
         return all.Length > MaxTestsListed ? $"{listed} and {all.Length - MaxTestsListed} more" : listed;
+    }
+
+    private static int LongestBacktickRun(string text)
+    {
+        int longest = 0;
+        int current = 0;
+        foreach (char character in text)
+        {
+            current = character == '`' ? current + 1 : 0;
+            longest = Math.Max(longest, current);
+        }
+
+        return longest;
     }
 
     private static string Date(DateTimeOffset at) => at.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);

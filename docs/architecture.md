@@ -135,7 +135,8 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
   without calling production code, already passes, is skipped or is flaky is rejected. While red, the test projects are locked. An accepted red keeps a local snapshot of the
   tree as a git commit object (`refs/lockflight/red/<feature>/<cycle>/<commit>`); a person's amend of a test is re-checked on that
   snapshot in a temporary worktree, so the amended test must still fail on the red-time code. `redgreen green` accepts when
-  those tests pass and nothing was deleted, skipped or broken elsewhere.
+  those tests pass, nothing was deleted, skipped or broken elsewhere, and every locked test file still has the hash its red (or
+  an amend's red) recorded.
 - **Trace** builds the matrix from each requirement (`[Trait("Requirement", "FR-001")]`) to the tests that went red, then
   green, for it. A requirement whose last test is gone fails the trace.
 - **Review of record.** `lockflight review` builds the reviewer's prompt itself, from the spec and the diff, and runs an
@@ -179,7 +180,8 @@ types add fields, and readers ignore fields they do not know:
 | `session-command.answered` | none: an in-session human command answered without recording anything (a usage hint, a wrong, expired or used code, changed content). It is the person's own typing, so neither the status line nor `ledger retro` counts it; a refusal for an unattended session or a command from another source stays `hook.blocked` |
 
 No line names a person, with one exception: who approved a phase is kept in the approval record, not in the ledger, but
-`redgreen:amended` keeps in its detail who amended a test and why, as the red/green record does.
+`redgreen:amended` keeps in its detail who amended a test and why, as the red/green record does; `redgreen:red:amend-rechecked`
+keeps the summary and SHA-256 of each amend's diff since the red.
 
 ## Where the trust comes from
 

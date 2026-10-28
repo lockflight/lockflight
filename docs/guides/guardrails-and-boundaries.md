@@ -42,6 +42,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | Stop gate at the end of a turn | G | the agent's own session; Claude Code caps continuations |
 | Test lock during a red cycle | G | applied by the guard (above); see the shell commands it recognises below. A person's `redgreen amend` makes the one file that declares the amended test writable until the next red re-checks it; everything else in that file is writable too, so the record, trace and pull request summary name each amend for review |
 | Amend re-check on the red-time snapshot | G | The next red after an amend builds and runs the amended test on the tree the red was accepted on, plus the amended file, so an implementation written since cannot make it pass. It runs on your machine and builds test code the agent wrote, and the snapshot ref is local, so it prevents accidents and makes a weakened test harder to slip through; it is not a boundary. It cannot tell a right expected value from a wrong one: the pull request lists every amend for the person who merges |
+| Test file hashes checked at green and review | G | The red records a hash of every file in the locked test projects, and an amend's red records the amended files again. `redgreen green` and `lockflight review` refuse while a file differs without a recorded amend, which catches an edit the guard did not see. The hashes live in `redgreen.json`, which only the guard protects, and the check runs on your machine, so it makes a bypass visible; it is not a boundary |
 | Red/green evidence | G | runtime evidence from commands the agent runs; it does not prove the order of history |
 | Trace | G | built from that evidence |
 | Review of record (`lockflight review`) | G | independent prompt, but the agent may skip running it |
@@ -334,8 +335,9 @@ plants a violation in front of each control and reports it as caught or missed, 
 Each guard canary has a harmless twin (an ordinary write, an ordinary redirect) that must be allowed, and the test gate and red
 canaries have one that must pass; when a twin is refused too the canary is **BROKEN**, because a control that refuses everything
 proves nothing. Everything happens in a temporary scratch project that is deleted afterwards, never in your project.
-`--canaries=full` also generates a small .NET project and runs the real test gate, a real red, and an amend whose amended test
-passes on the red-time snapshot on it (it needs the .NET SDK and the xUnit packages). CI runs `--canaries=full` with the published engine on Linux, Windows and macOS.
+`--canaries=full` also generates a small .NET project and runs the real test gate, a real red, an amend whose amended test
+passes on the red-time snapshot, and a green after a test file was edited behind the guard on it (it needs the .NET SDK and the
+xUnit packages). CI runs `--canaries=full` with the published engine on Linux, Windows and macOS.
 
 The canaries check the engine's decisions, not Claude Code's: whether Claude Code still calls the hooks is what the
 [real-hook canary](../../tests/README.md) checks. A caught canary shows that a control works on the planted case, not that

@@ -12,7 +12,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a shell command after `cd`](#a-shell-command-is-blocked-after-a-cd) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --canaries` reports MISSED or BROKEN](#doctor---canaries-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
-| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) |
+| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) |
 
 ## Every tool call is blocked: "engine not installed in this project"
 
@@ -228,6 +228,15 @@ baselines from the base branch, so a baseline committed in the feature's pull re
 
 Approvals bind `spec.md`, `plan.md` and `tasks.md` by hash. After an edit, red/green refuses until you approve again in a
 separate terminal window (`.lockflight/bin/lockflight approve spec` or `approve tasks`). `trace` prints a warning line instead of refusing.
+
+## `redgreen green` or `review` says a test file "changed after red cycle N was accepted, without a recorded amend"
+
+The red recorded a hash of every file in the locked test projects. A file that differs now was changed, added or deleted
+without an amend: by another editor, a script, or a write the guard did not recognise. If the change is wanted, a person amends
+the test it belongs to (`/lockflight:amend` in the session, or `.lockflight/bin/lockflight redgreen amend <Class.Method> --reason
+"…"` in a separate terminal window) and the agent runs `redgreen red`, which re-checks the test and records the new content. A
+file that declares no test of the cycle (a helper, a data file) cannot be amended: restore it as it was at red (the red-time
+snapshot under `refs/lockflight/red/` holds it), or discard the cycle with `redgreen reset`.
 
 ## A red after an amend says "the amended tests do not build against the code as it was at red"
 

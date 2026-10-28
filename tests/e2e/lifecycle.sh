@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Lifecycle end to end on a copy of samples/dotnet-single: spec → approve → tasks → approve → red/green cycles → trace, with the
 # negative controls (agent approval refused, cheating red rejected, test edits blocked during red, a person's amend unlocking one
-# test file until its red is re-checked, an amend after the implementation re-checked on the red-time snapshot, stubbed green
-# rejected, a test switched off with Explicit refused, a test renamed after green dropped from the trace).
+# test file until its red is re-checked, an amend after the implementation re-checked on the red-time snapshot, a test file
+# edited behind the guard refused at green, stubbed green rejected, a test switched off with Explicit refused, a test renamed
+# after green dropped from the trace).
 # Plays the agent (CLAUDECODE=1) and the human (CLAUDECODE unset). Usage: ENGINE=<lockflight binary> lifecycle.sh <workdir>
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -179,6 +180,10 @@ expect 0 "production edits are allowed during red" -- hook src/Shop.Api/PriceCal
 expect 2 "git checkout of a locked test file is blocked" "red cycle 1" -- bash_hook "git checkout HEAD -- tests/Shop.Tests/ShippingTests.cs"
 expect 2 "a write after cd into the test project is blocked" "red cycle 1" -- bash_hook "cd tests/Shop.Tests && echo x > ShippingTests.cs"
 expect 2 "dotnet format over the locked tests is blocked" "red cycle 1" -- bash_hook "dotnet format"
+# An edit the guard did not see (another editor, a script) is caught at green by the test files' red-time hashes.
+printf '\n// edited behind the guard\n' >> tests/Shop.Tests/PriceCalculatorTests.cs
+expect 1 "a test file edited after red without an amend is refused at green" "tests/Shop.Tests/PriceCalculatorTests.cs (changed)" -- "$E" redgreen green
+git checkout -q -- tests/Shop.Tests/PriceCalculatorTests.cs
 # A test whose expectation is wrong changes only with a person's amend, which unlocks the file that declares it until a red
 # re-checks the test.
 expect 2 "the agent cannot amend a test" "records a human decision" -- "$E" redgreen amend EveryStartedKilogramCostsTwoFifty --reason "wrong weight"
@@ -231,8 +236,10 @@ expect 0 "a person amends the wrong test after the implementation" -- \
   human redgreen amend FreeShippingStartsAtFifty --reason "free shipping starts at 50.00, the spec's boundary"
 perl -pi -e 's/ShippingCost\(3m, 49m\)/ShippingCost(3m, 50m)/' tests/Shop.Tests/FreeShippingTests.cs
 expect 0 "the amended test is re-checked on the red-time snapshot" "RED_ASSERT   Shop.Tests.FreeShippingTests.FreeShippingStartsAtFifty (amended)" -- "$E" redgreen red
+expect 0 "status shows the amend's diff" "+1 -1 lines in tests/Shop.Tests/FreeShippingTests.cs" -- "$E" redgreen status
+expect 0 "the pull request summary shows the amend's diff" "+    public void FreeShippingStartsAtFifty() => Assert.Equal(0m, new PriceCalculator().ShippingCost(3m, 50m));" -- "$E" review status
 make_first_explicit
-expect 1 "a green is refused while an earlier test is Explicit" "tests newly marked Explicit" -- "$E" redgreen green
+expect 1 "a green is refused after an earlier test was marked Explicit behind the guard" "tests/Shop.Tests/ShippingTests.cs (changed) changed after red cycle 2" -- "$E" redgreen green
 write_shipping_tests
 expect 0 "green closes cycle 2" -- "$E" redgreen green
 

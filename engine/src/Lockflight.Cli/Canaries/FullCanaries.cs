@@ -8,7 +8,7 @@ namespace Lockflight.Cli.Canaries;
 /// The canaries that build and run a generated project (<see cref="CanaryProject"/>): the real test gate on a failing test, on every
 /// test skipped and on no test, after its harmless twin (a passing test) passed; then a real red whose test fails by
 /// <c>Assert.Fail</c>, after a person's approvals and a red/green start; then an amend whose amended test passes on the red-time
-/// snapshot. Tens of seconds, mostly the builds.
+/// snapshot, and a test file edited after red without an amend at green. Tens of seconds, mostly the builds.
 /// </summary>
 internal static class FullCanaries
 {
@@ -69,10 +69,41 @@ internal static class FullCanaries
         reports.Add(red);
         if (red.Result != CanaryResult.Broken)
         {
-            reports.Add(await AmendAsync(scratch, project, cancellationToken));
+            CanaryReport amend = await AmendAsync(scratch, project, cancellationToken);
+            reports.Add(amend);
+            if (amend.Result != CanaryResult.Broken)
+            {
+                reports.Add(await EditAfterRedAsync(scratch, project, cancellationToken));
+            }
         }
 
         return reports;
+    }
+
+    /// <summary>
+    /// In the cycle the amend left red (its implementation written), a test file edited behind the guard, without an amend, must be
+    /// refused at green; its harmless twin, the same green once the file is back as its red re-checked it, must pass.
+    /// </summary>
+    private static async Task<CanaryReport> EditAfterRedAsync(CanaryScratch scratch, CanaryProject project, CancellationToken cancellationToken)
+    {
+        const string name = "full: a test file edited after red without an amend is refused at green";
+        string tests = scratch.PathOf(CanaryProject.TestsFile);
+        string checkedContent = await File.ReadAllTextAsync(tests, cancellationToken);
+        await File.AppendAllTextAsync(tests, "// planted: edited after red, without an amend\n", cancellationToken);
+        CanaryRun planted = await scratch.RunAsAgentAsync(["redgreen", "green"], string.Empty, cancellationToken);
+        await File.WriteAllTextAsync(tests, checkedContent, cancellationToken);
+        CanaryRun twin = await scratch.RunAsAgentAsync(["redgreen", "green"], string.Empty, cancellationToken);
+        if (twin.ExitCode != ExitCode.Pass)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, $"the green with the test file as its red checked it was refused too, so the refusal proves nothing: {twin.FirstLine}");
+        }
+
+        return planted.ExitCode switch
+        {
+            ExitCode.Fail when planted.Output.Contains("changed after red", StringComparison.Ordinal) => new CanaryReport(name, CanaryResult.Caught, "refused: the file changed after red"),
+            ExitCode.Pass => new CanaryReport(name, CanaryResult.Missed, "the green was accepted"),
+            _ => new CanaryReport(name, CanaryResult.Broken, $"'redgreen green' exited {(int)planted.ExitCode}: {planted.FirstLine}"),
+        };
     }
 
     /// <summary>

@@ -85,6 +85,41 @@ internal static class RedSnapshots
         return kept.ExitCode == 0 ? reference : null;
     }
 
+    /// <summary>
+    /// The unified diff of <paramref name="files"/> (relative to <paramref name="root"/>, '/'-separated) from the snapshot to their
+    /// current content, with paths relative to the root; null when git or the file system fails. The current content is staged into a
+    /// private index read from the snapshot, so untracked files compare too and the person's index stays as it is.
+    /// </summary>
+    public static async Task<string?> DiffAsync(string root, string commit, IReadOnlyList<string> files, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        string index = Path.Combine(Path.GetTempPath(), $"lockflight-index-{Guid.CreateVersion7()}");
+        try
+        {
+            Dictionary<string, string> privateIndex = new(StringComparer.Ordinal) { [SnapshotGit.IndexVariable] = index };
+            if ((await SnapshotGit.RunAsync(["read-tree", commit], root, timeLimit, privateIndex, cancellationToken)).ExitCode != 0
+                || (await SnapshotGit.RunAsync(["add", "-A", "--force", "--", .. files], root, timeLimit, privateIndex, cancellationToken)).ExitCode != 0)
+            {
+                return null;
+            }
+
+            ProcessResult diff = await SnapshotGit.RunAsync(
+                ["-c", "core.quotePath=false", "diff", "--cached", "--no-color", "--no-ext-diff", "--no-renames", "--relative", "--src-prefix=a/", "--dst-prefix=b/", commit, "--", .. files],
+                root,
+                timeLimit,
+                privateIndex,
+                cancellationToken);
+            return diff.ExitCode == 0 ? diff.Output : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+        finally
+        {
+            File.Delete(index);
+        }
+    }
+
     /// <summary>The repository's top directory as git names it; null outside a repository.</summary>
     public static async Task<string?> TopLevelAsync(string directory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
         Directory.Exists(directory) ? await SnapshotGit.OutputAsync(["rev-parse", "--show-toplevel"], directory, timeLimit, cancellationToken) : null;
