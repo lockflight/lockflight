@@ -1,6 +1,6 @@
 {
   "name": "lockflight-crew",
-  "version": "0.2.0-alpha.8",
+  "version": "0.2.0-alpha.9",
   "description": "Optional Lockflight agents briefed for the gated lifecycle: a test author that writes a user story's failing tests against the declared stubs until `lockflight redgreen red` accepts them. An aid only: the Lockflight gates still judge every step.",
   "author": { "name": "Bohdan Ivaniichuk" },
   "repository": "https://github.com/lockflight/lockflight",
