@@ -5,6 +5,57 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0-alpha.9] — 2026-10-28
+
+### What to do after upgrading
+- **Update the engine in every project.** The plugin now needs engine 0.2.0-alpha.9 or later: the approve and review skills
+  describe what only this engine does (an approval refused by its phase check, the configurable diff limit, the warning for
+  a text file git shows as binary, the escalated findings). In a separate terminal window (not with `!` in Claude Code), run
+  `lockflight update` from the project root and commit what it lists. Until then, Claude Code tells you at session start
+  that the plugin needs a newer engine.
+- **An approval now needs a passing phase check.** `lockflight approve spec|tasks` and `/lockflight:approve` run
+  `phase check specify` (for the spec) or `phase check tasks` (for the tasks) first and record nothing while it fails; the
+  message lists each failure and how to fix it. The tasks can no longer be approved before the spec. A spec written before
+  Lockflight often fails because a user story has no Given/When/Then scenario: add the scenarios or rewrite the spec to
+  `.specify/templates/spec-template.md`, run the check until it passes, and approve. An adopted feature needs no approval
+  while it stays as it was adopted.
+- **`.gitattributes` is now a protected path.** The agent can no longer write it; propose a change and make it yourself. Run
+  `lockflight init` again to add its `Edit` deny rule to `.claude/settings.json` (`doctor` names it until then), and add it
+  to `CODEOWNERS` if you keep one ([CI hardening](docs/guides/ci-hardening.md)).
+- **A review whose diff hides a text file is not of record.** When git shows a text file as binary (a `-diff` or `binary`
+  attribute, a diff driver), the review still runs, names the file and warns, but it is not the review of record until the
+  attribute is gone.
+
+### Added
+- **`review.maxDiffCharacters`** in `lockflight.yaml` (default 120,000, from 10,000 up to 400,000). The run records the
+  limit, and a run fitted to another limit than the manifest's is not of record. When a diff is cut, the message suggests
+  raising the limit (and `review.maxUsd`, since a larger diff costs more).
+- **Generated files are listed, not shown, in the review diff:** `packages.lock.json`, `package-lock.json`,
+  `pnpm-lock.yaml`, `yarn.lock`, EF Core model snapshots, and migration designers whose migration is in the diff or the tree.
+  A snapshot or designer is listed only when its content has EF Core's generated shape; anything else is shown in full. The
+  reviewer gets each listed file's path, size and SHA-256 and may read it; listed files do not count toward the limit, and
+  the run records them under `generatedFiles`.
+- **Under-rated findings that break a MUST or SHALL are escalated.** A minor or nit finding whose quote is an anchored
+  requirement sentence with MUST or SHALL, and whose reproduction fails on the current code, is raised to major and then
+  treated like any other major finding. The evidence keeps the reviewer's rating (`originalSeverity`) and says why a
+  candidate was or was not escalated (`escalation`).
+- **The review evidence names the test project each reproduction was built in** (`reproductionProject`), so a reproduction
+  that never compiled on a solution with several test projects can be traced.
+
+### Changed
+- `approve spec|tasks` and `/lockflight:approve` run the matching phase check before recording, the same way in a terminal
+  and in a session; in a session, step 1 refuses before a code is shown.
+- The crew's test author ends its report with a `Security note:` line for each instruction it found in the inputs and
+  ignored, and the feature skill copies that line verbatim into its reply to you.
+- The getting-started guide says what specs written before Lockflight need and how the active feature is found when
+  `specs/` holds several.
+
+### Fixed
+- **A git attribute can no longer hide a change from the review.** The review diff ignores text conversions, and every
+  file git lists as binary is checked by content; a text file shown as binary makes the run not of record. `.gitattributes`
+  is protected and is a high-risk file for proposals.
+- The commands reference lists every hook the plugin registers, `task-completed` included.
+
 ## [0.2.0-alpha.8] — 2026-10-28
 
 ### What to do after upgrading
@@ -336,7 +387,8 @@ The first public release. Earlier versions were private previews; this entry sum
 - Levi, the pixel lock-keeper, in your terminal and, if you like, in Claude Code's status line (`lockflight statusline`). Only
   people see him.
 
-[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.8...HEAD
+[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.9...HEAD
+[0.2.0-alpha.9]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.8...v0.2.0-alpha.9
 [0.2.0-alpha.8]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.7...v0.2.0-alpha.8
 [0.2.0-alpha.7]: https://github.com/lockflight/lockflight/compare/70afe89...v0.2.0-alpha.7
 [0.2.0-alpha.6]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.5...70afe89
