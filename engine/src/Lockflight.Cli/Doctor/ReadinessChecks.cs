@@ -209,27 +209,34 @@ internal static class ReadinessChecks
             return new("linked engine", CheckStatus.Fail, "hooks have no engine to run (recovery mode)", Relink(pinned));
         }
 
-        EngineRecordStatus record = EngineRecord.Check(root, binary);
-        if (record == EngineRecordStatus.Differs)
+        if (UntrustedLink(root, binary) is DoctorCheck untrusted)
         {
-            return new("linked engine", CheckStatus.Fail,
-                $"replaced since it was linked: its SHA-256 is not the one link recorded in {LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName}, so it was not run (the hooks do not run it either)",
-                $"check what replaced it, then {Relink(pinned)}");
+            return untrusted;
         }
 
         ProcessResult versionRun = await ProcessRunner.RunAsync(binary, ["version"], root, cancellationToken);
         string linkedVersion = versionRun.Output.Trim();
-        if (!ToolPin.Matches(linkedVersion, ToolPin.RunningVersion))
-        {
-            return new("linked engine", CheckStatus.Fail, $"linked {linkedVersion}, expected {ToolPin.RunningVersion}", Relink(pinned));
-        }
-
-        return record == EngineRecordStatus.Matches
+        return ToolPin.Matches(linkedVersion, ToolPin.RunningVersion)
             ? new("linked engine", CheckStatus.Pass, $"{linkedVersion} at {LinkCommand.RelativeBinDirectory}, as linked", null)
-            : new("linked engine", CheckStatus.Warn,
-                $"{linkedVersion} at {LinkCommand.RelativeBinDirectory}, with no hash recorded (linked by an older Lockflight or copied by hand), so the hooks cannot tell when it is replaced",
-                Relink(pinned));
+            : new("linked engine", CheckStatus.Fail, $"linked {linkedVersion}, expected {ToolPin.RunningVersion}", Relink(pinned));
     }
+
+    /// <summary>
+    /// A linked engine the hooks do not run, so neither does doctor: one replaced since it was linked, or one without a hash record
+    /// (linked by a Lockflight before 0.2.0-alpha.7, which wrote none, or copied in by hand). Null when it matches its record.
+    /// An engine without a record may also be older than the plugin works with, and linking such an engine again writes no record,
+    /// so its fix is <c>update</c>, which installs the newest engine, re-pins the project to it and links it.
+    /// </summary>
+    internal static DoctorCheck? UntrustedLink(string root, string binary) => EngineRecord.Check(root, binary) switch
+    {
+        EngineRecordStatus.Differs => new("linked engine", CheckStatus.Fail,
+            $"replaced since it was linked: its SHA-256 is not the one link recorded in {LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName}, so it was not run (the hooks do not run it either)",
+            $"check what replaced it, then {Relink(ToolPin.ReadPin(root).Version)}"),
+        EngineRecordStatus.NotRecorded => new("linked engine", CheckStatus.Fail,
+            $"no hash recorded in {LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName} (linked by a Lockflight older than 0.2.0-alpha.7, or copied in by hand), so it was not run (the hooks do not run it either)",
+            $"a person opens a separate terminal window ({HumanOnlyCommands.NotWithBang}) and runs `{EngineCommand.UserInstall} update` in the project: it links the engine again and records its hash"),
+        _ => null,
+    };
 
     private static DoctorCheck CheckGitIgnore(string root)
     {

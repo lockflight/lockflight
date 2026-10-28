@@ -88,7 +88,8 @@ engine="$root/.lockflight/bin/lockflight"
 # repository: a cloned project could ship any program under that name. Never one another user owns: a lockflight.yaml in a
 # shared folder such as /tmp would otherwise run their binary in every project below it. Ownership is not checked under Git
 # Bash, which reports every file as the current user's. Never one replaced after linking: link records its SHA-256 beside it,
-# and an engine with a record must match it (one linked before link wrote records has none and is not compared). Asking git
+# and the engine must match it. Never one without a record (or with an empty one): linked by a Lockflight before 0.2.0-alpha.7,
+# which wrote none, or copied in by hand; `lockflight update` links it again and writes the record. Asking git
 # and hashing cost a process each (10-20 ms), so a passed check is remembered until the engine or its record changes: in .git,
 # which no commit can write, or beside the engine outside a git checkout. The marker counts only while it is strictly newer than
 # both, and it is dated from before the check: macOS /bin/sh compares -nt to the whole second, and Linux dates files to the
@@ -97,17 +98,24 @@ engine="$root/.lockflight/bin/lockflight"
 # the engine is still that file (-ef) and not writable. So a file moved into place keeping an older modification time, or
 # one copied over the engine with cp -p (which cannot write into a read-only file), is checked again. Where no hard link
 # can be made nothing is remembered and every call checks: the modification time alone cannot tell such a replacement.
-untrusted=""; untrusted_fix=""
+untrusted=""; untrusted_fix=""; unrecorded=""
 record="$root/.lockflight/bin/lockflight.sha256"
+# engine_recorded: whether the record holds a hash, which it sets in $recorded (a missing or empty record holds none).
+engine_recorded() {
+  recorded=""
+  [ -f "$record" ] || return 1
+  IFS= read -r recorded < "$record" || [ -n "$recorded" ] || return 1
+  recorded="${recorded%% *}"
+  [ -n "$recorded" ]
+}
 # engine_differs: whether the engine's SHA-256 is not the recorded one; a missing hash tool counts as different.
 engine_differs() {
-  IFS= read -r recorded < "$record" || [ -n "${recorded:-}" ] || return 0
   if command -v sha256sum >/dev/null 2>&1; then actual=$(sha256sum < "$engine")
   elif command -v shasum >/dev/null 2>&1; then actual=$(shasum -a 256 < "$engine")
   else untrusted="neither sha256sum nor shasum is installed to compare it with the SHA-256 lockflight link recorded"; untrusted_fix="install one of them"; return 0
   fi
   actual="${actual%% *}"
-  [ -z "$actual" ] || [ "$actual" != "${recorded%% *}" ]
+  [ -z "$actual" ] || [ "$actual" != "$recorded" ]
 }
 if [ -x "$engine" ]; then
   # test -O and -nt are not in POSIX but dash, bash and BusyBox have them; OSTYPE is set by bash only (Git Bash: msys).
@@ -123,7 +131,7 @@ if [ -x "$engine" ]; then
   fi
   # shellcheck disable=SC3013
   if [ -z "$untrusted" ] && ! { [ -n "$checked" ] && [ "$checked" -nt "$engine" ] && [ "$engine" -ef "$checked.engine" ] \
-      && { [ -n "$windows" ] || ! [ -w "$engine" ]; } && { ! [ -e "$record" ] || [ "$checked" -nt "$record" ]; }; }; then
+      && { [ -n "$windows" ] || ! [ -w "$engine" ]; } && [ -s "$record" ] && [ "$checked" -nt "$record" ]; }; then
     # The new marker and hard link are made before the checks and moved into place only when they pass, so no hook reads them
     # early, and the link is to the file that was hashed: one renamed over the engine meanwhile is not that file.
     pending=""; held=""
@@ -136,7 +144,9 @@ if [ -x "$engine" ]; then
         held="$checked.engine.$$"
         [ -n "$windows" ] || chmod a-w "$engine" 2>/dev/null || held=""
       fi
-      if [ -f "$record" ] && engine_differs; then
+      if ! engine_recorded; then
+        [ -n "$untrusted" ] || { untrusted="it has no hash record (.lockflight/bin/lockflight.sha256): it was linked by a Lockflight older than 0.2.0-alpha.7, or copied in by hand"; unrecorded=1; }
+      elif engine_differs; then
         [ -n "$untrusted" ] || { untrusted="its SHA-256 is not the one lockflight link recorded in .lockflight/bin/lockflight.sha256: it was replaced after linking"; untrusted_fix="check what replaced it"; }
       elif [ -n "$held" ] && mv -f "$held" "$checked.engine" 2>/dev/null && mv -f "$pending" "$checked" 2>/dev/null; then
         pending=""
@@ -146,6 +156,17 @@ if [ -x "$engine" ]; then
   fi
 fi
 untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Ask the user to $untrusted_fix, then run: dotnet tool restore && dotnet lockflight link"
+# An engine without a record may be older than the plugin's min-engine-version too, and an older engine writes no record when
+# linked again, so the fix is update: it installs the newest engine, re-pins the project to it and links it.
+update_in_terminal="open a separate terminal window (not with \`!\` in Claude Code: that runs inside the session and is refused) and run \`~/.lockflight/bin/lockflight update\` in the project: it links the engine again and records its hash"
+if [ -n "$unrecorded" ]; then
+  untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Ask the user to $update_in_terminal"
+  # The engine that would tell the person at session start is not run, so the shim does: the same fix, before any refusal.
+  if [ "$event" = "session-start" ]; then
+    printf '{"systemMessage":"Lockflight did not run this project%ss engine: it has no hash record (.lockflight/bin/lockflight.sha256), so the agent can only read. To fix it, %s."}\n' "'" "$update_in_terminal"
+    exit 0
+  fi
+fi
 if [ -x "$engine" ] && [ -z "$untrusted" ]; then
   # A slash command's payload is read first, so a failed engine can still be told apart from a typed human command.
   if [ "$event" = "user-prompt-expansion" ] && [ -z "$input" ]; then input=$(cat); fi

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Processes;
@@ -72,15 +73,80 @@ public sealed class ShimEngineRecordTests : IDisposable
         Assert.Equal(2, (await RunShimAsync(Write)).ExitCode);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("\n")]
+    public async Task AnEngineWithoutARecordIsNotRunAndTheUserIsToldToUpdate(string? record)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        LinkEngine(AllowingEngine);
+        if (record is not null)
+        {
+            File.WriteAllText(EngineRecord.PathOf(project.FullName), record);
+        }
+
+        (int exitCode, string error) = await RunShimAsync(Write);
+
+        Assert.Equal(2, exitCode);
+        Assert.Contains("no hash record", error, StringComparison.Ordinal);
+        Assert.Contains(
+            "Ask the user to open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `~/.lockflight/bin/lockflight update` in the project",
+            error,
+            StringComparison.Ordinal);
+        Assert.Equal(0, (await RunShimAsync(Read)).ExitCode);
+    }
+
     [Fact]
-    public async Task AnEngineLinkedWithoutARecordStillRuns()
+    public async Task AnEngineWithoutARecordDoesNotJudgeATypedApproval()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
         LinkEngine(AllowingEngine);
 
-        (int exitCode, string error) = await RunShimAsync(Write);
+        (int exitCode, string error) = await RunShimAsync(
+            """{"hook_event_name":"UserPromptExpansion","expansion_type":"slash_command","command_name":"lockflight:approve","command_args":"spec"}""",
+            "user-prompt-expansion");
 
-        Assert.True(exitCode == 0, error);
+        Assert.Equal(2, exitCode);
+        Assert.Contains("Nothing was approved", error, StringComparison.Ordinal);
+        Assert.Contains("lockflight update", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ARecordDeletedAfterAPassedCheckIsNotRun(bool gitCheckout)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        if (gitCheckout)
+        {
+            await ProcessRunner.RunAsync("git", ["init", "-q"], project.FullName, TestContext.Current.CancellationToken);
+        }
+
+        RecordEngine(LinkEngine(AllowingEngine));
+        Assert.Equal(0, (await RunShimAsync(Write)).ExitCode);
+
+        File.Delete(EngineRecord.PathOf(project.FullName));
+
+        Assert.Equal(2, (await RunShimAsync(Write)).ExitCode);
+    }
+
+    [Fact]
+    public async Task AtSessionStartThePersonIsToldToUpdateAnEngineWithoutARecord()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        LinkEngine(AllowingEngine);
+
+        (int exitCode, string output) = await RunShimOutputAsync("""{"hook_event_name":"SessionStart"}""", "session-start");
+
+        Assert.Equal(0, exitCode);
+        using JsonDocument notice = JsonDocument.Parse(output);
+        string message = notice.RootElement.GetProperty("systemMessage").GetString()!;
+        Assert.Contains("no hash record", message, StringComparison.Ordinal);
+        Assert.Contains(
+            "open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `~/.lockflight/bin/lockflight update` in the project",
+            message,
+            StringComparison.Ordinal);
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(project);
@@ -104,12 +170,23 @@ public sealed class ShimEngineRecordTests : IDisposable
 
     private void RecordEngine(string binary) => EngineRecord.Write(project.FullName, EngineRecord.HashOf(binary));
 
-    private async Task<(int ExitCode, string Error)> RunShimAsync(string payload)
+    private async Task<(int ExitCode, string Error)> RunShimAsync(string payload, string hookEvent = "pre-tool-use")
+    {
+        ProcessResult run = await RunShimProcessAsync(payload, hookEvent);
+        return (run.ExitCode, run.Error);
+    }
+
+    private async Task<(int ExitCode, string Output)> RunShimOutputAsync(string payload, string hookEvent)
+    {
+        ProcessResult run = await RunShimProcessAsync(payload, hookEvent);
+        return (run.ExitCode, run.Output);
+    }
+
+    private async Task<ProcessResult> RunShimProcessAsync(string payload, string hookEvent)
     {
         string input = Path.Combine(project.FullName, "payload.json");
         File.WriteAllText(input, payload);
-        ProcessResult run = await ProcessRunner.RunAsync(
-            "env", [$"CLAUDE_PROJECT_DIR={project.FullName}", "sh", ShimLocation.Path, "pre-tool-use"], project.FullName, TimeSpan.FromSeconds(30), input, TestContext.Current.CancellationToken);
-        return (run.ExitCode, run.Error);
+        return await ProcessRunner.RunAsync(
+            "env", [$"CLAUDE_PROJECT_DIR={project.FullName}", "sh", ShimLocation.Path, hookEvent], project.FullName, TimeSpan.FromSeconds(30), input, TestContext.Current.CancellationToken);
     }
 }

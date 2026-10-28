@@ -6,7 +6,8 @@ namespace Lockflight.Cli.Linking;
 /// The SHA-256 of the engine <c>lockflight link</c> copied into a project, as lower-case hex on one line in
 /// <c>.lockflight/bin/lockflight.sha256</c>. It lies beside the engine so it has the same protection (the guard's
 /// <c>.lockflight/**</c> rule, the sandbox's denial of <c>.lockflight/bin</c>). The hook shim compares the engine with it before
-/// running it, and <c>doctor</c> before asking it for its version: an engine replaced after linking is not run.
+/// running it, and <c>doctor</c> before asking it for its version: an engine replaced after linking, or one without a record, is
+/// not run.
 /// </summary>
 internal static class EngineRecord
 {
@@ -38,6 +39,11 @@ internal static class EngineRecord
         }
 
         string recorded = File.ReadAllText(path).Trim();
+        if (recorded.Length == 0)
+        {
+            return EngineRecordStatus.NotRecorded;
+        }
+
         return string.Equals(recorded, HashOf(binary), StringComparison.OrdinalIgnoreCase) ? EngineRecordStatus.Matches : EngineRecordStatus.Differs;
     }
 }

@@ -51,6 +51,14 @@ The shim found an engine at `.lockflight/bin/` but refused to run it, and is in 
   dotnet tool restore && dotnet lockflight link
   ```
 
+- **"because it has no hash record":** `.lockflight/bin/lockflight.sha256` is missing or empty. The engine was linked by a
+  Lockflight older than 0.2.0-alpha.7, which wrote no record, or copied in by hand. Claude Code also tells you at session
+  start. An engine that old may also be older than the plugin's `min-engine-version`, and linking it again would write no
+  record, so update instead: in a separate terminal window, not with `!` in Claude Code (a `!` command runs inside the
+  session and is refused), run `~/.lockflight/bin/lockflight update` in the project. It installs the newest engine, re-pins
+  the project to it and links it, which writes the record; commit `dotnet-tools.json`. `doctor` reports the same engine as a
+  **linked engine** FAIL.
+
 - **"because neither sha256sum nor shasum is installed":** the shim needs one of them to compare the engine with its record.
   Install coreutils (`sha256sum`) or Perl's `shasum`.
 
