@@ -50,6 +50,12 @@ internal static class PermissionDenyRules
         return [.. rules];
     }
 
+    /// <summary>The <c>permissions.deny</c> rules the settings list; none when the list is missing or not a list of strings.</summary>
+    public static IReadOnlyList<string> Entries(JsonNode? settings) =>
+        settings?[PermissionsKey]?[DenyKey] is JsonArray list && list.All(rule => rule?.GetValueKind() == JsonValueKind.String)
+            ? [.. list.Select(rule => rule!.GetValue<string>())]
+            : [];
+
     /// <summary>Why the rules cannot be merged into: <c>permissions</c> is not an object, or its <c>deny</c> not a list of strings.</summary>
     public static string? Problem(JsonObject settings)
     {
