@@ -198,6 +198,18 @@ path on this machine, or `--skip-speckit` to leave Spec Kit as it is. Open a sep
 Code) and run that line there yourself. It needs a clean working tree, backs up first, and `adopt undo` reverts it. Commit what it
 changed.
 
+Specs you wrote before adopting Lockflight may fail `phase check specify`. A common reason is a user story with no
+Given/When/Then acceptance scenario; others are stories not headed `### User Story N - Title`, requirements not listed as
+`- **FR-001**: …`, or template placeholders left in. The `lockflight:approve` skill runs that check first and stops when it fails, so it will not walk you through approving
+such a spec. The engine itself does not run the check when it records an approval. To get the spec approved, add the missing
+scenarios (or requirements), or rewrite the spec to Spec Kit's template (`.specify/templates/spec-template.md`). Then run
+the check until it passes, and approve. `lockflight review` does not need a spec approval: it needs the feature's `spec.md`,
+whose requirements it reviews against, and a change to review.
+
+With several feature folders under `specs/`, the engine does not guess which feature you mean. The active feature is the one
+named with `--feature <id>`, else the `feature_directory` in Spec Kit's `.specify/feature.json` (a malformed file is an error).
+With neither, commands stop with `no active feature: pass --feature <id>`. See [the commands reference](commands.md).
+
 ## Monorepos
 
 One repository with several services, each with its own solution: `init` at the root lists the child directories that build
