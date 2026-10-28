@@ -209,8 +209,11 @@ Then run the check until it passes, and approve. `lockflight review` does not ne
 whose requirements it reviews against, and a change to review.
 
 With several feature folders under `specs/`, the engine does not guess which feature you mean. The active feature is the one
-named with `--feature <id>`, else the `feature_directory` in Spec Kit's `.specify/feature.json` (a malformed file is an error).
-With neither, commands stop with `no active feature: pass --feature <id>`. See [the commands reference](commands.md).
+named with `--feature <id>`, else the one Spec Kit names: its `SPECIFY_FEATURE_DIRECTORY` variable, the `feature_directory` in
+`.specify/feature.json` (a malformed file is an error), its `SPECIFY_FEATURE` variable, or a feature branch such as
+`006-weak-spots` or `feat/006-weak-spots`, matched to `specs/006-weak-spots/` by name or by its number. When none names one,
+or a branch's number matches several folders, commands stop and ask for `--feature <id>`. See
+[the commands reference](commands.md).
 
 ## Monorepos
 
