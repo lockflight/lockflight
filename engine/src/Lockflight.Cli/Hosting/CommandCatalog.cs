@@ -18,6 +18,7 @@ internal static class CommandCatalog
         new(["statusline"], [], TakesArguments: false),
         new(["update"], ["--source", "--project"], TakesArguments: false),
         new(["docs", "check"], [], TakesArguments: false),
+        new(["rules", "audit"], [], TakesArguments: false),
         new(["hook"], [], TakesArguments: true),
         new(["baseline", "build"], ["--path"], TakesArguments: false),
         new(["baseline", "tests"], ["--path"], TakesArguments: false),

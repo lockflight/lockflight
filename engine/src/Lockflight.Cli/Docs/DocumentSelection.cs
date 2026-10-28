@@ -32,6 +32,24 @@ internal static class DocumentSelection
             || IsSkillFile(directories);
     }
 
+    /// <summary>
+    /// Whether the rules audit reads the file: the instructions an agent is given (<c>CLAUDE.md</c>, <c>.claude/rules/</c>, the
+    /// constitution, skills), not the project's other docs.
+    /// </summary>
+    public static bool IsRuleSource(string path)
+    {
+        if (!path.EndsWith(Markdown, StringComparison.OrdinalIgnoreCase) || IsHistory(path))
+        {
+            return false;
+        }
+
+        string[] directories = RepoPath.Directory(path).Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return RepoPath.FileName(path) == ClaudeMd
+            || path.EndsWith(".specify/memory/constitution.md", StringComparison.Ordinal)
+            || ContainsPair(directories, ".claude", "rules")
+            || IsSkillFile(directories);
+    }
+
     /// <summary>Whether the file is a skill's <c>SKILL.md</c>, for the size budget.</summary>
     public static bool IsSkill(string path) => RepoPath.FileName(path) == "SKILL.md" && IsSkillFile(RepoPath.Directory(path).Split('/'));
 

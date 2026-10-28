@@ -15,6 +15,7 @@ using Lockflight.Cli.Mascot;
 using Lockflight.Cli.Processes;
 using Lockflight.Cli.Proposals;
 using Lockflight.Cli.Review;
+using Lockflight.Cli.Rules;
 using Lockflight.Cli.Updating;
 using Lockflight.Cli.Workspace;
 
@@ -39,6 +40,9 @@ internal static class CliApplication
                                                         and docs/ that no longer resolve (links, anchors, deleted or
                                                         moved paths, engine and plugin commands) and instruction
                                                         files over Claude Code's size targets (read only)
+          rules audit                                   each rule in CLAUDE.md, rules, skills and the constitution
+                                                        with what backs it: checked by a guardrail, related, or
+                                                        guidance only (read only)
           statusline                                    Claude Code status line: Levi and the last verdict
           update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
                                                         package feed), re-pin this project
@@ -137,6 +141,7 @@ internal static class CliApplication
                 ["init", .. string[] initOptions] => await new InitCommand(context).RunAsync(initOptions, cancellationToken),
                 ["doctor", .. string[] doctorOptions] => await new DoctorCommand(context).RunAsync(doctorOptions, cancellationToken),
                 ["docs", "check", .. string[] docsOptions] => await new DocsCheckCommand(context).RunAsync(docsOptions, cancellationToken),
+                ["rules", "audit", .. string[] rulesOptions] => await new RulesAuditCommand(context).RunAsync(rulesOptions, cancellationToken),
                 ["statusline"] => await new StatusLineCommand(context).RunAsync(cancellationToken),
                 ["update", .. string[] updateOptions] => await new UpdateCommand(context).RunAsync(updateOptions, cancellationToken),
                 ["hook", string eventName] => await new HookCommand(context).RunAsync(HookEventNames.Parse(eventName), cancellationToken),
