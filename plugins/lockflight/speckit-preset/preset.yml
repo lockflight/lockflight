@@ -3,7 +3,7 @@ schema_version: "1.0"
 preset:
   id: "lockflight"
   name: "Lockflight"
-  version: "0.2.0-alpha.6"
+  version: "0.2.0-alpha.7"
   description: "Test-first tasks with requirement IDs and red/green stubs, checked by Lockflight phase checks"
   author: "lockflight"
   repository: "https://github.com/lockflight/lockflight"
