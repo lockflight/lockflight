@@ -60,8 +60,8 @@ review:                         # what the review of record runs with (both opti
 ```
 
 **Review of record.** A `lockflight review` run counts as the review of record only when it uses `review.model` and
-`review.maxUsd` (or the defaults) and its base commit is the merge base of HEAD and `review.target`: neither an older base nor a
-recent commit on the branch, which would review only part of the change. The base defaults to the target. A run with `--model`, `--budget` or an outdated base is still recorded, says why it is not of record, and
+`review.maxUsd` (or the defaults), its base commit is the merge base of HEAD and `review.target` (neither an older base nor a
+recent commit on the branch, which would review only part of the change), and everything it reads is committed. The base defaults to the target. A run with `--model`, `--budget`, an outdated base or uncommitted or untracked files in the reviewed paths is still recorded, says why it is not of record, and
 exits NOT-EARNED when it finds nothing.
 
 **How the reviewer runs.** `lockflight review` starts `claude -p` with every mode set explicitly, so a change of Claude Code's

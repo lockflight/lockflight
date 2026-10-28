@@ -125,6 +125,7 @@ public sealed class ReviewCommandTests : IDisposable
     public async Task ProjectGuidanceComesFromTheBaseCommitNotTheWorkingTree()
     {
         await ProjectAsync();
+        await GitAsync("switch", "-q", "main");
         File.WriteAllText(Path.Combine(root.FullName, "CLAUDE.md"), "Money is decimal, never double.\n");
         await GitAsync("add", "CLAUDE.md");
         await GitAsync("commit", "-q", "-m", "guidance");
@@ -186,6 +187,7 @@ public sealed class ReviewCommandTests : IDisposable
         await ProjectAsync();
         File.WriteAllText(Path.Combine(root.FullName, "src", "Catalog.cs"), "namespace Shop;\n" + string.Concat(Enumerable.Repeat("// a generated catalog line\n", 6_000)));
         await GitAsync("add", "src/Catalog.cs");
+        await GitAsync("commit", "-q", "-m", "catalog");
         claude.Answers();
 
         (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
@@ -200,6 +202,44 @@ public sealed class ReviewCommandTests : IDisposable
         Assert.Contains("not shown in full", shown, StringComparison.Ordinal);
         using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
         Assert.False(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AReviewOfUncommittedOrUntrackedChangesRunsButIsNotOfRecord()
+    {
+        await ProjectAsync();
+        File.AppendAllText(Path.Combine(root.FullName, "src", "Orders.cs"), "// not committed\n");
+        File.WriteAllText(Path.Combine(root.FullName, "src", "Stock.cs"), "namespace Shop;\n");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.NotEarned, exitCode);
+        int warning = output.IndexOf("Warning: this run will not be the review of record: the working tree has changes that are not committed", StringComparison.Ordinal);
+        int verdict = output.IndexOf("is recorded but is not the review of record: the working tree has changes", StringComparison.Ordinal);
+        Assert.InRange(warning, 0, verdict - 1);
+        Assert.Contains("1 uncommitted: src/Orders.cs", output, StringComparison.Ordinal);
+        Assert.Contains("1 untracked, which the reviewer was not shown: src/Stock.cs", output, StringComparison.Ordinal);
+        Assert.Single(claude.Prompts);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Assert.False(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
+        Assert.Contains("src/Stock.cs", evidence.RootElement.GetProperty("notOfRecord")[0].GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFileGitIgnoresDoesNotStopTheReviewOfRecord()
+    {
+        await ProjectAsync();
+        File.WriteAllText(Path.Combine(root.FullName, ".gitignore"), "*.local\n");
+        await GitAsync("add", ".gitignore");
+        await GitAsync("commit", "-q", "-m", "ignore local files");
+        File.WriteAllText(Path.Combine(root.FullName, "src", "notes.local"), "mine\n");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.DoesNotContain("not committed", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -225,7 +265,9 @@ public sealed class ReviewCommandTests : IDisposable
         await ProjectAsync();
         await GitAsync("checkout", "-q", "-b", "feature");
         await GitAsync("commit", "-q", "--allow-empty", "-m", "first feature commit");
-        await GitAsync("commit", "-q", "--allow-empty", "-m", "second feature commit");
+        File.WriteAllText(Path.Combine(root.FullName, "src", "Stock.cs"), "namespace Shop;\n");
+        await GitAsync("add", "src/Stock.cs");
+        await GitAsync("commit", "-q", "-m", "second feature commit");
         claude.Answers();
 
         (ExitCode exitCode, string output, _) = await RunAsync(["review", "--base", "HEAD~1"]);
@@ -253,7 +295,7 @@ public sealed class ReviewCommandTests : IDisposable
     public async Task TheDefaultTargetIsTheBranchOriginHeadPointsAt()
     {
         await ProjectAsync();
-        await GitAsync("update-ref", "refs/remotes/origin/main", "HEAD");
+        await GitAsync("update-ref", "refs/remotes/origin/main", "main");
         await GitAsync("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
         claude.Answers();
 
@@ -604,7 +646,9 @@ public sealed class ReviewCommandTests : IDisposable
         File.WriteAllText(Path.Combine(root.FullName, "src", "Orders.cs"), "namespace Shop;\n");
         await GitAsync("add", ".");
         await GitAsync("commit", "-q", "-m", "start");
+        await GitAsync("switch", "-q", "-c", "work");
         File.WriteAllText(Path.Combine(root.FullName, "src", "Orders.cs"), "namespace Shop;\n\npublic static class Orders { public static decimal Total(decimal price) => price; }\n");
+        await GitAsync("commit", "-q", "-am", "total");
         File.WriteAllText(Path.Combine(tools.FullName, OperatingSystem.IsWindows() ? "claude.exe" : "claude"), string.Empty);
     }
 
