@@ -59,7 +59,8 @@ The shim has three states:
 
 - **No `lockflight.yaml`:** it does nothing, so the plugin is harmless in other projects.
 - **Linked engine of the pinned version:** it runs it, unless the binary is committed to the repository, belongs to
-  another user, or differs from the SHA-256 `link` recorded beside it; then it treats the engine as missing and says how to fix it.
+  another user, or differs from the SHA-256 `link` recorded beside it, or has no such record; then it treats the engine as missing
+  and says how to fix it (for an engine without a record, also at session start).
 - **Engine missing, stale or unreadable configuration:** recovery mode. Reads and the exact restore command are allowed;
   everything else is blocked with the fix.
 

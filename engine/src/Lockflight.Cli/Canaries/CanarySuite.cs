@@ -22,6 +22,7 @@ internal static class CanarySuite
             reports.AddRange(await SessionCommandCanaries.RunAsync(scratch, cancellationToken));
             reports.AddRange(TestGateCanaries.Run(scratch));
             reports.Add(RedCanaries.Run());
+            reports.Add(LinkedEngineCanaries.Run(scratch));
         }
 
         reports.Add(await TaskCompletedCanaries.RunAsync(time, cancellationToken));

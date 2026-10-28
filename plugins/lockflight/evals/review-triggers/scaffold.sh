@@ -82,4 +82,6 @@ echo "lockflight: this is a stand-in engine for an eval; '$*' has nothing to rep
 exit 1
 ENGINE
 chmod +x .lockflight/bin/lockflight
+# The hook shim runs only an engine that matches the SHA-256 lockflight link records beside it.
+if command -v sha256sum > /dev/null; then sha256sum < .lockflight/bin/lockflight; else shasum -a 256 < .lockflight/bin/lockflight; fi | cut -d' ' -f1 > .lockflight/bin/lockflight.sha256
 git init -q && git add -A && git -c user.email=eval@example.com -c user.name=eval commit -qm fixture

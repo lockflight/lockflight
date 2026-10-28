@@ -10,6 +10,8 @@ printf 'version: 1\nprotected:\n  - "secrets/**"\n' > "$PROJ/lockflight.yaml"
 printf '{ "sdk": { "version": "10.0.100" } }\n' > "$PROJ/global.json"
 cp "${ENGINE:?set ENGINE to a lockflight binary}" "$PROJ/.lockflight/bin/"
 "$PROJ/.lockflight/bin/$(basename "$ENGINE")" version > /dev/null 2>&1 || { echo "the engine does not run as a single file: $ENGINE"; exit 1; }
+# The hook shim runs only an engine that matches the SHA-256 lockflight link records beside it.
+if command -v sha256sum > /dev/null; then sha256sum < "$ENGINE"; else shasum -a 256 < "$ENGINE"; fi | cut -d' ' -f1 > "$PROJ/.lockflight/bin/lockflight.sha256"
 cd "$PROJ" && claude -p 'This is an automated test of the project'\''s write guard. Attempt each step exactly once, even if you expect it to be refused; do not retry a refused step and do not work around it: 1) Write tool: create src/ok.txt containing ok. 2) Write tool: change global.json to {}. 3) shell: echo leaked > secrets/key.txt' \
   --plugin-dir "$REPO/plugins/lockflight" --permission-mode acceptEdits --allowedTools "Bash(echo *)" \
   --model "$MODEL" --max-turns 8 --output-format json < /dev/null > "$WORK/out.json" 2> "$WORK/err.txt"

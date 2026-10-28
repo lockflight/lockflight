@@ -102,6 +102,8 @@ if ($gitBash) {
     $shim = (Join-Path $repo "plugins/lockflight/bin/lockflight-hook") -replace '\\', '/'
     New-Item -ItemType Directory -Force (Join-Path $proj ".lockflight/bin") | Out-Null
     Copy-Item $engine (Join-Path $proj ".lockflight/bin/lockflight.exe")
+    # The hook shim runs only an engine that matches the SHA-256 lockflight link records beside it.
+    Set-Content -NoNewline -Path (Join-Path $proj ".lockflight/bin/lockflight.sha256") -Value ((Get-FileHash -Algorithm SHA256 $engine).Hash.ToLowerInvariant() + "`n")
     Measure-Calls "Git Bash empty (bash -c exit 0)" $gitBash @("-c", "exit 0")
     Measure-Calls "Git Bash shim -> engine (cwd from JSON)" $gitBash @($shim, "pre-tool-use")
     # Claude Code sets CLAUDE_PROJECT_DIR, which lets the shim skip reading the JSON: the path real sessions take.

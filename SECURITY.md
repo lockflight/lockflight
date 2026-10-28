@@ -26,7 +26,7 @@ Lockflight labels each control a **guardrail** or a **boundary**; see
 
 - **Opening a project runs its engine.** With the plugin enabled, every hook runs the engine linked into the project's
   `.lockflight/bin/`, starting with `SessionStart`. The shim refuses an engine that is committed to the repository, owned by another
-  user (outside Windows), or different from the SHA-256 `lockflight link` recorded for it. It does not verify the binary against
+  user (outside Windows), different from the SHA-256 `lockflight link` recorded for it, or without such a record. It does not verify the binary against
   the released package. Treat opening an untrusted
   project like running its build: the project's own `.claude/settings.json` hooks can run code too, once you trust the folder.
   A way to make the shim run an engine it should refuse is in scope.
