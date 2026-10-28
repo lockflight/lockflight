@@ -32,13 +32,13 @@ Windows, Git Bash; for the standard profile, `uv` and a working `python3 -c "imp
 
 ## 2. Engine
 
-During the preview the engine package is on no public feed, so do not start with `dotnet tool install`: it fails.
-
 - **`~/.lockflight/bin/lockflight` exists** (`lockflight.exe` on Windows)**:** use it. It works whatever SDK the project's `global.json` pins.
-- **It does not:** ask the user to install the engine from source in their own terminal: clone `lockflight/lockflight` and
-  run `scripts/dev-install.sh` in the checkout (on Windows, `scripts\dev-install.ps1` from PowerShell; it also installs the
-  plugin at user scope). Wait until the file exists. Never
-  suggest storing a feed token in a NuGet config, and never edit `nuget.config`: it is protected.
+- **It does not:** the install changes the user's home, so never run it yourself. Ask the user to open a separate terminal
+  window (not `!` in Claude Code) and run `cd ~ && dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin`
+  there (from the home directory: a project's `global.json` could pick an SDK older than 10). On Windows the install is from
+  source: "Install on Windows" in docs/guides/getting-started.md. Wait until the file exists. If the install fails, point them
+  to "The engine package is not found" in docs/guides/troubleshooting.md. Never suggest storing a feed token in a NuGet
+  config, and never edit `nuget.config`: it is protected.
 - **The project already pins a different version** (`doctor` reports the pin or link as behind, or the pin as not
   restorable): ask the user to open a separate terminal window (not `!` in Claude Code) and run
   `~/.lockflight/bin/lockflight update` there, in the project. It re-pins and links; they commit `dotnet-tools.json`.
@@ -48,8 +48,8 @@ During the preview the engine package is on no public feed, so do not start with
 - **Profile:** **lite** (the default) — gates and guard; **standard** — adds the spec-driven lifecycle: Spec Kit, approvals,
   red/green with xUnit v3 or v2, review and trace.
 - **CI trigger** for `.github/workflows/lockflight-gates.yml`, which runs the `pr` gates: **pr** (every pull request and push
-  to `main`), **manual** (only when started by hand) or **none** (no workflow). During the preview the generated workflow
-  restores an engine pin that no public feed has yet, so recommend **manual** until the package is published.
+  to `main`), **manual** (only when started by hand) or **none** (no workflow). Recommend **pr**: the project pins a release
+  from nuget.org. Only an engine built from source (a `.dev.` version) needs **manual** until the project pins a release.
 
 ## 4. Spec Kit for a new standard project (before `init`)
 
