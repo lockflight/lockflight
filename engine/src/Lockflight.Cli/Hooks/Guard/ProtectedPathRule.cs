@@ -1,60 +1,37 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
-using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Paths;
 
-namespace Lockflight.Cli.Hooks;
+namespace Lockflight.Cli.Hooks.Guard;
 
 /// <summary>
-/// PreToolUse guard: blocks file-editing tools, and shell commands that visibly write, when they target a protected path
-/// (built-in defaults plus the manifest's rules) or a test locked during a red cycle, except the test files a person's amend made
-/// writable (named one by one; a command that rewrites a whole directory stays blocked). A guardrail, not a boundary.
+/// Blocks file-editing tools, and shell commands that visibly write, when they target a protected path (built-in defaults plus the
+/// manifest's rules) or a test locked during a red cycle, except the test files a person's amend made writable (named one by one;
+/// a command that rewrites a whole directory stays blocked). One algorithm over shared facts (expanded wildcards, test locks, tree
+/// scans): hidden targets, editing tools, unknown variables, wildcard breadth, trees, files, computed targets, name patterns,
+/// floating targets, in that order. A guardrail, not a boundary.
 /// </summary>
-internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentReader environment, DirectoryReads reads)
+internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReader environment, DirectoryReads reads) : IGuardRule
 {
+    public const string RuleId = "protected-path";
+
     private const int MaxWildcardMatches = 2000;
     private const int MinSiblingsToPrime = 8;
 
-    private static readonly HashSet<string> FileEditingTools = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
+    public string Id => RuleId;
 
-    /// <summary>
-    /// Decides for the project root, then for every agent worktree under it (<c>.claude/worktrees/*</c>, where Claude Code puts
-    /// subagents with <c>isolation: worktree</c>): a worktree is a full checkout, so its copies of the manifest, the evidence and
-    /// the locked tests get the same rules, anchored at the worktree's own root.
-    /// </summary>
-    public async Task<HookDecision> DecideAsync(HookInput input, Manifest manifest)
+    public async ValueTask<GuardBlock?> CheckAsync(GuardFacts facts, CancellationToken cancellationToken) => GuardBlock.Of(await DecideAsync(facts));
+
+    private async Task<HookDecision> DecideAsync(GuardFacts facts)
     {
-        HookDecision decision = await DecideForRootAsync(input, manifest);
-        if (decision.Outcome != HookOutcome.Allow)
-        {
-            return decision;
-        }
-
-        foreach (string worktree in AgentWorktrees.Under(manifest.Root))
-        {
-            HookDecision inWorktree = await DecideForRootAsync(input, manifest with { Root = worktree });
-            if (inWorktree.Outcome != HookOutcome.Allow)
-            {
-                return inWorktree;
-            }
-        }
-
-        return decision;
-    }
-
-    private async Task<HookDecision> DecideForRootAsync(HookInput input, Manifest manifest)
-    {
-        ShellDialect dialect = input.ToolName == "PowerShell" ? ShellDialect.PowerShell : ShellDialect.Posix;
-        if (input.Command is string command && HumanOnlyCommands.FindIn(command, dialect) is string blocked)
-        {
-            return HookDecision.Block("human-only-command", $"lockflight: 'lockflight {blocked}' records a human decision; {HumanOnlyCommands.AskTheUser(blocked)}.");
-        }
-
-        IReadOnlyList<string> globs = DefaultProtectedPaths.For(manifest);
+        // The facts are read in this order on purpose: the same order the guard always computed them in.
+        HookInput input = facts.Input;
+        Manifest manifest = facts.Manifest;
+        IReadOnlyList<string> globs = facts.ProtectedGlobs;
         string workingDirectory = input.WorkingDirectory ?? manifest.Root;
-        IReadOnlyList<(string Glob, string Reason)> testLocks = TestLock.LockedGlobs(manifest);
-        IReadOnlySet<string> amended = testLocks.Count == 0 ? new HashSet<string>() : TestLock.AmendedFiles(manifest);
-        ShellWrites writes = TargetsOf(input);
+        IReadOnlyList<(string Glob, string Reason)> testLocks = facts.TestLocks;
+        IReadOnlySet<string> amended = facts.AmendedFiles;
+        ShellWrites writes = facts.Writes;
 
         if (writes.Hidden is string hidden)
         {
@@ -63,7 +40,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
                 $"lockflight: '{hidden}' writes to paths the command line does not show, so they cannot be checked against protected paths. Name the files in the command instead.");
         }
 
-        if (input.ToolName is string toolName && FileEditingTools.Contains(toolName))
+        if (facts.IsFileEditingTool)
         {
             // An editing tool's path is literal: no variables, no wildcards, no home.
             return await FileDecisionAsync(new RootRelativePaths(manifest.Root), WindowsParentSegments.WithCollapsed(writes.Files, workingDirectory), manifest, globs, testLocks, amended, workingDirectory) ?? HookDecision.Allow;
@@ -96,31 +73,6 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
             ?? PartialTargetDecisions.NamePatterns(writes.PatternFiles, scan, manifest.Root, workingDirectory, globs, testLocks)
             ?? PartialTargetDecisions.Floating(writes, globs, testLocks)
             ?? HookDecision.Allow;
-    }
-
-    private static ShellWrites TargetsOf(HookInput input)
-    {
-        if (input.ToolName is not string toolName)
-        {
-            return ShellWrites.None;
-        }
-
-        if (FileEditingTools.Contains(toolName) && input.FilePath is string filePath)
-        {
-            return ShellWrites.OfFile(filePath);
-        }
-
-        if (input.Command is not string command)
-        {
-            return ShellWrites.None;
-        }
-
-        return toolName switch
-        {
-            "Bash" => ShellWriteTargets.Find(command, ShellDialect.Posix),
-            "PowerShell" => ShellWriteTargets.Find(command, ShellDialect.PowerShell),
-            _ => ShellWrites.None,
-        };
     }
 
     /// <summary>
