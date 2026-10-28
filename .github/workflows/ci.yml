@@ -234,9 +234,15 @@ jobs:
       - name: Shellcheck the hook shim and test scripts
         run: |
           shellcheck --version
-          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/user-path.sh
+          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/marketplace-ref.sh scripts/user-path.sh
       - name: The install puts its folder on PATH once, for each shell
         run: sh tests/install/user-path.sh
+      - name: The marketplace pin check refuses incoherent pins
+        run: bash tests/install/marketplace-ref.sh
+      # The marketplace users add serves the plugins from a release tag; it must name a pushed tag whose plugins have the tag's
+      # version, with the engine on nuget.org (docs/engineering/releasing.md).
+      - name: The marketplace serves a published release
+        run: scripts/marketplace-ref.sh check
       - name: No citations of records outside the repository
         run: scripts/check-public-tree.sh
       # Pinned so a Claude Code release cannot change validation results unannounced. To bump: run
@@ -248,3 +254,4 @@ jobs:
           claude plugin validate --strict plugins/lockflight
           claude plugin validate --strict plugins/lockflight-crew
           claude plugin validate --strict .
+          claude plugin validate --strict plugins

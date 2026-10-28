@@ -101,7 +101,9 @@ claude plugin marketplace add lockflight/lockflight
 claude plugin install lockflight@lockflight --scope user
 ```
 
-To build from a checkout instead, run `scripts/dev-install.sh` in a clone of this repository
+The marketplace serves the plugins as of the latest release (the release tag), so they match the engine on nuget.org; changes
+on `main` reach you with the next release. To try `main`, run `scripts/dev-install.sh` in a clone of this repository instead:
+it builds the engine and installs the plugin from that checkout
 ([install from source](docs/guides/getting-started.md#install-from-source)).
 
 **2. Set up your repository**

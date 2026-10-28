@@ -4,8 +4,9 @@
 #   2. installs it under ~/.lockflight/tools/<version>, outside any project's global.json (an SDK 8 pin cannot restore the
 #      RID-specific package), and points ~/.lockflight/bin/lockflight at it,
 #   3. puts ~/.lockflight/bin on PATH for new terminals (scripts/user-path.sh: one marked line in your shell's startup file),
-#   4. adds this checkout as the marketplace and installs the plugin from it at user scope (needed for sessions started inside
-#      a child repo of a workspace shell: Claude Code loads project settings only from the directory it starts in).
+#   4. adds the checkout's development marketplace (plugins/) and installs the plugin from it at user scope (needed for
+#      sessions started inside a child repo of a workspace shell: Claude Code loads project settings only from the directory
+#      it starts in).
 # On Windows (Git Bash) it runs scripts/dev-install.ps1, which keeps the same layout with a copy of the engine instead of a link.
 # Usage: scripts/dev-install.sh [--no-plugin] [--no-modify-path]        Needs the .NET 10 SDK; the plugin step needs `claude`.
 set -eu
@@ -86,9 +87,11 @@ ln -sf "$tools/lockflight" "$HOME_DIR/bin/lockflight"
 if [ "$plugin" = true ]; then
   if command -v claude > /dev/null; then
     echo "lockflight: installing the plugin at user scope"
-    # The marketplace is this checkout, so the plugin is the one the engine was just built from. Claude Code reads a folder
-    # marketplace's plugins in place, and adding it again points an existing "lockflight" marketplace (say, the GitHub one) here.
-    claude plugin marketplace add "$REPO" > /dev/null || { echo "claude plugin marketplace add $REPO failed" >&2; exit 1; }
+    # The marketplace is this checkout's development marketplace (plugins/.claude-plugin/marketplace.json), so the plugin is
+    # the one the engine was just built from; the repository's own marketplace serves the last release instead. Claude Code
+    # reads a folder marketplace's plugins in place, and adding it again points an existing "lockflight" marketplace (say, the
+    # GitHub one) here.
+    claude plugin marketplace add "$REPO/plugins" > /dev/null || { echo "claude plugin marketplace add $REPO/plugins failed" >&2; exit 1; }
     if claude plugin list 2>/dev/null | grep -q 'lockflight@lockflight'; then
       claude plugin update lockflight@lockflight
     else
