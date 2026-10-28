@@ -6,6 +6,7 @@
 </picture>
 
 [![CI](https://github.com/lockflight/lockflight/actions/workflows/ci.yml/badge.svg)](https://github.com/lockflight/lockflight/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/vpre/Lockflight.Cli?label=nuget&color=14808F)](https://www.nuget.org/packages/Lockflight.Cli)
 ![Status: alpha](https://img.shields.io/badge/status-alpha-F2A33A)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-14808F)
