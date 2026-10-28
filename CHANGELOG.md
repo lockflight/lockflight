@@ -16,6 +16,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - **`lockflight update` also refreshes the Lockflight block in `CLAUDE.md`**, which now tells the agent never to try a
   human decision and how to propose a protected change. Until you run it, the block is reported as outdated (`adopt plan`
   lists it to be replaced). Commit the new block with the rest.
+- **A linked engine without a hash record**, linked before this release, now gets a `doctor` warning, and from 0.2.0-alpha.8
+  the hook shim will refuse it. `lockflight update` links the engine again and writes the record.
 - **Run `lockflight init` again** in a project set up before this release, to add the new `Edit` deny rules and sandbox
   write denials to `.claude/settings.json`. Your own entries are kept; `--no-sandbox` leaves out the sandbox list. Run it
   again after adding protected files; `doctor` names any it misses.
@@ -60,9 +62,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - **The linked engine is pinned by its hash.** `link` records the engine's SHA-256 beside it. The hook shim and `doctor`
   refuse an engine replaced after linking, even in the same second as the last passed check: reads still pass, writes and
   in-session commands are blocked, and the message says how to link again.
-- **Windows install and update.** `scripts/dev-install.ps1` installs from source on Windows, and `lockflight update` works
-  there, including replacing the engine while it runs. Both installers put `~/.lockflight/bin` on `PATH` for new terminals,
-  so `lockflight` works by name (`--no-modify-path` or `-NoModifyPath` skips that).
+- **Windows install and update**, tested in CI on windows-latest: `scripts/dev-install.ps1` installs from source on
+  Windows, and `lockflight update` there replaces the engine even while it runs. Both installers put `~/.lockflight/bin`
+  on `PATH` for new terminals, so `lockflight` works by name (`--no-modify-path` or `-NoModifyPath` skips that).
 - **Review findings are checked against the spec and the change's tests.** A blocker or major finding may quote the spec;
   the run records whether the quote appears in it, for you to read (this changes no verdict). When a confirmed finding comes
   with a fix and that fix makes one of the change's own tests fail, the finding is *contested* (NOT-EARNED, naming the test)
@@ -274,8 +276,8 @@ The first public release. Earlier versions were private previews; this entry sum
   people see him.
 
 [Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.7...HEAD
-[0.2.0-alpha.7]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.6...v0.2.0-alpha.7
-[0.2.0-alpha.6]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.5...v0.2.0-alpha.6
+[0.2.0-alpha.7]: https://github.com/lockflight/lockflight/compare/70afe89...v0.2.0-alpha.7
+[0.2.0-alpha.6]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.5...70afe89
 [0.2.0-alpha.5]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.4...v0.2.0-alpha.5
 [0.2.0-alpha.4]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.3...v0.2.0-alpha.4
 [0.2.0-alpha.3]: https://github.com/lockflight/lockflight/releases/tag/v0.2.0-alpha.3
