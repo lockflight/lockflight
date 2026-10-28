@@ -1,7 +1,7 @@
 global: --help -h --version
 version: []
 link: []
-init: [--profile --ci --no-link --no-sandbox]
+init: [--profile --ci --ci-platform --no-link --no-sandbox]
 doctor: [--canaries --canaries=full]
 statusline: []
 update: [--source --project]
