@@ -93,6 +93,7 @@ nuget.config                             @your-org/maintainers
 *.ruleset                                @your-org/maintainers
 stylecop.json                            @your-org/maintainers
 BannedSymbols.txt                        @your-org/maintainers
+.gitattributes                           @your-org/maintainers
 ```
 
 Then make it binding:

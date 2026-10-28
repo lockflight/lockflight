@@ -73,12 +73,13 @@ internal sealed class ReviewCommand(CliContext context)
 
         string target = manifest.Review.Target ?? await Git.DefaultBranchAsync(manifest.Root, DefaultTarget, cancellationToken);
         string baseRef = options.Value("--base") ?? target;
-        if (await CodeDiffAsync(manifest.Root, baseRef, cancellationToken) is not string diff)
+        if (await CodeDiffAsync(manifest.Root, baseRef, cancellationToken) is not CodeDiff code)
         {
             await context.Error.WriteLineAsync($"lockflight: git diff against '{baseRef}' failed; pass --base <ref> (in a workspace, every unit repository needs that ref)");
             return ExitCode.Config;
         }
 
+        string diff = code.Text;
         if (diff.Trim().Length == 0)
         {
             await context.Output.WriteLineAsync($"NOT-EARNED no changes against {baseRef}; nothing to review");
@@ -89,7 +90,7 @@ internal sealed class ReviewCommand(CliContext context)
             baseRef, await Git.CommitOfAsync(manifest.Root, baseRef, cancellationToken), target, await Git.MergeBaseAsync(manifest.Root, target, cancellationToken));
         ReviewedTree tree = await ReviewedTrees.FindAsync(manifest.Root, feature.SpecPath, cancellationToken);
         return await ReviewAsync(
-            manifest, feature, claude, reviewBase, ReviewDiff.Fit(diff, manifest.Review.MaxDiffCharacters, manifest.Root), tree, options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
+            manifest, feature, claude, reviewBase, ReviewDiff.Fit(diff, manifest.Review.MaxDiffCharacters, manifest.Root).WithTextShownAsBinary(code.TextShownAsBinary), tree, options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
     }
 
     /// <summary>Asks the reviewer, confirms its findings and the open ones, stores the run and turns the outcome into the exit code.</summary>
@@ -106,10 +107,15 @@ internal sealed class ReviewCommand(CliContext context)
     {
         DateTimeOffset started = context.Time.GetUtcNow();
         await context.Output.WriteLineAsync($"Reviewing {feature.Id} against {reviewBase.Ref} with {model} (budget ${ReviewOfRecord.Usd(budget)})…");
-        if (!diff.IsComplete)
+        // Said before the reviewer runs, so a person can stop a run that cannot count before it spends the budget.
+        if (diff.IsCut)
         {
-            // Said before the reviewer runs, so a person can stop a run that cannot count before it spends the budget.
             await context.Output.WriteLineAsync($"Warning: this run will not be the review of record: {ReviewOfRecord.Incomplete(diff)}.");
+        }
+
+        if (diff.TextShownAsBinary.Count > 0)
+        {
+            await context.Output.WriteLineAsync($"Warning: this run will not be the review of record: {ReviewOfRecord.ShownAsBinary(diff)}.");
         }
 
         if (!tree.IsClean)
@@ -253,25 +259,32 @@ internal sealed class ReviewCommand(CliContext context)
 
     /// <summary>
     /// The code change since the base: the project's own diff without Lockflight's records and the specs, then — in a workspace —
-    /// each unit repository's diff with its unit path in the file names. Null when git fails in any of them.
+    /// each unit repository's diff with its unit path in the file names, with the text files it shows as binary. External diff
+    /// tools and text conversions (<c>diff=&lt;driver&gt;</c> with a <c>textconv</c>) are off, so the reviewer reads the content
+    /// itself. Null when git fails in any of them.
     /// </summary>
-    private static async Task<string?> CodeDiffAsync(string root, string baseRef, CancellationToken cancellationToken)
+    private static async Task<CodeDiff?> CodeDiffAsync(string root, string baseRef, CancellationToken cancellationToken)
     {
         List<string> diffs = [];
+        List<string> hidden = [];
         foreach (RepoRoot repo in WorkspaceRepos.Of(root))
         {
             string[] scope = repo.Prefix.Length == 0 ? [".", ":(exclude).lockflight", $":(exclude){FeatureLocator.SpecsDirectory}"] : [];
             ProcessResult diff = await ProcessRunner.RunAsync(
-                "git", ["diff", "--no-color", "--no-ext-diff", $"--src-prefix=a/{repo.Prefix}", $"--dst-prefix=b/{repo.Prefix}", baseRef, "--", .. scope], repo.Directory, cancellationToken);
-            if (diff.ExitCode != 0)
+                "git",
+                ["diff", "--no-color", "--no-ext-diff", "--no-textconv", $"--src-prefix=a/{repo.Prefix}", $"--dst-prefix=b/{repo.Prefix}", baseRef, "--", .. scope],
+                repo.Directory,
+                cancellationToken);
+            if (diff.ExitCode != 0 || await HiddenTextFiles.FindAsync(repo, baseRef, scope, cancellationToken) is not IReadOnlyList<string> shownAsBinary)
             {
                 return null;
             }
 
             diffs.Add(diff.Output);
+            hidden.AddRange(shownAsBinary);
         }
 
-        return string.Concat(diffs);
+        return new CodeDiff(string.Concat(diffs), hidden);
     }
 
     /// <summary>

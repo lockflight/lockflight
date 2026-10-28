@@ -21,8 +21,27 @@ internal sealed record ReviewDiff(string Whole, string Shown, int Limit, int Fil
     /// <summary>The generated files listed instead of shown; they are not reviewed.</summary>
     public IReadOnlyList<GeneratedFile> Generated { get; init; } = [];
 
-    /// <summary>Whether the reviewer is shown the whole diff.</summary>
-    public bool IsComplete => NotShown.Count == 0;
+    /// <summary>
+    /// The paths of the changed files git shows as binary although they hold text (see <see cref="HiddenTextFiles"/>): the
+    /// reviewer cannot read their change.
+    /// </summary>
+    public IReadOnlyList<string> TextShownAsBinary { get; init; } = [];
+
+    /// <summary>Whether the diff was cut at the limit, so some files are not shown in full.</summary>
+    public bool IsCut => NotShown.Count > 0;
+
+    /// <summary>Whether the reviewer is shown the whole diff: nothing cut and no text file shown as binary.</summary>
+    public bool IsComplete => !IsCut && TextShownAsBinary.Count == 0;
+
+    /// <summary>This diff with the text files git shows as binary, named in a note after the shown diff so the reviewer can read them.</summary>
+    public ReviewDiff WithTextShownAsBinary(IReadOnlyList<string> paths) =>
+        paths.Count == 0
+            ? this
+            : this with
+            {
+                TextShownAsBinary = paths,
+                Shown = Shown + $"\n[git showed these text files as binary, so their change is not above; read them: {string.Join(", ", paths)}]",
+            };
 
     /// <summary>
     /// Fits the diff to the limit. <paramref name="root"/> is the working tree the diff is of, where generated files are read for

@@ -175,7 +175,7 @@ The lite profile gives you the guard and the gates, without the lifecycle.
 2. Commit the new files, and start Claude Code at the repository root. From now on:
    - the guard blocks agent edits to protected files (`lockflight.yaml`, the tool pin, `.lockflight/`, Claude settings,
      `Directory.Build.*`, `Directory.Packages.props`, `global.json`, `NuGet.config`, code-style and analyzer config
-     (`.editorconfig`, `.globalconfig`, rulesets, `stylecop.json`, `BannedSymbols.txt`), gitleaks config, the gates workflow;
+     (`.editorconfig`, `.globalconfig`, rulesets, `stylecop.json`, `BannedSymbols.txt`), `.gitattributes`, gitleaks config, the gates workflow;
      the full list is in the [configuration reference](configuration.md#built-in-protected-paths));
    - `.lockflight/bin/lockflight gate run` (from the project root; the agent runs the engine this way) runs format → build → tests; `--profile pr` adds vulnerable packages, secrets and — when
      `gates.coverage.collector` is set — patch coverage, as the generated CI workflow does;

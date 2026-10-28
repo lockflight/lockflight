@@ -4,8 +4,8 @@ using Lockflight.Cli.Config;
 namespace Lockflight.Cli.Review;
 
 /// <summary>
-/// Whether a run counts as the review of record: only when the reviewer was shown the whole diff (generated files listed aside) of
-/// a clean tree (everything it reads committed), with the manifest's (or the default) model, budget and diff limit, against a base whose
+/// Whether a run counts as the review of record: only when the reviewer was shown the whole diff (generated files listed aside, none of it
+/// cut, no text file shown as binary) of a clean tree (everything it reads committed), with the manifest's (or the default) model, budget and diff limit, against a base whose
 /// commit is the merge base of HEAD and the target branch (so a recent commit on the branch cannot narrow the diff, and an outdated
 /// base cannot widen it). Any other run is recorded too, with the reasons it is not of record, so a re-roll with a
 /// cheaper model or an old base is visible rather than quietly replacing the review.
@@ -18,9 +18,14 @@ internal static class ReviewOfRecord
     public static IReadOnlyList<string> Reasons(ReviewSettings settings, string model, decimal budgetUsd, ReviewBase reviewBase, ReviewDiff diff, ReviewedTree tree)
     {
         List<string> reasons = [];
-        if (!diff.IsComplete)
+        if (diff.IsCut)
         {
             reasons.Add(Incomplete(diff));
+        }
+
+        if (diff.TextShownAsBinary.Count > 0)
+        {
+            reasons.Add(ShownAsBinary(diff));
         }
 
         if (!tree.IsClean)
@@ -66,6 +71,16 @@ internal static class ReviewOfRecord
             + $"({diff.NotShown.Count} of {diff.Files} changed files not shown in full: {named}{more}): split the change into smaller pull requests "
             + $"and review each, or raise review.maxDiffCharacters (at most {ReviewSettings.DiffCharactersCeiling}; a larger diff costs more, so review.maxUsd may need "
             + "raising too); a review against a later commit of this branch (--base <commit>) checks only the commits after it and is not of record";
+    }
+
+    /// <summary>Why a run whose diff showed text files as binary is not of record, and what to do instead.</summary>
+    public static string ShownAsBinary(ReviewDiff diff)
+    {
+        int count = diff.TextShownAsBinary.Count;
+        string files = count == 1 ? "1 text file" : $"{count} text files";
+        return $"git showed {files} as binary ({Named(diff.TextShownAsBinary)}), so the reviewer did not see {(count == 1 ? "its" : "their")} change: "
+            + "a .gitattributes entry (-diff, binary, or a diff driver set to binary) hides text from the diff; remove it for these files, "
+            + "commit, and review again";
     }
 
     /// <summary>Why a run over changes no commit holds is not of record, and how to make the tree clean.</summary>

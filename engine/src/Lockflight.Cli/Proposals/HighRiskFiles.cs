@@ -24,6 +24,7 @@ internal static class HighRiskFiles
         ("**/*.ruleset", Analyzers),
         ("**/stylecop.json", Analyzers),
         ("**/BannedSymbols.txt", Analyzers),
+        ("**/.gitattributes", "git attributes: they decide what a diff shows, and can hide a text change as binary"),
         ("**/.claude/hooks/**", ClaudeCode),
         ("**/.claude/settings.json", ClaudeCode),
         ("**/.claude/settings.local.json", ClaudeCode),
