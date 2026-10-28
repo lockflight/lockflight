@@ -20,6 +20,15 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
     /// </summary>
     public string? AbnormalExit { get; private set; }
 
+    /// <summary>The directories this workspace builds.</summary>
+    public IReadOnlyList<string> Directories => [.. targets.Select(target => target.Directory)];
+
+    /// <summary>
+    /// The same build targets at the same places under <paramref name="otherRoot"/> (a worktree of the project), with nothing built yet.
+    /// </summary>
+    public TestWorkspace MovedTo(string otherRoot) =>
+        new(otherRoot, [.. targets.Select(target => target with { Directory = Path.GetFullPath(Path.Combine(otherRoot, Path.GetRelativePath(root, target.Directory))) })], timeLimit);
+
     /// <summary>Builds; returns the build output when the build fails, null on success.</summary>
     public async Task<string?> BuildAsync(CancellationToken cancellationToken)
     {

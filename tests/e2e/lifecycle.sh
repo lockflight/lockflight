@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Lifecycle end to end on a copy of samples/dotnet-single: spec → approve → tasks → approve → red/green cycles → trace, with the
 # negative controls (agent approval refused, cheating red rejected, test edits blocked during red, a person's amend unlocking one
-# test file until its red is re-checked, stubbed green rejected, a test switched off with Explicit refused, a test renamed after
-# green dropped from the trace).
+# test file until its red is re-checked, an amend after the implementation re-checked on the red-time snapshot, stubbed green
+# rejected, a test switched off with Explicit refused, a test renamed after green dropped from the trace).
 # Plays the agent (CLAUDECODE=1) and the human (CLAUDECODE unset). Usage: ENGINE=<lockflight binary> lifecycle.sh <workdir>
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -211,6 +211,10 @@ public sealed class FreeShippingTests
     [InlineData(50)]
     [InlineData(80)]
     public void OrdersOfFiftyOrMoreShipFree(decimal subtotal) => Assert.Equal(0m, new PriceCalculator().ShippingCost(3m, subtotal));
+
+    [Fact]
+    [Trait("Requirement", "FR-003")]
+    public void FreeShippingStartsAtFifty() => Assert.Equal(0m, new PriceCalculator().ShippingCost(3m, 49m));
 }
 CS
 # Switching off a test that already went green (xUnit v3 Explicit) is caught before a red and at a green.
@@ -220,13 +224,20 @@ expect 1 "a red is refused after an earlier test was marked Explicit" "known tes
 write_shipping_tests
 expect 0 "cycle 2 assertion red accepted" "RED_ASSERT" -- "$E" redgreen red
 perl -pi -e 's/=> weightKg <= 1m \? 5m/=> subtotal >= 50m ? 0m : weightKg <= 1m ? 5m/' "$calc"
+# The implementation exists and shows a test of this cycle is wrong (free shipping starts at 50.00, not 49.00). The amended test
+# passes on the current code, so its red is re-checked on the red-time snapshot, where it still fails.
+expect 1 "green shows the wrong test" "cycle tests not passing: Shop.Tests.FreeShippingTests.FreeShippingStartsAtFifty" -- "$E" redgreen green
+expect 0 "a person amends the wrong test after the implementation" -- \
+  human redgreen amend FreeShippingStartsAtFifty --reason "free shipping starts at 50.00, the spec's boundary"
+perl -pi -e 's/ShippingCost\(3m, 49m\)/ShippingCost(3m, 50m)/' tests/Shop.Tests/FreeShippingTests.cs
+expect 0 "the amended test is re-checked on the red-time snapshot" "RED_ASSERT   Shop.Tests.FreeShippingTests.FreeShippingStartsAtFifty (amended)" -- "$E" redgreen red
 make_first_explicit
 expect 1 "a green is refused while an earlier test is Explicit" "tests newly marked Explicit" -- "$E" redgreen green
 write_shipping_tests
 expect 0 "green closes cycle 2" -- "$E" redgreen green
 
 expect 0 "every requirement traced" "3 of 3 requirements covered" -- "$E" trace
-expect 0 "trace names the amended test" "1 test was changed after its red" -- "$E" trace
+expect 0 "trace names the amended tests" "2 tests were changed after their red" -- "$E" trace
 # Trace re-checks the evidence against the current tests: a test renamed after its green no longer counts.
 perl -pi -e 's/FirstKilogramCostsFive\(\)/FirstKilogramCostsFiveRenamed()/' tests/Shop.Tests/ShippingTests.cs
 expect 1 "trace fails when a requirement loses its last red/green test" "FR-001 lost every test" -- "$E" trace

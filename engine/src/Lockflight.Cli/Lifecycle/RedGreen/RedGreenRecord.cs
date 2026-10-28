@@ -87,6 +87,11 @@ internal sealed record RedGreenRecord
                     entry["assertionFree"] = true;
                 }
 
+                if (test.Rows > 0)
+                {
+                    entry["rows"] = test.Rows;
+                }
+
                 tests.Add((JsonNode)entry);
             }
 
@@ -97,6 +102,11 @@ internal sealed record RedGreenRecord
                 ["greenAt"] = cycle.GreenAt?.ToString("O", CultureInfo.InvariantCulture),
                 ["tests"] = tests,
             };
+            if (cycle.Snapshot is string snapshot)
+            {
+                saved["snapshot"] = snapshot;
+            }
+
             if (cycle.Amends.Count > 0)
             {
                 saved["amends"] = AmendsArray(cycle.Amends);
@@ -165,9 +175,11 @@ internal sealed record RedGreenRecord
             Strings(test["requirements"]))
         {
             AssertionFree = test["assertionFree"]?.GetValue<bool>() == true,
+            Rows = test["rows"]?.GetValue<int>() ?? 0,
         })])
     {
         Amends = [.. (cycle["amends"] as JsonArray ?? []).OfType<JsonObject>().Select(ReadAmend)],
+        Snapshot = cycle["snapshot"]?.GetValue<string>(),
     };
 
     private static string[] Strings(JsonNode? node) =>

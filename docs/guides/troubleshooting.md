@@ -12,7 +12,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a shell command after `cd`](#a-shell-command-is-blocked-after-a-cd) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --canaries` reports MISSED or BROKEN](#doctor---canaries-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
-| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) |
+| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) |
 
 ## Every tool call is blocked: "engine not installed in this project"
 
@@ -228,6 +228,15 @@ baselines from the base branch, so a baseline committed in the feature's pull re
 
 Approvals bind `spec.md`, `plan.md` and `tasks.md` by hash. After an edit, red/green refuses until you approve again in a
 separate terminal window (`.lockflight/bin/lockflight approve spec` or `approve tasks`). `trace` prints a warning line instead of refusing.
+
+## A red after an amend says "the amended tests do not build against the code as it was at red"
+
+The re-check builds the cycle's red-time snapshot with the amended file laid over it, so the amended test must compile against the
+red-time code: the production stubs as they were when the red was accepted. An amend that uses an API added later (a renamed
+member, a new parameter) cannot be re-checked that way, and neither can a build that needs a file git ignores, because ignored
+files are not in the snapshot. Rewrite the amended test against the red-time API, or, as a person, discard the cycle with
+`.lockflight/bin/lockflight redgreen reset` in a separate terminal window and run the red again. On Windows, a deep project can pass the 260-character path limit inside the temporary worktree (`.git/lockflight/red-…`); `git config core.longpaths true` helps git, and the .NET build needs long paths enabled in Windows. A red that says the snapshot "is
+not in the repository" means its ref under `refs/lockflight/red/` was deleted; only a reset helps then.
 
 ## Windows
 
