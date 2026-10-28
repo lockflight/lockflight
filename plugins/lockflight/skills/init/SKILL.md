@@ -50,6 +50,9 @@ Windows, Git Bash; for the standard profile, `uv` and a working `python3 -c "imp
 - **CI trigger** for `.github/workflows/lockflight-gates.yml`, which runs the `pr` gates: **pr** (every pull request and push
   to `main`), **manual** (only when started by hand) or **none** (no workflow). Recommend **pr**: the project pins a release
   from nuget.org. Only an engine built from source (a `.dev.` version) needs **manual** until the project pins a release.
+- **CI platform** (`--ci-platform`): **github** (the default), or **azure**, **bitbucket** or **gitlab** when the repository
+  is hosted there. Say that those three templates are not yet verified on the live services, and point to
+  docs/guides/ci-other-platforms.md for making the job a required check.
 
 ## 4. Spec Kit for a new standard project (before `init`)
 
@@ -68,7 +71,8 @@ With an existing `.specify/`, never run `specify init`: adoption upgrades it wit
 
 ## 5. Initialize
 
-Run `~/.lockflight/bin/lockflight init --profile <lite|standard> --ci <pr|manual|none>` and show the
+Run `~/.lockflight/bin/lockflight init --profile <lite|standard> --ci <pr|manual|none>` (plus `--ci-platform <name>` when it is
+not github) and show the
 created/updated/unchanged list. It writes the manifest, the tool pin, `.gitignore`, `.claude/settings.json` (the plugin, an
 `Edit` deny rule for each protected path, and the protected paths as Claude Code sandbox write denials), the CI workflow and the linked engine; it is idempotent and only
 merges into existing files. It does not turn the sandbox on: if the user asks, point them to "The Claude Code sandbox" in

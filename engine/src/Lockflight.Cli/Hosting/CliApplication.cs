@@ -30,9 +30,11 @@ internal static class CliApplication
         Usage: lockflight <command> [options]   (in a project, from its root: .lockflight/bin/lockflight <command> [options])
 
         Setup
-          init [--profile lite|standard] [--ci pr|manual|none] [--no-link] [--no-sandbox]
+          init [--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab]
+               [--no-link] [--no-sandbox]
                                                         onboard: manifest, tool pin, settings, CI job, link; --ci:
-                                                        the job runs on pull requests, only by hand, or is not written
+                                                        the job runs on pull requests, only by hand, or is not written;
+                                                        --ci-platform: the CI service the job is for (default github)
           doctor [--canaries[=full]]                    readiness report with fixes; --canaries: plant a violation
                                                         before every control in a scratch project and report each
                                                         as caught or missed (=full also builds and runs one)
