@@ -46,6 +46,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | Trace | G | built from that evidence |
 | Review of record (`lockflight review`) | G | independent prompt, but the agent may skip running it |
 | Review prompt hardening: the instructions are compiled into the engine; the reviewer runs with `--restricted --safe-mode` (both in every Claude Code version Lockflight supports), so the working tree's `CLAUDE.md`, skills, agents and settings are not loaded; project guidance is the base commit's `CLAUDE.md`; the spec, the diff and that guidance sit in fences with a random per-run marker, labelled as data the reviewer must not take instructions from | G | a model can still be swayed by what it reads; injected text is measured in the review benchmark, not ruled out |
+| Review spec anchor: the prompt asks that a reproduction encode a spec sentence or an existing test; the engine records whether a blocking finding's quoted sentence is in the spec | G | the prompt is guidance to a model; the anchor is recorded for a person and changes no verdict |
 | Review of record rules: the manifest's model and budget, base = merge base of HEAD and the target branch, open findings carried forward, run count in the pull request summary | G | they make a skipped or re-rolled review visible; they do not prevent it |
 | `review dismiss` human-only | G | refused inside Claude Code like `approve` (`CLAUDECODE=1`); the variable can be unset |
 | Ledger and retro | G | local and fail-open; never an audit log |

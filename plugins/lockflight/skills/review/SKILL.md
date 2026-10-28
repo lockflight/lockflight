@@ -26,6 +26,10 @@ independent.
    - **rejected** — the reproduction passes: tell the user.
    - **reported** (minor/nit findings are not reproduced) — fix when cheap, otherwise list them in the PR body.
 
+   A blocker/major finding also says whether the requirement sentence it quotes was found in the spec ("spec quote
+   anchored"), was not ("not anchored"), or was not given ("no spec quote"). It does not change the outcome. When a confirmed
+   finding's quote is not anchored, tell the user: its test may encode the reviewer's expectation rather than the spec.
+
    A confirmed or unverified blocker/major finding is **open** and stays open in every later review, also when that review
    does not raise it again ("carried from an earlier run") or raises it again at a lower severity. It closes only when a
    later review re-runs its reproductions — the new one and every earlier one — and all of them pass (**fixed**), or when the

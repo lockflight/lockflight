@@ -64,6 +64,17 @@ public sealed class ReviewResultParserTests
         Assert.Equal(FindingIds.Of(ReviewNames.GeneralDimension, "src/A.cs", 23, "Boundary"), finding.Id);
     }
 
+    [Fact]
+    public void AFindingsSpecQuoteIsRead()
+    {
+        const string output = """
+            {"is_error":false,"structured_output":{"verdict":"request_changes","summary":"One.","findings":[
+              {"severity":"major","file":"src/A.cs","line":23,"title":"Boundary","evidence":"x","specQuote":"Orders above 50 ship free."}]}}
+            """;
+
+        Assert.Equal("Orders above 50 ship free.", Assert.Single(ReviewResultParser.Parse(output).Findings).SpecQuote);
+    }
+
     [Theory]
     [InlineData("""{"is_error":true,"result":"Credit balance is too low","total_cost_usd":0}""", "claude reported an error")]
     [InlineData("Not logged in", "no JSON")]

@@ -42,5 +42,6 @@ internal static class ReviewSummary
     public static string Runs(int count) => count == 1 ? "1 review run" : $"{count} review runs";
 
     public static string Line(ReviewFinding finding) =>
-        $"`{finding.Id}` {ReviewNames.ToName(finding.Severity)}, {ReviewNames.ToName(finding.Outcome)}: `{finding.File}:{finding.Line}` {finding.Title}";
+        $"`{finding.Id}` {ReviewNames.ToName(finding.Severity)}, {ReviewNames.ToName(finding.Outcome)}: `{finding.File}:{finding.Line}` {finding.Title}"
+        + (finding.NeedsReproduction ? $" ({ReviewNames.Describe(finding.SpecAnchor)})" : string.Empty);
 }

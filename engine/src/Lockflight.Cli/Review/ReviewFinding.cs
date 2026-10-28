@@ -6,6 +6,8 @@ namespace Lockflight.Cli.Review;
 /// that are not tracked (minor, nit, rejected). <see cref="EarlierReproductions"/> are the reproductions earlier runs gave an open
 /// finding that differ from <see cref="Reproduction"/>: each is re-run too, and the finding is fixed only when all of them pass. <see cref="ReproductionAttempts"/> counts the builds of this run's reproduction (two when it
 /// was repaired after it did not compile), and <see cref="CompileErrors"/> holds a bounded summary of the errors of each attempt that did not compile.
+/// <see cref="SpecQuote"/> is the requirement sentence the reviewer says the finding encodes, and <see cref="SpecAnchor"/> whether the
+/// engine found it in the spec (recorded only; it does not change the outcome).
 /// </summary>
 internal sealed record ReviewFinding(
     FindingSeverity Severity,
@@ -32,6 +34,10 @@ internal sealed record ReviewFinding(
     public IReadOnlyList<string> CompileErrors { get; init; } = [];
 
     public FindingState? State { get; init; }
+
+    public string? SpecQuote { get; init; }
+
+    public SpecAnchor SpecAnchor { get; init; } = SpecAnchor.None;
 
     public bool NeedsReproduction => Severity is FindingSeverity.Blocker or FindingSeverity.Major;
 }

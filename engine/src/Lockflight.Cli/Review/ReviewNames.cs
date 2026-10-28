@@ -53,6 +53,29 @@ internal static class ReviewNames
         _ => throw new ArgumentOutOfRangeException(nameof(result), result, null),
     };
 
+    public static string ToName(SpecAnchor anchor) => anchor switch
+    {
+        SpecAnchor.None => "none",
+        SpecAnchor.Anchored => "anchored",
+        SpecAnchor.NotAnchored => "not-anchored",
+        _ => throw new ArgumentOutOfRangeException(nameof(anchor), anchor, null),
+    };
+
+    public static SpecAnchor ParseSpecAnchor(string? name) => name switch
+    {
+        "anchored" => SpecAnchor.Anchored,
+        "not-anchored" => SpecAnchor.NotAnchored,
+        _ => SpecAnchor.None,
+    };
+
+    /// <summary>How output and the pull request summary say a blocker/major finding's spec anchor: "spec quote anchored", …</summary>
+    public static string Describe(SpecAnchor anchor) => anchor switch
+    {
+        SpecAnchor.Anchored => "spec quote anchored",
+        SpecAnchor.NotAnchored => "spec quote not anchored",
+        _ => "no spec quote",
+    };
+
     public static string ToName(FindingState state) => state switch
     {
         FindingState.Open => "open",
