@@ -1,9 +1,5 @@
 using Lockflight.Cli.Config;
-using Lockflight.Cli.Gates.Parsers;
-using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Hosting;
-using Lockflight.Cli.Ledger;
-using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Gates.Baselines;
 
@@ -15,9 +11,10 @@ internal sealed class BaselineCommand(CliContext context)
 {
     private static readonly string[] ValueOptions = ["--path"];
 
-    public async Task<ExitCode> RunAsync(string kind, string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(string kindName, string[] args, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync($"baseline {kind}", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options)
+        if (await CommandOptions.ParseOrReportAsync($"baseline {kindName}", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options
+            || !BaselineKindNames.TryParse(kindName, out BaselineKind kind))
         {
             return ExitCode.Config;
         }
@@ -28,75 +25,15 @@ internal sealed class BaselineCommand(CliContext context)
             return ExitCode.Config;
         }
 
-        if (kind == "tests")
+        BaselineRun run = new(context, manifest);
+        BaselineCapture capture = await run.CaptureAsync(kind, target, Timeout.InfiniteTimeSpan, underHook: false, cancellationToken);
+        if (capture.Entries is not IReadOnlyList<string> entries)
         {
-            return await AcceptFailingTestsAsync(target, manifest, cancellationToken);
+            await context.Error.WriteLineAsync($"lockflight: {capture.Problem}");
+            return capture.FailureExit;
         }
 
-        if (kind == "deps")
-        {
-            return await AcceptAdvisoriesAsync(target, manifest, cancellationToken);
-        }
-
-        // A full rebuild: an incremental build skips unchanged projects and would leave their warnings out of the baseline.
-        GateRunContext buildRun = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: false);
-        ProcessResult build = await ProcessRunner.RunAsync(
-            "dotnet", ["build", .. buildRun.BuildFileArguments, "--no-incremental", "--nologo", "--interactive", "false"], target, cancellationToken);
-        if (build.ExitCode != 0)
-        {
-            await context.Error.WriteLineAsync("lockflight: the build fails; a baseline is taken from a building tree only");
-            return ExitCode.Fail;
-        }
-
-        IReadOnlyList<BuildDiagnostic> diagnostics = BuildDiagnostics.Parse(build.Output, manifest.Root);
-        DiagnosticsBaseline baseline = new(manifest.Root, buildRun.UnitPath);
-        baseline.Save(diagnostics);
-        await new LedgerWriter(manifest.Root, context.Time).AppendAsync(
-            new LedgerEvent(LedgerEventType.ConfigWritten, "baseline:build", $"{diagnostics.Count} warnings accepted", null), cancellationToken);
-        await context.Output.WriteLineAsync($"baseline: {diagnostics.Count} warnings accepted -> {baseline.RelativePath}");
-        return ExitCode.Pass;
-    }
-
-    private async Task<ExitCode> AcceptFailingTestsAsync(string target, Manifest manifest, CancellationToken cancellationToken)
-    {
-        GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: false);
-        if ((await BuildStep.RunAsync(run, cancellationToken)).Verdict != Verdict.Pass)
-        {
-            await context.Error.WriteLineAsync("lockflight: the build gate does not pass; fix it before accepting failing tests");
-            return ExitCode.Fail;
-        }
-
-        TestStepOutcome tests = await TestStep.RunAsync(run, cancellationToken);
-        if (tests.Step.Verdict == Verdict.Error)
-        {
-            await context.Error.WriteLineAsync($"lockflight: the test run itself broke ({tests.Step.Detail}); a baseline needs a test run that completes");
-            return ExitCode.Error;
-        }
-
-        KnownFailingTests known = new(manifest.Root, run.UnitPath);
-        known.Save(tests.FailedTests);
-        string accepted = $"{tests.FailedTests.Count} failing {(tests.FailedTests.Count == 1 ? "test" : "tests")} accepted";
-        await new LedgerWriter(manifest.Root, context.Time).AppendAsync(
-            new LedgerEvent(LedgerEventType.ConfigWritten, "baseline:tests", accepted, null), cancellationToken);
-        await context.Output.WriteLineAsync($"baseline: {accepted} -> {known.RelativePath}");
-        return ExitCode.Pass;
-    }
-
-    private async Task<ExitCode> AcceptAdvisoriesAsync(string target, Manifest manifest, CancellationToken cancellationToken)
-    {
-        GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.PullRequest, baseRef: null, context.Time);
-        (GateStep step, IReadOnlyList<VulnerablePackage> found) = await DependencyStep.RunAsync(run, cancellationToken);
-        if (step.Verdict == Verdict.Error)
-        {
-            await context.Error.WriteLineAsync($"lockflight: could not list vulnerable packages ({step.Detail})");
-            return ExitCode.Error;
-        }
-
-        AcceptedAdvisories accepted = new(manifest.Root, run.UnitPath);
-        accepted.Save(found);
-        await new LedgerWriter(manifest.Root, context.Time).AppendAsync(
-            new LedgerEvent(LedgerEventType.ConfigWritten, "baseline:deps", $"{found.Count} advisories accepted", null), cancellationToken);
-        await context.Output.WriteLineAsync($"baseline: {found.Count} advisories accepted -> {accepted.RelativePath}");
+        await context.Output.WriteLineAsync(await run.SaveAsync(kind, capture.UnitPath, entries, cancellationToken));
         return ExitCode.Pass;
     }
 }

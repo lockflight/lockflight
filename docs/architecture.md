@@ -69,11 +69,12 @@ not offer that for `Stop`, which is why the Stop gate is best effort and CI is t
 
 `UserPromptExpansion` fires when a prompt expands a slash command, never for the agent's own skill calls. Claude Code's
 documentation says it runs for a user-typed command, but a live probe showed it also fires, with the same payload, for a prompt
-that a `CronCreate` task queued; the approve relay in the guard (see [guardrails and
+that a `CronCreate` task queued; the relay guard (see [guardrails and
 boundaries](guides/guardrails-and-boundaries.md#every-control-labelled)) exists for that case, and the probe is repeated before
-each Lockflight release. The engine ignores every command except `/lockflight:approve`, which it handles only in an interactive,
-attended session: it shows the person (on stderr with exit 2, which the agent does not see) what would be approved with a
-one-time code, and records the approval when the person types that code while the files are unchanged.
+each Lockflight release. The engine ignores every command except the in-session human commands (`/lockflight:approve`,
+`/lockflight:baseline`, `/lockflight:reset`, `/lockflight:amend`), which it handles only in an interactive, attended session:
+it shows the person (on stderr with exit 2, which the agent does not see) what would be recorded with a one-time code, and
+records the decision when the person types that code while what they were shown is unchanged.
 
 ## The guard
 
@@ -173,6 +174,7 @@ types add fields, and readers ignore fields they do not know:
 | `gate.completed` | `trigger` (`command` for `lockflight gate run`, `stop-hook` for the Stop hook), `durationMs`, `cache` (`hit` when the Stop gate's cache of the last PASS answered, `miss` when it was consulted and the gate ran, `none` when it was not consulted) |
 | `approval.recorded` | `feature`, `phase`, `artifacts` (each artifact with the first 12 characters of its hash), `signed`, `channel` (`terminal` for `lockflight approve`, `session` for `/lockflight:approve`) |
 | `evidence.recorded`, `config.written` | none |
+| `session-command.answered` | none: an in-session human command answered without recording anything (a usage hint, a wrong, expired or used code, changed content). It is the person's own typing, so neither the status line nor `ledger retro` counts it; a refusal for an unattended session or a command from another source stays `hook.blocked` |
 
 No line names a person, with one exception: who approved a phase is kept in the approval record, not in the ledger, but
 `redgreen:amended` keeps in its detail who amended a test and why, as the red/green record does.

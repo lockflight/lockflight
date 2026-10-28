@@ -19,7 +19,7 @@ internal static class ApprovalDigest
     {
         string phaseName = ApprovalPhaseNames.ToName(phase);
         StringBuilder digest = new();
-        digest.AppendLine($"lockflight: you are about to approve the {phaseName} of {feature.Id}. Review it (the engine read these files, the agent did not write this):");
+        digest.AppendLine(SessionCommandGate.Opening("nothing has been approved yet", $"Check the {phaseName} of {feature.Id} you are approving"));
         foreach (ArtifactSnapshot artifact in artifacts)
         {
             string hash = artifact.Hash;
@@ -34,9 +34,7 @@ internal static class ApprovalDigest
 
         digest.AppendLine($"  Open [NEEDS CLARIFICATION] markers: {Clarifications(artifacts)}");
         digest.AppendLine($"  Current approval: {Describe(current)}");
-        digest.AppendLine($"To approve exactly this content, type within {ApprovalCodes.Lifetime.TotalMinutes:0} minutes:");
-        digest.AppendLine($"  /lockflight:approve {phaseName} {code}{typedOptions}");
-        digest.Append("The code works once, and only while the files stay as shown. The agent does not see this message.");
+        digest.Append(SessionCommandGate.Closing($"/lockflight:approve {phaseName} {code}{typedOptions}", "the files stay as shown"));
         return digest.ToString();
     }
 

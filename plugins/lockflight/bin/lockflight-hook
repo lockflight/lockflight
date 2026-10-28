@@ -50,12 +50,19 @@ json_string() {
   }'
 }
 
-# approval_expansion: whether the payload is the expansion of a typed /lockflight:approve (any case). That one must never reach
-# the agent unchecked, so it is blocked whenever the engine cannot judge it.
-approval_expansion() {
+# human_expansion: whether the payload is the expansion of a typed in-session human command (/lockflight:approve, :baseline,
+# :reset, :amend; any case), setting $nothing to what was not done. Such a command must never reach the agent unchecked, so it
+# is blocked whenever the engine cannot judge it.
+human_expansion() {
   [ "$event" = "user-prompt-expansion" ] || return 1
   name=$(json_string command_name | tr '[:upper:]' '[:lower:]')
-  [ "$name" = "lockflight:approve" ]
+  case "$name" in
+    lockflight:approve) nothing="nothing was approved" ;;
+    lockflight:baseline) nothing="nothing was accepted" ;;
+    lockflight:reset) nothing="nothing was reset" ;;
+    lockflight:amend) nothing="nothing was amended" ;;
+    *) return 1 ;;
+  esac
 }
 
 dir="${CLAUDE_PROJECT_DIR:-}"
@@ -103,7 +110,7 @@ if [ -x "$engine" ]; then
 fi
 untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Ask the user to $untrusted_fix, then run: dotnet tool restore && dotnet lockflight link"
 if [ -x "$engine" ] && [ -z "$untrusted" ]; then
-  # A slash command's payload is read first, so a failed engine can still be told apart from a typed /lockflight:approve.
+  # A slash command's payload is read first, so a failed engine can still be told apart from a typed human command.
   if [ "$event" = "user-prompt-expansion" ] && [ -z "$input" ]; then input=$(cat); fi
   # An engine older than this plugin does not know the TaskCompleted event and would block every task completion; its
   # "does not know the hook event" refusal is let through instead (it prints nothing else for this event).
@@ -118,14 +125,14 @@ if [ -x "$engine" ] && [ -z "$untrusted" ]; then
   # Not `printf | exec`: in a pipeline exec only replaces the subshell and the script would fall through.
   if [ -n "$input" ]; then printf '%s' "$input" | "$engine" hook "$event"; else "$engine" hook "$event"; fi
   status=$?
-  # Fail closed: a crash or any exit other than allow (0) / block (2) must not let a tool call or an approval through.
+  # Fail closed: a crash or any exit other than allow (0) / block (2) must not let a tool call or a human command through.
   if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
     if [ "$event" = "pre-tool-use" ]; then
       echo "lockflight: the engine failed (exit $status), so the tool call is blocked. Run: .lockflight/bin/lockflight doctor (from $root)" >&2
       exit 2
     fi
-    if approval_expansion; then
-      echo "lockflight: the engine failed (exit $status), so nothing was approved. Run: .lockflight/bin/lockflight doctor (from $root)" >&2
+    if human_expansion; then
+      echo "lockflight: the engine failed (exit $status), so $nothing. Run: .lockflight/bin/lockflight doctor (from $root)" >&2
       exit 2
     fi
   fi
@@ -134,9 +141,9 @@ fi
 
 if [ "$event" = "user-prompt-expansion" ]; then
   [ -n "$input" ] || input=$(cat)
-  if approval_expansion; then
-    if [ -n "$untrusted" ]; then echo "$untrusted_message. Nothing was approved." >&2; exit 2; fi
-    echo "lockflight: engine not installed in this project, so nothing was approved. Run exactly: dotnet tool restore && dotnet lockflight link, then type the command again." >&2
+  if human_expansion; then
+    if [ -n "$untrusted" ]; then echo "$untrusted_message. N${nothing#n}." >&2; exit 2; fi
+    echo "lockflight: engine not installed in this project, so $nothing. Run exactly: dotnet tool restore && dotnet lockflight link, then type the command again." >&2
     exit 2
   fi
   exit 0

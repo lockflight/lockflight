@@ -19,5 +19,7 @@ internal sealed class AcceptedAdvisories(string projectRoot, string? unitPath)
 
     public IReadOnlySet<string> Load() => List.Load();
 
-    public void Save(IEnumerable<VulnerablePackage> packages) => List.Save(packages.Select(package => package.Fingerprint));
+    public void Save(IEnumerable<VulnerablePackage> packages) => Save(packages.Select(package => package.Fingerprint));
+
+    public void Save(IEnumerable<string> fingerprints) => List.Save(fingerprints);
 }

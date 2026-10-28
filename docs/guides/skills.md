@@ -15,12 +15,16 @@ The plugin adds these skills to Claude Code. Claude picks them from what you ask
 | `gate` | "check the code", or before declaring a task done | Runs `gate run` and explains the verdict |
 | `feature` | "build feature X" | The standard lifecycle: specify → clarify → plan → tasks → red/green per story → trace → gates → review. In a lite project (no `.specify/`) it stops and offers the standard setup |
 | `approve` | **only you can invoke it**: `/lockflight:approve spec\|tasks` | Typed by you, the engine's hook shows you what would be approved with a one-time code, and records the approval when you type `/lockflight:approve spec <code>`. The agent then checks the recorded state with `approve verify` and continues; if nothing was recorded, it summarises what would be approved and tells you how to approve (here, or in a separate terminal window). The agent never sees or types the code. See [commands](commands.md#human-decisions). |
+| `baseline` | **only you can invoke it**: `/lockflight:baseline build\|tests\|deps` | Typed by you, the engine runs the build, the tests or the advisory listing, shows every entry it would accept with a one-time code, and writes exactly those when you type the line with the code. The agent explains what a baseline would accept and never runs it. |
+| `reset` | **only you can invoke it**: `/lockflight:reset` | Typed by you, the engine shows the red/green evidence it would discard with a one-time code, and discards it when you type the line with the code. |
+| `amend` | **only you can invoke it**: `/lockflight:amend <Class.Method> --reason <why>` | Typed by you, the engine shows the test and the file it would unlock with a one-time code, and records the amend when you type `/lockflight:amend <Class.Method> <code>`. The agent tells you which test is wrong and why, and never amends by itself. |
 | `review` | "review this before the PR" | Runs the review of record and handles confirmed, unverified and rejected findings; open ones stay open across runs until fixed or dismissed by you, and it checks them with `review status` |
 | `retro` | "what keeps going wrong?" | Runs `ledger retro` and walks through the suggested remedies |
 
 The plugin also installs five hooks: `SessionStart` (a short banner), `PreToolUse` (the guard), `UserPromptExpansion`
-(records `/lockflight:approve` when you type it), `TaskCompleted` (a task is completed only after the stop gate passed, when
-`stop.gate: true`) and `Stop` (the stop gate, when `stop.gate: true`).
+(records `/lockflight:approve`, `/lockflight:baseline`, `/lockflight:reset` and `/lockflight:amend` when you type them),
+`TaskCompleted` (a task is completed only after the stop gate passed, when `stop.gate: true`) and `Stop` (the stop gate, when
+`stop.gate: true`).
 
 ## The crew (optional)
 

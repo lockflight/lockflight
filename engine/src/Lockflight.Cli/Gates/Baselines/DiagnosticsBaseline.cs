@@ -41,10 +41,13 @@ internal sealed class DiagnosticsBaseline(string projectRoot, string? unitPath)
         return fresh;
     }
 
-    public void Save(IReadOnlyList<BuildDiagnostic> diagnostics)
+    public void Save(IReadOnlyList<BuildDiagnostic> diagnostics) => Save(diagnostics.Select(diagnostic => diagnostic.Fingerprint));
+
+    /// <summary>Saves the fingerprints, one per occurrence of the warning.</summary>
+    public void Save(IEnumerable<string> fingerprints)
     {
         JsonObject counts = [];
-        foreach (IGrouping<string, BuildDiagnostic> group in diagnostics.GroupBy(diagnostic => diagnostic.Fingerprint).OrderBy(group => group.Key, StringComparer.Ordinal))
+        foreach (IGrouping<string, string> group in fingerprints.GroupBy(fingerprint => fingerprint).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             counts[group.Key] = group.Count();
         }
@@ -52,6 +55,9 @@ internal sealed class DiagnosticsBaseline(string projectRoot, string? unitPath)
         JsonObject document = new() { ["schema"] = Schema, ["diagnostics"] = counts };
         JsonFiles.Write(FilePath, document);
     }
+
+    /// <summary>The accepted fingerprints, one per accepted occurrence.</summary>
+    public IReadOnlyList<string> Accepted() => [.. Load().SelectMany(entry => Enumerable.Repeat(entry.Key, entry.Value))];
 
     private Dictionary<string, int> Load()
     {

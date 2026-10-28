@@ -173,7 +173,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "user-prompt-expansion"], payload, root.FullName, attended, time);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("you are about to approve the spec", error, StringComparison.Ordinal);
+        Assert.Contains("you are approving", error, StringComparison.Ordinal);
         AssertClean(error);
         Assert.Contains($"1 Pay{HostileShown}", error, StringComparison.Ordinal);
     }

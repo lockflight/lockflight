@@ -88,11 +88,13 @@ Never approve for them.
       green. Implement in production code until `.lockflight/bin/lockflight redgreen green` passes. If a test itself turns
       out wrong (its expectation contradicts the spec, or the API it uses had to change), stop and ask the user; never edit a
       locked test, and never amend or reset yourself. Tell them which test and why, and that they can let exactly that test
-      change with `.lockflight/bin/lockflight redgreen amend <Class.Method> --reason "<why>"` run in a separate terminal
-      window (not with `!` in Claude Code: that runs inside the session and is refused). Its output names the file it
-      unlocks. Then change only what the amend allows, run `.lockflight/bin/lockflight redgreen red` (the amended test must
-      fail in production code again), and go on to green. Discarding the whole cycle is `redgreen reset`, also theirs.
-      **If a test written in this cycle turns out wrong after red, ask the user for an amend of that test. Never change
+      change by typing `/lockflight:amend <Class.Method> --reason <why>` here, or with
+      `.lockflight/bin/lockflight redgreen amend <Class.Method> --reason "<why>"` run in a separate terminal window (not with
+      `!` in Claude Code: that runs inside the session and is refused). Never type the command or its code yourself. Check
+      `.lockflight/bin/lockflight redgreen status`: it names the file the amend unlocks. Then change only what the amend
+      allows, run `.lockflight/bin/lockflight redgreen red` (the amended test must fail in production code again), and go on
+      to green. Discarding the whole cycle is `redgreen reset` (or `/lockflight:reset`), also theirs.
+      **If a test written in this cycle turns out wrong after red, ask the user for `/lockflight:amend <test>`. Never change
       production code just to satisfy a wrong test, and `baseline` does not excuse this cycle's tests.**
    5. If `red` or `green` refuses because an approval is stale (spec.md, plan.md or tasks.md changed after approval), show the
       user what changed and ask them to approve again (see Approvals). Wait.
