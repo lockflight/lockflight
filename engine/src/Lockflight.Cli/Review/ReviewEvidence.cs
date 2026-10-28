@@ -55,6 +55,8 @@ internal static class ReviewEvidence
                 ["file"] = finding.File,
                 ["line"] = finding.Line,
                 ["requirement"] = finding.Requirement,
+                ["specQuote"] = finding.SpecQuote,
+                ["specAnchor"] = ReviewNames.ToName(finding.SpecAnchor),
                 ["title"] = finding.Title,
                 ["evidence"] = finding.Evidence,
                 ["reproduction"] = finding.Reproduction,
@@ -261,6 +263,8 @@ internal static class ReviewEvidence
                 ? [.. earlier.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)]
                 : [],
             State = ReviewNames.ParseState(Text(element, "state")),
+            SpecQuote = OptionalText(element, "specQuote"),
+            SpecAnchor = ReviewNames.ParseSpecAnchor(Text(element, "specAnchor")),
         };
 
     private static string Text(JsonElement element, string property) =>

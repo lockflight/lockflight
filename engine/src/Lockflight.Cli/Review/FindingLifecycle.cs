@@ -69,6 +69,7 @@ internal static class FindingLifecycle
         {
             Severity = finding.Severity < open.Severity ? finding.Severity : open.Severity,
             Reproduction = reproduction,
+            SpecQuote = finding.SpecQuote ?? open.SpecQuote,
             EarlierReproductions = [.. open.EarlierReproductions.Append(open.Reproduction).OfType<string>().Where(earlier => earlier != reproduction).Distinct(StringComparer.Ordinal)],
         };
     }

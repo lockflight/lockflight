@@ -43,6 +43,7 @@ internal static class ReviewPrompt
                   "file": { "type": "string" },
                   "line": { "type": "integer" },
                   "requirement": { "type": "string" },
+                  "specQuote": { "type": "string", "description": "For blocker/major: the requirement sentence the reproduction's assertion encodes, copied word for word from the requirements" },
                   "title": { "type": "string" },
                   "evidence": { "type": "string" },
                   "reproduction": { "type": "string", "description": "For blocker/major: one complete xUnit v3 [Fact] method (attribute and body, no class, no usings) that fails on the current code and would pass once the defect is fixed" }
@@ -71,6 +72,12 @@ internal static class ReviewPrompt
             (blocker, major, minor, nit). For every blocker or major finding include `reproduction`: one complete xUnit v3 [Fact]
             method — attribute and body only, no class and no using directives — that fails on the current code and passes once the
             defect is fixed.
+
+            The reproduction's assertion must encode a requirement sentence of the requirements below, or behaviour that an existing
+            test defines, never an expectation of your own. Copy that requirement sentence word for word into `specQuote`; when the
+            expectation comes from an existing test instead, leave `specQuote` out and name the test in `evidence`. When the
+            requirements are silent on the behaviour and no existing test defines it, report it as minor and say in `evidence` that
+            the spec does not cover it.
 
             {ReproductionRules}
 

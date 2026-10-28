@@ -545,6 +545,36 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task ABlockingFindingRecordsWhetherItsSpecQuoteIsAnchoredWithoutChangingTheVerdict()
+    {
+        await ProjectAsync();
+        claude.Answers(
+            """{"severity":"major","file":"src/Orders.cs","line":3,"title":"Discount ignored","evidence":"x","specQuote":"The total applies\nthe discount."}""",
+            """{"severity":"major","file":"src/Orders.cs","line":4,"title":"Rounding","evidence":"x","specQuote":"Totals are rounded to cents."}""",
+            """{"severity":"major","file":"src/Orders.cs","line":5,"title":"Currency","evidence":"x"}""");
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.NotEarned, exitCode);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Dictionary<string, JsonElement> findings = evidence.RootElement.GetProperty("findings").EnumerateArray().ToDictionary(finding => finding.GetProperty("title").GetString()!);
+        Assert.Equal("anchored", findings["Discount ignored"].GetProperty("specAnchor").GetString());
+        Assert.Equal("The total applies\nthe discount.", findings["Discount ignored"].GetProperty("specQuote").GetString());
+        Assert.Equal("not-anchored", findings["Rounding"].GetProperty("specAnchor").GetString());
+        Assert.Equal("none", findings["Currency"].GetProperty("specAnchor").GetString());
+        Assert.All(findings.Values, finding => Assert.Equal("unverified", finding.GetProperty("outcome").GetString()));
+        Assert.Contains("Discount ignored (", output, StringComparison.Ordinal);
+        Assert.Matches(@"Discount ignored \(\w+; spec quote anchored\)", output);
+        Assert.Matches(@"Rounding \(\w+; spec quote not anchored\)", output);
+        Assert.Matches(@"Currency \(\w+; no spec quote\)", output);
+        (_, string status, _) = await RunAsync(["review", "status"]);
+        string summary = status[status.IndexOf("## Pull request summary", StringComparison.Ordinal)..];
+        Assert.Contains("Discount ignored (spec quote anchored)", summary, StringComparison.Ordinal);
+        Assert.Contains("Rounding (spec quote not anchored)", summary, StringComparison.Ordinal);
+        Assert.Contains("Currency (no spec quote)", summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task StatusIsNotReservedForAPerson()
     {
         await ProjectAsync();

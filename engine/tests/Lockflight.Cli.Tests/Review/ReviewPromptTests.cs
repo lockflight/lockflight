@@ -52,6 +52,17 @@ public sealed class ReviewPromptTests
     }
 
     [Fact]
+    public void ThePromptTiesAReproductionToTheSpecOrAnExistingTest()
+    {
+        string prompt = ReviewPrompt.Build(new ReviewPromptData("FR-001", "specs/001/spec.md", "+x", null, string.Empty, string.Empty, Marker));
+
+        Assert.Contains("must encode a requirement sentence of the requirements below", prompt, StringComparison.Ordinal);
+        Assert.Contains("`specQuote`", prompt, StringComparison.Ordinal);
+        Assert.Contains("report it as minor", prompt, StringComparison.Ordinal);
+        Assert.Contains("\"specQuote\"", ReviewPrompt.Schema, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WithoutGuidanceThereIsNoGuidanceBlock()
     {
         string prompt = ReviewPrompt.Build(new ReviewPromptData("FR-001", "specs/001/spec.md", "+x", null, string.Empty, string.Empty, Marker));

@@ -127,7 +127,8 @@ internal sealed class ReviewCommand(CliContext context)
                 (await AskReviewerAsync(manifest, claude, model, ReviewOfRecord.Usd(repairBudget), repairPrompt, repairCancellation)).Output),
             budget - outcome.CostUsd);
         HashSet<string> repairable = [.. outcome.Findings.Select(finding => finding.Id).Where(id => !history.Open.Any(tracked => tracked.Finding.Id == id))];
-        IReadOnlyList<ReviewFinding> judged = await ConfirmFindingsAsync(manifest, feature, FindingLifecycle.Carry(outcome.Findings, history), repairer, repairable, cancellationToken);
+        IReadOnlyList<ReviewFinding> anchored = [.. FindingLifecycle.Carry(outcome.Findings, history).Select(finding => Anchor(finding, requirements))];
+        IReadOnlyList<ReviewFinding> judged = await ConfirmFindingsAsync(manifest, feature, anchored, repairer, repairable, cancellationToken);
         outcome = outcome with
         {
             Findings = FindingLifecycle.Resolve(judged, history),
@@ -308,8 +309,9 @@ internal sealed class ReviewCommand(CliContext context)
             string state = finding.State is FindingState findingState ? $", {ReviewNames.ToName(findingState)}" : string.Empty;
             string requirement = finding.Requirement is null ? string.Empty : $" ({finding.Requirement})";
             string carried = finding.Carried ? ", carried from an earlier run" : string.Empty;
+            string anchor = finding.NeedsReproduction ? $"; {ReviewNames.Describe(finding.SpecAnchor)}" : string.Empty;
             await context.Output.WriteLineAsync(
-                $"- {ReviewNames.ToName(finding.Severity)} [{ReviewNames.ToName(finding.Outcome)}{state}] {finding.File}:{finding.Line}{requirement} {finding.Title} ({finding.Id}{carried})");
+                $"- {ReviewNames.ToName(finding.Severity)} [{ReviewNames.ToName(finding.Outcome)}{state}] {finding.File}:{finding.Line}{requirement} {finding.Title} ({finding.Id}{carried}{anchor})");
         }
 
         await context.Output.WriteLineAsync(
@@ -323,6 +325,10 @@ internal sealed class ReviewCommand(CliContext context)
             $"Open blocker/major findings: {open}. They stay open until a later review re-runs their reproduction and it passes, or a person "
             + "dismisses them; 'lockflight review status' shows them and the pull request summary.");
     }
+
+    /// <summary>A blocker/major finding with its spec quote checked against the spec it was reviewed against; others as they are.</summary>
+    private static ReviewFinding Anchor(ReviewFinding finding, string requirements) =>
+        finding.NeedsReproduction ? finding with { SpecAnchor = SpecQuotes.Check(finding.SpecQuote, requirements) } : finding;
 
     private static string Cost(ReviewOutcome outcome) => outcome.CostUsd.ToString("0.000", CultureInfo.InvariantCulture);
 
