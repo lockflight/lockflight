@@ -22,14 +22,20 @@ internal static class PathRules
     /// <summary>As <see cref="FindMatch(string, string, IEnumerable{string})"/>, resolving a relative path against <paramref name="workingDirectory"/>.</summary>
     public static string? FindMatch(string root, string filePath, string workingDirectory, IEnumerable<string> globs)
     {
-        string? relative = ToRelative(Canonicalize(root, baseDirectory: null), Canonicalize(filePath, workingDirectory));
-        if (relative is null)
+        string canonicalRoot = Canonicalize(root, baseDirectory: null);
+        foreach (string form in WindowsParentSegments.WithCollapsed([filePath], workingDirectory))
         {
-            return null;
+            if (ToRelative(canonicalRoot, Canonicalize(form, workingDirectory)) is string relative)
+            {
+                string composed = UnicodeNormalization.Compose(relative);
+                if (globs.FirstOrDefault(glob => ToRegex(glob).IsMatch(composed)) is string match)
+                {
+                    return match;
+                }
+            }
         }
 
-        string composed = UnicodeNormalization.Compose(relative);
-        return globs.FirstOrDefault(glob => ToRegex(glob).IsMatch(composed));
+        return null;
     }
 
     /// <summary>Whether a '/'-separated path relative to the root matches a glob.</summary>

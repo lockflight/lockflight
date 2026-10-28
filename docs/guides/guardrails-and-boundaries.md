@@ -166,7 +166,7 @@ It does **not** see:
 - a protected file that a `git checkout <rev> -- <dir>` would recreate after it was deleted.
 
 Paths are compared where the operating system would really open them: symbolic links are resolved segment by segment and each
-`..` goes to the parent of the directory reached so far, as `realpath` does, so `link/../x` is judged beside the link's target.
+`..` goes to the parent of the directory reached so far, as `realpath` does, so `link/../x` is judged beside the link's target. Windows collapses a `..` by its text before it follows a link (`out\..\x` is `x` beside `out`), so there a path with `..` is judged in both forms.
 Names are compared in Unicode composed form (NFC) on both sides, so a decomposed spelling of a protected name (`e` + U+0301
 for `é`, which macOS file systems open as the same file) matches its rule. On Windows, `\\?\C:\…`, `\\.\C:\…`,
 `\\?\UNC\…` and this machine's administrative shares (`\\localhost\C$\…`) are judged as the drive path they name; a volume,

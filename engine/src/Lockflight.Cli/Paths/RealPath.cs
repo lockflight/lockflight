@@ -24,7 +24,8 @@ internal static class RealPath
                 return resolved;
             }
 
-            pending = resolved;
+            // A link target joined on Windows carries backslashes; the walk splits on '/' only.
+            pending = resolved.Replace('\\', '/');
         }
 
         throw new IOException($"Too many levels of symbolic links resolving '{absolutePath}'.");

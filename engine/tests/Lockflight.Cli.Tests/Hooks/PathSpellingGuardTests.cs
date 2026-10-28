@@ -30,6 +30,28 @@ public sealed class PathSpellingGuardTests : IDisposable
     }
 
     [Theory]
+    [InlineData("Bash", "cp /tmp/x out/../secrets/k")]
+    [InlineData("Write", "out/../secrets/k")]
+    public async Task OnWindowsAParentSegmentAfterALinkElsewhereIsJudgedWhereWindowsCollapsesIt(string tool, string target)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows() && SymbolicLinks.CanCreate, "Windows only, with symbolic links.");
+        DirectoryInfo elsewhere = Directory.CreateTempSubdirectory("lockflight-elsewhere-");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(elsewhere.FullName, "inner"));
+            Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "out"), Path.Combine(elsewhere.FullName, "inner"));
+
+            (ExitCode exitCode, _, _) = await RunAsync(tool, target);
+
+            Assert.True(exitCode == ExitCode.HookBlock, $"'{target}' was allowed");
+        }
+        finally
+        {
+            TempDirectories.DeleteRecursively(elsewhere);
+        }
+    }
+
+    [Theory]
     [InlineData("echo x > docs/cafe\u0301.md")]
     [InlineData("rm docs/caf\u00e9.md")]
     public async Task EitherUnicodeSpellingOfAProtectedNameIsBlocked(string command)
@@ -89,7 +111,7 @@ public sealed class PathSpellingGuardTests : IDisposable
         {
             ["cwd"] = projectRoot.FullName,
             ["tool_name"] = toolName,
-            ["tool_input"] = new Dictionary<string, string> { ["command"] = command },
+            ["tool_input"] = toolName == "Bash" ? new Dictionary<string, string> { ["command"] = command } : new Dictionary<string, string> { ["file_path"] = command },
         });
         return TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
     }
