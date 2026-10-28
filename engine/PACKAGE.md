@@ -14,21 +14,28 @@ Windows (x64). Other platforms are not supported.
 
 ## Install
 
-Lockflight is used together with its Claude Code plugin:
+Install the engine for your user, outside any project, then the Claude Code plugin:
 
 ```sh
+cd ~                                   # outside any project: a global.json there could pick an SDK older than 10
+dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin
+~/.lockflight/bin/lockflight version
 claude plugin marketplace add lockflight/lockflight
-claude plugin install lockflight@lockflight
+claude plugin install lockflight@lockflight --scope user
 ```
 
-Then, in your repository (the `lockflight:init` skill runs these for you):
+Then, at your repository's root (or ask Claude Code to *"Set up Lockflight"*; the `lockflight:init` skill runs the same
+steps):
 
 ```sh
-dotnet new tool-manifest             # when the repository has none
-dotnet tool install Lockflight.Cli --local --prerelease
-dotnet lockflight init               # manifest, tool pin, Claude settings, CI workflow, linked engine
-.lockflight/bin/lockflight doctor
+~/.lockflight/bin/lockflight init      # manifest, tool pin, Claude settings, CI workflow, linked engine
+.lockflight/bin/lockflight doctor      # the linked engine, the way the agent runs every command from here on
 ```
+
+The engine is installed with `--tool-path`, not as a local tool in the project: the package is built for each platform and
+only the .NET 10 SDK can install it, so a local install fails in a repository whose `global.json` pins an older SDK. The
+installed engine is a native binary that works whatever SDK the project pins. To update, run
+`~/.lockflight/bin/lockflight update` in a project, in a separate terminal window (not with `!` in Claude Code).
 
 ## Documentation
 
