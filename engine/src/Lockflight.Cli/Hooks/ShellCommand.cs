@@ -4,7 +4,7 @@ namespace Lockflight.Cli.Hooks;
 /// One simple command after its prefixes are peeled off: variable assignments, keywords (<c>if</c>, <c>then</c>, <c>do</c>, <c>!</c>,
 /// <c>{</c>, <c>function NAME</c>, …) and wrappers that run the next word as a program (<c>command</c>, <c>env</c> (also the
 /// command line of <c>env -S</c>), <c>sudo</c>, <c>time</c>, <c>nice</c>, <c>nohup</c>, <c>exec</c>, <c>timeout</c>,
-/// <c>setsid</c>, <c>flock</c>, <c>caffeinate</c>, <c>arch</c>, <c>ionice</c>, <c>chronic</c>, <c>xargs</c>).
+/// <c>setsid</c>, <c>flock</c>, <c>caffeinate</c>, <c>arch</c>, <c>xcrun</c>, <c>ionice</c>, <c>chronic</c>, <c>xargs</c>).
 /// <see cref="Program"/> is the lower-cased file name without <c>.exe</c>; <see cref="ArgumentsFromInput"/> is set behind
 /// <c>xargs</c>, whose arguments come from stdin and are not seen.
 /// </summary>
@@ -40,6 +40,7 @@ internal sealed record ShellCommand(string Program, IReadOnlyList<string> Argume
         ["flock"] = ["-w", "--wait", "--timeout", "-E", "--conflict-exit-code"],
         ["caffeinate"] = ["-t", "-w"],
         ["arch"] = ["-arch", "-e"],
+        ["xcrun"] = ["--sdk", "-sdk", "--toolchain", "-toolchain"],
         ["ionice"] = ["-c", "--class", "-n", "--classdata", "-p", "--pid", "-P", "--pgid", "-u", "--uid"],
         ["chronic"] = [],
         ["xargs"] = ["-I", "-n", "-P", "-L", "-d", "-E", "-s", "-a", "--arg-file", "--delimiter", "--max-args", "--max-procs", "--replace"],

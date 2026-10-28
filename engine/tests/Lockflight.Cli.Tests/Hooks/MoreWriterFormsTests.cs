@@ -68,6 +68,33 @@ public sealed class MoreWriterFormsTests
     [InlineData("env --split-string='rm secrets/k'", "secrets/k")]
     [InlineData("ionice -c 3 rm secrets/k", "secrets/k")]
     [InlineData("chronic rm secrets/k", "secrets/k")]
+    [InlineData("xcrun rm secrets/k", "secrets/k")]
+    [InlineData("xcrun --sdk macosx -r rm secrets/k", "secrets/k")]
+    [InlineData("xcrun -toolchain swift rm secrets/k", "secrets/k")]
+    [InlineData("script -q /dev/null rm secrets/k", "secrets/k")]
+    [InlineData("script -t 0 /dev/null rm -f secrets/k", "secrets/k")]
+    [InlineData("script -c 'rm secrets/k' /dev/null", "secrets/k")]
+    [InlineData("script -q --command='rm secrets/k' /dev/null", "secrets/k")]
+    [InlineData("script secrets/k", "secrets/k")]
+    [InlineData("script -a -q secrets/k true", "secrets/k")]
+    [InlineData("script -O secrets/k -c true", "secrets/k")]
+    [InlineData("script --log-out=secrets/k -c true", "secrets/k")]
+    [InlineData("watch rm secrets/k", "secrets/k")]
+    [InlineData("watch -n 5 'rm secrets/k'", "secrets/k")]
+    [InlineData("watch -n1 -d 'ls; rm secrets/k'", "secrets/k")]
+    [InlineData("watch --interval=1 -x rm secrets/k", "secrets/k")]
+    [InlineData("watch -x sh -c 'rm secrets/k'", "secrets/k")]
+    [InlineData("parallel rm ::: secrets/k", "secrets/k")]
+    [InlineData("parallel 'rm {}' ::: src/a.cs secrets/k", "secrets/k")]
+    [InlineData("parallel -j 4 rm {1} ::: secrets/k ::: x", "secrets/k")]
+    [InlineData("parallel 'rm {2}' ::: x ::: secrets/k", "secrets/k")]
+    [InlineData("parallel rm {.}.yaml ::: lockflight.txt", "lockflight.yaml")]
+    [InlineData("parallel rm secrets/{/} ::: /tmp/k", "secrets/k")]
+    [InlineData("parallel -I X rm X ::: secrets/k", "secrets/k")]
+    [InlineData("parallel --jobs=2 'echo x > {}' ::: secrets/k", "secrets/k")]
+    [InlineData("parallel ::: 'rm secrets/k' ls", "secrets/k")]
+    [InlineData("parallel -X rm ::: a secrets/k", "secrets/k")]
+    [InlineData("nohup parallel rm ::: secrets/k", "secrets/k")]
     public void MoreWritersAndRunnersAreFound(string command, string expectedTarget) =>
         Assert.Contains(expectedTarget, ShellWriteTargets.Find(command, ShellDialect.Posix).Files);
 
@@ -87,6 +114,14 @@ public sealed class MoreWriterFormsTests
     [InlineData("ls | xargs sort")]
     [InlineData("find . -name '*.txt' -exec awk '{print}' {} \\;")]
     [InlineData("ls | while read f; do sort \"$f\"; done")]
+    [InlineData("xcrun --show-sdk-path")]
+    [InlineData("xcrun swift build")]
+    [InlineData("watch ls")]
+    [InlineData("watch -n 2 'git status; ls'")]
+    [InlineData("parallel echo ::: secrets/k")]
+    [InlineData("ls | parallel echo")]
+    [InlineData("parallel -a list.txt grep x")]
+    [InlineData("script -p secrets/k")]
     public void ReadingFormsWriteNothing(string command)
     {
         ShellWrites writes = ShellWriteTargets.Find(command, ShellDialect.Posix);
@@ -95,6 +130,28 @@ public sealed class MoreWriterFormsTests
         Assert.Empty(writes.Files);
         Assert.Empty(writes.Trees);
     }
+
+    [Fact]
+    public void ScriptRecordingToTheNullDeviceWritesNoProjectFile()
+    {
+        ShellWrites writes = ShellWriteTargets.Find("script -q /dev/null ls -la", ShellDialect.Posix);
+
+        Assert.Null(writes.Hidden);
+        Assert.Equal(["/dev/null"], writes.Files);
+    }
+
+    [Theory]
+    [InlineData("ls | parallel rm")]
+    [InlineData("parallel rm :::: list.txt")]
+    [InlineData("parallel -a list.txt rm")]
+    [InlineData("parallel --arg-file=list.txt 'echo x > {}'")]
+    [InlineData("parallel rm ::: $(cat list)")]
+    public void AParallelWriterWithArgumentsFromElsewhereIsHidden(string command) =>
+        Assert.NotNull(ShellWriteTargets.Find(command, ShellDialect.Posix).Hidden);
+
+    [Fact]
+    public void AParallelRunWithTooManyJobsToListIsHidden() =>
+        Assert.NotNull(ShellWriteTargets.Find($"parallel rm {{1}}{{2}}{{3}} ::: {Words(20)} ::: {Words(20)} ::: {Words(20)}", ShellDialect.Posix).Hidden);
 
     [Fact]
     public void AHugeBraceSequenceIsHidden() =>
@@ -123,4 +180,6 @@ public sealed class MoreWriterFormsTests
     [InlineData("xcopy C:\\tmp\\conf secrets /E /I", "secrets")]
     public void PowerShellExtractionsAndWindowsCopiesRewriteATree(string command, string expectedTree) =>
         Assert.Contains(expectedTree, ShellWriteTargets.Find(command, ShellDialect.PowerShell).Trees);
+
+    private static string Words(int count) => string.Join(' ', Enumerable.Range(0, count).Select(index => $"w{index}"));
 }

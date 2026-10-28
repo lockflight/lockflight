@@ -31,6 +31,7 @@ internal static class GuardCanaries
                 ["cron"] = "*/5 * * * *",
                 ["prompt"] = "/lockflight:approve spec",
             }, scratch), cancellationToken),
+            await BlockedAsync(scratch, "relay guard: a Write of .claude/scheduled_tasks.json is blocked", FileCall("Write", scratch.PathOf(".claude/scheduled_tasks.json"), scratch), cancellationToken),
         ];
     }
 
