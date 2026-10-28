@@ -180,7 +180,8 @@ These always apply; `protected:` can add paths but never remove these.
 | `**/.gitattributes` | what git diffs show: a `-diff` or `binary` line, or a diff driver, can show a text change as "Binary files … differ" (attributes set outside the tree, in `.git/info/attributes` or `core.attributesFile`, are not covered; the review's own check below is) |
 | `**/NuGet.config`, `**/nuget.config` | package sources |
 | `.gitleaks.toml`, `.gitleaksignore` | secret-scanning policy |
-| `.github/workflows/lockflight-gates.yml` | the CI job that judges pull requests |
+| `.github/workflows/lockflight-gates.yml`, `.azure-pipelines/lockflight-gates.yml`, `.gitlab/ci/lockflight-gates.yml` | the CI job that judges pull requests |
+| `.gitlab-ci.yml`, `bitbucket-pipelines.yml` | the one pipeline file that decides whether the job runs at all on GitLab and Bitbucket: see [CI on other platforms](ci-other-platforms.md) |
 
 `init` and `adopt apply` also write an `Edit` deny rule for each protected path into `.claude/settings.json`, so Claude Code
 refuses its own file tools there: see [permission deny rules](guardrails-and-boundaries.md#permission-deny-rules).

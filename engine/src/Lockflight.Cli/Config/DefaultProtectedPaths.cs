@@ -39,6 +39,12 @@ internal static class DefaultProtectedPaths
         ".gitleaks.toml",
         ".gitleaksignore",
         ".github/workflows/lockflight-gates.yml",
+        // The Lockflight job on the other CI platforms. GitLab and Bitbucket decide whether the job runs at all in one shared
+        // file (a job defined there overrides an included one), so that whole file is policy, as Directory.Build.props is.
+        ".azure-pipelines/lockflight-gates.yml",
+        ".gitlab/ci/lockflight-gates.yml",
+        ".gitlab-ci.yml",
+        "bitbucket-pipelines.yml",
     ];
 
     /// <summary>
