@@ -97,7 +97,7 @@ internal sealed class CanaryProject(CanaryScratch scratch)
 
             ## Phase 3: User Story 1 - Archive an order (Priority: P1)
 
-            - [ ] T001 [US1] (FR-001) Declare Order.Archive in src/Canary/Order.cs
+            - [ ] T001 [US1] (FR-001) Declare Order.Archive stub in src/Canary/Order.cs
 
             ### Tests for User Story 1 (MANDATORY — write first, ensure they FAIL) ⚠️
 

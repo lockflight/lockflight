@@ -1,6 +1,5 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
-using Lockflight.Cli.Lifecycle.Approvals;
 
 namespace Lockflight.Cli.Lifecycle;
 
@@ -24,13 +23,7 @@ internal sealed class PhaseCommand(CliContext context)
             return ExitCode.Config;
         }
 
-        IReadOnlyList<PhaseCheckItem>? items = phase switch
-        {
-            "specify" => PhaseChecks.Specify(feature),
-            "tasks" => PhaseChecks.Tasks(feature, new ApprovalStore(feature).Check(ApprovalPhase.Spec), [.. manifest.Units.Select(unit => unit.Path)]),
-            _ => null,
-        };
-        if (items is null)
+        if (PhaseChecks.Run(phase, feature, manifest) is not IReadOnlyList<PhaseCheckItem> items)
         {
             await context.Error.WriteLineAsync($"lockflight: unknown phase '{phase}'; use specify or tasks (implementation is checked by 'lockflight redgreen')");
             return ExitCode.Config;

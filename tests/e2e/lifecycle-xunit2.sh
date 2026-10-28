@@ -45,7 +45,7 @@ cat > $F/tasks.md <<'MD'
 
 ## Phase 3: User Story 1 - Count the lines (Priority: P1)
 
-- [ ] T010 [US1] (FR-010, FR-011) Declare Order.LineCount in src/Orders/Order.cs
+- [ ] T010 [US1] (FR-010, FR-011) Declare Order.LineCount stub in src/Orders/Order.cs
 
 ### Tests for User Story 1 (MANDATORY — write first, ensure they FAIL) ⚠️
 

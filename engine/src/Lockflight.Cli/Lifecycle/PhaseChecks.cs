@@ -1,3 +1,4 @@
+using Lockflight.Cli.Config;
 using Lockflight.Cli.Lifecycle.Approvals;
 
 namespace Lockflight.Cli.Lifecycle;
@@ -10,12 +11,24 @@ namespace Lockflight.Cli.Lifecycle;
 /// </summary>
 internal static class PhaseChecks
 {
+    public const string SpecifyPhase = "specify";
+
+    public const string TasksPhase = "tasks";
+
     private const int MaxListed = 5;
 
     private const string HowToMark = "Mark a test task with a '### Tests for …' heading above it, test wording at the start "
         + "('Write tests …', 'Spec for …', 'Cover … with tests') or the test file it writes (*.spec.ts, *.test.ts, *Tests.cs, a *.Tests/ "
         + "project); mark a stub declaration with 'stub', 'skeleton', 'declare signatures' or 'NotImplementedException' so it may "
         + "come first; move implementation tasks after the story's last test task";
+
+    /// <summary>The checks of the phase named <paramref name="phase"/> (<c>specify</c> or <c>tasks</c>); null for any other name.</summary>
+    public static IReadOnlyList<PhaseCheckItem>? Run(string phase, Feature feature, Manifest manifest) => phase switch
+    {
+        SpecifyPhase => Specify(feature),
+        TasksPhase => Tasks(feature, new ApprovalStore(feature).Check(ApprovalPhase.Spec), [.. manifest.Units.Select(unit => unit.Path)]),
+        _ => null,
+    };
 
     public static IReadOnlyList<PhaseCheckItem> Specify(Feature feature)
     {

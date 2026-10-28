@@ -109,7 +109,7 @@ case "$(uname -s)" in
     mkdir -p "$proj/secrets" && ln -s "$proj/secrets" "$proj/innocent"
     check "linked: write via symlinked dir"        2 "$proj" "$(json "$proj" Write "$(fp "$proj/innocent/k")")" ;;
 esac
-mkdir -p "$proj/specs/001-probe" && printf -- '- **FR-001**: Probe\n' > "$proj/specs/001-probe/spec.md"
+mkdir -p "$proj/specs/001-probe" && printf -- '### User Story 1 - Probe\n\n1. **Given** a probe, **When** it runs, **Then** it reports\n\n- **FR-001**: Probe\n' > "$proj/specs/001-probe/spec.md"
 checkexp "linked: other slash command ignored"  0 sdk-cli 0 "$(expansion "$proj" lockflight:status "")"
 checkexp "linked: approve, headless refused"    2 sdk-cli 0 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
 checkexp "linked: approve, unattended refused"  2 cli 0 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"

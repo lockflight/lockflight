@@ -200,10 +200,11 @@ changed.
 
 Specs you wrote before adopting Lockflight may fail `phase check specify`. A common reason is a user story with no
 Given/When/Then acceptance scenario; others are stories not headed `### User Story N - Title`, requirements not listed as
-`- **FR-001**: …`, or template placeholders left in. The `lockflight:approve` skill runs that check first and stops when it fails, so it will not walk you through approving
-such a spec. The engine itself does not run the check when it records an approval. To get the spec approved, add the missing
-scenarios (or requirements), or rewrite the spec to Spec Kit's template (`.specify/templates/spec-template.md`). Then run
-the check until it passes, and approve. `lockflight review` does not need a spec approval: it needs the feature's `spec.md`,
+`- **FR-001**: …`, or template placeholders left in. `lockflight approve` and `/lockflight:approve` run that check
+themselves and refuse to approve such a spec, listing what fails. Such a feature needs no approval as long as it stays as it
+was adopted: `approve verify --base` accepts it until it gets Lockflight records of its own. To bring it under the lifecycle,
+add the missing scenarios (or requirements), or rewrite the spec to Spec Kit's template (`.specify/templates/spec-template.md`).
+Then run the check until it passes, and approve. `lockflight review` does not need a spec approval: it needs the feature's `spec.md`,
 whose requirements it reviews against, and a change to review.
 
 With several feature folders under `specs/`, the engine does not guess which feature you mean. The active feature is the one

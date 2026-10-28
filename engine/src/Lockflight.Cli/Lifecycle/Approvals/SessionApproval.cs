@@ -8,8 +8,9 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 /// <summary>
 /// <c>/lockflight:approve spec|tasks [--feature id] [--sign [--key file]]</c> typed by the person in Claude Code (the two steps and
 /// their checks: <see cref="SessionCommandGate"/>). Without a code the engine shows the person what would be approved with a one-time
-/// code bound to the artifacts' hashes; with that code it records the approval exactly as <c>lockflight approve</c> does. Signed
-/// approvals verified in CI are the boundary.
+/// code bound to the artifacts' hashes; with that code it records the approval exactly as <c>lockflight approve</c> does. Both steps
+/// first run the matching phase check and refuse while it fails (<see cref="ApprovalReadiness"/>). Signed approvals verified in CI
+/// are the boundary.
 /// </summary>
 internal sealed class SessionApproval(CliContext context, Manifest manifest)
 {
@@ -93,6 +94,11 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest)
             return Refuse(new SessionRefusal("nothing-to-approve", $"{Path.GetRelativePath(manifest.Root, primary)} does not exist; nothing to approve"), words);
         }
 
+        if (ApprovalReadiness.Of(manifest, feature, phase) is { Ready: false } readiness)
+        {
+            return Refuse(new SessionRefusal("phase-check", readiness.Explanation), words);
+        }
+
         (string Name, string Hash)[] artifacts = [.. snapshot.Select(artifact => (artifact.Name, artifact.Hash))];
         string code = Gate.Codes.Issue(ApprovalPhaseNames.ToName(phase), feature.Id, artifacts);
         string typedOptions = (options.Flag("--sign") ? " --sign" : string.Empty)
@@ -129,6 +135,13 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest)
         {
             codes.Discard(phaseName);
             return Refuse(new SessionRefusal("changed", $"the {phaseName} changed since you saw it ({string.Join(", ", changed)}); run /{CommandName} {phaseName} again"), words);
+        }
+
+        // The tasks check also reads the spec and its approval, which the code does not bind.
+        if (ApprovalReadiness.Of(manifest, feature, phase) is { Ready: false } readiness)
+        {
+            codes.Discard(phaseName);
+            return Refuse(new SessionRefusal("phase-check", readiness.Explanation), words);
         }
 
         ApprovalRecording recording = await new ApprovalRecorder(context, manifest.Root).RecordAsync(
