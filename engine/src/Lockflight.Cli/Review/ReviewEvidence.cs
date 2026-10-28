@@ -63,6 +63,13 @@ internal static class ReviewEvidence
                 ["earlierReproductions"] = new JsonArray([.. finding.EarlierReproductions.Select(earlier => (JsonNode)JsonValue.Create(earlier))]),
                 ["reproductionAttempts"] = finding.ReproductionAttempts,
                 ["compileErrors"] = new JsonArray([.. finding.CompileErrors.Select(errors => (JsonNode)JsonValue.Create(errors))]),
+                ["fix"] = finding.Fix,
+                ["fixCheck"] = ReviewNames.ToName(finding.FixCheck),
+                ["fixChecked"] = finding.FixChecked,
+                ["fixAttempts"] = finding.FixAttempts,
+                ["ownTestsChecked"] = finding.OwnTestsChecked,
+                ["conflictingTests"] = new JsonArray([.. finding.ConflictingTests.Select(test => (JsonNode)JsonValue.Create(test))]),
+                ["fixCheckErrors"] = finding.FixCheckErrors,
             });
         }
 
@@ -105,6 +112,11 @@ internal static class ReviewEvidence
             {
                 ["calls"] = outcome.Repairs.Calls,
                 ["estimatedCostUsd"] = outcome.Repairs.CostUsd,
+            },
+            ["fixChecks"] = new JsonObject
+            {
+                ["count"] = outcome.FixChecks.Count,
+                ["wallTimeMs"] = outcome.FixChecks.WallTimeMs,
             },
             ["claudeDurationMs"] = outcome.DurationMs,
             ["wallTimeMs"] = run.WallTimeMs,
@@ -265,6 +277,11 @@ internal static class ReviewEvidence
             State = ReviewNames.ParseState(Text(element, "state")),
             SpecQuote = OptionalText(element, "specQuote"),
             SpecAnchor = ReviewNames.ParseSpecAnchor(Text(element, "specAnchor")),
+            Fix = OptionalText(element, "fix"),
+            FixCheck = ReviewNames.ParseFixCheck(Text(element, "fixCheck")),
+            ConflictingTests = element.TryGetProperty("conflictingTests", out JsonElement conflicting) && conflicting.ValueKind == JsonValueKind.Array
+                ? [.. conflicting.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)]
+                : [],
         };
 
     private static string Text(JsonElement element, string property) =>

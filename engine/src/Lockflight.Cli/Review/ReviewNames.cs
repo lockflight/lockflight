@@ -29,6 +29,7 @@ internal static class ReviewNames
         FindingOutcome.Confirmed => "confirmed",
         FindingOutcome.Rejected => "rejected",
         FindingOutcome.Unverified => "unverified",
+        FindingOutcome.Contested => "contested",
         _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
     };
 
@@ -38,6 +39,7 @@ internal static class ReviewNames
         "reported" => FindingOutcome.Reported,
         "confirmed" => FindingOutcome.Confirmed,
         "rejected" => FindingOutcome.Rejected,
+        "contested" => FindingOutcome.Contested,
         _ => FindingOutcome.Unverified,
     };
 
@@ -75,6 +77,49 @@ internal static class ReviewNames
         SpecAnchor.NotAnchored => "spec quote not anchored",
         _ => "no spec quote",
     };
+
+    public static string ToName(FixCheckResult result) => result switch
+    {
+        FixCheckResult.None => "none",
+        FixCheckResult.Held => "held",
+        FixCheckResult.BreaksOwnTest => "breaks-own-test",
+        FixCheckResult.DidNotApply => "did-not-apply",
+        FixCheckResult.DidNotBuild => "did-not-build",
+        FixCheckResult.DidNotFix => "did-not-fix",
+        FixCheckResult.NotRun => "not-run",
+        FixCheckResult.BreaksOwnTestBuild => "breaks-own-test-build",
+        _ => throw new ArgumentOutOfRangeException(nameof(result), result, null),
+    };
+
+    public static FixCheckResult ParseFixCheck(string? name) => name switch
+    {
+        "held" => FixCheckResult.Held,
+        "breaks-own-test" => FixCheckResult.BreaksOwnTest,
+        "did-not-apply" => FixCheckResult.DidNotApply,
+        "did-not-build" => FixCheckResult.DidNotBuild,
+        "did-not-fix" => FixCheckResult.DidNotFix,
+        "not-run" => FixCheckResult.NotRun,
+        "breaks-own-test-build" => FixCheckResult.BreaksOwnTestBuild,
+        _ => FixCheckResult.None,
+    };
+
+    /// <summary>
+    /// How output and the pull request summary say what the fix check of a confirmed or contested finding showed: "fix-checked",
+    /// "the reviewer's fix breaks the change's own test A.B", …; null for findings a fix check does not concern.
+    /// </summary>
+    public static string? DescribeFixCheck(ReviewFinding finding) => finding.Outcome is not (FindingOutcome.Confirmed or FindingOutcome.Contested)
+        ? null
+        : finding.FixCheck switch
+        {
+            FixCheckResult.Held => "fix-checked",
+            FixCheckResult.BreaksOwnTest => $"the reviewer's fix breaks the change's own test{(finding.ConflictingTests.Count == 1 ? string.Empty : "s")} {string.Join(", ", finding.ConflictingTests)}",
+            FixCheckResult.BreaksOwnTestBuild => $"the reviewer's fix breaks the build of the change's own test file{(finding.ConflictingTests.Count == 1 ? string.Empty : "s")} {string.Join(", ", finding.ConflictingTests)}",
+            FixCheckResult.DidNotApply => "not fix-checked: the reviewer's fix did not apply",
+            FixCheckResult.DidNotBuild => "not fix-checked: the reviewer's fix did not build",
+            FixCheckResult.DidNotFix => "not fix-checked: the reviewer's fix left the reproduction failing",
+            FixCheckResult.NotRun => "not fix-checked: the fixed build did not run",
+            _ => "not fix-checked",
+        };
 
     public static string ToName(FindingState state) => state switch
     {

@@ -196,6 +196,31 @@ public sealed class FindingLifecycleTests
 
     private static ReproductionResult Result(string name) => Enum.GetValues<ReproductionResult>().Single(result => ReviewNames.ToName(result) == name);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AContestedFindingStaysContestedWithItsConflictingTestWhenALaterRunReproducesItAgain(bool reproduced)
+    {
+        FindingOutcome later = reproduced ? FindingOutcome.Confirmed : FindingOutcome.Unverified;
+        ReviewFinding open = Major("Caller cancellation is swallowed", FindingOutcome.Contested) with
+        {
+            State = FindingState.Open,
+            FixCheck = FixCheckResult.BreaksOwnTest,
+            ConflictingTests = ["Shop.Tests.QuoteTests.CallerCancellationKeepsTheQuote"],
+        };
+
+        ReviewFinding resolved = Assert.Single(FindingLifecycle.Resolve([open with { Outcome = later, FixCheck = FixCheckResult.None, ConflictingTests = [], State = null }], History(open)));
+
+        Assert.Equal(FindingOutcome.Contested, resolved.Outcome);
+        Assert.Equal(FindingState.Open, resolved.State);
+        Assert.Equal(FixCheckResult.BreaksOwnTest, resolved.FixCheck);
+        Assert.Equal(open.ConflictingTests, resolved.ConflictingTests);
+    }
+
+    [Fact]
+    public void ANewContestedFindingIsOpen() =>
+        Assert.Equal(FindingState.Open, Assert.Single(FindingLifecycle.Resolve([Major("Caller cancellation is swallowed", FindingOutcome.Contested)], ReviewHistory.Empty)).State);
+
     private static ReviewFinding Judged(ReviewFinding finding, ReproductionResult result) => finding with
     {
         Reproduced = result,

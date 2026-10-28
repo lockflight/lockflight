@@ -4,7 +4,8 @@ namespace Lockflight.Cli.Review;
 /// How tracked findings move between runs. A blocker or major finding that is confirmed or unverified opens, and stays open in every
 /// later run until its reproduction, re-run by a later review, passes (fixed) or a person dismisses it. A run that does not raise an
 /// open finding again carries it, so re-running the review never makes one disappear. Only that deterministic re-run closes a finding
-/// by itself, and a confirmed finding whose reproduction cannot run this time stays confirmed. A finding raised again with a new
+/// by itself, and a confirmed finding whose reproduction cannot run this time stays confirmed. A contested finding stays contested
+/// (with the test its fix broke) while it is open, because only new findings are fix-checked. A finding raised again with a new
 /// reproduction keeps the earlier ones, and every known reproduction has to pass before it counts as fixed, so a weaker new
 /// reproduction cannot close it.
 /// </summary>
@@ -96,12 +97,19 @@ internal static class FindingLifecycle
             return finding.Outcome switch
             {
                 FindingOutcome.Rejected => finding with { State = FindingState.Fixed },
+                FindingOutcome.Confirmed or FindingOutcome.Unverified when open.Finding.Outcome == FindingOutcome.Contested => finding with
+                {
+                    Outcome = FindingOutcome.Contested,
+                    FixCheck = open.Finding.FixCheck,
+                    ConflictingTests = open.Finding.ConflictingTests,
+                    State = FindingState.Open,
+                },
                 FindingOutcome.Unverified when open.Finding.Outcome == FindingOutcome.Confirmed => finding with { Outcome = FindingOutcome.Confirmed, State = FindingState.Open },
                 _ => finding with { State = FindingState.Open },
             };
         }
 
-        return finding.Outcome is FindingOutcome.Confirmed or FindingOutcome.Unverified
+        return finding.Outcome is FindingOutcome.Confirmed or FindingOutcome.Unverified or FindingOutcome.Contested
             ? finding with { State = FindingState.Open }
             : finding with { State = null };
     }

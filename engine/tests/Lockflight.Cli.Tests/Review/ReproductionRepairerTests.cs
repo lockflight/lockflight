@@ -39,6 +39,21 @@ public sealed class ReproductionRepairerTests
     }
 
     [Fact]
+    public async Task AFixRepairSharesTheBudgetWithTheReproductionRepairs()
+    {
+        List<decimal> caps = [];
+        ReproductionRepairer repairer = new((_, cap, _) => { caps.Add(cap); return Task.FromResult(Reply(0.40m) with { Findings = [Request.Finding with { Fix = "--- a/src/Pricing.cs\n+++ b/src/Pricing.cs\n" }] }); }, 1.00m);
+
+        await repairer.RepairAsync(Request, TestContext.Current.CancellationToken);
+        FixRepair repair = await repairer.RepairFixAsync(new FixRepairRequest(Request.Finding, FixCheckResult.DidNotApply, "hunk 1 does not match"), TestContext.Current.CancellationToken);
+
+        Assert.Equal([1.00m, 0.60m], caps);
+        Assert.True(repair.Asked);
+        Assert.StartsWith("--- a/src/Pricing.cs", repair.Fix, StringComparison.Ordinal);
+        Assert.Equal(2, repairer.Calls);
+    }
+
+    [Fact]
     public void TheRepairPromptCarriesTheErrorsTheProjectAndTheSignatures()
     {
         string prompt = ReviewPrompt.Repair(Request);

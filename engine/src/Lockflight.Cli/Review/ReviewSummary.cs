@@ -43,5 +43,9 @@ internal static class ReviewSummary
 
     public static string Line(ReviewFinding finding) =>
         $"`{finding.Id}` {ReviewNames.ToName(finding.Severity)}, {ReviewNames.ToName(finding.Outcome)}: `{finding.File}:{finding.Line}` {finding.Title}"
-        + (finding.NeedsReproduction ? $" ({ReviewNames.Describe(finding.SpecAnchor)})" : string.Empty);
+        + (finding.NeedsReproduction ? $" ({string.Join("; ", Notes(finding))})" : string.Empty);
+
+    /// <summary>What a person reads next to a blocker/major finding: its spec anchor and, when it was reproduced, its fix check.</summary>
+    public static IReadOnlyList<string> Notes(ReviewFinding finding) =>
+        [ReviewNames.Describe(finding.SpecAnchor), .. ReviewNames.DescribeFixCheck(finding) is string fixCheck ? [fixCheck] : Array.Empty<string>()];
 }

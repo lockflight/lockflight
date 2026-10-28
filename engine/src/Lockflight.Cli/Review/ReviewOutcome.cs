@@ -10,4 +10,7 @@ internal sealed record ReviewOutcome(string Verdict, string Summary, IReadOnlyLi
 
     /// <summary>The reproduction repairs of the run; <see cref="CostUsd"/>, <see cref="DurationMs"/> and <see cref="Usage"/> include them.</summary>
     public RepairSpend Repairs { get; init; } = RepairSpend.None;
+
+    /// <summary>The run's fix checks: how many and the wall time they took (the time is not part of <see cref="DurationMs"/>, which is Claude's).</summary>
+    public FixCheckSpend FixChecks { get; init; } = FixCheckSpend.None;
 }

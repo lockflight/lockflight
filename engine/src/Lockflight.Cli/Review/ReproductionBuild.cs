@@ -14,7 +14,8 @@ namespace Lockflight.Cli.Review;
 /// <c>obj/lockflight-review/</c> (or a review's own folder, <see cref="ReviewBuildFolder"/>), so the developer's sources, <c>bin/Debug</c> and <c>obj/Debug</c> stay as they were and a
 /// build the developer runs at the same time does not collide with it. The review output folders are kept between runs, so the
 /// next review builds incrementally. Analyzers are off and warnings stay warnings: a reproduction is judged by whether it
-/// compiles and fails, not by the project's style rules.
+/// compiles and fails, not by the project's style rules. For a fix check, the props file also swaps production files for their
+/// fixed copies in the temporary directory (in the project that compiles each), and the run includes the tests named to run alongside.
 /// </summary>
 internal static class ReproductionBuild
 {
@@ -28,10 +29,24 @@ internal static class ReproductionBuild
 
     private static readonly string[] BuildProperties = ["-p:TreatWarningsAsErrors=false", "-p:WarningsAsErrors=", "-p:RunAnalyzersDuringBuild=false"];
 
+    public static Task<ReproductionBuildResult> RunAsync(
+        TestApp app,
+        IReadOnlyList<ReproductionCandidate> candidates,
+        IReadOnlyList<string> usings,
+        string root,
+        string outputFolder,
+        TimeSpan timeLimit,
+        CancellationToken cancellationToken) =>
+        RunAsync(app, candidates, usings, [], [], root, outputFolder, timeLimit, cancellationToken);
+
+    /// <param name="fixedFiles">Production files to build as a fix changes them; the files on disk stay as they are.</param>
+    /// <param name="alsoRun">Method filters of the project's own tests to run with the reproductions.</param>
     public static async Task<ReproductionBuildResult> RunAsync(
         TestApp app,
         IReadOnlyList<ReproductionCandidate> candidates,
         IReadOnlyList<string> usings,
+        IReadOnlyList<FixedFile> fixedFiles,
+        IReadOnlyList<string> alsoRun,
         string root,
         string outputFolder,
         TimeSpan timeLimit,
@@ -54,7 +69,16 @@ internal static class ReproductionBuild
                 await File.WriteAllTextAsync(Path.Combine(scratch.FullName, candidate.FileName), candidate.Source, cancellationToken);
             }
 
-            await File.WriteAllTextAsync(props, Props(project, source, outputFolder), cancellationToken);
+            List<(FixedFile File, string Copy)> copies = [];
+            foreach ((FixedFile file, int index) in fixedFiles.Select((file, index) => (file, index)))
+            {
+                string copy = Path.Combine(scratch.FullName, $"fixed{index + 1}", Path.GetFileName(file.Path));
+                Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+                await File.WriteAllTextAsync(copy, file.Text, cancellationToken);
+                copies.Add((file, copy));
+            }
+
+            await File.WriteAllTextAsync(props, Props(project, source, outputFolder, copies), cancellationToken);
             string isolation = $"-p:CustomAfterMicrosoftCommonProps={props}";
             if (await TargetAsync(project, app, isolation, root, cancellationToken) is not { } target)
             {
@@ -76,7 +100,7 @@ internal static class ReproductionBuild
                     ReproductionBuildStatus.DidNotCompile, errors.Count > 0 ? errors : [new CompileError(string.Empty, 0, 0, "build", LastLine(build.Combined))], []);
             }
 
-            string[] filters = [.. candidates.Select(candidate => $"{Namespace}.{candidate.ClassName}.{candidate.Method}")];
+            string[] filters = [.. candidates.Select(candidate => $"{Namespace}.{candidate.ClassName}.{candidate.Method}"), .. alsoRun];
             TestRunReport? report = await NativeTestRunner.RunAsync(app with { AssemblyPath = assembly }, filters, root, timeLimit, cancellationToken);
             return report is null
                 ? new ReproductionBuildResult(ReproductionBuildStatus.NotRun, [], [])
@@ -121,7 +145,7 @@ internal static class ReproductionBuild
         return source.ToString();
     }
 
-    private static string Props(string project, string source, string outputFolder) => $"""
+    private static string Props(string project, string source, string outputFolder, IReadOnlyList<(FixedFile File, string Copy)> copies) => $"""
         <Project>
           <PropertyGroup>
             <OutputPath>bin/{outputFolder}/</OutputPath>
@@ -130,7 +154,21 @@ internal static class ReproductionBuild
           <ItemGroup Condition="'$(MSBuildProjectFullPath)' == '{Escape(Path.GetFullPath(project))}'">
             <Compile Include="{Escape(source)}" />
           </ItemGroup>
-        </Project>
+        {string.Concat(copies.Select((copy, index) => Swap(copy.File, copy.Copy, index)))}</Project>
+        """;
+
+    /// <summary>
+    /// A target that replaces one production file by its fixed copy before the compiler's inputs are settled (so the build sees
+    /// the change and the next build sees it undone), in the project that compiles the file only.
+    /// </summary>
+    private static string Swap(FixedFile file, string copy, int index) => $"""
+          <Target Name="LockflightReviewFix{index + 1}" BeforeTargets="BeforeCompile" Condition="'$(MSBuildProjectFullPath)' == '{Escape(Path.GetFullPath(file.Project))}'">
+            <ItemGroup>
+              <Compile Remove="@(Compile)" Condition="'%(Compile.FullPath)' == '{Escape(Path.GetFullPath(file.Path))}'" />
+              <Compile Include="{Escape(copy)}" />
+            </ItemGroup>
+          </Target>
+
         """;
 
     /// <summary>The isolated build's test assembly and, for a multi-targeted project, the framework to build; null when MSBuild cannot say.</summary>
