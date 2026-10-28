@@ -187,6 +187,17 @@ git -C "$cloned" rm -q --cached "${committed#"$cloned"/}"
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1"; else shasum -a 256 < "$1"; fi | cut -d' ' -f1; }
 sha "$committed" > "$cloned/.lockflight/bin/lockflight.sha256"
 check "recorded engine: Write allowed"       0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+# The engine replaced within the same second as the last passed check, the marker not dated back: some shells compare -nt to
+# the whole second, so the shim must not take a marker from that second as newer than the engine. Starts at a fresh second so
+# the pass, its unchanged twin and the replacement all land in one second; no marker, so the pass writes one in that second.
+second=$(date +%s); while [ "$(date +%s)" = "$second" ]; do :; done
+rm -f "$cloned/.git/lockflight-engine-checked"
+check "same second: passed check"              0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+check "same second: unchanged engine allowed"  0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+cp "$committed" "$WORK/engine-linked" && printf 'replaced' >> "$committed"
+check "same second: replaced engine blocked"   2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+[ "$(date +%s)" = "$((second + 1))" ] || echo "same second: note: the cases above crossed a second boundary"
+cp "$WORK/engine-linked" "$committed"
 # The engine itself replaced after link recorded it, the record left as it was: not run, so writes are refused. The last passed
 # check is dated back, as it is when the engine is replaced later: the shim's -nt compares whole seconds on some shells.
 cp "$committed" "$WORK/engine-linked" && touch -t 200001010000 "$cloned/.git/lockflight-engine-checked" && printf 'replaced' >> "$committed"
