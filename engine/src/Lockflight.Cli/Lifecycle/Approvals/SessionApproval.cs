@@ -12,14 +12,16 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 /// first run the matching phase check and refuse while it fails (<see cref="ApprovalReadiness"/>). Signed approvals verified in CI
 /// are the boundary.
 /// </summary>
-internal sealed class SessionApproval(CliContext context, Manifest manifest)
+internal sealed class SessionApproval(CliContext context, Manifest manifest) : ISessionDecider
 {
     public const string CommandName = "lockflight:approve";
 
     private static readonly string[] ValueOptions = ["--feature", "--key"];
     private static readonly string[] Flags = ["--sign"];
 
-    public static SessionCommandSpec Spec { get; } = new(CommandName, "approve", "nothing was approved", "approves", "session-approval");
+    public static SessionCommandSpec Spec { get; } = new(
+        CommandName, "approve", "nothing was approved", "approves", "session-approval", (context, manifest) => new SessionApproval(context, manifest),
+        [new("spec", "approval", _ => $"/{CommandName} spec <code>"), new("tasks", "approval", _ => $"/{CommandName} tasks <code>")]);
 
     private SessionCommandGate Gate => new(context, manifest, Spec);
 

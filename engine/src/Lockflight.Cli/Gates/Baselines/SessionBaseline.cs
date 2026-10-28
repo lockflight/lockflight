@@ -14,7 +14,7 @@ namespace Lockflight.Cli.Gates.Baselines;
 /// with a code bound to those entries and to the state of the files (<see cref="WorkingTreeFingerprint"/>); the second, with that
 /// code and only while no file changed, writes exactly those entries, without running anything again.
 /// </summary>
-internal sealed class SessionBaseline(CliContext context, Manifest manifest)
+internal sealed class SessionBaseline(CliContext context, Manifest manifest) : ISessionDecider
 {
     public const string CommandName = "lockflight:baseline";
 
@@ -27,7 +27,13 @@ internal sealed class SessionBaseline(CliContext context, Manifest manifest)
 
     private static readonly string[] ValueOptions = [PathOption];
 
-    public static SessionCommandSpec Spec { get; } = new(CommandName, "baseline", "nothing was accepted", "accepts a baseline", "session-baseline");
+    public static SessionCommandSpec Spec { get; } = new(
+        CommandName, "baseline", "nothing was accepted", "accepts a baseline", "session-baseline", (context, manifest) => new SessionBaseline(context, manifest),
+        [
+            new("baseline-build", "baseline", _ => $"/{CommandName} build <code>"),
+            new("baseline-tests", "baseline", _ => $"/{CommandName} tests <code>"),
+            new("baseline-deps", "baseline", _ => $"/{CommandName} deps <code>"),
+        ]);
 
     /// <summary>The longest a first step may run: below the plugin's 600-second hook time limit, leaving time to answer.</summary>
     private static TimeSpan Budget { get; } = TimeSpan.FromSeconds(540);

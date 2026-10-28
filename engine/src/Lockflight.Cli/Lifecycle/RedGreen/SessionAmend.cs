@@ -15,7 +15,7 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 /// <c>/lockflight:amend &lt;test&gt; &lt;code&gt;</c>, records the amend as the terminal command does while the record and the files
 /// are unchanged. The reason is the rest of the line after <c>--reason</c>, so it comes last.
 /// </summary>
-internal sealed class SessionAmend(CliContext context, Manifest manifest)
+internal sealed class SessionAmend(CliContext context, Manifest manifest) : ISessionDecider
 {
     public const string CommandName = "lockflight:amend";
 
@@ -25,7 +25,9 @@ internal sealed class SessionAmend(CliContext context, Manifest manifest)
 
     private static readonly string[] ValueOptions = ["--feature"];
 
-    public static SessionCommandSpec Spec { get; } = new(CommandName, "redgreen amend", "nothing was amended", "amends a locked test", "session-amend");
+    public static SessionCommandSpec Spec { get; } = new(
+        CommandName, "redgreen amend", "nothing was amended", "amends a locked test", "session-amend", (context, manifest) => new SessionAmend(context, manifest),
+        [new(Slot, "amend", waiting => $"/{CommandName} {(waiting.Payload.Count > 0 ? TraceMatrix.ShortName(waiting.Payload[0].Split(':')[^1]) : "<test>")} <code>")]);
 
     private SessionCommandGate Gate => new(context, manifest, Spec);
 

@@ -14,7 +14,7 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 /// (<see cref="SessionCommandGate"/>). The first shows the evidence that would be discarded, with a code bound to the record's exact
 /// bytes; the second, with that code and only while the record is unchanged, discards it as the terminal command does.
 /// </summary>
-internal sealed class SessionReset(CliContext context, Manifest manifest)
+internal sealed class SessionReset(CliContext context, Manifest manifest) : ISessionDecider
 {
     public const string CommandName = "lockflight:reset";
 
@@ -22,7 +22,9 @@ internal sealed class SessionReset(CliContext context, Manifest manifest)
 
     private static readonly string[] ValueOptions = ["--feature"];
 
-    public static SessionCommandSpec Spec { get; } = new(CommandName, "redgreen reset", "nothing was reset", "discards red/green evidence", "session-reset");
+    public static SessionCommandSpec Spec { get; } = new(
+        CommandName, "redgreen reset", "nothing was reset", "discards red/green evidence", "session-reset", (context, manifest) => new SessionReset(context, manifest),
+        [new(Slot, "reset", _ => $"/{CommandName} <code>")]);
 
     private SessionCommandGate Gate => new(context, manifest, Spec);
 
