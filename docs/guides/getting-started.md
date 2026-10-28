@@ -353,3 +353,4 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
 - [Guardrails and boundaries](guardrails-and-boundaries.md): what Lockflight can and cannot guarantee
 - [CI hardening](ci-hardening.md): CODEOWNERS and required checks
 - [CI on other platforms](ci-other-platforms.md): Azure Pipelines, Bitbucket Pipelines and GitLab CI/CD
+- [Code quality](code-quality.md): the recommended analyzers, code metrics rules and architecture tests `init` can add

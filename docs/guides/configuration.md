@@ -176,7 +176,7 @@ These always apply; `protected:` can add paths but never remove these.
 | `.claude/settings.json`, `.claude/settings.local.json` | Claude Code settings that load the plugin and its hooks |
 | `.claude/hooks/**`, `.claude/agents/**`, `.claude/skills/**`, `.claude/commands/**` | the team's own controls: a guard hook edited to exit 0 would be a silent bypass |
 | `**/Directory.Build.props`, `**/Directory.Build.targets`, `**/Directory.Build.rsp`, `**/Directory.Packages.props`, `global.json` | .NET build control |
-| `**/.editorconfig`, `**/.globalconfig`, `**/*.globalconfig`, `**/*.ruleset`, `**/stylecop.json`, `**/BannedSymbols.txt` | code-style and analyzer policy the build gate enforces |
+| `**/.editorconfig`, `**/.globalconfig`, `**/*.globalconfig`, `**/*.ruleset`, `**/stylecop.json`, `**/BannedSymbols.txt`, `**/CodeMetricsConfig.txt` | code-style and analyzer policy the build gate enforces |
 | `**/.gitattributes` | what git diffs show: a `-diff` or `binary` line, or a diff driver, can show a text change as "Binary files … differ" (attributes set outside the tree, in `.git/info/attributes` or `core.attributesFile`, are not covered; the review's own check below is) |
 | `**/NuGet.config`, `**/nuget.config` | package sources |
 | `.gitleaks.toml`, `.gitleaksignore` | secret-scanning policy |

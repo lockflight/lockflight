@@ -40,7 +40,8 @@ internal static class Templates
         # Lockflight project manifest — https://github.com/lockflight/lockflight
         # Built-in protected paths always apply: this file, the tool pin, .lockflight/, Claude settings, .NET build-control files
         # (Directory.Build.*, Directory.Packages.props, global.json, NuGet.config), code-style and analyzer policy (.editorconfig,
-        # .globalconfig, *.ruleset, stylecop.json, BannedSymbols.txt), .gitattributes, gitleaks policy and the Lockflight CI files.
+        # .globalconfig, *.ruleset, stylecop.json, BannedSymbols.txt, CodeMetricsConfig.txt), .gitattributes, gitleaks policy and the
+        # Lockflight CI files.
         # The full list: https://github.com/lockflight/lockflight/blob/main/docs/guides/configuration.md
         version: 1
 
@@ -100,7 +101,7 @@ internal static class Templates
                   if git cat-file -e "$BASE:.lockflight/baselines" 2>/dev/null; then git checkout "$BASE" -- .lockflight/baselines; fi
                   # Code-style and analyzer config (nested files too) decides what the build and format gates enforce: a PR is
                   # judged by the base's rules, and its own rule changes apply after the merge.
-                  style='(^|/)(\.editorconfig|\.globalconfig|[^/]*\.globalconfig|[^/]*\.ruleset|stylecop\.json|BannedSymbols\.txt)$'
+                  style='(^|/)(\.editorconfig|\.globalconfig|[^/]*\.globalconfig|[^/]*\.ruleset|stylecop\.json|BannedSymbols\.txt|CodeMetricsConfig\.txt)$'
                   { git ls-tree -r --name-only "$BASE"; git ls-files; } | grep -E "$style" | sort -u | while IFS= read -r file; do
                     if git cat-file -e "$BASE:$file" 2>/dev/null; then git checkout "$BASE" -- "$file"; else rm -f "$file"; fi
                   done
@@ -178,7 +179,7 @@ internal static class Templates
                   done
                   rm -rf .lockflight/baselines
                   if git cat-file -e "$BASE:.lockflight/baselines" 2>/dev/null; then git checkout "$BASE" -- .lockflight/baselines; fi
-                  style='(^|/)(\.editorconfig|\.globalconfig|[^/]*\.globalconfig|[^/]*\.ruleset|stylecop\.json|BannedSymbols\.txt)$'
+                  style='(^|/)(\.editorconfig|\.globalconfig|[^/]*\.globalconfig|[^/]*\.ruleset|stylecop\.json|BannedSymbols\.txt|CodeMetricsConfig\.txt)$'
                   { git ls-tree -r --name-only "$BASE"; git ls-files; } | grep -E "$style" | sort -u | while IFS= read -r file; do
                     if git cat-file -e "$BASE:$file" 2>/dev/null; then git checkout "$BASE" -- "$file"; else rm -f "$file"; fi
                   done

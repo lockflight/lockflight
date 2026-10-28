@@ -111,7 +111,51 @@ public sealed class RulesAuditTests : IDisposable
         AuditedRule rule = Assert.Single(await AuditAsync());
 
         Assert.Equal(RuleStatus.GuidanceOnly, rule.Status);
-        Assert.Contains("NetArchTest", rule.Suggestion, StringComparison.Ordinal);
+        Assert.Contains("lockflight init --architecture-tests", rule.Suggestion, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADependencyBanBetweenLayersIsRelatedToAnArchitectureTest()
+    {
+        Write(".specify/memory/constitution.md", "### I. Layers\n\nThe domain MUST NOT depend on the infrastructure project.\n\nThe service MUST NOT reference the cache.\n");
+        Write("tests/App.ArchitectureTests/LayerDependencyTests.cs", "using ArchUnitNET.Domain;\n");
+        await CommitAsync();
+
+        IReadOnlyList<AuditedRule> rules = await AuditAsync();
+
+        Assert.Equal([RuleStatus.Related, RuleStatus.GuidanceOnly], rules.Select(rule => rule.Status));
+        Assert.Contains("tests/App.ArchitectureTests/LayerDependencyTests.cs", rules[0].By, StringComparison.Ordinal);
+        Assert.Contains("not this sentence", rules[0].By, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnAnalyzerRuleTheConfigMakesABuildWarningIsRelated()
+    {
+        Write(".editorconfig", "root = true\n[*.cs]\ndotnet_diagnostic.CA1502.severity = warning\ndotnet_diagnostic.CA2007.severity = none\n");
+        Write("CLAUDE.md", "- Methods MUST stay below a cyclomatic complexity of 15.\n- Never ignore `CA2007`.\n- Always fix IDE0005.\n");
+        await CommitAsync();
+
+        IReadOnlyList<AuditedRule> rules = await AuditAsync();
+
+        Assert.Equal([RuleStatus.Related, RuleStatus.GuidanceOnly, RuleStatus.GuidanceOnly], rules.Select(rule => rule.Status));
+        Assert.Contains("analyzer CA1502 is set to warning in .editorconfig", rules[0].By, StringComparison.Ordinal);
+        Assert.Contains("build baseline", rules[0].By, StringComparison.Ordinal);
+        Assert.Contains("dotnet_diagnostic.CA2007.severity = warning", rules[1].Suggestion, StringComparison.Ordinal);
+        Assert.Contains("dotnet_diagnostic.IDE0005.severity = warning", rules[2].Suggestion, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ANestedGlobalConfigThatMakesTheRuleAnErrorBacksItToo()
+    {
+        Write("src/.editorconfig", "[*.cs]\ndotnet_diagnostic.CA1506.severity = none\n");
+        Write("src/strict.globalconfig", "is_global = true\ndotnet_diagnostic.CA1506.severity = error\n");
+        Write("CLAUDE.md", "- Keep class coupling low: you MUST split a class that CA1506 flags.\n");
+        await CommitAsync();
+
+        AuditedRule rule = Assert.Single(await AuditAsync());
+
+        Assert.Equal(RuleStatus.Related, rule.Status);
+        Assert.Contains("set to error in src/strict.globalconfig", rule.By, StringComparison.Ordinal);
     }
 
     [Fact]
