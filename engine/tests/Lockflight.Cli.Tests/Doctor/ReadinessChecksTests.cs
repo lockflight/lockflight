@@ -415,16 +415,24 @@ public sealed class ReadinessChecksTests : IDisposable
         Assert.False(File.Exists(marker));
     }
 
-    [Fact]
-    public async Task ALinkedEngineWithoutARecordedHashIsAWarningToLinkAgain()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task ALinkedEngineWithoutARecordedHashFailsWithoutBeingRunAndNamesUpdate(string? record)
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
-        WriteEngine($"#!/bin/sh\necho {ToolPin.RunningVersion}\n");
+        string marker = Path.Combine(root.FullName, "ran");
+        WriteEngine($"#!/bin/sh\ntouch '{marker}'\necho {ToolPin.RunningVersion}\n");
+        if (record is not null)
+        {
+            Write($"{LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName}", record);
+        }
 
         DoctorCheck link = await CheckAsync("linked engine");
 
-        Assert.Equal(CheckStatus.Warn, link.Status);
+        Assert.Equal(CheckStatus.Fail, link.Status);
         Assert.Contains("no hash recorded", link.Detail, StringComparison.Ordinal);
+        Assert.Contains($"a person opens a separate terminal window ({HumanOnlyCommands.NotWithBang}) and runs `~/.lockflight/bin/lockflight update`", link.Fix, StringComparison.Ordinal);
+        Assert.False(File.Exists(marker));
     }
 
     [Fact]

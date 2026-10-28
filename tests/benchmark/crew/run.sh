@@ -67,6 +67,8 @@ setup_project() { # setup_project <story dir> <project dir>
   rm -f "$w/tests/Shop.Tests/ContainerSmokeTests.cs"
   mkdir -p "$w/.lockflight/bin" "$w/specs/001-$slug"
   cp "$ENGINE" "$w/.lockflight/bin/lockflight"
+  # The hook shim runs only an engine that matches the SHA-256 lockflight link records beside it.
+  if command -v sha256sum > /dev/null; then sha256sum < "$ENGINE"; else shasum -a 256 < "$ENGINE"; fi | cut -d' ' -f1 > "$w/.lockflight/bin/lockflight.sha256"
   printf 'version: 1\n' > "$w/lockflight.yaml"
   printf 'bin/\nobj/\n.lockflight/bin/\n.lockflight/ledger/\n.claude/worktrees/\n' > "$w/.gitignore"
   cp "$story/spec.md" "$story/plan.md" "$story/tasks.md" "$w/specs/001-$slug/"

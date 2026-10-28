@@ -20,6 +20,9 @@ checkenv() { # $1=name $2=expected exit $3=project dir $4=json
   printf '%-44s expected=%s got=%s %s\n' "$1" "$2" "$got" "$r"
 }
 fp() { printf '"file_path":"%s"' "$(winpath "$1")"; }
+# The SHA-256 lockflight link records beside the engine; $1=engine $2=project.
+sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1"; else shasum -a 256 < "$1"; fi | cut -d' ' -f1; }
+record() { sha "$1" > "$2/.lockflight/bin/lockflight.sha256"; }
 # A task being marked completed (TaskCompleted); $1=name $2=expected exit $3=dir [$4=text stderr must contain].
 checktask() {
   printf '{"cwd":"%s","hook_event_name":"TaskCompleted","session_id":"probe","task_id":"t1","task_subject":"Probe task"}' "$(winpath "$3")" \
@@ -76,6 +79,21 @@ mkdir -p "$proj/.lockflight/bin"; case "$ENGINE" in *.exe) cp "$ENGINE" "$proj/.
 # framework-dependent build without its .dll) would make every block case pass. Stop instead.
 linked=$(ls "$proj/.lockflight/bin/"lockflight*)
 "$linked" version > /dev/null 2>&1 || { echo "the engine does not run as a single file: $ENGINE (use a Native AOT or single-file build)"; exit 1; }
+# An engine without the hash record link writes (linked by a Lockflight before 0.2.0-alpha.7, or copied by hand) is not run, as
+# with a record that is empty: reads pass, writes and a typed approval are blocked, and the person is told to run update.
+for empty in missing empty; do
+  if [ "$empty" = missing ]; then rm -f "$proj/.lockflight/bin/lockflight.sha256"; else : > "$proj/.lockflight/bin/lockflight.sha256"; fi
+  check "unrecorded engine ($empty): Write blocked" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
+  if grep -q 'no hash record' "$WORK/err" && grep -q 'separate terminal window.*lockflight update' "$WORK/err"; then pass=$((pass+1)); echo "unrecorded engine ($empty): names update: ok"; else fail=$((fail+1)); echo "unrecorded engine ($empty): names update: FAIL ($(head -c 400 "$WORK/err"))"; fi
+  check "unrecorded engine ($empty): Read allowed" 0 "$proj" "$(json "$proj" Read "$(fp "$proj/src/a.cs")")"
+done
+checkexp "unrecorded engine: approve blocked"  2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "Nothing was approved"
+if printf '{}' | CLAUDE_PROJECT_DIR="$(nativepath "$proj")" "$SHIM" session-start 2>/dev/null | grep -q '"systemMessage":"Lockflight did not run.*lockflight update'; then
+  pass=$((pass+1)); echo "unrecorded engine: session notice names update: ok"
+else
+  fail=$((fail+1)); echo "unrecorded engine: session notice names update: FAIL"
+fi
+record "$linked" "$proj"
 checkenv "env dir, linked: Write unprotected" 0 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 checkenv "env dir, linked: Write protected"  2 "$proj"  "$(json "$proj" Write "$(fp "$proj/secrets/k")")"
 checkenv "env subdir, linked: Write protected" 2 "$proj/src" "$(json "$proj/src" Write "$(fp "$proj/secrets/k")")"
@@ -110,7 +128,7 @@ checktask "linked, stop gate off: task completed" 0 "$proj"
 # With the stop gate on, a task is completed only after the gate passed for the tree; nothing has passed here.
 gated="$WORK/gated"; mkdir -p "$gated/.lockflight/bin"
 printf 'stop:\n  gate: true\n' > "$gated/lockflight.yaml"; cp "$proj/dotnet-tools.json" "$gated/"
-cp "$linked" "$gated/.lockflight/bin/"
+cp "$linked" "$proj/.lockflight/bin/lockflight.sha256" "$gated/.lockflight/bin/"
 printf '.lockflight/\n' > "$gated/.gitignore"
 git -C "$gated" init -q && git -C "$gated" add -A && git -C "$gated" -c user.email=p@p -c user.name=p commit -qm probe
 checktask "linked, stop gate on: task blocked" 2 "$gated" "Probe task"
@@ -177,6 +195,7 @@ check "committed engine: Read allowed"      0 "$cloned" "$(json "$cloned" Read "
 checkexp "committed engine: approve blocked" 2 cli 1 "$(expansion "$cloned" lockflight:approve spec)" "Nothing was approved"
 checkexp "committed engine: amend blocked"   2 cli 1 "$(expansion "$cloned" lockflight:amend "A.B --reason x")" "Nothing was amended"
 git -C "$cloned" rm -q --cached "${committed#"$cloned"/}"
+record "$committed" "$cloned"
 check "untracked engine: Write allowed"     0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 # A passed check is remembered until the engine file changes; an engine committed later is caught again.
 touch -t 200001010000 "$cloned/.git/lockflight-engine-checked"
@@ -184,8 +203,7 @@ cp -f "$ENGINE" "$committed" && git -C "$cloned" add -f "${committed#"$cloned"/}
 check "engine committed later: Write blocked" 2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 # link records the engine's SHA-256 beside it; an engine that no longer matches its record is not run.
 git -C "$cloned" rm -q --cached "${committed#"$cloned"/}"
-sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1"; else shasum -a 256 < "$1"; fi | cut -d' ' -f1; }
-sha "$committed" > "$cloned/.lockflight/bin/lockflight.sha256"
+record "$committed" "$cloned"
 check "recorded engine: Write allowed"       0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 # The engine replaced within the same second as the last passed check, the marker not dated back: some shells compare -nt to
 # the whole second, so the shim must not take a marker from that second as newer than the engine. Starts at a fresh second so
@@ -229,6 +247,11 @@ case "$ENGINE" in
      cp -f "$WORK/engine-linked" "$committed"
      check "engine copied back: Write allowed"   0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")" ;;
 esac
+# A record removed after a passed check: the remembered pass does not count without one.
+mv "$cloned/.lockflight/bin/lockflight.sha256" "$WORK/record"
+check "record removed after a pass: Write blocked" 2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+mv "$WORK/record" "$cloned/.lockflight/bin/lockflight.sha256"
+check "record put back: Write allowed"        0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 printf '%064d\n' 0 > "$cloned/.lockflight/bin/lockflight.sha256"
 touch -t 200001010000 "$cloned/.git/lockflight-engine-checked"
 check "replaced engine: Write blocked"       2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
@@ -238,11 +261,12 @@ checkexp "replaced engine: approve blocked"  2 cli 1 "$(expansion "$cloned" lock
 
 # An engine that crashes must block, never allow. On Windows the shim prefers lockflight.exe, so the stub there is a real .exe
 # (Git Bash's false.exe, exit 1); elsewhere a script exiting 3. A passed check left the engine read-only, so each stand-in below
-# replaces the file.
+# replaces the file, and each is recorded as link would record it.
 case "$ENGINE" in
   *.exe) cp /usr/bin/false.exe "$proj/.lockflight/bin/lockflight.exe" || { echo "no /usr/bin/false.exe to stand in for a crashing engine"; exit 1; }; crash=1 ;;
   *) rm -f "$proj/.lockflight/bin/lockflight"; printf '#!/bin/sh\nexit 3\n' > "$proj/.lockflight/bin/lockflight"; chmod +x "$proj/.lockflight/bin/lockflight"; crash=3 ;;
 esac
+crashing="$proj/.lockflight/bin/lockflight"; [ ! -f "$crashing.exe" ] || crashing="$crashing.exe"; record "$crashing" "$proj"
 check "crashing engine: tool call blocked" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 checktask "crashing engine: task not blocked" "$crash" "$proj"
 checkexp "crashing engine: approve blocked"  2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
@@ -255,7 +279,7 @@ case "$ENGINE" in
   *.exe) ;;
   *) rm -f "$proj/.lockflight/bin/lockflight"
      printf '#!/bin/sh\ncat >/dev/null\necho "lockflight: this engine does not know the hook event it was called for; update it with: x" >&2\nexit 2\n' > "$proj/.lockflight/bin/lockflight"
-     chmod +x "$proj/.lockflight/bin/lockflight"
+     chmod +x "$proj/.lockflight/bin/lockflight" && record "$proj/.lockflight/bin/lockflight" "$proj"
      checktask "older engine: unknown event let through" 0 "$proj" ;;
 esac
 
