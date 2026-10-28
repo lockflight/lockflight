@@ -86,6 +86,7 @@ internal static class ReviewResultParser
         {
             Id = FindingIds.Of(ReviewNames.GeneralDimension, file, line, title),
             SpecQuote = Text(finding, "specQuote") is { Length: > 0 } quote ? quote : null,
+            Fix = Text(finding, "fix") is { Length: > 0 } fix ? fix : null,
         };
     }
 

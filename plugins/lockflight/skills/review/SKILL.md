@@ -20,17 +20,23 @@ independent.
 3. Read the findings. Each has an id, an outcome and, for blocker/major, a state:
    - **confirmed** — the reproduction fails on the current code: the defect is real. Fix it in production code, add the
      reproduction as a regression test in the next red/green cycle, and re-run the review.
+   - **contested** — the reproduction fails, but the reviewer's own fix for it breaks one of the change's own tests (named in
+     the output), or that fix did not apply or build. The reviewer's expectation and the author's tests disagree, or the
+     evidence is incomplete: show the finding and the named test to the user and let them decide which is right. Change the
+     named test only when the user decides the test is the one that is wrong.
    - **unverified** — no usable reproduction: show it to the user and let them decide. A reproduction that did not compile was
      already sent back to the reviewer once with the compiler errors; the evidence file lists them under `compileErrors`.
      `repaired-passed` means the repaired test passed, which does not count as a rejection.
    - **rejected** — the reproduction passes: tell the user.
    - **reported** (minor/nit findings are not reproduced) — fix when cheap, otherwise list them in the PR body.
 
+   A confirmed finding says "fix-checked" when the reviewer's fix made its reproduction pass and kept the change's own tests
+   green; that checks the reviewer's evidence, it does not prove the finding. A finding without a fix is "not fix-checked".
    A blocker/major finding also says whether the requirement sentence it quotes was found in the spec ("spec quote
    anchored"), was not ("not anchored"), or was not given ("no spec quote"). It does not change the outcome. When a confirmed
    finding's quote is not anchored, tell the user: its test may encode the reviewer's expectation rather than the spec.
 
-   A confirmed or unverified blocker/major finding is **open** and stays open in every later review, also when that review
+   A confirmed, contested or unverified blocker/major finding is **open** and stays open in every later review, also when that review
    does not raise it again ("carried from an earlier run") or raises it again at a lower severity. It closes only when a
    later review re-runs its reproductions — the new one and every earlier one — and all of them pass (**fixed**), or when the
    user dismisses it. Re-running the review is never a way to make a finding go away.
@@ -38,7 +44,7 @@ independent.
    says. If the user thinks a finding is not a defect, ask them to open a separate terminal window (not with `!` in Claude
    Code: that runs inside the session and is refused) and run `.lockflight/bin/lockflight review dismiss <id> --reason "<why>"`
    there themselves. You cannot dismiss findings.
-5. The command exits 1 when an open finding is confirmed, 5 (NOT-EARNED) when one is unverified or the run is not of record,
+5. The command exits 1 when an open finding is confirmed, 5 (NOT-EARNED) when one is unverified or contested or the run is not of record,
    and 0 otherwise. Repair cycles are bounded: after two reviews that still confirm findings, stop and ask the user.
 6. In the PR body, paste the "Pull request summary" from `review status` unchanged: it names the base, the number of review
    runs and every open finding. Add the cost from the last run. The evidence files are under `.lockflight/features/`.

@@ -17,8 +17,9 @@ namespace Lockflight.Cli.Review;
 /// sent back to the reviewer once, within the run's budget), and stores the run. A run counts as the review of record only when
 /// the reviewer was shown the whole diff, with the manifest's model and budget, against a base whose commit is the merge base of
 /// HEAD and the target branch (<c>review.target</c>, else <c>origin/HEAD</c>'s branch, else <c>main</c>; also the default base); others are recorded and say why not.
-/// Exit 1 when an open blocker/major finding is confirmed, 5 (NOT-EARNED) when one is unverified or the run is not of record, 0
-/// otherwise. Advisory (guardrail): it runs with the developer's credentials and the agent can skip it.
+/// A new confirmed finding with a fix is checked against the change's own tests (<see cref="FixChecks"/>) and contested when its fix
+/// contradicts them. Exit 1 when an open blocker/major finding is confirmed, 5 (NOT-EARNED) when one is unverified or contested or
+/// the run is not of record, 0 otherwise. Advisory (guardrail): it runs with the developer's credentials and the agent can skip it.
 /// </summary>
 internal sealed class ReviewCommand(CliContext context)
 {
@@ -128,7 +129,7 @@ internal sealed class ReviewCommand(CliContext context)
             budget - outcome.CostUsd);
         HashSet<string> repairable = [.. outcome.Findings.Select(finding => finding.Id).Where(id => !history.Open.Any(tracked => tracked.Finding.Id == id))];
         IReadOnlyList<ReviewFinding> anchored = [.. FindingLifecycle.Carry(outcome.Findings, history).Select(finding => Anchor(finding, requirements))];
-        IReadOnlyList<ReviewFinding> judged = await ConfirmFindingsAsync(manifest, feature, anchored, repairer, repairable, cancellationToken);
+        (IReadOnlyList<ReviewFinding> judged, FixCheckSpend fixChecks) = await ConfirmFindingsAsync(manifest, feature, diff.Whole, anchored, repairer, repairable, cancellationToken);
         outcome = outcome with
         {
             Findings = FindingLifecycle.Resolve(judged, history),
@@ -140,6 +141,7 @@ internal sealed class ReviewCommand(CliContext context)
                 outcome.Usage.CacheReadInputTokens + repairer.Usage.CacheReadInputTokens,
                 outcome.Usage.CacheCreationInputTokens + repairer.Usage.CacheCreationInputTokens),
             Repairs = new RepairSpend(repairer.Calls, repairer.CostUsd),
+            FixChecks = fixChecks,
         };
         ReviewRun run = new(
             ReviewEvidence.NewRunId(feature.RecordDirectory, started),
@@ -244,23 +246,43 @@ internal sealed class ReviewCommand(CliContext context)
 
     /// <summary>
     /// Runs the reproductions of blocker/major findings when there are any and the tests build and list; otherwise blocker/major
-    /// findings stay unverified, because a finding nobody could check is not a pass.
+    /// findings stay unverified, because a finding nobody could check is not a pass. Then checks the fix of each new confirmed
+    /// finding that has one against the change's own tests (<see cref="FixChecks"/>), and says how many checks ran and how long they took.
     /// </summary>
-    private static async Task<IReadOnlyList<ReviewFinding>> ConfirmFindingsAsync(
-        Manifest manifest, Feature feature, IReadOnlyList<ReviewFinding> findings, ReproductionRepairer repairer, IReadOnlySet<string> repairable, CancellationToken cancellationToken)
+    private async Task<(IReadOnlyList<ReviewFinding> Findings, FixCheckSpend FixChecks)> ConfirmFindingsAsync(
+        Manifest manifest,
+        Feature feature,
+        string diff,
+        IReadOnlyList<ReviewFinding> findings,
+        ReproductionRepairer repairer,
+        IReadOnlySet<string> repairable,
+        CancellationToken cancellationToken)
     {
         IReadOnlyList<ReviewFinding> checks = FindingLifecycle.WithEarlierReproductions(findings);
         if (!checks.Any(Reproductions.IsRunnable))
         {
-            return FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]);
+            return (FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]), FixCheckSpend.None);
         }
 
         TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
         TestWorkspace workspace = TestWorkspaces.For(manifest, feature);
-        IReadOnlyList<ReviewFinding> judged = await workspace.BuildAsync(cancellationToken) is null && await workspace.ListAsync(cancellationToken) is not null && workspace.Apps.Count > 0
-            ? await Reproductions.ConfirmAsync(checks, workspace.Apps, manifest.Root, timeLimit, repairer, repairable, cancellationToken)
-            : [.. checks.Select(Reproductions.Unjudged)];
-        return FindingLifecycle.CombineReproductions(findings, judged);
+        if (await workspace.BuildAsync(cancellationToken) is not null || await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> listed || workspace.Apps.Count == 0)
+        {
+            return (FindingLifecycle.CombineReproductions(findings, [.. checks.Select(Reproductions.Unjudged)]), FixCheckSpend.None);
+        }
+
+        IReadOnlyList<ReviewFinding> judged = FindingLifecycle.CombineReproductions(
+            findings, await Reproductions.ConfirmAsync(checks, workspace.Apps, manifest.Root, timeLimit, repairer, repairable, cancellationToken));
+        int fixChecks = judged.Count(finding => FixChecks.IsCheckable(finding, repairable));
+        if (fixChecks == 0)
+        {
+            return (judged, FixCheckSpend.None);
+        }
+
+        DateTimeOffset started = context.Time.GetUtcNow();
+        IReadOnlyList<ReviewFinding> fixChecked = await FixChecks.CheckAsync(
+            judged, workspace.Apps, ChangeTests.Find(diff, manifest.Root, workspace.Apps, listed), manifest.Root, timeLimit, repairer, repairable, cancellationToken);
+        return (fixChecked, new FixCheckSpend(fixChecks, (long)(context.Time.GetUtcNow() - started).TotalMilliseconds));
     }
 
     /// <summary>Records the run and every finding it fixed in the ledger, and turns the open findings into the exit code.</summary>
@@ -279,7 +301,7 @@ internal sealed class ReviewCommand(CliContext context)
                 LedgerEventType.ReviewCompleted,
                 signature,
                 $"{run.Feature}: run {run.Id}, {(run.OfRecord ? "of record" : "not of record")}, {outcome.Findings.Count} findings, "
-                    + $"{openConfirmed} open confirmed and {openUnverified} open unverified blocker/major, {fixedFindings.Length} fixed, ${Cost(outcome)}",
+                    + $"{openConfirmed} open confirmed and {openUnverified} open unverified or contested blocker/major, {fixedFindings.Length} fixed, ${Cost(outcome)}",
                 null)
             {
                 Review = new LedgerReview(
@@ -309,14 +331,25 @@ internal sealed class ReviewCommand(CliContext context)
             string state = finding.State is FindingState findingState ? $", {ReviewNames.ToName(findingState)}" : string.Empty;
             string requirement = finding.Requirement is null ? string.Empty : $" ({finding.Requirement})";
             string carried = finding.Carried ? ", carried from an earlier run" : string.Empty;
-            string anchor = finding.NeedsReproduction ? $"; {ReviewNames.Describe(finding.SpecAnchor)}" : string.Empty;
+            string notes = finding.NeedsReproduction ? $"; {string.Join("; ", ReviewSummary.Notes(finding))}" : string.Empty;
             await context.Output.WriteLineAsync(
-                $"- {ReviewNames.ToName(finding.Severity)} [{ReviewNames.ToName(finding.Outcome)}{state}] {finding.File}:{finding.Line}{requirement} {finding.Title} ({finding.Id}{carried}{anchor})");
+                $"- {ReviewNames.ToName(finding.Severity)} [{ReviewNames.ToName(finding.Outcome)}{state}] {finding.File}:{finding.Line}{requirement} {finding.Title} ({finding.Id}{carried}{notes})");
+            if (finding.Outcome == FindingOutcome.Contested && finding.FixCheckErrors is string errors)
+            {
+                await context.Output.WriteLineAsync($"  {errors.ReplaceLineEndings(" ")}");
+            }
         }
 
         await context.Output.WriteLineAsync(
             $"Cost ${Cost(outcome)} (estimate), {outcome.Usage.InputTokens} input and {outcome.Usage.OutputTokens} output tokens, {outcome.DurationMs / 1000} s. "
             + $"Evidence: {Path.GetRelativePath(root, evidence)}");
+        if (outcome.FixChecks.Count > 0)
+        {
+            await context.Output.WriteLineAsync(
+                $"Fix checks: {outcome.FixChecks.Count}, {outcome.FixChecks.WallTimeMs / 1000.0:0.0} s. A contested finding's fix contradicts the change's own tests or could not be "
+                + "applied: a person decides whether the finding or the test is right.");
+        }
+
         await context.Output.WriteLineAsync(run.OfRecord
             ? $"This run is the review of record (base {run.Base.Ref} is the merge base of HEAD and {run.Base.Target})."
             : $"This run is recorded but is not the review of record: {string.Join("; ", run.NotOfRecord)}.");

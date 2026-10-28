@@ -14,4 +14,10 @@ internal enum FindingOutcome
 
     /// <summary>A blocker/major finding without a usable reproduction (missing, or it did not compile or run); a person must judge it.</summary>
     Unverified = 4,
+
+    /// <summary>
+    /// The reproduction failed, but the reviewer's own fix contradicts the change: it makes the reproduction pass and breaks one of
+    /// the change's own tests, or it does not apply or build after one repair. A person must judge it.
+    /// </summary>
+    Contested = 5,
 }

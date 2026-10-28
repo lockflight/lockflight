@@ -8,11 +8,13 @@ namespace Lockflight.Cli.Review;
 /// takes the shared <see cref="ReproductionBuild.OutputFolder"/>, kept between runs so the next review builds incrementally; it
 /// holds a lock file (in the temporary directory, named after the project root) while it builds. A review that starts while
 /// another one holds it gets a folder of its own, removed again when it is done, so two reviews never write the same output.
+/// Fix checks build into <see cref="FixName"/> next to it, so a fixed build never leaves its production code in the reproductions' output.
 /// </summary>
 internal sealed class ReviewBuildFolder : IDisposable
 {
     private const int RootHashBytes = 6;
     private const int OwnSuffixLength = 8;
+    private const string FixSuffix = "-fix";
 
     private readonly FileStream? lockFile;
     private readonly string root;
@@ -25,6 +27,8 @@ internal sealed class ReviewBuildFolder : IDisposable
     }
 
     public string Name { get; }
+
+    public string FixName => $"{Name}{FixSuffix}";
 
     public static ReviewBuildFolder Acquire(string root)
     {
@@ -52,8 +56,11 @@ internal sealed class ReviewBuildFolder : IDisposable
         foreach (string project in Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
         {
             string directory = Path.GetDirectoryName(project)!;
-            Delete(Path.Combine(directory, "bin", Name));
-            Delete(Path.Combine(directory, "obj", Name));
+            foreach (string name in new[] { Name, FixName })
+            {
+                Delete(Path.Combine(directory, "bin", name));
+                Delete(Path.Combine(directory, "obj", name));
+            }
         }
     }
 

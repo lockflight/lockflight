@@ -257,7 +257,7 @@ internal static partial class Reproductions
     [GeneratedRegex(
         @"\[(?:(?:[^\[\]]|\[[^\[\]]*\])*,)?\s*(?:\w+\s*\.\s*)*(?:Fact|Theory|Test|TestCase|TestCaseSource|TestMethod|DataTestMethod)(?:Attribute)?\s*(?:[(,](?:[^\[\]]|\[[^\[\]]*\])*)?\]"
         + @"(?:\s*\[(?:[^\[\]]|\[[^\[\]]*\])*\])*\s*(?:(?:public|internal|protected|private|static|async|override|virtual|new)\s+)*(?:void|Task|ValueTask)\s+(?<name>\w+)\s*\(")]
-    private static partial Regex TestAttributedMethod();
+    internal static partial Regex TestAttributedMethod();
 
     [GeneratedRegex(@"\b(?:void|Task)\s+(?<name>\w+)\s*\(")]
     private static partial Regex AnyMethod();

@@ -14,6 +14,9 @@ public sealed class ReviewReproductionTests : IDisposable
     private const string Broken = """{"severity":"major","file":"src/Shop/PriceCalculator.cs","line":5,"title":"Discount ignored","evidence":"Total returns the price","reproduction":"[Fact]\npublic void TotalAppliesTheDiscount() => Assert.Equal(90m, PriceCalculator.Totl(100m, 10m));"}""";
     private const string Repaired = """{"severity":"major","file":"src/Shop/PriceCalculator.cs","line":5,"title":"Discount ignored","evidence":"Total returns the price","reproduction":"[Fact]\npublic void TotalAppliesTheDiscount() => Assert.Equal(90m, PriceCalculator.Total(100m, 10m));"}""";
 
+    private const string SubtractTheDiscount =
+        "--- a/src/Shop/PriceCalculator.cs\n+++ b/src/Shop/PriceCalculator.cs\n@@ -5 +5 @@\n-    public static decimal Total(decimal price, decimal discount) => price;\n+    public static decimal Total(decimal price, decimal discount) => price - discount;\n";
+
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-repro-");
     private readonly DirectoryInfo tools = Directory.CreateTempSubdirectory("lockflight-repro-path-");
     private readonly ManualTime time = new(new DateTimeOffset(2026, 10, 27, 9, 0, 0, TimeSpan.Zero));
@@ -33,6 +36,8 @@ public sealed class ReviewReproductionTests : IDisposable
         Assert.Equal("confirmed", finding.GetProperty("outcome").GetString());
         Assert.Equal("failed", finding.GetProperty("reproductionResult").GetString());
         Assert.Equal(2, finding.GetProperty("reproductionAttempts").GetInt32());
+        Assert.Equal("none", finding.GetProperty("fixCheck").GetString());
+        Assert.False(finding.GetProperty("fixChecked").GetBoolean());
         Assert.Contains("PriceCalculator.Total(100m, 10m)", finding.GetProperty("reproduction").GetString(), StringComparison.Ordinal);
         string errors = Assert.Single(finding.GetProperty("compileErrors").EnumerateArray().Select(item => item.GetString()!).ToArray());
         Assert.Contains("Finding1.cs(2,", errors, StringComparison.Ordinal);
@@ -116,6 +121,61 @@ public sealed class ReviewReproductionTests : IDisposable
         Assert.True(File.Exists(Path.Combine(root.FullName, "tests", "Shop.Tests", "bin", "lockflight-review", "net10.0", "Shop.Tests.dll")));
     }
 
+    [Fact]
+    public async Task AConfirmedFindingWhoseFixHoldsStillFailsAndIsFixChecked()
+    {
+        await RepositoryAsync();
+        claude.Answers(WithFix(Repaired, SubtractTheDiscount));
+
+        (ExitCode exitCode, string output) = await RunAsync();
+
+        Assert.True(exitCode == ExitCode.Fail, output);
+        JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single());
+        Assert.Equal("confirmed", finding.GetProperty("outcome").GetString());
+        Assert.Equal("held", finding.GetProperty("fixCheck").GetString());
+        Assert.True(finding.GetProperty("fixChecked").GetBoolean());
+        Assert.Contains("fix-checked", output, StringComparison.Ordinal);
+        Assert.Contains("=> price;", File.ReadAllText(Path.Combine(root.FullName, "src", "Shop", "PriceCalculator.cs")), StringComparison.Ordinal);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Directory.GetFiles(ReviewsDirectory(), "*.json").Single()));
+        Assert.Equal(1, evidence.RootElement.GetProperty("fixChecks").GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task AFixThatStillDoesNotApplyAfterItsRepairContestsTheFinding()
+    {
+        await RepositoryAsync();
+        string stale = SubtractTheDiscount.Replace("discount) => price;", "discount) => price * 1;", StringComparison.Ordinal);
+        claude.Answers(WithFix(Repaired, stale)).Answers(WithFix(Repaired, stale));
+
+        (ExitCode exitCode, string output) = await RunAsync();
+
+        Assert.True(exitCode == ExitCode.NotEarned, output);
+        JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single());
+        Assert.Equal("contested", finding.GetProperty("outcome").GetString());
+        Assert.Equal("did-not-apply", finding.GetProperty("fixCheck").GetString());
+        Assert.Equal(2, finding.GetProperty("fixAttempts").GetInt32());
+        Assert.Contains("src/Shop/PriceCalculator.cs", finding.GetProperty("fixCheckErrors").GetString(), StringComparison.Ordinal);
+        Assert.Equal(2, claude.Calls.Count(arguments => arguments.Contains("-p")));
+        Assert.Contains("did not apply", claude.Prompts[1], StringComparison.Ordinal);
+        Assert.Contains("price * 1", claude.Prompts[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFixRepairedToApplyIsCheckedAgain()
+    {
+        await RepositoryAsync();
+        string stale = SubtractTheDiscount.Replace("discount) => price;", "discount) => price * 1;", StringComparison.Ordinal);
+        claude.Answers(WithFix(Repaired, stale)).Answers(WithFix(Repaired, SubtractTheDiscount));
+
+        (ExitCode exitCode, string output) = await RunAsync();
+
+        Assert.True(exitCode == ExitCode.Fail, output);
+        JsonElement finding = SingleFinding(Directory.GetFiles(ReviewsDirectory(), "*.json").Single());
+        Assert.Equal("held", finding.GetProperty("fixCheck").GetString());
+        Assert.Equal(2, finding.GetProperty("fixAttempts").GetInt32());
+        Assert.Contains("price - discount", finding.GetProperty("fix").GetString(), StringComparison.Ordinal);
+    }
+
     public void Dispose()
     {
         TempDirectories.DeleteRecursively(root);
@@ -172,6 +232,8 @@ public sealed class ReviewReproductionTests : IDisposable
 
     private async Task GitAsync(params string[] arguments) =>
         await ProcessRunner.RunAsync("git", arguments, root.FullName, TestContext.Current.CancellationToken);
+
+    private static string WithFix(string finding, string fix) => finding[..^1] + $",\"fix\":{JsonSerializer.Serialize(fix)}}}";
 
     private static JsonElement SingleFinding(string runFile)
     {
