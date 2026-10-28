@@ -4,6 +4,7 @@ using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Lifecycle.Approvals;
+using Lockflight.Cli.Lifecycle.RedGreen.Snapshots;
 using Lockflight.Cli.Processes;
 using Lockflight.Cli.Testing;
 
@@ -93,11 +94,36 @@ internal sealed class RedGreenCommand(CliContext context)
         };
     }
 
-    /// <summary>Deletes the feature's red/green evidence and ledgers it, whichever way the person reset it.</summary>
-    public static async Task DiscardAsync(RedGreenSession session, CancellationToken cancellationToken)
+    /// <summary>
+    /// Deletes the feature's red/green evidence and the refs that keep its cycles' red-time snapshots, and ledgers it, whichever way the
+    /// person reset it; says which refs it deleted, for the person's confirmation.
+    /// </summary>
+    public static async Task<string> DiscardAsync(RedGreenSession session, CancellationToken cancellationToken)
     {
+        IReadOnlyList<string> references = SnapshotRefs(session.Feature);
         File.Delete(session.RecordPath);
+        IReadOnlyList<string> deleted = await RedSnapshots.DeleteAsync(
+            session.Manifest.Root, references, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), cancellationToken);
         await session.RecordAsync(LedgerSignatures.RedGreenReset, session.Feature.Id, cancellationToken);
+        return deleted.Count switch
+        {
+            0 => string.Empty,
+            1 => $" Deleted the red-time snapshot ref {deleted[0]}.",
+            _ => $" Deleted the red-time snapshot refs {string.Join(", ", deleted)}.",
+        };
+    }
+
+    /// <summary>The snapshot refs the feature's record names; none when there is no record or it cannot be read.</summary>
+    public static IReadOnlyList<string> SnapshotRefs(Feature feature)
+    {
+        try
+        {
+            return RedGreenRecord.Load(RedGreenRecord.PathFor(feature)) is RedGreenRecord record ? RedSnapshots.RefsOf(feature.Id, record) : [];
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or FormatException or InvalidOperationException)
+        {
+            return [];
+        }
     }
 
     private async Task<ExitCode> StartAsync(RedGreenSession session, RedGreenRecord? record, CancellationToken cancellationToken)
@@ -208,8 +234,8 @@ internal sealed class RedGreenCommand(CliContext context)
             return ExitCode.Pass;
         }
 
-        await DiscardAsync(session, cancellationToken);
-        await context.Output.WriteLineAsync($"{feature}: red/green evidence discarded; the test projects are unlocked for this feature.");
+        string refs = await DiscardAsync(session, cancellationToken);
+        await context.Output.WriteLineAsync($"{feature}: red/green evidence discarded; the test projects are unlocked for this feature.{refs}");
         return ExitCode.Pass;
     }
 
