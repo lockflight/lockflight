@@ -56,13 +56,54 @@ internal static class InputsHash
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
-    /// <summary>The settings the stop gate would run with, as loaded (a manifest that does not load yields its absence).</summary>
     /// <summary>The engine build and the effective settings, for keys that cover one unit (<see cref="UnitState"/>).</summary>
     public static string EngineAndSettings(string root) => $"{EngineBuild}|{EffectiveSettings(root)}";
 
-    private static string EffectiveSettings(string root) => ManifestLocator.Discover(root).Manifest is Manifest manifest
-        ? $"{manifest.StopGate}|{manifest.StopTarget}|{manifest.Gates}|{string.Join(",", manifest.Units)}"
-        : "no manifest";
+    /// <summary>The cache key of the unit steps one unit runs in the stop profile (<see cref="GateProfiles"/>).</summary>
+    public static string UnitStepsKey(Unit unit) => StepsKey(new CanonicalKey().Add("unit", unit.Path), GateProfiles.For(GateProfile.Stop).PerUnit);
+
+    /// <summary>
+    /// The settings the stop gate would run with, as loaded, field by field, and the cache keys of its steps (a manifest that
+    /// does not load yields its absence). A field added to the stop, gate, coverage or unit settings is added here too.
+    /// </summary>
+    private static string EffectiveSettings(string root)
+    {
+        if (ManifestLocator.Discover(root).Manifest is not Manifest manifest)
+        {
+            return "no manifest";
+        }
+
+        GateSettings gates = manifest.Gates;
+        CanonicalKey key = new CanonicalKey()
+            .Add("stop.gate", manifest.StopGate)
+            .Add("stop.target", manifest.StopTarget)
+            .Add("gates.timeoutSeconds", gates.TimeoutSeconds)
+            .Add("gates.build", gates.BuildFile)
+            .Add("gates.test.framework", gates.TestFramework)
+            .Add("gates.coverage.collector", (int)gates.Coverage.Collector)
+            .Add("gates.coverage.patchThreshold", gates.Coverage.PatchThreshold)
+            .Add("gates.coverage.minChangedLines", gates.Coverage.MinChangedLines);
+        foreach (Unit unit in manifest.Units)
+        {
+            key.Add("unit.path", unit.Path)
+                .Add("unit.build", unit.Build)
+                .Add("unit.kind", (int)unit.Kind)
+                .Add("unit.test.framework", unit.TestFramework)
+                .Add("unit.test.stopFilter", unit.StopFilter);
+        }
+
+        return StepsKey(key, GateProfiles.For(GateProfile.Stop).InOrder);
+    }
+
+    private static string StepsKey(CanonicalKey key, IReadOnlyList<IGateStep> steps)
+    {
+        foreach (IGateStep step in steps)
+        {
+            key.Add("step", step.CacheKey);
+        }
+
+        return key.ToString();
+    }
 
     /// <summary>Appends a value with a separator, so adjacent values cannot run together into the same bytes.</summary>
     private static void Append(IncrementalHash hash, string value)

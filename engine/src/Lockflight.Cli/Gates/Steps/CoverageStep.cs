@@ -9,13 +9,19 @@ namespace Lockflight.Cli.Gates.Steps;
 /// Patch coverage (pr profile): of the changed lines that are coverable, the share the tests executed must reach the threshold.
 /// Reads the Cobertura reports the test run just wrote; judges nothing when too few coverable lines changed.
 /// </summary>
-internal static class CoverageStep
+internal sealed class CoverageStep : IGateStep
 {
-    public const string Name = "coverage.patch";
+    public const string StepName = "coverage.patch";
 
     private const int MaxUncoveredListed = 5;
 
     private const int MaxLinesListed = 8;
+
+    public string Name => StepName;
+
+    public StepScope Scope => StepScope.Unit;
+
+    public string CacheKey => StepName;
 
     /// <summary>
     /// Test arguments that make the configured collector write Cobertura; empty when coverage is not configured. On VSTest the
@@ -85,12 +91,13 @@ internal static class CoverageStep
         return null;
     }
 
-    /// <param name="resultsDirectory">Where a VSTest run wrote its results (Cobertura in per-run GUID folders); null for MTP.</param>
-    public static async Task<GateStep> RunAsync(GateRunContext run, DateTimeOffset testsStarted, string? resultsDirectory, CancellationToken cancellationToken)
+    /// <param name="facts">When the tests started and, on VSTest, where they wrote their results (Cobertura in per-run GUID folders).</param>
+    public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken)
     {
+        DateTimeOffset testsStarted = facts.TestsStarted ?? throw new InvalidOperationException("the coverage step reads the test run: it runs after the test step");
         Stopwatch stopwatch = Stopwatch.StartNew();
-        GateStep step = await JudgeAsync(run, testsStarted, resultsDirectory, cancellationToken);
-        return step with { DurationMs = stopwatch.ElapsedMilliseconds };
+        GateStep step = await JudgeAsync(run, testsStarted, facts.TestResultsDirectory, cancellationToken);
+        return new(step with { DurationMs = stopwatch.ElapsedMilliseconds }, facts);
     }
 
     private static async Task<GateStep> JudgeAsync(GateRunContext run, DateTimeOffset testsStarted, string? resultsDirectory, CancellationToken cancellationToken)
@@ -98,7 +105,7 @@ internal static class CoverageStep
         CoverageSettings settings = run.Settings.Coverage;
         if (settings.Collector == CoverageCollector.None)
         {
-            return new GateStep(Name, 0, Verdict.NotApplicable, 0, "not configured, so not judged (set gates.coverage.collector in lockflight.yaml)");
+            return new GateStep(StepName, 0, Verdict.NotApplicable, 0, "not configured, so not judged (set gates.coverage.collector in lockflight.yaml)");
         }
 
         IEnumerable<string> searched = resultsDirectory is not null && Directory.Exists(resultsDirectory)
@@ -107,7 +114,7 @@ internal static class CoverageStep
         string[] reports = [.. searched.Where(path => File.GetLastWriteTimeUtc(path) >= testsStarted.UtcDateTime.AddSeconds(-1))];
         if (reports.Length == 0)
         {
-            return new GateStep(Name, 0, Verdict.NotEarned, 0, "the test run wrote no Cobertura report; does every test project reference the collector package?");
+            return new GateStep(StepName, 0, Verdict.NotEarned, 0, "the test run wrote no Cobertura report; does every test project reference the collector package?");
         }
 
         LineCoverage coverage = new();
@@ -119,7 +126,7 @@ internal static class CoverageStep
 
         if (await ChangedLines.FindAsync(run.ProjectRoot, run.BaseRef, cancellationToken) is not IReadOnlyDictionary<string, IReadOnlySet<int>> allChanged)
         {
-            return new GateStep(Name, 0, Verdict.Error, 0, "git could not list the changed lines; with --base, is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
+            return new GateStep(StepName, 0, Verdict.Error, 0, "git could not list the changed lines; with --base, is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
         }
 
         // A unit's run judges its own files: another unit's changes are that unit's run's to judge.
@@ -140,7 +147,7 @@ internal static class CoverageStep
 
         if (coverable.Count < settings.MinChangedLines)
         {
-            return new GateStep(Name, 0, Verdict.NotApplicable, 0, $"{coverable.Count} coverable changed lines, below the {settings.MinChangedLines}-line minimum; not judged");
+            return new GateStep(StepName, 0, Verdict.NotApplicable, 0, $"{coverable.Count} coverable changed lines, below the {settings.MinChangedLines}-line minimum; not judged");
         }
 
         int covered = coverable.Count(entry => entry.Hits > 0);
@@ -148,7 +155,7 @@ internal static class CoverageStep
         string summary = $"{percent}% of {coverable.Count} changed lines covered (threshold {settings.PatchThreshold}%)";
         if (percent >= settings.PatchThreshold)
         {
-            return new GateStep(Name, 0, Verdict.Pass, 0, summary);
+            return new GateStep(StepName, 0, Verdict.Pass, 0, summary);
         }
 
         string uncovered = string.Join(", ", coverable
@@ -156,6 +163,6 @@ internal static class CoverageStep
             .GroupBy(entry => entry.File)
             .Take(MaxUncoveredListed)
             .Select(group => $"{group.Key}:{string.Join(',', group.Select(entry => entry.Line.ToString(CultureInfo.InvariantCulture)).Take(MaxLinesListed))}"));
-        return new GateStep(Name, 0, Verdict.Fail, 0, $"{summary}; uncovered: {uncovered}");
+        return new GateStep(StepName, 0, Verdict.Fail, 0, $"{summary}; uncovered: {uncovered}");
     }
 }

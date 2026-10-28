@@ -13,8 +13,9 @@ public sealed class CoverageStepTests : IDisposable
     public async Task UnconfiguredCoverageIsNotApplicableRatherThanAPass()
     {
         GateRunContext run = new(projectRoot.FullName, projectRoot.FullName, GateProfile.PullRequest, GateSettings.Default, BaseRef: null, TimeProvider.System);
+        GateRunFacts afterTests = new(TestsTotal: 1, TestResultsDirectory: null, TestsStarted: DateTimeOffset.UnixEpoch);
 
-        GateStep step = await CoverageStep.RunAsync(run, DateTimeOffset.UnixEpoch, resultsDirectory: null, TestContext.Current.CancellationToken);
+        GateStep step = (await new CoverageStep().RunAsync(run, afterTests, TestContext.Current.CancellationToken)).Step;
 
         Assert.Equal(Verdict.NotApplicable, step.Verdict);
         Assert.Contains("not judged", step.Detail, StringComparison.Ordinal);

@@ -84,12 +84,12 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
     private async Task<BaselineCapture> FailingTestsAsync(string target, bool underHook, CancellationToken cancellationToken)
     {
         GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: underHook);
-        if ((await BuildStep.RunAsync(run, cancellationToken)).Verdict != Verdict.Pass)
+        if ((await BuildStep.BuildAsync(run, cancellationToken)).Verdict != Verdict.Pass)
         {
             return BaselineCapture.Failed("the build gate does not pass; fix it before accepting failing tests", ExitCode.Fail);
         }
 
-        TestStepOutcome tests = await TestStep.RunAsync(run, cancellationToken);
+        TestStepOutcome tests = await TestStep.RunTestsAsync(run, cancellationToken);
         return tests.Step.Verdict == Verdict.Error
             ? BaselineCapture.Failed($"the test run itself broke ({tests.Step.Detail}); a baseline needs a test run that completes", ExitCode.Error)
             : BaselineCapture.Taken(tests.FailedTests, run.UnitPath);
@@ -98,7 +98,7 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
     private async Task<BaselineCapture> AdvisoriesAsync(string target, CancellationToken cancellationToken)
     {
         GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.PullRequest, baseRef: null, context.Time);
-        (GateStep step, IReadOnlyList<VulnerablePackage> found) = await DependencyStep.RunAsync(run, cancellationToken);
+        (GateStep step, IReadOnlyList<VulnerablePackage> found) = await DependencyStep.ScanAsync(run, cancellationToken);
         return step.Verdict == Verdict.Error
             ? BaselineCapture.Failed($"could not list vulnerable packages ({step.Detail})", ExitCode.Error)
             : BaselineCapture.Taken([.. found.Select(package => package.Fingerprint)], run.UnitPath);
