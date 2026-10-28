@@ -9,7 +9,7 @@ public sealed class PathAliasTests : IDisposable
     [Fact]
     public void AWriteThroughASymlinkedDirectoryStillMatchesTheProtectedTarget()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "secrets"));
         Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "innocent"), Path.Combine(projectRoot.FullName, "secrets"));
 
@@ -42,7 +42,7 @@ public sealed class PathAliasTests : IDisposable
     [InlineData("l/./../../secrets/key.txt", "secrets/**")]
     public void AParentSegmentAfterASymlinkGoesToTheParentOfItsTarget(string target, string expectedRule)
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".lockflight", "local"));
         Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "l"), Path.Combine(projectRoot.FullName, ".lockflight", "local"));
 
@@ -54,7 +54,7 @@ public sealed class PathAliasTests : IDisposable
     [Fact]
     public void AParentSegmentAfterASymlinkToADirectoryElsewhereLeavesTheProject()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows collapses '..' before it follows a link (tested on its own below).");
         DirectoryInfo elsewhere = Directory.CreateTempSubdirectory("lockflight-elsewhere-");
         try
         {
@@ -66,6 +66,26 @@ public sealed class PathAliasTests : IDisposable
         finally
         {
             elsewhere.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void OnWindowsAParentSegmentIsAlsoJudgedWhereWindowsCollapsesIt()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows() && SymbolicLinks.CanCreate, "Windows only, with symbolic links.");
+        DirectoryInfo elsewhere = Directory.CreateTempSubdirectory("lockflight-elsewhere-");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(elsewhere.FullName, "inner"));
+            Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "out"), Path.Combine(elsewhere.FullName, "inner"));
+            File.WriteAllText(Path.Combine(projectRoot.FullName, "out", "..", "probe.txt"), "x");
+
+            Assert.True(File.Exists(Path.Combine(projectRoot.FullName, "probe.txt")), "Windows did not collapse 'out\\..' before following the link");
+            Assert.Equal("lockflight.yaml", PathRules.FindMatch(projectRoot.FullName, "out/../lockflight.yaml", projectRoot.FullName, ["lockflight.yaml"]));
+        }
+        finally
+        {
+            TempDirectories.DeleteRecursively(elsewhere);
         }
     }
 

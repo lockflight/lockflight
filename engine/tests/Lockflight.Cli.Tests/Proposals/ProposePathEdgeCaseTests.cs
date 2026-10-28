@@ -9,8 +9,6 @@ namespace Lockflight.Cli.Tests.Proposals;
 
 public sealed class ProposePathEdgeCaseTests : IDisposable
 {
-    private const string SymlinksNeedPrivileges = "Creating symlinks needs developer mode on Windows.";
-
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-propose-edge-");
     private readonly DirectoryInfo scratch = Directory.CreateTempSubdirectory("lockflight-scratch-edge-");
 
@@ -76,7 +74,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     [Fact]
     public async Task ASymbolicLinkToAFileOutsideTheProjectIsRefused()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), SymlinksNeedPrivileges);
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         string outside = WriteScratch("outside.txt", "outside\n");
         File.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "notes.txt"), outside);
         string from = WriteScratch("notes.new", "changed\n");
@@ -91,7 +89,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     [Fact]
     public async Task ADirectoryLinkOutOfTheProjectIsRefused()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), SymlinksNeedPrivileges);
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "vendor"), scratch.FullName);
         string from = WriteScratch("lib.new", "lib\n");
 
@@ -105,7 +103,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     [Fact]
     public async Task ALinkIntoAProtectedPathProposesTheRealFileUnderItsRule()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), SymlinksNeedPrivileges);
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         await InitRepositoryAsync();
         WriteProject("secrets/key.txt", "old\n");
         await CommitAllAsync();
@@ -128,7 +126,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     [Fact]
     public async Task AFileNamedThroughALinkAndByItsOwnNameIsNamedTwice()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), SymlinksNeedPrivileges);
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         WriteProject("notes.txt", "a\n");
         File.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "alias.txt"), Path.Combine(projectRoot.FullName, "notes.txt"));
         string first = WriteScratch("first.new", "b\n");
@@ -294,7 +292,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     [Fact]
     public async Task AProposalsDirectoryThatIsALinkIsRefused()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), SymlinksNeedPrivileges);
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         WriteProject("notes.txt", "a\n");
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".lockflight", "local"));
         DirectoryInfo elsewhere = Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "secrets"));
@@ -312,7 +310,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     [Fact]
     public async Task ALockflightDirectoryThatIsALinkIsRefused()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), SymlinksNeedPrivileges);
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         WriteProject("notes.txt", "a\n");
         Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, ".lockflight"), scratch.FullName);
         string from = WriteScratch("notes.new", "b\n");
@@ -341,7 +339,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     [Fact]
     public async Task ContentLinkedFromAProtectedFileIsRefused()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), SymlinksNeedPrivileges);
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         WriteProject("global.json", "{}\n");
         WriteProject("secrets/token.json", "{ \"token\": \"t\" }\n");
         string link = Path.Combine(scratch.FullName, "innocent.json");
@@ -384,7 +382,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     [Fact]
     public async Task OneRefusedLinkAmongGoodPairsWritesNothingAtAll()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), SymlinksNeedPrivileges);
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         WriteProject("global.json", "{}\n");
         File.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "escape.txt"), WriteScratch("target.txt", "t\n"));
         string good = WriteScratch("good.new", "{ \"sdk\": {} }\n");
@@ -402,7 +400,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     [Fact]
     public void ANewPatchPathSkipsADanglingLinkAlreadyThere()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), SymlinksNeedPrivileges);
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         DateTimeOffset now = new(2026, 10, 15, 9, 0, 0, TimeSpan.Zero);
         string first = ProposalFiles.NewPath(projectRoot.FullName, now, "notes.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(first)!);

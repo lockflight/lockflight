@@ -388,7 +388,7 @@ public sealed class SessionApprovalTests : IDisposable
     [InlineData(true)]
     public async Task ALinkInPlaceOfTheWaitingCodeIsRefusedAndNotFollowed(bool codeTyped)
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await CreateProjectAsync();
         string target = Path.Combine(root.FullName, "elsewhere.json");
@@ -407,7 +407,7 @@ public sealed class SessionApprovalTests : IDisposable
     [Fact]
     public async Task AWaitingCodesDirectoryThatIsALinkIsRefused()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creating symlinks needs developer mode on Windows.");
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         await CreateProjectAsync();
         DirectoryInfo elsewhere = Directory.CreateDirectory(Path.Combine(root.FullName, "elsewhere"));
         Directory.CreateDirectory(Path.Combine(root.FullName, ".lockflight", "local"));

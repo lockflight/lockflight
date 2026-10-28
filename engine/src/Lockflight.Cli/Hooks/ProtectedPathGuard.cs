@@ -66,7 +66,7 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
         if (input.ToolName is string toolName && FileEditingTools.Contains(toolName))
         {
             // An editing tool's path is literal: no variables, no wildcards, no home.
-            return await FileDecisionAsync(new RootRelativePaths(manifest.Root), writes.Files, manifest, globs, testLocks, amended, workingDirectory) ?? HookDecision.Allow;
+            return await FileDecisionAsync(new RootRelativePaths(manifest.Root), WindowsParentSegments.WithCollapsed(writes.Files, workingDirectory), manifest, globs, testLocks, amended, workingDirectory) ?? HookDecision.Allow;
         }
 
         IEnumerable<(string Path, bool AsTree)> allTargets = writes.Files.Select(path => (path, false))
@@ -76,13 +76,17 @@ internal sealed class ProtectedPathGuard(TextWriter diagnostics, EnvironmentRead
             return variable;
         }
 
-        IReadOnlyList<string>? files = Expand(writes.Files, workingDirectory);
-        IReadOnlyList<string>? trees = Expand(writes.Trees, workingDirectory);
-        IReadOnlyList<string>? sourceTrees = Expand(writes.SourceTrees, workingDirectory);
-        if (files is null || trees is null || sourceTrees is null)
+        IReadOnlyList<string>? expandedFiles = Expand(writes.Files, workingDirectory);
+        IReadOnlyList<string>? expandedTrees = Expand(writes.Trees, workingDirectory);
+        IReadOnlyList<string>? expandedSourceTrees = Expand(writes.SourceTrees, workingDirectory);
+        if (expandedFiles is null || expandedTrees is null || expandedSourceTrees is null)
         {
             return HookDecision.Block("wildcard-too-broad", $"lockflight: a wildcard in this command matches more than {MaxWildcardMatches} paths; name the files or a narrower pattern.");
         }
+
+        IReadOnlyList<string> files = WindowsParentSegments.WithCollapsed(expandedFiles, workingDirectory);
+        IReadOnlyList<string> trees = WindowsParentSegments.WithCollapsed(expandedTrees, workingDirectory);
+        IReadOnlyList<string> sourceTrees = WindowsParentSegments.WithCollapsed(expandedSourceTrees, workingDirectory);
 
         ProtectedTreeScan scan = new(manifest.Root, [.. globs, .. testLocks.Select(testLock => testLock.Glob)], reads);
         RootRelativePaths relatives = new(manifest.Root);
