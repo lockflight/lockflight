@@ -59,7 +59,7 @@ internal static class SecretsStep
                 $"added lines silence gitleaks with an inline '{InlineAllowMarker}': {string.Join(", ", allowances.Files.Take(MaxLeaksListed))}; accept false positives in .gitleaksignore (human review) instead");
         }
 
-        return await ScanAsync(new GitleaksScan(gitleaks, run), untracked, cancellationToken);
+        return await ScanAsync(new GitleaksScan(gitleaks, run, PrivateDirectory("lockflight-gitleaks-")), untracked, cancellationToken);
     }
 
     private static async Task<GateStep> ScanAsync(GitleaksScan scan, string[] untracked, CancellationToken cancellationToken)
@@ -98,7 +98,7 @@ internal static class SecretsStep
         }
         finally
         {
-            scan.DeleteReport();
+            scan.Delete();
             staging?.Delete(recursive: true);
         }
 
@@ -160,16 +160,11 @@ internal static class SecretsStep
 
     /// <summary>
     /// Copies the untracked files under their repository-relative paths into a new temporary directory, so the scan reports and
-    /// fingerprints those paths. The directory is created for the current user only (mode 0700 on Unix): the copies may hold secrets.
+    /// fingerprints those paths. The copies may hold secrets, so the directory is private.
     /// </summary>
     private static DirectoryInfo Stage(string root, string[] untracked)
     {
-        DirectoryInfo staging = Directory.CreateTempSubdirectory("lockflight-untracked-");
-        if (!OperatingSystem.IsWindows())
-        {
-            staging.UnixFileMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-        }
-
+        DirectoryInfo staging = PrivateDirectory("lockflight-untracked-");
         foreach (string path in untracked)
         {
             string target = Path.Combine(staging.FullName, path);
@@ -187,16 +182,34 @@ internal static class SecretsStep
         return File.Exists(config) ? ["--config", config] : [];
     }
 
+    /// <summary>A new temporary directory only the current user can read (mode 0700 on Unix).</summary>
+    private static DirectoryInfo PrivateDirectory(string prefix)
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory(prefix);
+        if (!OperatingSystem.IsWindows())
+        {
+            directory.UnixFileMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+        }
+
+        return directory;
+    }
+
     /// <summary>A file gitleaks would scan: it exists and is not a symbolic link (gitleaks does not follow links).</summary>
     private static bool IsRegularFile(string path) => File.Exists(path) && new FileInfo(path).LinkTarget is null;
 
     /// <summary>Files that add an inline allowance, or the range whose diff git could not produce.</summary>
     private sealed record InlineAllowances(IReadOnlyList<string> Files, string? DiffFailedFor);
 
-    /// <summary>One gitleaks report file reused by every scan of the step, with the findings and time collected so far.</summary>
-    private sealed class GitleaksScan(string gitleaks, GateRunContext run)
+    /// <summary>
+    /// One gitleaks report file reused by every scan of the step, with the findings and time collected so far. The report is not
+    /// redacted — the engine's own recorded hashes are told apart by their value — so it lives in <paramref name="reportDirectory"/>,
+    /// a private directory deleted with the scan; only rule, file, line and commit are kept.
+    /// </summary>
+    private sealed class GitleaksScan(string gitleaks, GateRunContext run, DirectoryInfo reportDirectory)
     {
-        private readonly string reportPath = Path.Combine(Path.GetTempPath(), $"lockflight-gitleaks-{Guid.CreateVersion7()}.json");
+        private const string ReportFileName = "report.json";
+
+        private readonly string reportPath = Path.Combine(reportDirectory.FullName, ReportFileName);
 
         public GateRunContext Run => run;
 
@@ -205,7 +218,7 @@ internal static class SecretsStep
         public long DurationMs { get; private set; }
 
         public string[] ReportArguments =>
-            ["--redact", "--no-banner", "--report-format", "json", "--report-path", reportPath, "--exit-code", $"{LeaksFoundExitCode}"];
+            ["--no-banner", "--report-format", "json", "--report-path", reportPath, "--exit-code", $"{LeaksFoundExitCode}"];
 
         /// <summary>
         /// Runs one scan and collects its findings, their paths under <paramref name="pathPrefix"/> (a child repository's unit path);
@@ -230,7 +243,7 @@ internal static class SecretsStep
             return null;
         }
 
-        public void DeleteReport() => File.Delete(reportPath);
+        public void Delete() => reportDirectory.Delete(recursive: true);
 
         private static string LastLine(string output) =>
             output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? string.Empty;

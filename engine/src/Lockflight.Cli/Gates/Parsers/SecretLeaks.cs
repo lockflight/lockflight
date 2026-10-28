@@ -2,7 +2,11 @@ using System.Text.Json;
 
 namespace Lockflight.Cli.Gates.Parsers;
 
-/// <summary>Reads a gitleaks JSON report: an array of findings with <c>RuleID</c>, <c>File</c>, <c>StartLine</c> and <c>Commit</c>.</summary>
+/// <summary>
+/// Reads a gitleaks JSON report: an array of findings with <c>RuleID</c>, <c>File</c>, <c>StartLine</c> and <c>Commit</c>. The
+/// <c>Match</c> and <c>Secret</c> are read only to leave out the engine's own recorded hashes (<see cref="EngineEvidenceHashes"/>)
+/// and are not kept.
+/// </summary>
 internal static class SecretLeaks
 {
     public static IReadOnlyList<SecretLeak> Parse(string json)
@@ -19,6 +23,7 @@ internal static class SecretLeaks
         }
 
         return [.. document.RootElement.EnumerateArray()
+            .Where(finding => !EngineEvidenceHashes.Recognize(Text(finding, "RuleID"), Text(finding, "File"), Text(finding, "Match"), Text(finding, "Secret")))
             .Select(finding => new SecretLeak(
                 Text(finding, "RuleID"),
                 Text(finding, "File").Replace('\\', '/'),
