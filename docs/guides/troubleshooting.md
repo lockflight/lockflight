@@ -162,10 +162,11 @@ Until then, `~/.lockflight/bin/lockflight` works everywhere, and in a set-up pro
 
 ## The engine package is not found
 
-The `Lockflight.Cli` packages are not on nuget.org yet, so `dotnet tool install Lockflight.Cli` finds nothing. Until they are
-published, [install from source](getting-started.md#install-from-source-no-feed-no-token) with `scripts/dev-install.sh`: it
-packs the engine into a local feed (`~/.lockflight/feed`) and needs no package feed and no token. [Install from a
-package](getting-started.md#install-from-a-package) works once the packages are published.
+`Lockflight.Cli` is published as a prerelease, so `dotnet tool install Lockflight.Cli` without `--prerelease` finds no
+version. Install it as [install from a package](getting-started.md#install-from-a-package) shows: with `--prerelease`, with
+the .NET 10 SDK, from your home directory rather than a project whose `global.json` pins an older SDK. Behind a mirror, add
+`--add-source <feed>`. Without access to any feed, [install from source](getting-started.md#install-from-source) with
+`scripts/dev-install.sh`: it packs the engine into a local feed (`~/.lockflight/feed`) and needs no package feed and no token.
 
 A project set up from a source install pins a development build that only your machine's local feed has. `doctor` reports
 that pin: **pin restorable** FAIL when this machine cannot restore it ([fix](#dotnet-lockflight-fails-the-pinned-version-is-not-found)),
