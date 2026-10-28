@@ -1,9 +1,9 @@
 # Releases the Lockflight.Cli tool packages (a pointer package plus one Native AOT package per RID) to nuget.org.
 #
 # Runs for a pushed version tag (vX.Y.Z[-pre]), or by manual dispatch from such a tag ("Use workflow from" = the tag; with
-# publish off it is a dry run). A dispatch from a branch is a dry run only: it builds 0.0.0-ci.<run number>, skips the
-# tag and plugin-version checks, and refuses publish on. Every RID is built, tested, installed from a local feed, linked into a project and run through
-# the hook compatibility suite before anything is pushed. Pushing needs the `nuget` environment, whose required reviewers
+# publish off it is a dry run). A dispatch from a branch is a dry run only: it builds 0.0.0-ci.<run number>, skips the tag
+# and plugin-version checks, and refuses publish on. Every RID is built, tested, installed from a local feed, linked into a
+# project and run through the hook compatibility suite before anything is pushed. Pushing needs the `nuget` environment, whose required reviewers
 # approve each release, and uses nuget.org Trusted Publishing (OIDC): no API key is stored. The GitHub Release is created as a
 # draft for the maintainer to edit and publish. Setup: docs/engineering/releasing.md. Versions are never re-published.
 name: release-packages
@@ -132,7 +132,6 @@ jobs:
           dotnet tool install Lockflight.Cli --tool-path "$tools" --version "$VERSION" --add-source "$feed"
           tool="$tools/lockflight$shim"
           [ -f "$tool" ] || { echo "::error::the install did not write $tool"; ls -la "$tools"; exit 1; }
-          cat "$tool" # DEBUG
           installed=$("$tool" version | tr -d '\r')
           if [ "$installed" != "$VERSION" ]; then
             echo "::error::the installed engine reports $installed, expected $VERSION"; exit 1
