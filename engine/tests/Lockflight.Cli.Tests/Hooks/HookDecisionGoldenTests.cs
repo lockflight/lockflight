@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
@@ -12,7 +13,7 @@ namespace Lockflight.Cli.Tests.Hooks;
 /// and their order (plugin API and unknown event for every event; lockdown, else the engine pin, for PreToolUse only; then the
 /// relay guard; then the human-only and protected-path rules, at the root and in agent worktrees).
 /// </summary>
-public sealed class HookDecisionGoldenTests
+public sealed partial class HookDecisionGoldenTests
 {
     private const string ManifestText = """
         version: 1
@@ -163,8 +164,12 @@ public sealed class HookDecisionGoldenTests
             .Replace(JsonEncodedText.Encode(root).ToString(), "<root>", StringComparison.Ordinal)
             .Replace(root, "<root>", StringComparison.Ordinal)
             .Replace(ToolPin.RunningVersion, "<version>", StringComparison.Ordinal);
-        return OperatingSystem.IsWindows() ? normalized.Replace("\\\\", "/", StringComparison.Ordinal).Replace('\\', '/') : normalized;
+        return OperatingSystem.IsWindows() ? WindowsSeparator().Replace(normalized.Replace("\\\\", "/", StringComparison.Ordinal), "/") : normalized;
     }
+
+    /// <summary>A backslash that separates path segments, not one that starts a JSON escape (<c>\u003C</c>).</summary>
+    [GeneratedRegex(@"\\(?!u[0-9A-Fa-f]{4})")]
+    private static partial Regex WindowsSeparator();
 
     private static void Lockdown(string root)
     {
