@@ -120,6 +120,26 @@ internal static class RedSnapshots
         }
     }
 
+    /// <summary>The refs that keep the snapshots of a record's cycles.</summary>
+    public static IReadOnlyList<string> RefsOf(string featureId, RedGreenRecord record) =>
+        [.. record.Cycles.Where(cycle => cycle.Snapshot is not null).Select(cycle => RefFor(featureId, cycle.Number, cycle.Snapshot!))];
+
+    /// <summary>Deletes the refs that exist; the ones it deleted.</summary>
+    public static async Task<IReadOnlyList<string>> DeleteAsync(string root, IReadOnlyList<string> references, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        List<string> deleted = [];
+        foreach (string reference in references)
+        {
+            if ((await SnapshotGit.RunAsync(["rev-parse", "--verify", "--quiet", reference], root, timeLimit, cancellationToken)).ExitCode == 0
+                && (await SnapshotGit.RunAsync(["update-ref", "-d", reference], root, timeLimit, cancellationToken)).ExitCode == 0)
+            {
+                deleted.Add(reference);
+            }
+        }
+
+        return deleted;
+    }
+
     /// <summary>The repository's top directory as git names it; null outside a repository.</summary>
     public static async Task<string?> TopLevelAsync(string directory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
         Directory.Exists(directory) ? await SnapshotGit.OutputAsync(["rev-parse", "--show-toplevel"], directory, timeLimit, cancellationToken) : null;

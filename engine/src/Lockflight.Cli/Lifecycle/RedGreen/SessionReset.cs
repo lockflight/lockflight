@@ -4,6 +4,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.Approvals;
+using Lockflight.Cli.Lifecycle.RedGreen.Snapshots;
 using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Lifecycle.RedGreen;
@@ -100,10 +101,10 @@ internal sealed class SessionReset(CliContext context, Manifest manifest)
             return Refuse(new SessionRefusal("changed", $"the red/green evidence of {feature.Id} changed since you saw it; run /{CommandName} again"), words);
         }
 
-        await RedGreenCommand.DiscardAsync(new RedGreenSession(context, manifest, feature, TestWorkspaces.For(manifest, feature)), cancellationToken);
+        string refs = await RedGreenCommand.DiscardAsync(new RedGreenSession(context, manifest, feature, TestWorkspaces.For(manifest, feature)), cancellationToken);
         codes.Discard(Slot);
         return SessionCommandResult.Recorded(
-            $"Step 2 of 2 — reset: the red/green evidence of {feature.Id} is discarded, and the test projects are unlocked for this feature.",
+            $"Step 2 of 2 — reset: the red/green evidence of {feature.Id} is discarded, and the test projects are unlocked for this feature.{refs}",
             $"The person discarded the red/green evidence of {feature.Id} in this session. Re-read the state from the engine "
             + $"({EngineCommand.Linked} redgreen status --feature {feature.Id}), never assume it; red/green starts again with '{EngineCommand.Linked} redgreen start'.");
     }
@@ -125,6 +126,11 @@ internal sealed class SessionReset(CliContext context, Manifest manifest)
             foreach (string amend in RedGreenAmends.Lines(record))
             {
                 digest.AppendLine($"  Amended: {amend}");
+            }
+
+            foreach (string reference in RedSnapshots.RefsOf(feature.Id, record))
+            {
+                digest.AppendLine($"  Red-time snapshot {reference} (deleted)");
             }
 
             digest.AppendLine(record.OpenCycle is null
