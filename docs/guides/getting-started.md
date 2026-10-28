@@ -4,10 +4,10 @@ Lockflight runs deterministic checks around a Claude Code agent working in a .NE
 at the end of a turn and in CI, and — in the standard profile — a spec-driven lifecycle with human approvals and red/green
 evidence. This page takes you from nothing to a first green gate.
 
-**On this page:** [Requirements](#requirements) · [Install from source](#install-from-source-no-feed-no-token) ·
+**On this page:** [Requirements](#requirements) · [Install from source](#install-from-source) ·
 [Install on Windows](#install-on-windows) · [Install from a package](#install-from-a-package) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
 [An existing setup](#a-repository-with-an-existing-claude-code-or-spec-kit-setup) · [Monorepos](#monorepos) ·
-[Workspace shells](#workspace-shells) · [Standard profile](#standard-profile) · [CI during the preview](#ci-during-the-preview) ·
+[Workspace shells](#workspace-shells) · [Standard profile](#standard-profile) · [CI with a development build](#ci-with-a-development-build) ·
 [Levi and the status line](#levi-and-the-status-line)
 
 ## Requirements
@@ -22,10 +22,11 @@ evidence. This page takes you from nothing to a first green gate.
 | The `pr` profile's secrets step | [gitleaks](https://github.com/gitleaks/gitleaks) on `PATH` (or `LOCKFLIGHT_GITLEAKS`); without it the step is NOT-EARNED. The generated CI workflow downloads its own. |
 | The standard profile | `uv` (for Spec Kit) and Python 3 with PyYAML. |
 
-## Install from source (no feed, no token)
+## Install from source
 
-This is the install that works today: build the engine from a checkout of this repository and install it for your user. On
-Windows, see [Install on Windows](#install-on-windows).
+To work on Lockflight or try `main`, build the engine from a checkout of this repository and install it for your user; it
+needs no package feed and no token. Otherwise, [install from a package](#install-from-a-package). On Windows, see
+[Install on Windows](#install-on-windows).
 
 ```sh
 git clone https://github.com/lockflight/lockflight && cd lockflight
@@ -60,7 +61,7 @@ Then set up your project: the [lite profile](#lite-profile-target-first-green-in
 - **Tool pin:** `init` pins the dev version, which exists only in your local feed. A teammate runs the same script to get it.
   `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
   root, as the skills do; `doctor` reports a pin that cannot be restored on this machine. No package feed has it either, so
-  CI cannot install it yet.
+  CI cannot install it until the project pins a release (`update`).
 - **Human decisions** (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo`, `update`) are yours: run them in a separate
   terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
   approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`), and a baseline, a reset or an
@@ -108,10 +109,8 @@ and your projects.
 
 ## Install from a package
 
-> [!NOTE]
-> Once the `Lockflight.Cli` packages are published on nuget.org. Until then, [install from source](#install-from-source-no-feed-no-token).
-
-Install the engine for your user, then the plugin:
+`Lockflight.Cli` is published on nuget.org, as a prerelease during the preview. Install the engine for your user, then the
+plugin:
 
 ```sh
 cd ~                                   # outside any project: a global.json there could pick an SDK older than 10
@@ -275,12 +274,13 @@ hold the keys to the two approvals.
    [the crew](skills.md#the-crew-optional).
 3. Now and then: `.lockflight/bin/lockflight ledger retro` (or ask for a retro) to see recurring incidents and suggested remedies.
 
-## CI during the preview
+## CI with a development build
 
 The workflow `init` writes installs the engine version the project pins, from nuget.org or the package sources in the
-repository's `nuget.config`. During the preview no feed has it: an engine built from source is a development build
-(`0.2.0-alpha.4.dev.<commit time>`) that exists only in your local feed (`~/.lockflight/feed`). A workflow that ran on every
-pull request would fail at the engine install every time. So:
+repository's `nuget.config`. A project set up from a package pins a release that nuget.org has, so its workflow runs on every
+pull request. An engine built from source is a development build (`0.2.0-alpha.7.dev.<commit time>`) that exists only in
+your local feed (`~/.lockflight/feed`), so a workflow that ran on every pull request would fail at the engine install every
+time. So:
 
 - When the engine is a development build, `init` writes the workflow to run only when started by hand (`workflow_dispatch`),
   says why in its output, and the workflow's comment says so too. `init --ci pr` writes the pull-request trigger anyway, and
