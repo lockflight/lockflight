@@ -143,7 +143,7 @@ internal static class ReadinessChecks
         {
             return new(DevelopmentPinCheck, CheckStatus.Warn,
                 $"the project pins the development build {pinned}, which no package feed has, and the release {installed} is installed",
-                $"a person runs `{EngineCommand.UserInstall} update` in the project {HumanOnlyCommands.WhereToRun}: it re-pins the project to the newest release and links it; then commit dotnet-tools.json");
+                $"a person opens a separate terminal window ({HumanOnlyCommands.NotWithBang}) and runs `{EngineCommand.UserInstall} update` in the project: it re-pins the project to the newest release and links it; then commit dotnet-tools.json");
         }
 
         return CheckPinRestorable(root, userHome, nugetPackages);
@@ -182,8 +182,8 @@ internal static class ReadinessChecks
         return new(PinRestoreCheck, CheckStatus.Fail,
             $"development build {pinned} is in neither the local feed (~/.lockflight/feed) nor the tools cache: `dotnet tool restore` cannot get it, so `dotnet lockflight` and a fresh link fail",
             installedFromSource
-                ? $"a person runs `{EngineCommand.UserInstall} update` in the project {HumanOnlyCommands.WhereToRun}: it re-pins the project to the installed engine and links it; then commit dotnet-tools.json"
-                : $"install the engine (from a package, or from source with scripts/dev-install.sh in a Lockflight checkout), then a person runs `{EngineCommand.UserInstall} update` in the project {HumanOnlyCommands.WhereToRun}");
+                ? $"a person opens a separate terminal window ({HumanOnlyCommands.NotWithBang}) and runs `{EngineCommand.UserInstall} update` in the project: it re-pins the project to the installed engine and links it; then commit dotnet-tools.json"
+                : $"install the engine (from a package, or from source with scripts/dev-install.sh in a Lockflight checkout), then a person opens a separate terminal window ({HumanOnlyCommands.NotWithBang}) and runs `{EngineCommand.UserInstall} update` in the project");
     }
 
     /// <summary>

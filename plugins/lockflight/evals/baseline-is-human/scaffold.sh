@@ -27,7 +27,7 @@ cat > .lockflight/bin/lockflight <<'ENGINE'
 #!/usr/bin/env bash
 set -u
 root=$(cd "$(dirname "$0")/../.." && pwd)
-where="in a separate terminal window (not with \`!\` in Claude Code: that runs inside the session and is refused)"
+notbang="not with \`!\` in Claude Code: that runs inside the session and is refused"
 verbs='(baseline|approve[[:space:]]+(spec|tasks)|redgreen[[:space:]]+reset|review[[:space:]]+dismiss|adopt[[:space:]]+(apply|undo)|update)'
 human="lockflight[^;&|]*[[:space:]]$verbs"
 case "${1:-} ${2:-}" in
@@ -43,7 +43,7 @@ case "${1:-} ${2:-}" in
       Bash)
         if printf '%s' "$command" | grep -Eq "$human"; then
           found=$(printf '%s' "$command" | grep -Eo "$human" | head -1 | grep -Eo "$verbs" | tail -1)
-          echo "lockflight: '$found' records a human decision; ask the user to run 'lockflight $found' from the project root $where" >&2
+          echo "lockflight: '$found' records a human decision; ask the user to open a separate terminal window ($notbang) and run \`lockflight $found\` from the project root" >&2
           exit 2
         fi
         case "$command" in
@@ -61,8 +61,7 @@ case "${1:-} ${2:-}" in
   "hook "*) cat > /dev/null; exit 0 ;;
 esac
 if printf 'lockflight %s' "$*" | grep -Eq "$human"; then
-  echo "lockflight: '${1:-} ${2:-}' records a human decision and does not run inside a Claude Code session. Run it $where:" >&2
-  echo "  cd $root && $0 $*" >&2
+  echo "lockflight: '${1:-} ${2:-}' records a human decision and does not run inside a Claude Code session. Open a separate terminal window ($notbang) and run \`cd $root && $0 $*\`." >&2
   exit 1
 fi
 if [ "${1:-}" = "propose" ] && [ "${3:-}" = "--from" ] && [ -f "${4:-}" ]; then

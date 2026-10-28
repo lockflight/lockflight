@@ -40,8 +40,8 @@ During the preview the engine package is on no public feed, so do not start with
   plugin at user scope). Wait until the file exists. Never
   suggest storing a feed token in a NuGet config, and never edit `nuget.config`: it is protected.
 - **The project already pins a different version** (`doctor` reports the pin or link as behind, or the pin as not
-  restorable): ask the user to run `~/.lockflight/bin/lockflight update` in the project, in a separate terminal window. It
-  re-pins and links; they commit `dotnet-tools.json`.
+  restorable): ask the user to open a separate terminal window (not `!` in Claude Code) and run
+  `~/.lockflight/bin/lockflight update` there, in the project. It re-pins and links; they commit `dotnet-tools.json`.
 
 ## 3. Choose with the user
 
@@ -90,6 +90,6 @@ When one needs changing, write the complete new file in your scratch directory, 
   `statusLine` snippet from docs/guides/getting-started.md ("Levi and the status line") to add to their
   `~/.claude/settings.json` themselves. It is their settings file: never edit it for them.
 - **The Stop gate is off** (`stop.gate: false`) until they turn it on, once they know how long build and tests take.
-- **Known-failing tests** (standard profile) must be accepted before the first feature: the user runs
-  `.lockflight/bin/lockflight baseline tests` from the project root in a separate terminal window, and merges it in its own
-  pull request.
+- **Known-failing tests** (standard profile) must be accepted before the first feature: the user types
+  `/lockflight:baseline tests` in Claude Code, or opens a separate terminal window and runs
+  `.lockflight/bin/lockflight baseline tests` there, from the project root; then they merge it in its own pull request.

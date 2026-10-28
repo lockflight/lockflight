@@ -54,7 +54,7 @@ internal static class AdoptionPlanWriter
     {
         StringBuilder text = new();
         text.AppendLine("# Lockflight adoption plan").AppendLine()
-            .AppendLine($"Made {plan.At:yyyy-MM-dd HH:mm} UTC for `{plan.Root}`. Review it, then run this {HumanOnlyCommands.WhereToRun}:")
+            .AppendLine($"Made {plan.At:yyyy-MM-dd HH:mm} UTC for `{plan.Root}`. Review it, then open a separate terminal window ({HumanOnlyCommands.NotWithBang}) and run:")
             .AppendLine().AppendLine("```sh").AppendLine(applyLine).AppendLine("```").AppendLine();
         if (applyNote is not null)
         {

@@ -105,7 +105,7 @@ internal sealed class RedGreenCommand(CliContext context)
         if (record is not null)
         {
             return await session.FailAsync(
-                $"the baseline was taken at {record.BaselineAt:u} (commit {RedGreenSession.Short(record.BaselineCommit)}); it is never retaken by the agent. A person can discard it with '{EngineCommand.Linked} redgreen reset' in a separate terminal window.",
+                $"the baseline was taken at {record.BaselineAt:u} (commit {RedGreenSession.Short(record.BaselineCommit)}); it is never retaken by the agent. Only a person can discard it: {HumanOnlyCommands.AskTheUser("redgreen reset")}.",
                 cancellationToken);
         }
 

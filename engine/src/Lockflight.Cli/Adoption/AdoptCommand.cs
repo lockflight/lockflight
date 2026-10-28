@@ -62,8 +62,8 @@ internal sealed class AdoptCommand(CliContext context)
             await context.Output.WriteLineAsync($"{action.Key.ToString().ToLowerInvariant(),-8} {action.Count()}");
         }
 
-        await context.Output.WriteLineAsync($"Plan: {AdoptionPlan.RelativeDirectory}/{AdoptionPlan.MarkdownFile}. Review it, then run this {HumanOnlyCommands.WhereToRun}:");
-        await context.Output.WriteLineAsync($"  {applyLine}");
+        await context.Output.WriteLineAsync(
+            $"Plan: {AdoptionPlan.RelativeDirectory}/{AdoptionPlan.MarkdownFile}. Review it, then {HumanOnlyCommands.OpenATerminalAndRun(applyLine)}.");
         if (applyNote is not null)
         {
             await context.Output.WriteLineAsync(applyNote);
@@ -123,7 +123,7 @@ internal sealed class AdoptCommand(CliContext context)
             await context.Output.WriteLineAsync($"manual   {line}");
         }
 
-        await context.Output.WriteLineAsync($"Undo: {EngineCommand.Name} adopt undo ({HumanOnlyCommands.WhereToRun}). Then review and commit, and run '{EngineCommand.Name} doctor'.");
+        await context.Output.WriteLineAsync($"To undo: {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.Name} adopt undo")}. Then review and commit, and run '{EngineCommand.Name} doctor'.");
         return ExitCode.Pass;
     }
 

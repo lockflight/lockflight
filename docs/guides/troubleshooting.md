@@ -62,7 +62,7 @@ that is neither in this machine's local feed (`~/.lockflight/feed`) nor in the N
 cleaned up. The hooks are not affected while the linked engine is there, and the agent runs `.lockflight/bin/lockflight`, not
 `dotnet lockflight`.
 
-Fix: run `~/.lockflight/bin/lockflight update` in the project, in a separate terminal window, not with `!` in Claude Code (a `!` command runs inside the session and is refused). It re-pins the project to your installed engine and
+Fix: in a separate terminal window, not with `!` in Claude Code (a `!` command runs inside the session and is refused), run `~/.lockflight/bin/lockflight update` in the project. It re-pins the project to your installed engine and
 links it; commit `dotnet-tools.json`. Without a user install, install the engine first ([from a package or from
 source](getting-started.md)). When doctor only warns that the version is in the local feed, `dotnet tool restore --add-source ~/.lockflight/feed`
 restores it.
@@ -70,8 +70,8 @@ restores it.
 ## `doctor` reports a development pin, or the plugin needs a newer engine
 
 **development pin** (a warning): the project pins a development build, and a release at or above the version that build
-followed is installed. Development builds are on no package feed, so teammates and CI cannot restore them. Run
-`~/.lockflight/bin/lockflight update` in the project, in a separate terminal window: it re-pins the project to the newest
+followed is installed. Development builds are on no package feed, so teammates and CI cannot restore them. In a separate
+terminal window, run `~/.lockflight/bin/lockflight update` in the project: it re-pins the project to the newest
 release and links it; commit `dotnet-tools.json`.
 
 **plugin engine** FAIL, or a session-start message "The Lockflight plugin needs engine X or newer": the plugin updated from its
@@ -207,8 +207,9 @@ also rewrites the rest of the file, which an upstream pull request may not want.
 ## `redgreen green` says "other tests fail" for tests the feature never touched
 
 `redgreen start` runs the suite once and warns when tests already fail before any change (often for environmental reasons,
-such as a test that needs an older SDK). Every green is refused while they fail. If they are not the feature's business, run
-`.lockflight/bin/lockflight baseline tests` **in a separate terminal window** (not with `!` in Claude Code) and merge that baseline in **its own pull request first**: CI takes
+such as a test that needs an older SDK). Every green is refused while they fail. If they are not the feature's business, type
+`/lockflight:baseline tests` in Claude Code, or, **in a separate terminal window** (not with `!` in Claude Code), run
+`.lockflight/bin/lockflight baseline tests`; then merge that baseline in **its own pull request first**: CI takes
 baselines from the base branch, so a baseline committed in the feature's pull request is discarded there by design
 ([CI hardening](ci-hardening.md)).
 
@@ -246,8 +247,8 @@ command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approv
 
 ## Uninstall
 
-1. In each project, if you ran `adopt apply`, run `.lockflight/bin/lockflight adopt undo` first, in a separate terminal window,
-   to revert what it changed.
+1. In each project, if you ran `adopt apply`, first open a separate terminal window and run
+   `.lockflight/bin/lockflight adopt undo` there, to revert what it changed.
 2. In a standard-profile project, remove the Spec Kit preset: `uvx --from specify-cli==1.1.3 specify preset remove lockflight`.
    Spec Kit itself (`.specify/`, the `speckit-*` skills) is yours to keep or remove.
 3. In each project, remove what `init` added: `lockflight.yaml`, `.lockflight/`, the tool pin (the `lockflight.cli` entry

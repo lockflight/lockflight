@@ -17,8 +17,9 @@ offer the standard setup (`/lockflight:init`), or build the change without it an
 (`/lockflight:gate`).
 
 **Approvals.** Whenever a step below asks for an approval, the user gives it in one of two ways: they type
-`/lockflight:approve spec` (or `tasks`) in this session, or they run `.lockflight/bin/lockflight approve spec|tasks` from
-the project root in a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused).
+`/lockflight:approve spec` (or `tasks`) in this session, or they open a separate terminal window (not with `!` in Claude
+Code: that runs inside the session and is refused) and run `.lockflight/bin/lockflight approve spec|tasks` there, from the
+project root.
 Never approve for them.
 
 1. **Specify.** Run `/speckit-specify` with the user's request (Spec Kit 1.1.3 creates `specs/<NNN-slug>/spec.md`, numbered
@@ -37,9 +38,8 @@ Never approve for them.
    anything else is **implementation**.
 4. **Human gate — tasks.** Ask the user to approve the tasks (`/lockflight:approve tasks`, see Approvals). Wait.
 5. **Start.** `.lockflight/bin/lockflight redgreen start` records the test inventory (once per feature) and runs the suite once.
-   If it warns that tests already fail, tell the user: they decide whether to run `.lockflight/bin/lockflight baseline tests` in
-   a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused), and merge that
-   baseline in its own pull request first.
+   If it warns that tests already fail, tell the user: they decide whether to accept them, by typing
+   `/lockflight:baseline tests` in Claude Code, and merge that baseline in its own pull request first.
 6. **For each user story, one red/green cycle:**
    1. Declare the members the tests need with bodies `throw new NotImplementedException();`.
    2. Write the story's xUnit tests (v3 or v2), each tagged `[Trait("Requirement", "FR-001")]`, asserting the specified behaviour.
@@ -88,9 +88,7 @@ Never approve for them.
       green. Implement in production code until `.lockflight/bin/lockflight redgreen green` passes. If a test itself turns
       out wrong (its expectation contradicts the spec, or the API it uses had to change), stop and ask the user; never edit a
       locked test, and never amend or reset yourself. Tell them which test and why, and that they can let exactly that test
-      change by typing `/lockflight:amend <Class.Method> --reason <why>` here, or with
-      `.lockflight/bin/lockflight redgreen amend <Class.Method> --reason "<why>"` run in a separate terminal window (not with
-      `!` in Claude Code: that runs inside the session and is refused). Never type the command or its code yourself. Check
+      change by typing `/lockflight:amend <Class.Method> --reason <why>` here. Never type the command or its code yourself. Check
       `.lockflight/bin/lockflight redgreen status`: it names the file the amend unlocks. Then change only what the amend
       allows, run `.lockflight/bin/lockflight redgreen red` (the amended test must fail in production code again), and go on
       to green. Discarding the whole cycle is `redgreen reset` (or `/lockflight:reset`), also theirs.
