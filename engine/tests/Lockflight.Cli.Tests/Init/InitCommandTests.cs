@@ -2,6 +2,8 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
+using Lockflight.Cli.Processes;
+using Lockflight.Cli.Quality;
 
 namespace Lockflight.Cli.Tests.Init;
 
@@ -320,6 +322,85 @@ public sealed class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task TheQualityPackIsOnlyAddedWhenAskedFor()
+    {
+        await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, QualityPack.CodeMetricsPath)));
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, QualityPack.EditorConfigPath)));
+    }
+
+    [Fact]
+    public async Task TheQualityPackWritesItsFilesWhenTheyAreMissingAndSaysToBaselineTheBuild()
+    {
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--quality"], "", projectRoot.FullName);
+        (_, string again, _) = await TestConsole.RunAsync(["init", "--no-link", "--quality"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("created    .editorconfig", output, StringComparison.Ordinal);
+        Assert.Contains("created    Directory.Build.props", output, StringComparison.Ordinal);
+        Assert.Contains("created    CodeMetricsConfig.txt", output, StringComparison.Ordinal);
+        Assert.Contains("baseline build", output, StringComparison.Ordinal);
+        Assert.Contains("Edit(/**/CodeMetricsConfig.txt)", File.ReadAllText(Path.Combine(projectRoot.FullName, ".claude", "settings.json")), StringComparison.Ordinal);
+        Assert.DoesNotContain("created", again, StringComparison.Ordinal);
+        Assert.DoesNotContain("Quality pack", again, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(projectRoot.FullName, ".lockflight", "local", "proposals")));
+    }
+
+    [Fact]
+    public async Task AnExistingEditorConfigIsNotChangedButGetsAProposal()
+    {
+        await GitAsync("init", "--quiet");
+        const string team = "root = true\n[*.cs]\nindent_size = 4\n";
+        File.WriteAllText(Path.Combine(projectRoot.FullName, ".editorconfig"), team);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--quality"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Equal(team, File.ReadAllText(Path.Combine(projectRoot.FullName, ".editorconfig")));
+        string patch = Assert.Single(Directory.GetFiles(Path.Combine(projectRoot.FullName, ".lockflight", "local", "proposals")));
+        Assert.Contains("+dotnet_diagnostic.CA1502.severity = warning", File.ReadAllText(patch), StringComparison.Ordinal);
+        Assert.Contains("git apply --check", output, StringComparison.Ordinal);
+
+        await GitAsync("apply", patch);
+        (_, string again, _) = await TestConsole.RunAsync(["init", "--no-link", "--quality"], "", projectRoot.FullName);
+        Assert.DoesNotContain("git apply", again, StringComparison.Ordinal);
+        Assert.Single(Directory.GetFiles(Path.Combine(projectRoot.FullName, ".lockflight", "local", "proposals")));
+    }
+
+    [Fact]
+    public async Task ArchitectureTestsWithoutLayersAreRefusedBeforeAnythingIsWritten()
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--no-link", "--architecture-tests"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("fewer than two layer projects", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, Manifest.FileName)));
+    }
+
+    [Fact]
+    public async Task ArchitectureTestsAreWrittenOnceForTheLayersFound()
+    {
+        foreach (string layer in new[] { "Domain", "Application" })
+        {
+            string project = Path.Combine(projectRoot.FullName, "src", $"Shop.{layer}", $"Shop.{layer}.csproj");
+            Directory.CreateDirectory(Path.GetDirectoryName(project)!);
+            File.WriteAllText(project, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        }
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--architecture-tests"], "", projectRoot.FullName);
+        (_, string again, _) = await TestConsole.RunAsync(["init", "--no-link", "--architecture-tests"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("created    tests/Shop.ArchitectureTests/Shop.ArchitectureTests.csproj", output, StringComparison.Ordinal);
+        Assert.Contains("created    tests/Shop.ArchitectureTests/LayerDependencyTests.cs", output, StringComparison.Ordinal);
+        Assert.Contains("dotnet sln add tests/Shop.ArchitectureTests/Shop.ArchitectureTests.csproj", output, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(projectRoot.FullName, QualityPack.EditorConfigPath)));
+        Assert.DoesNotContain("created", again, StringComparison.Ordinal);
+        Assert.DoesNotContain("Architecture tests:", again, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task InitTwiceChangesNothingTheSecondTime()
     {
         await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
@@ -420,4 +501,10 @@ public sealed class InitCommandTests : IDisposable
     }
 
     public void Dispose() => projectRoot.Delete(recursive: true);
+
+    private async Task GitAsync(params string[] arguments)
+    {
+        ProcessResult result = await ProcessRunner.RunAsync("git", arguments, projectRoot.FullName, TestContext.Current.CancellationToken);
+        Assert.True(result.ExitCode == 0, result.Combined);
+    }
 }

@@ -17,6 +17,9 @@ internal static partial class ProjectFiles
     public static IReadOnlyList<string> TestProjects(string root) =>
         [.. Enumerate(root).Where(project => TestMarkers.Any(marker => File.ReadAllText(project).Contains(marker, StringComparison.OrdinalIgnoreCase))).Order(StringComparer.Ordinal)];
 
+    /// <summary>Every C# project under the root (outside build output, <c>.git</c> and <c>.lockflight</c>), sorted.</summary>
+    public static IReadOnlyList<string> All(string root) => [.. Enumerate(root).Order(StringComparer.Ordinal)];
+
     /// <summary>Whether the project, or a Directory.Build/Packages file between it and the root, references the package.</summary>
     public static bool References(string root, string projectPath, string package) =>
         WithInheritedFiles(root, projectPath).Any(file => PackageReferences().Matches(File.ReadAllText(file))

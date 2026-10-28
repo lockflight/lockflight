@@ -31,10 +31,13 @@ internal static class CliApplication
 
         Setup
           init [--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab]
-               [--no-link] [--no-sandbox]
+               [--quality] [--architecture-tests] [--no-link] [--no-sandbox]
                                                         onboard: manifest, tool pin, settings, CI job, link; --ci:
                                                         the job runs on pull requests, only by hand, or is not written;
-                                                        --ci-platform: the CI service the job is for (default github)
+                                                        --ci-platform: the CI service the job is for (default github);
+                                                        --quality: recommended analyzers and code metrics rules (an
+                                                        existing file gets a proposal); --architecture-tests: a layer
+                                                        dependency test project
           doctor [--canaries[=full]]                    readiness report with fixes; --canaries: plant a violation
                                                         before every control in a scratch project and report each
                                                         as caught or missed (=full also builds and runs one)

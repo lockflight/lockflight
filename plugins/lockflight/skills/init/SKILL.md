@@ -53,6 +53,11 @@ Windows, Git Bash; for the standard profile, `uv` and a working `python3 -c "imp
 - **CI platform** (`--ci-platform`): **github** (the default), or **azure**, **bitbucket** or **gitlab** when the repository
   is hosted there. Say that those three templates are not yet verified on the live services, and point to
   docs/guides/ci-other-platforms.md for making the job a required check.
+- **Code quality (optional, off unless the user wants it):** `--quality` adds the recommended analyzers and the code
+  metrics rules (an existing `.editorconfig` or `Directory.Build.props` gets a proposal patch the user applies);
+  `--architecture-tests` adds a layer test project when the solution has `.Domain`/`.Application`/`.Infrastructure`/`.Api`
+  projects. Say that the new warnings fail the build gate until the user runs `baseline build` and merges that baseline in
+  its own pull request first (docs/guides/code-quality.md).
 
 ## 4. Spec Kit for a new standard project (before `init`)
 
@@ -72,7 +77,7 @@ With an existing `.specify/`, never run `specify init`: adoption upgrades it wit
 ## 5. Initialize
 
 Run `~/.lockflight/bin/lockflight init --profile <lite|standard> --ci <pr|manual|none>` (plus `--ci-platform <name>` when it is
-not github) and show the
+not github, and `--quality` / `--architecture-tests` when chosen) and show the
 created/updated/unchanged list. It writes the manifest, the tool pin, `.gitignore`, `.claude/settings.json` (the plugin, an
 `Edit` deny rule for each protected path, and the protected paths as Claude Code sandbox write denials), the CI workflow and the linked engine; it is idempotent and only
 merges into existing files. It does not turn the sandbox on: if the user asks, point them to "The Claude Code sandbox" in

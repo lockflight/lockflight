@@ -16,7 +16,7 @@ internal static class CiShellScripts
     public const string PolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .gitleaks.toml .gitleaksignore nuget.config NuGet.config";
 
     /// <summary>Code-style and analyzer config, at any depth, restored from the base commit.</summary>
-    public const string StylePattern = @"'(^|/)(\.editorconfig|\.globalconfig|[^/]*\.globalconfig|[^/]*\.ruleset|stylecop\.json|BannedSymbols\.txt)$'";
+    public const string StylePattern = @"'(^|/)(\.editorconfig|\.globalconfig|[^/]*\.globalconfig|[^/]*\.ruleset|stylecop\.json|BannedSymbols\.txt|CodeMetricsConfig\.txt)$'";
 
     /// <summary>The gate command every pipeline runs, before its base and result options.</summary>
     public const string GateCommand = "lockflight gate run --profile pr";
