@@ -169,6 +169,7 @@ The lite profile gives you the guard and the gates, without the lifecycle.
      run in a folder nobody trusted ignores it without a message;
    - `.github/workflows/lockflight-gates.yml`, the CI job. It installs every .NET version the test projects target, and `init`
      says so when there are several. `--ci manual` writes a job that runs only when started by hand, `--ci none` none;
+     `--ci-platform azure|bitbucket|gitlab` writes the job for that service instead ([CI on other platforms](ci-other-platforms.md));
    - the linked engine in `.lockflight/bin/` (git-ignored), which the hooks run.
 
    It merges into files that exist and never overwrites them. Running it again changes nothing.
@@ -351,3 +352,4 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
 - [Configuration reference](configuration.md): `lockflight.yaml`, gate profiles and protected paths
 - [Guardrails and boundaries](guardrails-and-boundaries.md): what Lockflight can and cannot guarantee
 - [CI hardening](ci-hardening.md): CODEOWNERS and required checks
+- [CI on other platforms](ci-other-platforms.md): Azure Pipelines, Bitbucket Pipelines and GitLab CI/CD

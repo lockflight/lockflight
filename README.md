@@ -91,6 +91,8 @@ when the guard says no. Only you see him: he stays out of anything the agent rea
   supported; NUnit and MSTest get the gates only, no red/green or trace yet. .NET Framework projects are not supported.
 - **Claude Code 2.1.295 or newer.**
 - **[gitleaks](https://github.com/gitleaks/gitleaks)** on `PATH` for the secrets step of the `pr` profile.
+- For CI: GitHub Actions; templates for Azure Pipelines, Bitbucket Pipelines and GitLab CI/CD are generated too but not yet
+  verified on those services ([CI on other platforms](docs/guides/ci-other-platforms.md)).
 - For the standard profile: `uv` and Python 3 with PyYAML (Spec Kit).
 
 **1. Install the engine and the plugin**

@@ -53,7 +53,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | `review dismiss` human-only | G | refused inside Claude Code like `approve` (`CLAUDECODE=1`); the variable can be unset |
 | Ledger and retro | G | local and fail-open; never an audit log |
 | Proposals (`lockflight propose`) | G | it changes nothing by itself: it writes a patch and the person reads and applies it; the guard keeps blocking the agent's own `git apply` |
-| **CI gates with the base branch's policy** | **B** where the check is **required** (rulesets/branch protection); otherwise advisory | runs on GitHub, with policy the PR cannot change |
+| **CI gates with the base branch's policy** | **B** where the check is **required** (rulesets/branch protection); otherwise advisory | runs on GitHub, with policy the PR cannot change; the Azure Pipelines, Bitbucket and GitLab templates are not yet verified live, and their plan limits differ: see [CI on other platforms](ci-other-platforms.md#guardrail-or-boundary) |
 | **Signed approvals verified in CI** | **B** only when all hold: presence-gated key (Touch ID / security key), allowed signers from the base branch, a required check, and a policy requiring approvals for the change | a file key without a passphrase could be used by the agent. Not in the generated workflow: add `approve verify` as shown in [CI hardening](ci-hardening.md) |
 | Merge | G (the agent could use your token); B only with a separate identity for the agent | |
 

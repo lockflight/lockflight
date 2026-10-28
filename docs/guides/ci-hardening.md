@@ -1,7 +1,9 @@
 # CI hardening
 
 The agent works with your credentials, so CI is where an independent check happens. `lockflight init` writes
-`.github/workflows/lockflight-gates.yml`; this page explains what it does and what you add by hand.
+`.github/workflows/lockflight-gates.yml`; this page explains what it does and what you add by hand. On Azure Pipelines,
+Bitbucket Pipelines or GitLab CI/CD, `init --ci-platform azure|bitbucket|gitlab` writes the same job for that service (not
+yet verified on the live services): see [CI on other platforms](ci-other-platforms.md).
 
 **On this page:** [What the generated workflow does](#what-the-generated-workflow-does) ·
 [CODEOWNERS for the protected paths](#what-you-add-codeowners-for-the-protected-paths) ·
@@ -167,6 +169,7 @@ single-repository workflow does. A pull request in the unit therefore cannot loo
 
 ## Next
 
+- [CI on other platforms](ci-other-platforms.md): Azure Pipelines, Bitbucket Pipelines and GitLab CI/CD
 - [Guardrails and boundaries](guardrails-and-boundaries.md): which controls are boundaries, and under what conditions
 - [Configuration reference](configuration.md#built-in-protected-paths): the built-in protected paths
 - [Commands](commands.md#ci): `approve verify` and `gate run` in CI

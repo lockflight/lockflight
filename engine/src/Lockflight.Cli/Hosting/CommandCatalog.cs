@@ -13,7 +13,7 @@ internal static class CommandCatalog
     [
         new(["version"], [], TakesArguments: false),
         new(["link"], [], TakesArguments: false),
-        new(["init"], ["--profile", "--ci", "--no-link", "--no-sandbox"], TakesArguments: false),
+        new(["init"], ["--profile", "--ci", "--ci-platform", "--no-link", "--no-sandbox"], TakesArguments: false),
         new(["doctor"], ["--canaries", "--canaries=full"], TakesArguments: false),
         new(["statusline"], [], TakesArguments: false),
         new(["update"], ["--source", "--project"], TakesArguments: false),
