@@ -87,6 +87,7 @@ internal static class ReadinessChecks
         }
 
         checks.AddRange(await WorkspaceChecks.RunAsync(root, ManifestLocator.Discover(root).Manifest, userHome, time.GetUtcNow(), cancellationToken));
+        checks.AddRange(await DocsChecks.RunAsync(root, cancellationToken));
         return checks;
     }
 
