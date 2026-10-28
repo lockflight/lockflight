@@ -11,7 +11,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | Every tool call or every write is blocked | [engine not installed](#every-tool-call-is-blocked-engine-not-installed-in-this-project) · [engine not run](#every-tool-call-is-blocked-the-engine-was-not-run) · [lockdown](#every-write-is-blocked-the-project-is-in-lockdown) · [after editing `lockflight.yaml`](#writes-are-blocked-after-editing-lockflightyaml) · [engine and pin differ](#running-engine-x-but-the-project-pins-y) · [internal error](#lockflight-internal-error-or-the-engine-failed-exit-n) |
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a shell command after `cd`](#a-shell-command-is-blocked-after-a-cd) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
-| A gate result | [`doctor --canaries` reports MISSED or BROKEN](#doctor---canaries-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
+| A gate result | [`doctor --canaries` reports MISSED or BROKEN](#doctor---canaries-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [review: changes not committed](#review-says-the-working-tree-has-changes-that-are-not-committed) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
 | Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) |
 
 ## Every tool call is blocked: "engine not installed in this project"
@@ -250,6 +250,16 @@ baselines from the base branch, so a baseline committed in the feature's pull re
 
 Approvals bind `spec.md`, `plan.md` and `tasks.md` by hash. After an edit, red/green refuses until you approve again in a
 separate terminal window (`.lockflight/bin/lockflight approve spec` or `approve tasks`). `trace` prints a warning line instead of refusing.
+
+## `review` says the working tree has changes that are not committed
+
+The review of record is a review of a commit. The run found files in the paths the review reads (the diff's paths and the
+feature's `spec.md`) that differ from HEAD: changed or staged files, which the diff shows but no commit holds, and untracked
+files, which the diff does not show at all. The run is still reviewed and recorded, and its findings count, but it is not the
+review of record. Commit the files that belong to the change, stash or delete the rest (`git stash -u` also stashes untracked
+files), and run `review` again. Files git ignores, `.lockflight/`, `.claude/worktrees/`, untracked `bin/` and `obj/` folders and
+the other files under `specs/` never count. A local file that should never be committed belongs in `.gitignore` or
+`.git/info/exclude`.
 
 ## `redgreen green` or `review` says a test file "changed after red cycle N was accepted, without a recorded amend"
 

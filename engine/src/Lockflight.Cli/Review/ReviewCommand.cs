@@ -88,12 +88,22 @@ internal sealed class ReviewCommand(CliContext context)
 
         ReviewBase reviewBase = new(
             baseRef, await Git.CommitOfAsync(manifest.Root, baseRef, cancellationToken), target, await Git.MergeBaseAsync(manifest.Root, target, cancellationToken));
-        return await ReviewAsync(manifest, feature, claude, reviewBase, ReviewDiff.Fit(diff, MaxDiffCharacters), options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
+        ReviewedTree tree = await ReviewedTrees.FindAsync(manifest.Root, feature.SpecPath, cancellationToken);
+        return await ReviewAsync(
+            manifest, feature, claude, reviewBase, ReviewDiff.Fit(diff, MaxDiffCharacters), tree, options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
     }
 
     /// <summary>Asks the reviewer, confirms its findings and the open ones, stores the run and turns the outcome into the exit code.</summary>
     private async Task<ExitCode> ReviewAsync(
-        Manifest manifest, Feature feature, string claude, ReviewBase reviewBase, ReviewDiff diff, string model, decimal budget, CancellationToken cancellationToken)
+        Manifest manifest,
+        Feature feature,
+        string claude,
+        ReviewBase reviewBase,
+        ReviewDiff diff,
+        ReviewedTree tree,
+        string model,
+        decimal budget,
+        CancellationToken cancellationToken)
     {
         DateTimeOffset started = context.Time.GetUtcNow();
         await context.Output.WriteLineAsync($"Reviewing {feature.Id} against {reviewBase.Ref} with {model} (budget ${ReviewOfRecord.Usd(budget)})…");
@@ -101,6 +111,11 @@ internal sealed class ReviewCommand(CliContext context)
         {
             // Said before the reviewer runs, so a person can stop a run that cannot count before it spends the budget.
             await context.Output.WriteLineAsync($"Warning: this run will not be the review of record: {ReviewOfRecord.Incomplete(diff)}.");
+        }
+
+        if (!tree.IsClean)
+        {
+            await context.Output.WriteLineAsync($"Warning: this run will not be the review of record: {ReviewOfRecord.NotCommitted(tree)}.");
         }
 
         string requirements = await File.ReadAllTextAsync(feature.SpecPath, cancellationToken);
@@ -163,7 +178,7 @@ internal sealed class ReviewCommand(CliContext context)
             manifest.Review,
             claudeVersion,
             (long)(context.Time.GetUtcNow() - started).TotalMilliseconds,
-            ReviewOfRecord.Reasons(manifest.Review, model, budget, reviewBase, diff));
+            ReviewOfRecord.Reasons(manifest.Review, model, budget, reviewBase, diff, tree));
         string evidence = ReviewEvidence.Save(feature.RecordDirectory, run, outcome);
         await PrintAsync(run, outcome, manifest.Root, evidence);
         return await RecordAsync(manifest, run, outcome, cancellationToken);

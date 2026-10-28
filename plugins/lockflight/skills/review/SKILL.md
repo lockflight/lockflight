@@ -9,12 +9,15 @@ The engine builds the reviewer's prompt from the spec and the diff; you do not b
 author steers it away from defects. Do not try to review the change yourself instead — your review of your own work is not
 independent.
 
-1. Make sure the work is committed or at least saved, and the gates pass (`.lockflight/bin/lockflight gate run --profile stop`,
+1. Make sure the work is committed (a changed, staged or untracked file in the reviewed paths makes the run not of record; files
+   git ignores and `.lockflight/` do not count), and the gates pass (`.lockflight/bin/lockflight gate run --profile stop`,
    from the project root: the engine the hooks run).
 2. Run `.lockflight/bin/lockflight review` (add `--feature <id>` when several features exist). Leave out `--base`, `--model`
    and `--budget`: the base defaults to the target branch, and only the manifest's settings against the merge base of HEAD and
    the target make the review of record. If the output says the run is not of record because the target moved on, merge or
-   rebase onto it (ask the user if that is not yours to do) and run it again. If it says the reviewer did not see the whole
+   rebase onto it (ask the user if that is not yours to do) and run it again. If it says the working tree has changes that are
+   not committed, commit them (or ask the user to; `git stash -u` sets aside what should not be in the change) and run it
+   again. If it says the reviewer did not see the whole
    change, the diff is too large for one review: tell the user, and offer to split the change into smaller pull requests,
    each reviewed on its own. Its findings still count, but no run of the whole change can be the review of record.
 3. Read the findings. Each has an id, an outcome and, for blocker/major, a state:
