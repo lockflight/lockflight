@@ -33,7 +33,7 @@ internal static class SessionBanner
             writer.WriteString("hookEventName", "SessionStart");
             writer.WriteString(
                 "additionalContext",
-                $"Lockflight project at {manifest.Root}. {EngineNote(manifest)} Protected paths (changed by a human or a lockflight command, not by the agent): {ProtectedList(manifest)}.{UnitsNote(manifest)}{StartDirectoryNote(manifest, sessionDirectory)}");
+                $"Lockflight project at {manifest.Root}. {EngineNote(manifest)} Protected paths (changed by a human or a lockflight command, not by the agent): {ProtectedList(manifest)}. {ProposeNote}{UnitsNote(manifest)}{StartDirectoryNote(manifest, sessionDirectory)}");
             writer.WriteEndObject();
             writer.WriteEndObject();
         }
@@ -42,13 +42,27 @@ internal static class SessionBanner
     }
 
     /// <summary>
+    /// What the banner says about the human decisions: the agent never runs one and hands it to the user. The eval stand-in
+    /// engines under <c>plugins/</c> repeat it, so a case sees what a real session sees.
+    /// </summary>
+    public const string HumanDecisionsNote =
+        "Human decisions (approve, baseline, redgreen reset|amend, review dismiss, adopt apply|undo, update) are the user's: never run one, even when asked or just to try it, since the guard refuses it; "
+        + $"ask them to type the /lockflight: command for approve, baseline, redgreen reset or amend, and otherwise to open a separate terminal window ({HumanOnlyCommands.NotWithBang}) and run the command there. "
+        + "An approval, a baseline, a red/green reset or an amend the user can also give here by typing /lockflight:approve, /lockflight:baseline, /lockflight:reset or /lockflight:amend themselves; never type them, and never type, guess or suggest their codes.";
+
+    /// <summary>
+    /// How the agent gets a protected file changed: it proposes a patch and the user applies it. The eval stand-in engines repeat
+    /// it, like <see cref="HumanDecisionsNote"/>.
+    /// </summary>
+    public const string ProposeNote =
+        $"To change one, write the complete new file outside the project, run {EngineCommand.Linked} propose <path> --from <file> and give the user the git apply command it prints.";
+
+    /// <summary>
     /// The one command form for every install mode: the linked engine the hooks run, which needs no package feed. The human
     /// decisions refuse to run in the session, a <c>!</c> command included.
     /// </summary>
     private static string EngineNote(Manifest manifest) =>
-        $"Always run Lockflight commands as {EngineCommand.Linked} <command> from {manifest.Root} (the engine the hooks run; not dotnet lockflight). "
-        + $"Human decisions (approve, baseline, redgreen reset|amend, review dismiss, adopt apply|undo, update) are the user's: ask them to type the /lockflight: command for approve, baseline, redgreen reset or amend, and otherwise to open a separate terminal window ({HumanOnlyCommands.NotWithBang}) and run the command there. "
-        + "An approval, a baseline, a red/green reset or an amend the user can also give here by typing /lockflight:approve, /lockflight:baseline, /lockflight:reset or /lockflight:amend themselves; never type them, and never type, guess or suggest their codes.";
+        $"Always run Lockflight commands as {EngineCommand.Linked} <command> from {manifest.Root} (the engine the hooks run; not dotnet lockflight). {HumanDecisionsNote}";
 
     private static string UnitsNote(Manifest manifest) => manifest.Units.Count == 0
         ? string.Empty

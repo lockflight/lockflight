@@ -78,17 +78,20 @@ decisions and messages for what the case exercises.
 claude plugin eval plugins/lockflight --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
 ```
 
-The crew plugin's evals (`plugins/lockflight-crew/evals/`) dispatch the test author on a small fixture:
+The crew plugin's evals (`plugins/lockflight-crew/evals/`) load the crew alone and dispatch the test author on a small
+fixture with no engine:
 
 ```sh
 claude plugin eval plugins/lockflight-crew --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
 ```
 
-Cases that need both plugins at once (the feature skill dispatching the test author) live in `plugins/evals/`, and run with
-`plugins` as the target so both load:
+Cases that need both plugins at once (the feature skill dispatching the test author) live in `plugins/evals/`; each names both
+plugins in its `case.yaml` and carries the `both-plugins` tag. They run with `plugins` as the target, the folder that holds
+both plugins, which also finds every other eval folder under `plugins/`; the tag keeps the two suites above from running
+again:
 
 ```sh
-claude plugin eval plugins --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
+claude plugin eval plugins --tag both-plugins --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
 ```
 
 [`tests/README.md`](tests/README.md) describes each suite. CI runs them on Linux, Windows and macOS. Before opening a pull

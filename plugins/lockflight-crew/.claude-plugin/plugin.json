@@ -5,6 +5,5 @@
   "author": { "name": "Bohdan Ivaniichuk" },
   "repository": "https://github.com/lockflight/lockflight",
   "license": "MIT",
-  "keywords": ["lockflight", "subagents", "tdd", "dotnet", "xunit"],
-  "dependencies": [{ "name": "lockflight", "version": "^0.2.0-0" }]
+  "keywords": ["lockflight", "subagents", "tdd", "dotnet", "xunit"]
 }
