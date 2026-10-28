@@ -168,7 +168,7 @@ internal sealed partial class ShellWriteTargets(ShellWritesBuilder writes)
         ShellCommand? upstream = piped ? previous : null;
         previous = command;
         int programIndex = command.ProgramIndex;
-        writes.AddHumanOnly(HumanOnlyCommands.FindInWords(words));
+        writes.AddHumanOnly(HumanOnlyCommands.FindInWords(words, honorHelp: true), HumanOnlyCommands.FindInWords(words, honorHelp: false));
         if (depth > 0 && programIndex >= 0 && IsExpansionOnly(commandWords[programIndex]))
         {
             // eval "$X", bash -c "$CMD": the command itself is computed when it runs.

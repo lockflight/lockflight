@@ -18,8 +18,14 @@ the same list.
 Commands that take `--feature <id>` resolve the feature in this order:
 
 1. the explicit `--feature`;
-2. Spec Kit's `.specify/feature.json` (a malformed file is an error, not a fallback);
-3. the only feature, when there is exactly one.
+2. Spec Kit's `SPECIFY_FEATURE_DIRECTORY` variable (a directory that does not exist is an error);
+3. Spec Kit's `.specify/feature.json` (a malformed file, or one naming a directory that does not exist, is an error, not a
+   fallback);
+4. Spec Kit's `SPECIFY_FEATURE` variable, then the git branch, each read as Spec Kit's git extension names feature branches:
+   the last path segment (`006-weak-spots` in `feat/006-weak-spots`) is the directory under `specs/`, else its number (`006`, or
+   a `YYYYMMDD-HHMMSS` timestamp) picks the one directory with that prefix. A number that several directories share is an
+   error; `SPECIFY_FEATURE` naming no directory is an error; a branch naming none (`main`) falls through;
+5. the only feature, when there is exactly one.
 
 This resolution does **not** apply to `approve verify`: it verifies exactly the feature named with `--feature`, or every feature
 the change since `--base` touches, never a guessed one.
