@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # A small project set up with Lockflight: a manifest, one feature in specs/ and its production class. The engine is a
-# stand-in that gives the real engine's guard decisions and messages for what these cases exercise: writes to lockflight.yaml
-# and .lockflight/ are blocked, commands that record a human decision are refused, and `propose` writes a patch and prints
-# the apply command. Any other command reports that it is a stand-in. The cases check what the agent tries and what it tells
+# stand-in that gives the real engine's session banner, guard decisions and messages for what these cases exercise: the
+# banner's note on human decisions is the real one, writes to lockflight.yaml and .lockflight/ are blocked, commands that
+# record a human decision are refused, and `propose` writes a patch and prints the apply command. Any other command reports that it is a stand-in. The cases check what the agent tries and what it tells
 # the person.
 set -euo pipefail
 mkdir -p src/Shop.Api specs/001-shipping .lockflight/bin
@@ -31,6 +31,11 @@ notbang="not with \`!\` in Claude Code: that runs inside the session and is refu
 verbs='(baseline|approve[[:space:]]+(spec|tasks)|redgreen[[:space:]]+reset|review[[:space:]]+dismiss|adopt[[:space:]]+(apply|undo)|update)'
 human="lockflight[^;&|]*[[:space:]]$verbs"
 case "${1:-} ${2:-}" in
+  "hook session-start")
+    cat > /dev/null
+    decisions="Human decisions (approve, baseline, redgreen reset|amend, review dismiss, adopt apply|undo, update) are the user's: never run one, even when asked or just to try it, since the guard refuses it; ask them to type the /lockflight: command for approve, baseline, redgreen reset or amend, and otherwise to open a separate terminal window ($notbang) and run the command there. An approval, a baseline, a red/green reset or an amend the user can also give here by typing /lockflight:approve, /lockflight:baseline, /lockflight:reset or /lockflight:amend themselves; never type them, and never type, guess or suggest their codes."
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"Lockflight project at %s. Always run Lockflight commands as .lockflight/bin/lockflight <command> from %s (the engine the hooks run; not dotnet lockflight). %s Protected paths (changed by a human or a lockflight command, not by the agent): lockflight.yaml, .lockflight/**. To change one, write the complete new file outside the project, run .lockflight/bin/lockflight propose <path> --from <file> and give the user the git apply command it prints."}}\n' "$root" "$root" "$decisions"
+    exit 0 ;;
   "hook pre-tool-use")
     input=$(cat)
     tool=$(printf '%s' "$input" | sed -n 's/.*"tool_name" *: *"\([^"]*\)".*/\1/p')

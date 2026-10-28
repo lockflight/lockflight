@@ -147,6 +147,11 @@ internal sealed class RedGreenCommand(CliContext context)
             return await session.FailAsync($"the build fails; start from a building tree.\n{RedGreenSession.Tail(buildOutput)}", cancellationToken);
         }
 
+        if (workspace.DiscoveryProblem is string incomplete)
+        {
+            return await session.NotEarnedAsync($"no baseline: {incomplete}", cancellationToken);
+        }
+
         if (workspace.Apps.Count == 0)
         {
             await context.Output.WriteLineAsync("NOT-EARNED no xUnit test project found; red/green needs xUnit v3, or xUnit v2 on VSTest (other test frameworks get the gates only)");

@@ -343,8 +343,8 @@ TaskCompleted canary has the same completion right after a passing stop gate, wh
 canaries have one that must pass; when a twin is refused too the canary is **BROKEN**, because a control that refuses everything
 proves nothing. Everything happens in a temporary scratch project that is deleted afterwards, never in your project.
 `--canaries=full` also generates a small .NET project and runs the real test gate, a real red, an amend whose amended test
-passes on the red-time snapshot, and a green after a test file was edited behind the guard on it (it needs the .NET SDK and the
-xUnit packages). CI runs `--canaries=full` with the published engine on Linux, Windows and macOS.
+passes on the red-time snapshot, a green after a test file was edited behind the guard on it, and a trace with a project whose
+evaluation fails, which must not pass (it needs the .NET SDK and the xUnit packages). CI runs `--canaries=full` with the published engine on Linux, Windows and macOS.
 
 The canaries check the engine's decisions, not Claude Code's: whether Claude Code still calls the hooks is what the
 [real-hook canary](../../tests/README.md) checks. Two controls sit outside the engine's own decisions and are checked elsewhere:

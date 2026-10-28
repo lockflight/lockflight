@@ -88,6 +88,11 @@ internal sealed class AmendRecheck(RedGreenSession session, RedJudge judge)
                     cancellationToken);
             }
 
+            if (workspace.DiscoveryProblem is string incomplete)
+            {
+                return await session.NotEarnedAsync($"the amended tests cannot be re-checked on the red-time snapshot, the amend stays open: {incomplete}", cancellationToken);
+            }
+
             if (await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> inventory)
             {
                 return await session.BrokenAsync($"the test runner could not list the tests of the red-time snapshot ({workspace.FailedApp})", cancellationToken);

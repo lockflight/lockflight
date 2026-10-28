@@ -44,6 +44,11 @@ internal sealed class GreenStep(RedGreenSession session)
             return await session.FailAsync($"the build fails.\n{RedGreenSession.Tail(buildOutput)}", cancellationToken);
         }
 
+        if (workspace.DiscoveryProblem is string incomplete)
+        {
+            return await session.NotEarnedAsync($"the green cannot be judged, the cycle stays open: {incomplete}", cancellationToken);
+        }
+
         if (await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> inventory)
         {
             return await session.BrokenAsync($"the test runner could not list the tests of {workspace.FailedApp}", cancellationToken);

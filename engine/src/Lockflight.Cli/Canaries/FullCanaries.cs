@@ -8,7 +8,8 @@ namespace Lockflight.Cli.Canaries;
 /// The canaries that build and run a generated project (<see cref="CanaryProject"/>): the real test gate on a failing test, on every
 /// test skipped and on no test, after its harmless twin (a passing test) passed; then a real red whose test fails by
 /// <c>Assert.Fail</c>, after a person's approvals and a red/green start; then an amend whose amended test passes on the red-time
-/// snapshot, and a test file edited after red without an amend at green. Tens of seconds, mostly the builds.
+/// snapshot, a test file edited after red without an amend at green, and a trace with a project whose evaluation fails. Tens of
+/// seconds, mostly the builds.
 /// </summary>
 internal static class FullCanaries
 {
@@ -73,11 +74,40 @@ internal static class FullCanaries
             reports.Add(amend);
             if (amend.Result != CanaryResult.Broken)
             {
-                reports.Add(await EditAfterRedAsync(scratch, project, cancellationToken));
+                CanaryReport edited = await EditAfterRedAsync(scratch, project, cancellationToken);
+                reports.Add(edited);
+                if (edited.Result != CanaryResult.Broken)
+                {
+                    reports.Add(await UnevaluatedProjectAsync(scratch, project, cancellationToken));
+                }
             }
         }
 
         return reports;
+    }
+
+    /// <summary>
+    /// With every requirement traced (the green before closed the cycle), a project whose evaluation fails must not let trace PASS: it
+    /// may be a test project whose tests would be left out. Its harmless twin, the same trace without that project, must pass.
+    /// </summary>
+    private static async Task<CanaryReport> UnevaluatedProjectAsync(CanaryScratch scratch, CanaryProject project, CancellationToken cancellationToken)
+    {
+        const string name = "full: a project whose evaluation fails does not let trace PASS";
+        CanaryRun twin = await scratch.RunAsAgentAsync(["trace"], string.Empty, cancellationToken);
+        if (twin.ExitCode != ExitCode.Pass)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, $"the trace with every project evaluating did not pass, so a refusal proves nothing: {twin.FirstLine}");
+        }
+
+        project.WriteUnevaluatedProject();
+        CanaryRun planted = await scratch.RunAsAgentAsync(["trace"], string.Empty, cancellationToken);
+        project.RemoveUnevaluatedProject();
+        return planted.ExitCode switch
+        {
+            ExitCode.NotEarned when planted.Output.Contains("could not be evaluated", StringComparison.Ordinal) => new CanaryReport(name, CanaryResult.Caught, "NOT-EARNED: a project could not be evaluated"),
+            ExitCode.Pass => new CanaryReport(name, CanaryResult.Missed, "the trace passed"),
+            _ => new CanaryReport(name, CanaryResult.Broken, $"'trace' exited {(int)planted.ExitCode}: {planted.FirstLine}"),
+        };
     }
 
     /// <summary>

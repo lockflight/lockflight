@@ -51,7 +51,7 @@ cannot run them; a maintainer runs them on the release candidate on `main` befor
 Claude Code version and the results in it:
 
 1. **The plugin evals**, all three suites, as [CONTRIBUTING](../../CONTRIBUTING.md#skill-evals) shows
-   (`claude plugin eval plugins/lockflight …`, `plugins/lockflight-crew …` and `plugins …`). Read every failing case: a skill
+   (`claude plugin eval plugins/lockflight …`, `plugins/lockflight-crew …` and `plugins --tag both-plugins …`). Read every failing case: a skill
    that regressed blocks the release until it is fixed.
 2. **The real-hook canary** on an engine built from the same commit:
    `dotnet publish engine/src/Lockflight.Cli -c Release -r <rid> -o out`, then
@@ -63,15 +63,40 @@ Claude Code version and the results in it:
    still fires for queued ones, the approve relay must stay (see
    [the approval row](../guides/guardrails-and-boundaries.md#every-control-labelled)).
 
+## How the marketplace serves a release
+
+Users add the marketplace from `main`, but [`.claude-plugin/marketplace.json`](../../.claude-plugin/marketplace.json) does not
+serve the plugins from `main`: each entry is a `git-subdir` source at the last release tag (`ref`) and that tag's commit
+(`sha`). A merge to `main` therefore changes nothing for users; only moving the pin does. Claude Code fetches the plugin at
+`sha` and keeps it under its `plugin.json` version, and `claude plugin update` and auto-update replace an installed copy only
+when that version changes. So the pin moves only to a new release tag, whose plugins carry the new version.
+
+The pin moves **after** the release is published, in a pull request of its own, never in the release pull request: a ref to a
+tag that does not exist yet fails every install and update, and a plugin served before its engine is on nuget.org can ask
+(`min-engine-version`) for an engine nobody can install. `scripts/marketplace-ref.sh` (run in CI on every pull request and
+push to `main`) fails unless:
+
+- every entry names the same tag and commit, and the tag exists on GitHub and points at that commit;
+- at that commit, both `plugin.json` files have the tag's version, and `min-engine-version` is at most that version;
+- nuget.org lists `Lockflight.Cli` at the tag's version and at `min-engine-version`;
+- the development marketplace, [`plugins/.claude-plugin/marketplace.json`](../../plugins/.claude-plugin/marketplace.json),
+  lists the same plugins from the checkout (`scripts/dev-install.sh` adds it, to try `main`).
+
+The release pull request raises the versions on `main` while the pin still names the previous tag, so the check passes
+throughout and users stay on the previous release until the last step below.
+
 ## Cutting a release
 
 1. Raise the version in both `plugin.json` files and in the Spec Kit preset's `preset.yml` (and
    `plugins/lockflight/min-engine-version` when the plugin needs the new engine), and draft the CHANGELOG entries in a release
-   pull request. When the minor or major version changes, also widen the crew plugin's `dependencies` range on `lockflight`
-   (`^0.2.0-0` covers every 0.2 prerelease and release). Merge it.
+   pull request. Leave `.claude-plugin/marketplace.json` alone. Merge it.
 2. Tag the merge commit and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
 3. Approve the `publish` job when the build and smoke tests are green.
 4. Edit and publish the draft GitHub Release.
+5. Once nuget.org lists the packages, move the marketplace to the release in a pull request of its own:
+   `scripts/marketplace-ref.sh set vX.Y.Z` writes the tag and its commit into both entries and runs the check. Merge it; users
+   then get the release from `claude plugin update` or auto-update. If the release is abandoned before this step, users never
+   see it.
 
 Check a published package against its attestation with
 `gh attestation verify Lockflight.Cli.X.Y.Z.nupkg --repo lockflight/lockflight`, using the file from the GitHub Release

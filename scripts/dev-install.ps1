@@ -12,8 +12,9 @@ engine reads it):
      ~\.lockflight\bin\lockflight.version,
   4. puts ~\.lockflight\bin on your user PATH (the per-user environment variable, never the system one), once: a reinstall or
      `lockflight update` finds it there and changes nothing,
-  5. adds this checkout as the marketplace and installs the plugin from it at user scope (needed for sessions started inside a
-     child repo of a workspace shell: Claude Code loads project settings only from the directory it starts in).
+  5. adds the checkout's development marketplace (plugins\) and installs the plugin from it at user scope (needed for
+     sessions started inside a child repo of a workspace shell: Claude Code loads project settings only from the directory it
+     starts in).
 
 Why a copy and not a link as on macOS and Linux: creating a symbolic link on Windows needs developer mode or an elevated
 session, and the tool path's own lockflight.exe is a small launcher that starts the engine from the store, so it is not one
@@ -222,9 +223,12 @@ if (-not $NoModifyPath) { Add-UserPath $bin }
 if (-not $NoPlugin) {
     if (Get-Command claude -ErrorAction SilentlyContinue) {
         Write-Output "lockflight: installing the plugin at user scope"
-        # The marketplace is this checkout, so the plugin is the one the engine was just built from. Claude Code reads a folder
-        # marketplace's plugins in place, and adding it again points an existing "lockflight" marketplace (say, the GitHub one) here.
-        if ((Invoke-Native "claude" @("plugin", "marketplace", "add", $repo)) -ne 0) { Fail "claude plugin marketplace add $repo failed" }
+        # The marketplace is this checkout's development marketplace (plugins/.claude-plugin/marketplace.json), so the plugin is
+        # the one the engine was just built from; the repository's own marketplace serves the last release instead. Claude Code
+        # reads a folder marketplace's plugins in place, and adding it again points an existing "lockflight" marketplace (say, the
+        # GitHub one) here.
+        $marketplace = Join-Path $repo "plugins"
+        if ((Invoke-Native "claude" @("plugin", "marketplace", "add", $marketplace)) -ne 0) { Fail "claude plugin marketplace add $marketplace failed" }
         $plugin = if ((Read-Native "claude" @("plugin", "list")) -match "lockflight@lockflight") { @("plugin", "update", "lockflight@lockflight") } else { @("plugin", "install", "lockflight@lockflight", "--scope", "user") }
         if ((Invoke-Native "claude" $plugin) -ne 0) { Fail "claude $($plugin -join ' ') failed" }
     } else {

@@ -6,6 +6,7 @@
 </picture>
 
 [![CI](https://github.com/lockflight/lockflight/actions/workflows/ci.yml/badge.svg)](https://github.com/lockflight/lockflight/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/vpre/Lockflight.Cli?label=nuget&color=14808F)](https://www.nuget.org/packages/Lockflight.Cli)
 ![Status: alpha](https://img.shields.io/badge/status-alpha-F2A33A)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-14808F)
@@ -92,12 +93,19 @@ when the guard says no. Only you see him: he stays out of anything the agent rea
 - **[gitleaks](https://github.com/gitleaks/gitleaks)** on `PATH` for the secrets step of the `pr` profile.
 - For the standard profile: `uv` and Python 3 with PyYAML (Spec Kit).
 
-**1. Install the engine and the plugin, from source**
+**1. Install the engine and the plugin**
 
 ```sh
-git clone https://github.com/lockflight/lockflight && cd lockflight
-scripts/dev-install.sh        # the engine at ~/.lockflight/bin/lockflight (on PATH in new terminals), the plugin at user scope
+cd ~                          # outside any project: a global.json there could pick an SDK older than 10
+dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin
+claude plugin marketplace add lockflight/lockflight
+claude plugin install lockflight@lockflight --scope user
 ```
+
+The marketplace serves the plugins as of the latest release (the release tag), so they match the engine on nuget.org; changes
+on `main` reach you with the next release. To try `main`, run `scripts/dev-install.sh` in a clone of this repository instead:
+it builds the engine and installs the plugin from that checkout
+([install from source](docs/guides/getting-started.md#install-from-source)).
 
 **2. Set up your repository**
 
@@ -124,10 +132,10 @@ terminal window: the engine refuses them inside an agent session, a `!` command 
 first, and `adopt undo` reverts it.
 
 > [!NOTE]
-> **Preview.** The engine installs from source and needs no tokens. Once the `Lockflight.Cli` packages are published on
-> nuget.org, step 1 becomes `dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin` and
-> `claude plugin install lockflight@lockflight --scope user` ([install from a package](docs/guides/getting-started.md#install-from-a-package)). Until then the engine pin is a
-> development build that no package feed has, so the generated CI workflow cannot install it.
+> **Preview.** `Lockflight.Cli` is published on nuget.org as a prerelease (`--prerelease` above); the design can still change
+> between releases. An engine built from source is a development build that no package feed has, so a project that pins one
+> gets a CI workflow that runs only when started by hand until it pins a release
+> ([CI with a development build](docs/guides/getting-started.md#ci-with-a-development-build)).
 
 ## Honest about its limits
 

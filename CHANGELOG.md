@@ -5,6 +5,108 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0-alpha.7] — 2026-10-28
+
+### What to do after upgrading
+- **Update the engine in every project.** The plugin now needs engine 0.2.0-alpha.7 or later, because the in-session
+  commands, the amend re-check and the linked engine's hash record are new in it. In a separate terminal window (not with
+  `!` in Claude Code), run `lockflight update` from the project root and commit what it lists. It re-pins and re-links the
+  engine, which also writes the hash record. Until then, Claude Code tells you at session start that the plugin needs a
+  newer engine.
+- **`lockflight update` also refreshes the Lockflight block in `CLAUDE.md`**, which now tells the agent never to try a
+  human decision and how to propose a protected change. Until you run it, the block is reported as outdated (`adopt plan`
+  lists it to be replaced). Commit the new block with the rest.
+- **A linked engine without a hash record**, linked before this release, now gets a `doctor` warning, and from 0.2.0-alpha.8
+  the hook shim will refuse it. `lockflight update` links the engine again and writes the record.
+- **Run `lockflight init` again** in a project set up before this release, to add the new `Edit` deny rules and sandbox
+  write denials to `.claude/settings.json`. Your own entries are kept; `--no-sandbox` leaves out the sandbox list. Run it
+  again after adding protected files; `doctor` names any it misses.
+- **Install from source takes the plugin from your checkout.** `scripts/dev-install.sh` (and the new
+  `scripts/dev-install.ps1`) now point the `lockflight` marketplace at the checkout, so the plugin and the engine come from
+  the same commit. To go back to the GitHub marketplace: `claude plugin marketplace add lockflight/lockflight`.
+- **Scripts that read the status line:** a red Stop gate now reads `stop gate FAIL` (lower case), like `stop gate PASS`.
+
+### Added
+- **In-session `/lockflight:baseline`, `/lockflight:reset` and `/lockflight:amend`**, in two steps like
+  `/lockflight:approve`: `/lockflight:baseline build|tests|deps [--path <unit>]`, `/lockflight:reset [--feature <id>]` and
+  `/lockflight:amend <Class.Method> [--feature <id>] --reason <why>`. Step 1 shows you, not the agent, what would be recorded,
+  with a one-time code. Step 2 records it only while that state is unchanged. The steps say `Step 1 of 2` and `Step 2 of 2`,
+  the status line shows the line to type while a code waits, and the command typed alone repeats that line. `update` and
+  `adopt` stay terminal-only.
+- **`lockflight redgreen amend <test> --reason "…"`** (human-only) lets one locked test of the open red cycle change,
+  instead of throwing the whole cycle away with `redgreen reset`. Only the file that declares the test becomes writable.
+  The next `redgreen red` re-checks the amended tests on a snapshot of the tree as it was at red, so a corrected test must
+  still fail even when the implementation already exists. `redgreen green` waits for that re-check. Who amended, when, why
+  and the amend's diff are shown in `redgreen status`, `trace` and the pull request summary of `review status`.
+- **Test files are checked between red and green.** `redgreen red` records a hash of every file in the locked test
+  projects. `redgreen green` and `lockflight review` refuse while one of them was changed, added or deleted without a
+  recorded amend, and name each file.
+- **`redgreen red` explains each red class** in a line under each test (`--verbose` adds the exception, the deciding stack
+  frame and the production member it found), and warns about a new test that contains no assertion.
+- **`lockflight docs check`** lists references in `CLAUDE.md`, rules, skills, the Spec Kit constitution and `docs/` that no
+  longer resolve: links to missing files or headings, paths that git history deleted or renamed, engine commands or options
+  that do not exist, and plugin commands the repository does not have. It also names instruction files over Claude Code's
+  size targets. `doctor` shows a short advisory summary of the same scan.
+- **`lockflight rules audit`** lists every rule in your instruction files with what backs it: checked by a Lockflight
+  guardrail, related to a check, or guidance only, with a suggestion where one fits. It changes nothing.
+- **`lockflight doctor --canaries[=full]`**, a self-test: it plants a violation in front of every control in a temporary
+  scratch project (never your project) and reports each as `caught`, `MISSED` or `BROKEN`. `=full` also builds a generated
+  .NET project and runs the real test gate, red, amend and green on it.
+- **A task is completed only after the stop gate passed.** With the stop gate on, the plugin's new `TaskCompleted` hook
+  refuses to mark a task in Claude Code's task list completed until the stop gate has passed for the current changes. It
+  never builds; `gate run --profile stop` earns the pass in the middle of a turn.
+- **Claude Code's own settings back the guard.** `init` and `adopt apply` add an `Edit` deny rule for each protected path
+  and list the protected paths as sandbox write denials in `.claude/settings.json`. The sandbox itself is not switched on
+  for you: the guide shows how a developer or a team turns it on, and what that costs builds and tests. `doctor` has a new
+  `sandbox` check.
+- **The linked engine is pinned by its hash.** `link` records the engine's SHA-256 beside it. The hook shim and `doctor`
+  refuse an engine replaced after linking, even in the same second as the last passed check: reads still pass, writes and
+  in-session commands are blocked, and the message says how to link again.
+- **Windows install and update**, tested in CI on windows-latest: `scripts/dev-install.ps1` installs from source on
+  Windows, and `lockflight update` there replaces the engine even while it runs. Both installers put `~/.lockflight/bin`
+  on `PATH` for new terminals, so `lockflight` works by name (`--no-modify-path` or `-NoModifyPath` skips that).
+- **Review findings are checked against the spec and the change's tests.** A blocker or major finding may quote the spec;
+  the run records whether the quote appears in it, for you to read (this changes no verdict). When a confirmed finding comes
+  with a fix and that fix makes one of the change's own tests fail, the finding is *contested* (NOT-EARNED, naming the test)
+  instead of FAIL.
+
+### Changed
+- Every hand-off to a person names the place first: the in-session command to type, or a separate terminal window (not
+  `!` in Claude Code), with the command inside the sentence rather than on a line of its own.
+- The session banner and the `CLAUDE.md` block tell the agent never to run a human decision, even when asked or just to
+  try it, and how to change a protected file: write the new version outside the project, run `propose`, and give you the
+  `git apply` command.
+- `adopt plan` says when `CLAUDE.md` will be created or is empty, instead of "about 0 tokens".
+- The Spec Kit preset carries the release version, like the plugins and the engine.
+- `workspace sync` says when it rewrites a unit's edited CI workflow (it is generated policy).
+- The documentation explains task roles and red classes in the feature skill, the checks a maintainer runs before a
+  release, team policy through managed settings and platform notes; questions and ideas go to Discussions.
+
+### Fixed
+- **The test gate never passes a run that executed nothing.** A Microsoft.Testing.Platform summary that counts no test that
+  ran is NOT-EARNED; a `test.stopFilter` that matches no test is NOT-EARNED and names the filter; when a filter leaves one
+  test project empty and others ran tests, the run is judged by the tests that ran.
+- **Red/green accepts real assertion failures.** Failures from Shouldly, FluentAssertions, AwesomeAssertions, NSubstitute,
+  Moq and Verify, and xUnit v2 assertions over VSTest, now count as RED_ASSERT; before, they were rejected.
+- Red/green runs projects on xunit.v3 3.x, shares one time limit across test batches, finds test projects in parallel
+  within the time limit, and no longer lists a public class nested in a non-public one as an xUnit v2 test.
+- Test runs started by the engine never open a snapshot diff tool on your screen.
+- **Review:** reproductions are built in the test project nearest the cited code, with more context for the reviewer and
+  one repair attempt for one that does not compile; the reproduction's test method runs, not a helper written before it;
+  the reviewer's material is fenced as data, no customization is loaded from the working tree, and project guidance is
+  taken from the merge base; two reviews of one project no longer share a build folder; a diff too large to show whole is
+  no longer the review of record, which is said before the reviewer starts; a spec quote matches when it leaves out
+  Markdown emphasis or code markers.
+- **Guard:** it looks through `script`, `xcrun`, `watch` and GNU `parallel`, and blocks writes to the files Claude Code reads
+  queued prompts from (scheduled tasks, loops, routines, mailboxes). On Windows, a path with `..` after a link or junction
+  is judged the way Windows opens it, which closes a bypass.
+- The ledger masks `--password x`, passwords in URLs, credential-named options and variables, and base64 secrets that
+  contain `/` or `+`.
+- `workspace sync` re-bases every protected glob a unit can match, so a unit's policy is never looser than the shell's.
+- `doctor` runs the standard checks for a project that uses the Lockflight Spec Kit preset.
+- `lockflight update` moves a project pinned to an older-scheme development build up to a newer prerelease.
+- `redgreen reset` and `/lockflight:reset` delete the cycle's red-time snapshots.
+
 ## [0.2.0-alpha.6] — 2026-10-27
 
 ### Added
@@ -173,8 +275,9 @@ The first public release. Earlier versions were private previews; this entry sum
 - Levi, the pixel lock-keeper, in your terminal and, if you like, in Claude Code's status line (`lockflight statusline`). Only
   people see him.
 
-[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.6...HEAD
-[0.2.0-alpha.6]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.5...v0.2.0-alpha.6
+[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.7...HEAD
+[0.2.0-alpha.7]: https://github.com/lockflight/lockflight/compare/70afe89...v0.2.0-alpha.7
+[0.2.0-alpha.6]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.5...70afe89
 [0.2.0-alpha.5]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.4...v0.2.0-alpha.5
 [0.2.0-alpha.4]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.3...v0.2.0-alpha.4
 [0.2.0-alpha.3]: https://github.com/lockflight/lockflight/releases/tag/v0.2.0-alpha.3

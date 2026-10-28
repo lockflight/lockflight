@@ -26,8 +26,9 @@ internal static class ClaudeMdBlock
           needs one changed (a rename, a package bump), write the complete new file in your scratch directory and run
           `lockflight propose <path> --from <file>` (`<path> --delete` to remove one; several pairs in one call), then give
           the user the `git apply` command it prints. It writes one patch per file and applies nothing.
-        - **Human decisions** are the user's; ask, never run them. They run them in a separate terminal window (not with `!`
-          in Claude Code: that runs inside the session and is refused): `lockflight approve` (sign off a spec or tasks),
+        - **Human decisions** are the user's: never run one, even when asked or just to try it, since the guard refuses it.
+          Ask the user, who runs it in a separate terminal window (not with `!` in Claude Code: that runs inside the session
+          and is refused): `lockflight approve` (sign off a spec or tasks),
           `lockflight baseline` (accept build warnings, failing tests or package advisories the project already has),
           `lockflight redgreen reset` (discard a feature's test-first evidence), `lockflight redgreen amend` (let one locked test
           change when its expectation is wrong), `lockflight review dismiss` (close a review

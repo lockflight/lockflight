@@ -35,7 +35,7 @@ The agent works with your credentials, so CI is where an independent check happe
   `dotnet tool restore`.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass
-  `--ci pr`; see [CI during the preview](getting-started.md#ci-during-the-preview).
+  `--ci pr`; see [CI with a development build](getting-started.md#ci-with-a-development-build).
 - **`gate run --profile pr --base <base sha>`**, in this order:
   1. `policy.protected` — lists protected files the PR changes (never fails; the list goes to the job summary);
   2. `format` → `build` → `test` (with coverage when `gates.coverage.collector` is set);
