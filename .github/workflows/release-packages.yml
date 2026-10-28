@@ -1,8 +1,9 @@
 # Releases the Lockflight.Cli tool packages (a pointer package plus one Native AOT package per RID) to nuget.org.
 #
 # Runs for a pushed version tag (vX.Y.Z[-pre]), or by manual dispatch from such a tag ("Use workflow from" = the tag; with
-# publish off it is a dry run). Every RID is built, tested, installed from a local feed, linked into a project and run through
-# the hook compatibility suite before anything is pushed. Pushing needs the `nuget` environment, whose required reviewers
+# publish off it is a dry run). A dispatch from a branch is a dry run only: it builds 0.0.0-ci.<run number>, skips the tag
+# and plugin-version checks, and refuses publish on. Every RID is built, tested, installed from a local feed, linked into a
+# project and run through the hook compatibility suite before anything is pushed. Pushing needs the `nuget` environment, whose required reviewers
 # approve each release, and uses nuget.org Trusted Publishing (OIDC): no API key is stored. The GitHub Release is created as a
 # draft for the maintainer to edit and publish. Setup: docs/engineering/releasing.md. Versions are never re-published.
 name: release-packages
@@ -40,9 +41,18 @@ jobs:
           TAG: ${{ github.ref_name }}
           EVENT: ${{ github.event_name }}
           PUBLISH_INPUT: ${{ inputs.publish }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           if [ "$REF_TYPE" != tag ]; then
-            echo "::error::run this workflow from a version tag (got $REF)"; exit 1
+            # A dry run from a branch: never publishes, and its version cannot collide with a release.
+            if [ "$EVENT" != workflow_dispatch ] || [ "$PUBLISH_INPUT" = true ]; then
+              echo "::error::publishing runs only from a version tag (got $REF)"; exit 1
+            fi
+            version="0.0.0-ci.$RUN_NUMBER"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "Lockflight $version from $REF (dry run, publish: false)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
           git fetch --no-tags origin "+$REF:$REF"
           if [ "$(git rev-parse "$REF^{commit}")" != "$(git rev-parse HEAD)" ]; then
@@ -110,21 +120,28 @@ jobs:
           cp ../packages/*.nupkg ../smoke-feed/
       - name: Install from the local feed, run it and link it
         run: |
+          # On Windows (Git Bash) RUNNER_TEMP is a Windows path, so take its POSIX form. There the tool's command is the
+          # lockflight.cmd shim .NET writes for a RID-specific tool, and the engine link copies is lockflight.exe.
+          temp="$RUNNER_TEMP" shim="" exe=""
+          if command -v cygpath >/dev/null; then temp=$(cygpath -u "$RUNNER_TEMP"); fi
+          if [ "$RUNNER_OS" = Windows ]; then shim=.cmd exe=.exe; fi
           feed="$PWD/smoke-feed"
-          tools="$RUNNER_TEMP/tools"
+          tools="$temp/tools"
           # From an empty directory, so no global.json or NuGet.config of the checkout applies.
-          mkdir -p "$RUNNER_TEMP/install" && cd "$RUNNER_TEMP/install"
+          mkdir -p "$temp/install" && cd "$temp/install"
           dotnet tool install Lockflight.Cli --tool-path "$tools" --version "$VERSION" --add-source "$feed"
-          installed=$("$tools/lockflight" version)
+          tool="$tools/lockflight$shim"
+          [ -f "$tool" ] || { echo "::error::the install did not write $tool"; ls -la "$tools"; exit 1; }
+          installed=$("$tool" version | tr -d '\r')
           if [ "$installed" != "$VERSION" ]; then
             echo "::error::the installed engine reports $installed, expected $VERSION"; exit 1
           fi
           # link copies the engine into a project; the copy must run on its own, as the hooks run it.
-          project="$RUNNER_TEMP/link-project"
+          project="$temp/link-project"
           mkdir -p "$project" && printf 'version: 1\n' > "$project/lockflight.yaml"
-          (cd "$project" && "$tools/lockflight" link)
-          linked="$project/.lockflight/bin/lockflight"
-          [ -f "$linked.exe" ] && linked="$linked.exe"
+          (cd "$project" && "$tool" link)
+          linked="$project/.lockflight/bin/lockflight$exe"
+          [ -f "$linked" ] || { echo "::error::link did not write $linked"; exit 1; }
           [ "$("$linked" version)" = "$VERSION" ] || { echo "::error::the linked engine does not run"; exit 1; }
           echo "ENGINE=$linked" >> "$GITHUB_ENV"
       - name: Hook compatibility suite on the linked engine
@@ -169,7 +186,7 @@ jobs:
 
   publish:
     needs: [version, rid, pointer]
-    if: ${{ needs.version.outputs.publish == 'true' }}
+    if: ${{ needs.version.outputs.publish == 'true' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     environment: nuget
     permissions:
