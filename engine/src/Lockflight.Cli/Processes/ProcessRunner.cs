@@ -9,6 +9,8 @@ internal static class ProcessRunner
     /// <summary>Exit code reported for a process killed at its time limit (128 + SIGKILL, as shells do).</summary>
     public const int TimedOutExitCode = 137;
 
+    private static readonly IReadOnlyDictionary<string, string?> NoVariables = new Dictionary<string, string?>(StringComparer.Ordinal);
+
     public static Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, string workingDirectory, CancellationToken cancellationToken) =>
         RunAsync(fileName, arguments, workingDirectory, Timeout.InfiniteTimeSpan, cancellationToken);
 
@@ -23,10 +25,40 @@ internal static class ProcessRunner
     /// the input counts against <paramref name="timeLimit"/>.
     /// </summary>
     /// <exception cref="ExecutableNotFoundException"><paramref name="fileName"/> is not installed or not on PATH.</exception>
-    public static async Task<ProcessResult> RunAsync(
-        string fileName, IEnumerable<string> arguments, string workingDirectory, TimeSpan timeLimit, string? standardInputPath, CancellationToken cancellationToken)
+    public static Task<ProcessResult> RunAsync(
+        string fileName, IEnumerable<string> arguments, string workingDirectory, TimeSpan timeLimit, string? standardInputPath, CancellationToken cancellationToken) =>
+        RunAsync(fileName, arguments, workingDirectory, timeLimit, standardInputPath, NoVariables, cancellationToken);
+
+    /// <summary>
+    /// Runs the process with <paramref name="variables"/> set in its environment (e.g. <c>GIT_INDEX_FILE</c> for a private index); a
+    /// variable whose value is null is removed instead.
+    /// </summary>
+    public static Task<ProcessResult> RunAsync(
+        string fileName, IEnumerable<string> arguments, string workingDirectory, TimeSpan timeLimit, IReadOnlyDictionary<string, string?> variables, CancellationToken cancellationToken) =>
+        RunAsync(fileName, arguments, workingDirectory, timeLimit, standardInputPath: null, variables, cancellationToken);
+
+    private static async Task<ProcessResult> RunAsync(
+        string fileName,
+        IEnumerable<string> arguments,
+        string workingDirectory,
+        TimeSpan timeLimit,
+        string? standardInputPath,
+        IReadOnlyDictionary<string, string?> variables,
+        CancellationToken cancellationToken)
     {
         ProcessStartInfo startInfo = StartInfo(fileName, arguments, workingDirectory, redirectInput: standardInputPath is not null);
+        foreach ((string name, string? value) in variables)
+        {
+            if (value is null)
+            {
+                startInfo.Environment.Remove(name);
+            }
+            else
+            {
+                startInfo.Environment[name] = value;
+            }
+        }
+
         Stopwatch stopwatch = Stopwatch.StartNew();
         using Process process = Start(startInfo);
         Task<string> standardOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);

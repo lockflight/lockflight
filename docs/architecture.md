@@ -132,8 +132,10 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
   when every new test fails because of production code: a stub's `NotImplementedException` thrown from production code
   (`RED_STUB`), or an assertion (xUnit or a recognised assertion or mocking library) in a test that calls production
   code (`RED_ASSERT`). A test that fails to compile, fails in its own code or setup, fails on another exception, fails
-  without calling production code, already passes, is skipped or is flaky is rejected. While red, the test projects are locked. `redgreen green` accepts when those tests pass
-  and nothing was deleted, skipped or broken elsewhere.
+  without calling production code, already passes, is skipped or is flaky is rejected. While red, the test projects are locked. An accepted red keeps a local snapshot of the
+  tree as a git commit object (`refs/lockflight/red/<feature>/<cycle>/<commit>`); a person's amend of a test is re-checked on that
+  snapshot in a temporary worktree, so the amended test must still fail on the red-time code. `redgreen green` accepts when
+  those tests pass and nothing was deleted, skipped or broken elsewhere.
 - **Trace** builds the matrix from each requirement (`[Trait("Requirement", "FR-001")]`) to the tests that went red, then
   green, for it. A requirement whose last test is gone fails the trace.
 - **Review of record.** `lockflight review` builds the reviewer's prompt itself, from the spec and the diff, and runs an

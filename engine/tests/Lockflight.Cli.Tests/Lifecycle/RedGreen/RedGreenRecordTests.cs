@@ -81,6 +81,33 @@ public sealed class RedGreenRecordTests : IDisposable
     }
 
     [Fact]
+    public void TheRedTimeSnapshotAndTheRowCountsRoundTripAndOlderRecordsReadWithoutThem()
+    {
+        string path = Path.Combine(root.FullName, ".lockflight", "features", "f1", RedGreenRecord.FileName);
+        RedGreenRecord record = new()
+        {
+            BaselineCommit = "abc",
+            BaselineAt = DateTimeOffset.UnixEpoch,
+            BaselineTests = new HashSet<string>(),
+            TestProjects = ["tests/Shop.Tests"],
+        };
+        record.Cycles.Add(new RedGreenCycle(1, DateTimeOffset.UnixEpoch, GreenAt: null, [new RedGreenTest("T:A.C", "A.C", RedClass.RedAssert, []) { Rows = 3 }])
+        {
+            Snapshot = "0123456789abcdef0123456789abcdef01234567",
+        });
+        record.Cycles.Add(new RedGreenCycle(2, DateTimeOffset.UnixEpoch, GreenAt: null, [new RedGreenTest("T:A.D", "A.D", RedClass.RedStub, [])]));
+        record.Save(path, "f1");
+
+        RedGreenRecord loaded = RedGreenRecord.Load(path)!;
+        Assert.Equal("0123456789abcdef0123456789abcdef01234567", loaded.Cycles[0].Snapshot);
+        Assert.Equal(3, loaded.Cycles[0].Tests[0].Rows);
+        Assert.Null(loaded.Cycles[1].Snapshot);
+        Assert.Equal(0, loaded.Cycles[1].Tests[0].Rows);
+        Assert.Single(Regex.Matches(File.ReadAllText(path), "\"snapshot\""));
+        Assert.Single(Regex.Matches(File.ReadAllText(path), "\"rows\""));
+    }
+
+    [Fact]
     public void TheBaselineExplicitTestsRoundTrip()
     {
         string path = Path.Combine(root.FullName, ".lockflight", "features", "f1", RedGreenRecord.FileName);

@@ -7,7 +7,8 @@ namespace Lockflight.Cli.Canaries;
 /// <summary>
 /// The canaries that build and run a generated project (<see cref="CanaryProject"/>): the real test gate on a failing test, on every
 /// test skipped and on no test, after its harmless twin (a passing test) passed; then a real red whose test fails by
-/// <c>Assert.Fail</c>, after a person's approvals and a red/green start. Tens of seconds, mostly the build.
+/// <c>Assert.Fail</c>, after a person's approvals and a red/green start; then an amend whose amended test passes on the red-time
+/// snapshot. Tens of seconds, mostly the builds.
 /// </summary>
 internal static class FullCanaries
 {
@@ -64,8 +65,91 @@ internal static class FullCanaries
         }
 
         project.WriteTests(Passing);
-        reports.Add(await RedAsync(scratch, project, cancellationToken));
+        CanaryReport red = await RedAsync(scratch, project, cancellationToken);
+        reports.Add(red);
+        if (red.Result != CanaryResult.Broken)
+        {
+            reports.Add(await AmendAsync(scratch, project, cancellationToken));
+        }
+
         return reports;
+    }
+
+    /// <summary>
+    /// After an honest red and its implementation, a person amends the cycle's test. A re-check of an amended test that passes on the
+    /// red-time snapshot (it no longer needs the implementation) must be refused; its harmless twin, an amended test that fails on the
+    /// snapshot's stub and passes on the implementation, must then be accepted, or the refusal proves nothing.
+    /// </summary>
+    private static async Task<CanaryReport> AmendAsync(CanaryScratch scratch, CanaryProject project, CancellationToken cancellationToken)
+    {
+        const string name = "full: an amended test that passes on the red-time snapshot is refused";
+        project.WriteProduction("""
+
+                public bool IsArchived => throw new NotImplementedException();
+
+                public void Archive() => throw new NotImplementedException();
+
+            """);
+        project.WriteTests(Passing + """
+
+                [Fact]
+                [Trait("Requirement", "FR-001")]
+                public void ArchivesTheOrder()
+                {
+                    Order order = new();
+                    order.Archive();
+                    Assert.True(order.IsArchived);
+                }
+            """);
+        CanaryRun red = await scratch.RunAsAgentAsync(["redgreen", "red"], string.Empty, cancellationToken);
+        if (red.ExitCode != ExitCode.Pass)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, $"the honest red was not accepted: {red.FirstLine}");
+        }
+
+        project.WriteProduction("""
+
+                public bool IsArchived { get; private set; }
+
+                public void Archive() => IsArchived = true;
+
+            """);
+        CanaryRun amend = await scratch.RunAsPersonAsync(["redgreen", "amend", "ArchivesTheOrder", "--reason", "canary"], cancellationToken);
+        if (amend.ExitCode != ExitCode.Pass)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, $"'redgreen amend' failed: {amend.FirstLine}");
+        }
+
+        project.WriteTests(Passing + """
+
+                [Fact]
+                [Trait("Requirement", "FR-001")]
+                public void ArchivesTheOrder() => Assert.Equal(0, new Order().LineCount);
+            """);
+        CanaryRun planted = await scratch.RunAsAgentAsync(["redgreen", "red"], string.Empty, cancellationToken);
+        project.WriteTests(Passing + """
+
+                [Fact]
+                [Trait("Requirement", "FR-001")]
+                public void ArchivesTheOrder()
+                {
+                    Order order = new();
+                    order.Archive();
+                    Assert.True(order.IsArchived, "an archived order says so");
+                }
+            """);
+        CanaryRun twin = await scratch.RunAsAgentAsync(["redgreen", "red"], string.Empty, cancellationToken);
+        if (twin.ExitCode != ExitCode.Pass)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, $"an amended test that fails on the red-time stub was refused too, so the refusal proves nothing: {twin.FirstLine}");
+        }
+
+        return planted.ExitCode switch
+        {
+            ExitCode.Fail when planted.Output.Contains("GREEN_BEFORE", StringComparison.Ordinal) => new CanaryReport(name, CanaryResult.Caught, "rejected as GREEN_BEFORE"),
+            ExitCode.Pass => new CanaryReport(name, CanaryResult.Missed, "the re-check was accepted"),
+            _ => new CanaryReport(name, CanaryResult.Broken, $"'redgreen red' exited {(int)planted.ExitCode}: {planted.FirstLine}"),
+        };
     }
 
     private static async Task<CanaryReport> RedAsync(CanaryScratch scratch, CanaryProject project, CancellationToken cancellationToken)
