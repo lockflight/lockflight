@@ -1,8 +1,8 @@
 namespace Lockflight.Cli.Hosting;
 
 /// <summary>
-/// Every command this engine runs, with its options: what <c>docs check</c> compares documented command lines with. A test runs
-/// each entry against the real parser and the help text, so the catalog cannot drift from the commands themselves.
+/// Every command this engine runs, with its options: what <c>docs check</c> compares documented command lines with. It is the
+/// listed part of <see cref="CommandRegistry"/>, and a test runs each entry against the real parser and the help text.
 /// </summary>
 internal static class CommandCatalog
 {
@@ -11,39 +11,10 @@ internal static class CommandCatalog
 
     public static IReadOnlyList<CatalogedCommand> All { get; } =
     [
-        new(["version"], [], TakesArguments: false),
-        new(["link"], [], TakesArguments: false),
-        new(["init"], ["--profile", "--ci", "--ci-platform", "--quality", "--architecture-tests", "--no-link", "--no-sandbox"], TakesArguments: false),
-        new(["doctor"], ["--canaries", "--canaries=full"], TakesArguments: false),
-        new(["statusline"], [], TakesArguments: false),
-        new(["update"], ["--source", "--project"], TakesArguments: false),
-        new(["docs", "check"], [], TakesArguments: false),
-        new(["rules", "audit"], [], TakesArguments: false),
-        new(["hook"], [], TakesArguments: true),
-        new(["baseline", "build"], ["--path"], TakesArguments: false),
-        new(["baseline", "tests"], ["--path"], TakesArguments: false),
-        new(["baseline", "deps"], ["--path"], TakesArguments: false),
-        new(["gate", "run"], ["--profile", "--path", "--unit", "--base", "--result"], TakesArguments: false),
-        new(["phase", "check"], ["--feature"], TakesArguments: true),
-        new(["redgreen", "start"], ["--feature"], TakesArguments: false),
-        new(["redgreen", "red"], ["--feature", "--verbose"], TakesArguments: false),
-        new(["redgreen", "green"], ["--feature"], TakesArguments: false),
-        new(["redgreen", "status"], ["--feature"], TakesArguments: false),
-        new(["redgreen", "reset"], ["--feature"], TakesArguments: false),
-        new(["redgreen", "amend"], ["--feature", "--reason"], TakesArguments: true),
-        new(["review"], ["--feature", "--base", "--model", "--budget"], TakesArguments: false),
-        new(["review", "status"], ["--feature"], TakesArguments: false),
-        new(["review", "dismiss"], ["--reason", "--feature"], TakesArguments: true),
-        new(["ledger", "retro"], ["--days", "--min"], TakesArguments: false),
-        new(["propose"], ["--from", "--delete"], TakesArguments: true),
-        new(["trace"], ["--feature"], TakesArguments: false),
-        new(["approve", "spec"], ["--feature", "--key", "--sign"], TakesArguments: false),
-        new(["approve", "tasks"], ["--feature", "--key", "--sign"], TakesArguments: false),
-        new(["approve", "verify"], ["--feature", "--base", "--allowed-signers", "--require"], TakesArguments: false),
-        new(["workspace", "sync"], ["--check"], TakesArguments: false),
-        new(["adopt", "plan"], [], TakesArguments: false),
-        new(["adopt", "apply"], ["--speckit-preset", "--skip-speckit", "--no-sandbox"], TakesArguments: false),
-        new(["adopt", "undo"], ["--backup", "--force"], TakesArguments: false),
+        .. CommandRegistry.All
+            .Where(command => command.Listing == CommandListing.Listed)
+            .Select(command => new CatalogedCommand(
+                command.Words, [.. command.ValueOptions, .. command.FlagOptions], command.Operands is not (CommandOperands.None or CommandOperands.Options))),
     ];
 
     /// <summary>The command whose words begin <paramref name="words"/>, the longest when several do; null when none does.</summary>

@@ -9,7 +9,7 @@ namespace Lockflight.Cli.Linking;
 /// copied: a framework-dependent build cannot run from a copy of its launcher. Its hash is recorded beside it
 /// (<see cref="EngineRecord"/>), so an engine replaced afterwards is not run.
 /// </summary>
-internal sealed class LinkCommand(CliContext context)
+internal sealed class LinkCommand(CliContext context) : ICommand
 {
     public const string RelativeBinDirectory = ".lockflight/bin";
 
@@ -22,6 +22,8 @@ internal sealed class LinkCommand(CliContext context)
     /// <summary>The linked engine of the project at <paramref name="root"/> (<c>.exe</c> on Windows).</summary>
     public static string BinaryPath(string root) =>
         Path.Combine(root, RelativeBinDirectory, OperatingSystem.IsWindows() ? "lockflight.exe" : "lockflight");
+
+    public Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken) => RunAsync(cancellationToken);
 
     public async Task<ExitCode> RunAsync(CancellationToken cancellationToken)
     {

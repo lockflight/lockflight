@@ -14,11 +14,12 @@ namespace Lockflight.Cli.Init;
 /// CI job; then links the engine. Idempotent: existing content is kept and merged into, never overwritten. As a sanctioned
 /// writer of protected files it records every change in the ledger.
 /// </summary>
-internal sealed class InitCommand(CliContext context)
+internal sealed class InitCommand(CliContext context) : ICommand
 {
     /// <summary><c>[--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests] [--no-link] [--no-sandbox]</c> in any order.</summary>
-    public async Task<ExitCode> RunAsync(string[] options, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
+        string[] options = arguments.RestArray;
         bool link = true;
         bool sandbox = true;
         InitProfile profile = InitProfile.Lite;
@@ -250,7 +251,8 @@ internal sealed class InitCommand(CliContext context)
             }
 
             await context.Output.WriteLineAsync("These files exist, so init proposes the quality pack's change to them instead of making it:");
-            ExitCode proposed = await new ProposeCommand(context with { WorkingDirectory = root }).RunAsync([.. arguments], cancellationToken);
+            CommandArguments propose = new(CommandRegistry.Match(["propose"])!, arguments);
+            ExitCode proposed = await new ProposeCommand(context with { WorkingDirectory = root }).RunAsync(propose, cancellationToken);
             return proposed == ExitCode.Pass ? null : proposed;
         }
         finally

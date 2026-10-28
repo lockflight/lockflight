@@ -16,10 +16,14 @@ namespace Lockflight.Cli.Hooks;
 /// (<c>/lockflight:approve</c>, <c>/lockflight:baseline</c>, <c>/lockflight:reset</c>, <c>/lockflight:amend</c>) is never passed on
 /// to the agent after an error either.
 /// </summary>
-internal sealed class HookCommand(CliContext context)
+internal sealed class HookCommand(CliContext context) : ICommand
 {
     /// <summary>The in-session human command the event expands, as far as the payload was read before an error; null for none.</summary>
     private SessionCommandSpec? expanding;
+
+    /// <param name="arguments">The event's command-line name (<c>pre-tool-use</c>) as the one operand.</param>
+    public Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken) =>
+        RunAsync(HookEventNames.Parse(arguments.Rest[0]), cancellationToken);
 
     public async Task<ExitCode> RunAsync(HookEvent hookEvent, CancellationToken cancellationToken)
     {

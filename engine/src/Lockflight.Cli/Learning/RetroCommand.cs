@@ -10,16 +10,14 @@ namespace Lockflight.Cli.Learning;
 /// <c>lockflight ledger retro [--days 30] [--min 2]</c> — the Tier-0 retro: clusters the ledger's incidents by
 /// fingerprint, pre-classifies them and suggests a remedy rung. A report for a person; remedies are human-authored PRs.
 /// </summary>
-internal sealed class RetroCommand(CliContext context)
+internal sealed class RetroCommand(CliContext context) : ICommand
 {
     private const int DefaultDays = 30;
     private const int DefaultMinimum = 2;
 
-    private static readonly string[] ValueOptions = ["--days", "--min"];
-
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("ledger retro", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options)
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options)
         {
             return ExitCode.Config;
         }

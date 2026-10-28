@@ -15,11 +15,11 @@ namespace Lockflight.Cli.Mascot;
 /// leave the last one shown.
 /// The status line is shown to the person only, never to the model. Outside a Lockflight project it prints nothing.
 /// </summary>
-internal sealed class StatusLineCommand(CliContext context)
+internal sealed class StatusLineCommand(CliContext context) : ICommand
 {
     private static readonly TimeSpan Window = TimeSpan.FromDays(1);
 
-    public async Task<ExitCode> RunAsync(CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
         string directory = ProjectDirectory(await context.Input.ReadToEndAsync(cancellationToken)) ?? context.WorkingDirectory;
         if (ManifestLocator.Discover(directory) is not { Manifest: Manifest manifest })

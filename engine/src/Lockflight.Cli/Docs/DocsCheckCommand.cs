@@ -8,11 +8,11 @@ namespace Lockflight.Cli.Docs;
 /// anchors, engine and plugin commands) and instruction files over Claude Code's size targets. Read only and advisory: exit 1
 /// when it finds something, so a CI step can show it, but no gate runs it.
 /// </summary>
-internal sealed class DocsCheckCommand(CliContext context)
+internal sealed class DocsCheckCommand(CliContext context) : ICommand
 {
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("docs check", args, [], [], context.Error, cancellationToken) is null)
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is null)
         {
             return ExitCode.Config;
         }

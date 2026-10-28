@@ -11,20 +11,15 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 /// from the base branch — SSH signatures for the named feature or every feature the change touches; every phase is required unless
 /// <c>--require</c> narrows it. It is what CI runs.
 /// </summary>
-internal sealed class ApproveCommand(CliContext context)
+internal sealed class ApproveCommand(CliContext context) : ICommand
 {
     private const string VerifyVerb = "verify";
 
-    private static readonly string[] ApproveValueOptions = ["--feature", "--key"];
-    private static readonly string[] ApproveFlags = ["--sign"];
-    private static readonly string[] VerifyValueOptions = ["--feature", "--base", "--allowed-signers", "--require"];
-
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        string verb = args[0];
+        (string verb, string[] rest) = arguments.Verb();
         bool verify = verb == VerifyVerb;
-        if (await CommandOptions.ParseOrReportAsync(
-                $"approve {verb}", args[1..], verify ? VerifyValueOptions : ApproveValueOptions, verify ? [] : ApproveFlags, context.Error, cancellationToken)
+        if (await CommandOptions.ParseOrReportAsync($"approve {verb}", rest, arguments.Command.ValueOptions, arguments.Command.FlagOptions, context.Error, cancellationToken)
             is not CommandOptions options)
         {
             return ExitCode.Config;

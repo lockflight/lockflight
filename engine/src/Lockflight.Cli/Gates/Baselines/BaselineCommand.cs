@@ -7,14 +7,13 @@ namespace Lockflight.Cli.Gates.Baselines;
 /// <c>lockflight baseline build|tests|deps [--path dir]</c>: accept the current build warnings, failing tests or advisories of a
 /// brownfield project. A human decision — the guard blocks this command inside agent sessions, and CI reads baselines from the base branch.
 /// </summary>
-internal sealed class BaselineCommand(CliContext context)
+internal sealed class BaselineCommand(CliContext context) : ICommand
 {
-    private static readonly string[] ValueOptions = ["--path"];
-
-    public async Task<ExitCode> RunAsync(string kindName, string[] args, CancellationToken cancellationToken)
+    /// <param name="arguments">The descriptor's second word is the kind (<c>baseline build</c>).</param>
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync($"baseline {kindName}", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options
-            || !BaselineKindNames.TryParse(kindName, out BaselineKind kind))
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options
+            || !BaselineKindNames.TryParse(arguments.Command.Words[1], out BaselineKind kind))
         {
             return ExitCode.Config;
         }
