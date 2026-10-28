@@ -1,5 +1,6 @@
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Docs;
 using Lockflight.Cli.Doctor;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Baselines;
@@ -34,6 +35,10 @@ internal static class CliApplication
           doctor [--canaries[=full]]                    readiness report with fixes; --canaries: plant a violation
                                                         before every control in a scratch project and report each
                                                         as caught or missed (=full also builds and runs one)
+          docs check                                    references in CLAUDE.md, rules, skills, the constitution
+                                                        and docs/ that no longer resolve (links, anchors, deleted or
+                                                        moved paths, engine and plugin commands) and instruction
+                                                        files over Claude Code's size targets (read only)
           statusline                                    Claude Code status line: Levi and the last verdict
           update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
                                                         package feed), re-pin this project
@@ -131,6 +136,7 @@ internal static class CliApplication
                 ["link"] => await new LinkCommand(context).RunAsync(cancellationToken),
                 ["init", .. string[] initOptions] => await new InitCommand(context).RunAsync(initOptions, cancellationToken),
                 ["doctor", .. string[] doctorOptions] => await new DoctorCommand(context).RunAsync(doctorOptions, cancellationToken),
+                ["docs", "check", .. string[] docsOptions] => await new DocsCheckCommand(context).RunAsync(docsOptions, cancellationToken),
                 ["statusline"] => await new StatusLineCommand(context).RunAsync(cancellationToken),
                 ["update", .. string[] updateOptions] => await new UpdateCommand(context).RunAsync(updateOptions, cancellationToken),
                 ["hook", string eventName] => await new HookCommand(context).RunAsync(HookEventNames.Parse(eventName), cancellationToken),

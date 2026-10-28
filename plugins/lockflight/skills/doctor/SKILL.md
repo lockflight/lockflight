@@ -15,7 +15,8 @@ description: Diagnose a Lockflight setup — manifest, engine pin, linked engine
    project.
    If the pin cannot be read (`dotnet-tools.json` is malformed), that file is protected: show the user the error and let them
    fix it.
-2. Report each line. For `FAIL`/`warn`, give the fix shown after `→`.
+2. Report each line. For `FAIL`/`warn`, give the fix shown after `→`. The `docs drift` and `instructions size` lines are
+   advisory: report them, and change no document for them unless the user asks.
 3. Apply fixes that are Lockflight commands yourself (`dotnet tool restore`, `dotnet lockflight link`,
    `.lockflight/bin/lockflight init`). A fix the doctor marks as a person's step — `update`, or a re-pin of the protected tool
    pin — is the user's: give them the command to run in a separate terminal window (not with `!` in Claude Code: that runs
