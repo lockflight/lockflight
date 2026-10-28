@@ -24,6 +24,15 @@ internal static class EnvironmentVariables
     /// </summary>
     public const string PluginMinimumEngine = "LOCKFLIGHT_PLUGIN_MIN_ENGINE";
 
+    /// <summary>
+    /// The directory of the plugin a Claude Code session loaded; the plugin's SessionStart hook writes it, with
+    /// <see cref="PluginMinimumEngine"/>, into the session's environment file so that commands the agent runs see them.
+    /// </summary>
+    public const string PluginRoot = "LOCKFLIGHT_PLUGIN_ROOT";
+
+    /// <summary>The plugin's directory, set by Claude Code for the plugin's hooks and commands.</summary>
+    public const string ClaudePluginRoot = "CLAUDE_PLUGIN_ROOT";
+
     /// <summary>Set to <c>1</c> by Claude Code in every shell the agent starts.</summary>
     public const string ClaudeCode = "CLAUDECODE";
 

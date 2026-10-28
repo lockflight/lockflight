@@ -36,7 +36,7 @@ internal static class ReadinessChecks
     private static readonly TimeSpan ClaudeVersionTimeLimit = TimeSpan.FromSeconds(30);
 
     public static Task<IReadOnlyList<DoctorCheck>> RunAsync(string root, CancellationToken cancellationToken) =>
-        RunAsync(root, userHome: null, nugetPackages: null, gitleaks: null, TimeProvider.System, cancellationToken);
+        RunAsync(root, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, cancellationToken);
 
     /// <param name="userHome">
     /// The user's home, for the user-scope plugin check of a workspace and for the local feed and tools cache of the pin check; null
@@ -44,9 +44,10 @@ internal static class ReadinessChecks
     /// </param>
     /// <param name="nugetPackages">The NuGet global packages folder (<c>NUGET_PACKAGES</c>); null for its default under the home.</param>
     /// <param name="gitleaks">The gitleaks the secrets step runs (<c>LOCKFLIGHT_GITLEAKS</c>, else the one on PATH); null when there is none.</param>
+    /// <param name="environment">The variables the plugin and Claude Code give the session, for the plugin engine check.</param>
     /// <param name="time">The clock, for the window of Stop timings read from the ledger.</param>
     public static async Task<IReadOnlyList<DoctorCheck>> RunAsync(
-        string root, string? userHome, string? nugetPackages, string? gitleaks, TimeProvider time, CancellationToken cancellationToken)
+        string root, string? userHome, string? nugetPackages, string? gitleaks, EnvironmentReader environment, TimeProvider time, CancellationToken cancellationToken)
     {
         List<DoctorCheck> checks = [CheckManifest(root), CheckPin(root)];
         if (CheckDevelopmentPin(root, userHome, nugetPackages) is DoctorCheck developmentPin)
@@ -55,7 +56,7 @@ internal static class ReadinessChecks
         }
 
         checks.Add(await CheckLinkAsync(root, cancellationToken));
-        if (PluginEngineCheck.Check(root, userHome) is DoctorCheck pluginEngine)
+        if (PluginEngineCheck.Check(root, userHome, environment) is DoctorCheck pluginEngine)
         {
             checks.Add(pluginEngine);
         }

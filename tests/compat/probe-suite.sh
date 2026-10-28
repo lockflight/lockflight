@@ -179,6 +179,14 @@ if printf '%s' "$(json "$proj" Read "$(fp "$proj/src/a.cs")")" | "$WORK/plugin/b
 else
   fail=$((fail+1)); echo "plugin needs newer engine: session notice: FAIL"
 fi
+# The session-start hook hands the loaded plugin's requirement and directory to the session's later Bash commands (doctor).
+: > "$WORK/env-file"
+printf '%s' "$(json "$proj" Read "$(fp "$proj/src/a.cs")")" | CLAUDE_ENV_FILE="$WORK/env-file" CLAUDE_PLUGIN_ROOT="$WORK/plugin" "$WORK/plugin/bin/lockflight-hook" session-start > /dev/null 2>&1
+if grep -qx "export LOCKFLIGHT_PLUGIN_MIN_ENGINE='999.0.0'" "$WORK/env-file" && grep -qx "export LOCKFLIGHT_PLUGIN_ROOT='$WORK/plugin'" "$WORK/env-file"; then
+  pass=$((pass+1)); echo "session start: exports the loaded plugin: ok"
+else
+  fail=$((fail+1)); echo "session start: exports the loaded plugin: FAIL ($(head -c 400 "$WORK/env-file"))"
+fi
 sed 's/"9.9.9"/"9.9.9-dev.1"/' "$proj/dotnet-tools.json" > "$WORK/t" && mv "$WORK/t" "$proj/dotnet-tools.json"
 check "dev pin mismatch: Write blocked"   2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 if grep -q 'lockflight update' "$WORK/err"; then pass=$((pass+1)); echo "dev pin mismatch: names update: ok"; else fail=$((fail+1)); echo "dev pin mismatch: names update: FAIL ($(head -c 400 "$WORK/err"))"; fi

@@ -12,6 +12,21 @@ event="$1"
 if [ "$event" = "session-start" ] && [ -f "${0%/*}/../min-engine-version" ]; then
   IFS= read -r LOCKFLIGHT_PLUGIN_MIN_ENGINE < "${0%/*}/../min-engine-version" || true
   export LOCKFLIGHT_PLUGIN_MIN_ENGINE
+  # Claude Code sources CLAUDE_ENV_FILE into the session's later Bash commands, so `lockflight doctor` run by the agent checks
+  # the plugin this session loaded (also one from --plugin-dir), not only the installed one. Values that would need quoting
+  # beyond single quotes are left out rather than written.
+  if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    case "$LOCKFLIGHT_PLUGIN_MIN_ENGINE" in
+      *[!0-9A-Za-z.+-]*|"") ;;
+      *) printf "export LOCKFLIGHT_PLUGIN_MIN_ENGINE='%s'\n" "$LOCKFLIGHT_PLUGIN_MIN_ENGINE" >> "$CLAUDE_ENV_FILE" ;;
+    esac
+    plugin_root="${CLAUDE_PLUGIN_ROOT:-${0%/*}/..}"
+    case "$plugin_root" in
+      *"'"*|*"
+"*) ;;
+      *) printf "export LOCKFLIGHT_PLUGIN_ROOT='%s'\n" "$plugin_root" >> "$CLAUDE_ENV_FILE" ;;
+    esac
+  fi
 fi
 # Every process costs ~10-20 ms under Git Bash, so the fast path (CLAUDE_PROJECT_DIR set, engine linked) starts none: stdin
 # goes straight to the engine and the root search uses parameter expansion only. The JSON is read only when it is needed.
