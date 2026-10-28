@@ -62,6 +62,7 @@ internal static class ReviewEvidence
                 ["reproduction"] = finding.Reproduction,
                 ["earlierReproductions"] = new JsonArray([.. finding.EarlierReproductions.Select(earlier => (JsonNode)JsonValue.Create(earlier))]),
                 ["reproductionAttempts"] = finding.ReproductionAttempts,
+                ["reproductionProject"] = finding.ReproductionProject,
                 ["compileErrors"] = new JsonArray([.. finding.CompileErrors.Select(errors => (JsonNode)JsonValue.Create(errors))]),
                 ["fix"] = finding.Fix,
                 ["fixCheck"] = ReviewNames.ToName(finding.FixCheck),

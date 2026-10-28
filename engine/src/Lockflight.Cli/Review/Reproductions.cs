@@ -67,6 +67,7 @@ internal static partial class Reproductions
                 Reproduced = verdict.Result,
                 ReproductionAttempts = 1,
                 CompileErrors = verdict.Errors is null ? [] : [verdict.Errors],
+                ReproductionProject = ProjectPath(chosen[index], root),
             };
         }
 
@@ -147,6 +148,10 @@ internal static partial class Reproductions
         return new ReproductionRepairRequest(
             finding, finding.CompileErrors.Count > 0 ? finding.CompileErrors[^1] : string.Empty, profile, CitedSignatures(finding.File, root), TestProjectProfiles.SampleTest(app.ProjectDirectory, root));
     }
+
+    /// <summary>The test project a reproduction is built in, relative to the root: its project file, else its directory.</summary>
+    private static string ProjectPath(TestApp app, string root) =>
+        TestProjectProfiles.Relative(root, TestProjectProfiles.ProjectFile(app.ProjectDirectory, app.AssemblyName) ?? app.ProjectDirectory);
 
     /// <summary>The signatures of the cited C# file; empty when it is not a C# file inside the repository.</summary>
     private static string CitedSignatures(string file, string root)
