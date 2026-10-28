@@ -4,6 +4,8 @@ using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Projects;
+using Lockflight.Cli.Proposals;
+using Lockflight.Cli.Quality;
 
 namespace Lockflight.Cli.Init;
 
@@ -14,7 +16,7 @@ namespace Lockflight.Cli.Init;
 /// </summary>
 internal sealed class InitCommand(CliContext context)
 {
-    /// <summary><c>[--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab] [--no-link] [--no-sandbox]</c> in any order.</summary>
+    /// <summary><c>[--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests] [--no-link] [--no-sandbox]</c> in any order.</summary>
     public async Task<ExitCode> RunAsync(string[] options, CancellationToken cancellationToken)
     {
         bool link = true;
@@ -22,6 +24,7 @@ internal sealed class InitCommand(CliContext context)
         InitProfile profile = InitProfile.Lite;
         CiTrigger? requestedCi = null;
         CiPlatform platform = CiPlatform.GitHub;
+        InitQuality quality = new(Analyzers: false, ArchitectureTests: false);
         for (int index = 0; index < options.Length; index++)
         {
             switch (options[index])
@@ -31,6 +34,12 @@ internal sealed class InitCommand(CliContext context)
                     break;
                 case "--no-sandbox":
                     sandbox = false;
+                    break;
+                case "--quality":
+                    quality = quality with { Analyzers = true };
+                    break;
+                case "--architecture-tests":
+                    quality = quality with { ArchitectureTests = true };
                     break;
                 case "--profile" when index + 1 < options.Length:
                     string name = options[++index];
@@ -65,14 +74,15 @@ internal sealed class InitCommand(CliContext context)
                 case "--ci-platform":
                     return await RefuseAsync($"--ci-platform needs a value: {CiPlatformNames.Choices}");
                 default:
-                    return await RefuseAsync($"unknown init option '{options[index]}'; use --profile lite|standard, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --no-link or --no-sandbox");
+                    return await RefuseAsync($"unknown init option '{options[index]}'; use --profile lite|standard, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --no-link or --no-sandbox");
             }
         }
 
-        return await InitializeAsync(link, sandbox, profile, requestedCi, platform, cancellationToken);
+        return await InitializeAsync(link, sandbox, profile, requestedCi, platform, quality, cancellationToken);
     }
 
-    private async Task<ExitCode> InitializeAsync(bool link, bool sandbox, InitProfile profile, CiTrigger? requestedCi, CiPlatform platform, CancellationToken cancellationToken)
+    private async Task<ExitCode> InitializeAsync(
+        bool link, bool sandbox, InitProfile profile, CiTrigger? requestedCi, CiPlatform platform, InitQuality quality, CancellationToken cancellationToken)
     {
         // The pin init writes is this engine's version: a newer pin is refused below and an older one is raised to it.
         bool developmentPin = EngineVersion.IsDevelopmentBuild(ToolPin.RunningVersion);
@@ -81,6 +91,12 @@ internal sealed class InitCommand(CliContext context)
         if (await PreflightProblemAsync(root, cancellationToken) is string problem)
         {
             return await RefuseAsync($"{problem}; nothing was written");
+        }
+
+        IReadOnlyList<LayerProject> layers = quality.ArchitectureTests ? ArchitectureTestProject.Layers(root) : [];
+        if (quality.ArchitectureTests && ArchitectureTestProject.Problem(layers) is string layerProblem)
+        {
+            return await RefuseAsync($"{layerProblem}; nothing was written");
         }
 
         string[] testFrameworks = [.. ProjectFiles.TestProjects(root).SelectMany(project => ProjectFiles.TargetFrameworks(root, project)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
@@ -106,6 +122,17 @@ internal sealed class InitCommand(CliContext context)
         }
 
         steps.AddRange(ciSteps);
+        List<QualityFile> proposals = [];
+        if (quality.Analyzers)
+        {
+            await AddQualityPackAsync(root, steps, proposals, cancellationToken);
+        }
+
+        string? architectureProject = null;
+        if (quality.ArchitectureTests)
+        {
+            architectureProject = await AddArchitectureTestsAsync(root, layers, steps, proposals, cancellationToken);
+        }
 
         if (profile == InitProfile.Standard)
         {
@@ -136,6 +163,15 @@ internal sealed class InitCommand(CliContext context)
         }
 
         await RecordAsync(root, steps, cancellationToken);
+        if (proposals.Count > 0 && await ProposeAsync(root, proposals, cancellationToken) is ExitCode proposeFailure)
+        {
+            return proposeFailure;
+        }
+
+        foreach (string line in QualityNextSteps.For(quality, steps, proposals, architectureProject))
+        {
+            await context.Output.WriteLineAsync(line);
+        }
 
         if (!link)
         {
@@ -155,6 +191,70 @@ internal sealed class InitCommand(CliContext context)
         }
 
         return linkResult;
+    }
+
+    /// <summary>
+    /// The quality pack's files: one that does not exist yet is written, as init writes every protected file it starts; one the
+    /// team already has is only proposed, because init never changes the team's own content.
+    /// </summary>
+    private static async Task AddQualityPackAsync(string root, List<InitStep> steps, List<QualityFile> proposals, CancellationToken cancellationToken)
+    {
+        foreach (QualityFile file in QualityPack.Files(root))
+        {
+            if (file.Existing)
+            {
+                proposals.Add(file);
+            }
+            else
+            {
+                steps.Add(await WriteIfMissingAsync(root, file.RelativePath, file.Content, cancellationToken));
+            }
+        }
+    }
+
+    /// <summary>The architecture test project, unless it exists; a central package list that lacks its packages is proposed.</summary>
+    private static async Task<string> AddArchitectureTestsAsync(
+        string root, IReadOnlyList<LayerProject> layers, List<InitStep> steps, List<QualityFile> proposals, CancellationToken cancellationToken)
+    {
+        string directory = ArchitectureTestProject.RelativeDirectory(root, layers);
+        string project = $"{directory}/{ArchitectureTestProject.Name(layers)}.csproj";
+        bool centralPackages = ArchitectureTestProject.UsesCentralPackages(root);
+        steps.Add(await WriteIfMissingAsync(root, project, ArchitectureTestProject.ProjectFile(root, directory, layers, centralPackages), cancellationToken));
+        steps.Add(await WriteIfMissingAsync(root, $"{directory}/{ArchitectureTestProject.TestFileName}", ArchitectureTestProject.TestFile(layers), cancellationToken));
+        string packagesPath = Path.Combine(root, ArchitectureTestProject.CentralPackagesFile);
+        if (centralPackages && ArchitectureTestProject.CentralPackages(root, await File.ReadAllTextAsync(packagesPath, cancellationToken)) is string packages)
+        {
+            proposals.Add(new QualityFile(ArchitectureTestProject.CentralPackagesFile, packages, Existing: true));
+        }
+
+        return project;
+    }
+
+    /// <summary>
+    /// Proposes each change to a file the team already has through <c>lockflight propose</c>: a patch the person reads and
+    /// applies, never applied here. The proposed content waits in a temporary directory outside the project.
+    /// </summary>
+    private async Task<ExitCode?> ProposeAsync(string root, List<QualityFile> proposals, CancellationToken cancellationToken)
+    {
+        DirectoryInfo staging = Directory.CreateTempSubdirectory("lockflight-init-proposals-");
+        try
+        {
+            List<string> arguments = [];
+            for (int index = 0; index < proposals.Count; index++)
+            {
+                string content = Path.Combine(staging.FullName, $"{index}-{Path.GetFileName(proposals[index].RelativePath)}");
+                await File.WriteAllTextAsync(content, proposals[index].Content, cancellationToken);
+                arguments.AddRange([proposals[index].RelativePath, "--from", content]);
+            }
+
+            await context.Output.WriteLineAsync("These files exist, so init proposes the quality pack's change to them instead of making it:");
+            ExitCode proposed = await new ProposeCommand(context with { WorkingDirectory = root }).RunAsync([.. arguments], cancellationToken);
+            return proposed == ExitCode.Pass ? null : proposed;
+        }
+        finally
+        {
+            staging.Delete(recursive: true);
+        }
     }
 
     /// <summary>Says why CI installs more than the engine's SDK, or that an existing pipeline may need it.</summary>

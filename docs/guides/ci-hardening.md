@@ -20,7 +20,7 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
   - `nuget.config` / `NuGet.config` at the root (package sources: a PR cannot make CI install an engine of its own choosing);
   - `.lockflight/baselines/` (accepted warnings, known-failing tests, advisories);
   - code-style and analyzer config anywhere in the tree: `.editorconfig`, `.globalconfig`/`*.globalconfig`, `*.ruleset`,
-    `stylecop.json`, `BannedSymbols.txt`. A PR is judged by the base's style rules, and its own rule changes apply after the
+    `stylecop.json`, `BannedSymbols.txt`, `CodeMetricsConfig.txt`. A PR is judged by the base's style rules, and its own rule changes apply after the
     merge.
 
   A PR cannot loosen the checks that judge it, pre-accept its own secret or accept its own failing test. On `pull_request`
@@ -98,6 +98,7 @@ nuget.config                             @your-org/maintainers
 *.ruleset                                @your-org/maintainers
 stylecop.json                            @your-org/maintainers
 BannedSymbols.txt                        @your-org/maintainers
+CodeMetricsConfig.txt                    @your-org/maintainers
 .gitattributes                           @your-org/maintainers
 ```
 
