@@ -12,13 +12,11 @@ namespace Lockflight.Cli.Review;
 /// and the summary for the pull request body, which also names the tests a person amended after their red. The agent runs it;
 /// only this, not the agent's own reading, says a finding is closed.
 /// </summary>
-internal sealed class ReviewStatusCommand(CliContext context)
+internal sealed class ReviewStatusCommand(CliContext context) : ICommand
 {
-    private static readonly string[] ValueOptions = ["--feature"];
-
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("review status", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options
             || await ManifestRequirement.LoadAsync(context, context.WorkingDirectory, cancellationToken) is not Manifest manifest)
         {
             return ExitCode.Config;

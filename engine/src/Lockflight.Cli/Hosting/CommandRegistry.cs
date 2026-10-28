@@ -1,0 +1,90 @@
+using Lockflight.Cli.Adoption;
+using Lockflight.Cli.Docs;
+using Lockflight.Cli.Doctor;
+using Lockflight.Cli.Gates;
+using Lockflight.Cli.Gates.Baselines;
+using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Init;
+using Lockflight.Cli.Learning;
+using Lockflight.Cli.Lifecycle;
+using Lockflight.Cli.Lifecycle.Approvals;
+using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Linking;
+using Lockflight.Cli.Mascot;
+using Lockflight.Cli.Proposals;
+using Lockflight.Cli.Review;
+using Lockflight.Cli.Rules;
+using Lockflight.Cli.Updating;
+using Lockflight.Cli.Workspace;
+
+namespace Lockflight.Cli.Hosting;
+
+/// <summary>
+/// The one place a command is registered: one line per command line, in the order the catalog lists them. Dispatch, the catalog
+/// and the human-only refusal are derived from it; the help text is written by hand and tested against it.
+/// </summary>
+internal static class CommandRegistry
+{
+    public static IReadOnlyList<CommandDescriptor> All { get; } =
+    [
+        new(["version"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new VersionCommand(context)),
+        new(["link"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new LinkCommand(context)),
+        new(["init"], CommandAudience.Anyone, ["--profile", "--ci", "--ci-platform"], ["--quality", "--architecture-tests", "--no-link", "--no-sandbox"], CommandOperands.Options, OptionParsing.Own, context => new InitCommand(context)),
+        new(["doctor"], CommandAudience.Anyone, [], [DoctorCommand.CanariesFlag, DoctorCommand.FullCanariesFlag], CommandOperands.Options, OptionParsing.Shared, context => new DoctorCommand(context)),
+        new(["statusline"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new StatusLineCommand(context)),
+        new(["update"], CommandAudience.Human, ["--source"], ["--project"], CommandOperands.Options, OptionParsing.Own, context => new UpdateCommand(context)),
+        new(["docs", "check"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new DocsCheckCommand(context)),
+        new(["rules", "audit"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new RulesAuditCommand(context)),
+        new(["hook"], CommandAudience.Anyone, [], [], CommandOperands.ExactlyOne, OptionParsing.Own, context => new HookCommand(context)),
+        new(["baseline", "build"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
+        new(["baseline", "tests"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
+        new(["baseline", "deps"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
+        new(["gate", "run"], CommandAudience.Anyone, ["--profile", "--path", "--unit", "--base", "--result"], [], CommandOperands.Options, OptionParsing.Shared, context => new GateCommand(context)),
+        new(["phase", "check"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.AtLeastOne, OptionParsing.Shared, context => new PhaseCommand(context)),
+        new(["redgreen", "start"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),
+        new(["redgreen", "red"], CommandAudience.Anyone, ["--feature"], ["--verbose"], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),
+        new(["redgreen", "green"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),
+        new(["redgreen", "status"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),
+        new(["redgreen", "reset"], CommandAudience.Human, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),
+        new(["redgreen", "amend"], CommandAudience.Human, ["--feature", "--reason"], [], CommandOperands.Any, OptionParsing.Shared, context => new RedGreenCommand(context)),
+        new(["redgreen"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.AtLeastOne, OptionParsing.Shared, context => new RedGreenCommand(context))
+        {
+            Listing = CommandListing.Unlisted,
+        },
+        new(["review"], CommandAudience.Anyone, ["--feature", "--base", "--model", "--budget"], [], CommandOperands.Options, OptionParsing.Shared, context => new ReviewCommand(context)),
+        new(["review", "status"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new ReviewStatusCommand(context)),
+        new(["review", "dismiss"], CommandAudience.Human, ["--reason", "--feature"], [], CommandOperands.Any, OptionParsing.Shared, context => new ReviewDismissCommand(context)),
+        new(["ledger", "retro"], CommandAudience.Anyone, ["--days", "--min"], [], CommandOperands.Options, OptionParsing.Shared, context => new RetroCommand(context)),
+        new(["propose"], CommandAudience.Anyone, ["--from"], ["--delete"], CommandOperands.Any, OptionParsing.Own, context => new ProposeCommand(context)),
+        new(["trace"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new TraceCommand(context)),
+        new(["approve", "spec"], CommandAudience.Human, ["--feature", "--key"], ["--sign"], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
+        new(["approve", "tasks"], CommandAudience.Human, ["--feature", "--key"], ["--sign"], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
+        new(["approve", "verify"], CommandAudience.Anyone, ["--feature", "--base", "--allowed-signers", "--require"], [], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
+        new(["approve"], CommandAudience.Human, ["--feature", "--key"], ["--sign"], CommandOperands.AtLeastOne, OptionParsing.Shared, context => new ApproveCommand(context))
+        {
+            Listing = CommandListing.Unlisted,
+        },
+        new(["workspace", "sync"], CommandAudience.Anyone, [], ["--check"], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceSyncCommand(context)),
+        new(["adopt", "plan"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
+        new(["adopt", "apply"], CommandAudience.Human, ["--speckit-preset"], ["--skip-speckit", "--no-sandbox"], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
+        new(["adopt", "undo"], CommandAudience.Human, ["--backup"], ["--force"], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
+    ];
+
+    /// <summary>Command groups reserved for a person even with a verb no descriptor names (<c>approve xyz</c>), except their agent verbs.</summary>
+    public static IReadOnlyList<ReservedGroup> ReservedGroups { get; } = [new("baseline", []), new("approve", ["verify"]), new("update", [])];
+
+    /// <summary>The descriptor whose words begin <paramref name="args"/>, the longest when several do; null when none does.</summary>
+    public static CommandDescriptor? Match(IReadOnlyList<string> args)
+    {
+        CommandDescriptor? longest = null;
+        foreach (CommandDescriptor command in All)
+        {
+            if (command.Begins(args) && (longest is null || command.Words.Count > longest.Words.Count))
+            {
+                longest = command;
+            }
+        }
+
+        return longest;
+    }
+}

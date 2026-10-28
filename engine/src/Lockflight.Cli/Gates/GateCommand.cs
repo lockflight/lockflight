@@ -10,13 +10,11 @@ namespace Lockflight.Cli.Gates;
 /// Lockflight project the gates run with the default settings; an invalid manifest stops the run, so a typo in it can never weaken
 /// the gates. At the root of a workspace with units the run covers every unit, or those <c>--unit</c> names.
 /// </summary>
-internal sealed class GateCommand(CliContext context)
+internal sealed class GateCommand(CliContext context) : ICommand
 {
-    private static readonly string[] ValueOptions = ["--profile", "--path", "--unit", "--base", "--result"];
-
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("gate run", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options)
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options)
         {
             return ExitCode.Config;
         }

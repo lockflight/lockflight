@@ -23,18 +23,16 @@ namespace Lockflight.Cli.Review;
 /// contradicts them. Exit 1 when an open blocker/major finding is confirmed, 5 (NOT-EARNED) when one is unverified or contested or
 /// the run is not of record, 0 otherwise. Advisory (guardrail): it runs with the developer's credentials and the agent can skip it.
 /// </summary>
-internal sealed class ReviewCommand(CliContext context)
+internal sealed class ReviewCommand(CliContext context) : ICommand
 {
     private const int MaxGuidanceCharacters = 8_000;
     private const string GuidanceFile = "CLAUDE.md";
     private const string DefaultTarget = "main";
 
     private static readonly TimeSpan VersionTimeLimit = TimeSpan.FromSeconds(30);
-    private static readonly string[] ValueOptions = ["--feature", "--base", "--model", "--budget"];
-
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("review", args, ValueOptions, [], context.Error, cancellationToken) is not CommandOptions options
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options
             || await ManifestRequirement.LoadAsync(context, context.WorkingDirectory, cancellationToken) is not Manifest manifest)
         {
             return ExitCode.Config;

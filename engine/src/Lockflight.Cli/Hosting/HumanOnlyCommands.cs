@@ -25,12 +25,13 @@ internal static partial class HumanOnlyCommands
 
     private const string DotnetHost = "dotnet";
 
-    /// <summary>Command words (subcommand, optional sub-subcommand) reserved for a person.</summary>
-    private static readonly string[][] Reserved = [["baseline"], ["approve"], ["redgreen", "reset"], ["redgreen", "amend"], ["review", "dismiss"], ["adopt", "apply"], ["adopt", "undo"], ["update"]];
-
+    /// <summary>
+    /// Whether the command line is reserved for a person: its command is registered for <see cref="CommandAudience.Human"/>, or it
+    /// starts with a reserved group (<see cref="CommandRegistry.ReservedGroups"/>) and its verb is not one of the group's agent verbs.
+    /// </summary>
     public static bool IsReserved(IReadOnlyList<string> args) =>
-        Reserved.Any(words => args.Count >= words.Length && words.Select((word, index) => args[index] == word).All(match => match))
-        && !(args.Count >= 2 && args[0] == "approve" && args[1] == "verify");
+        CommandRegistry.Match(args) is { Audience: CommandAudience.Human }
+        || CommandRegistry.ReservedGroups.Any(group => args.Count >= 1 && args[0] == group.Word && !(args.Count >= 2 && group.AgentVerbs.Contains(args[1])));
 
     public static bool RunsUnderAgent(EnvironmentReader environment) => environment.Get(EnvironmentVariables.ClaudeCode) == "1";
 

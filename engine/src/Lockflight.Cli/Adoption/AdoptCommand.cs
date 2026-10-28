@@ -14,19 +14,14 @@ namespace Lockflight.Cli.Adoption;
 /// session. Apply needs a clean working tree and the setup the plan was made from; it backs up first and rolls back on any failure.
 /// Undo reverts what apply changed, and keeps files changed since (unless forced).
 /// </summary>
-internal sealed class AdoptCommand(CliContext context)
+internal sealed class AdoptCommand(CliContext context) : ICommand
 {
     private const int MaxCustomisedListed = 8;
 
-    public async Task<ExitCode> RunAsync(string verb, string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        (string[] values, string[] flags) = verb switch
-        {
-            "undo" => (["--backup"], ["--force"]),
-            "apply" => (["--speckit-preset"], ["--skip-speckit", "--no-sandbox"]),
-            _ => ((string[])[], (string[])[]),
-        };
-        if (await CommandOptions.ParseOrReportAsync($"adopt {verb}", args, values, flags, context.Error, cancellationToken) is not CommandOptions options)
+        string verb = arguments.Verb().Name;
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options)
         {
             return ExitCode.Config;
         }

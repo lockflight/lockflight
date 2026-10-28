@@ -10,15 +10,15 @@ namespace Lockflight.Cli.Doctor;
 /// <c>lockflight doctor</c>: readiness report; exits <see cref="ExitCode.Fail"/> when any check fails. With <c>--canaries</c> (or
 /// <c>--canaries=full</c>) it runs the canary self-test instead (<see cref="CanarySuite"/>).
 /// </summary>
-internal sealed class DoctorCommand(CliContext context)
+internal sealed class DoctorCommand(CliContext context) : ICommand
 {
-    private const string CanariesFlag = "--canaries";
+    public const string CanariesFlag = "--canaries";
 
-    private const string FullCanariesFlag = "--canaries=full";
+    public const string FullCanariesFlag = "--canaries=full";
 
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("doctor", args, [], [CanariesFlag, FullCanariesFlag], context.Error, cancellationToken) is not CommandOptions options)
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options)
         {
             return ExitCode.Config;
         }

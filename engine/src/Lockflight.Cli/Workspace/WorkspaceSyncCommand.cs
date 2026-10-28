@@ -16,11 +16,11 @@ namespace Lockflight.Cli.Workspace;
 /// anything.
 /// <c>--check</c> changes nothing and fails when a unit has drifted from the shell.
 /// </summary>
-internal sealed class WorkspaceSyncCommand(CliContext context)
+internal sealed class WorkspaceSyncCommand(CliContext context) : ICommand
 {
-    public async Task<ExitCode> RunAsync(string[] args, CancellationToken cancellationToken)
+    public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
-        if (await CommandOptions.ParseOrReportAsync("workspace sync", args, [], ["--check"], context.Error, cancellationToken) is not CommandOptions options
+        if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options
             || await ManifestRequirement.LoadAsync(context, context.WorkingDirectory, cancellationToken) is not Manifest manifest)
         {
             return ExitCode.Config;

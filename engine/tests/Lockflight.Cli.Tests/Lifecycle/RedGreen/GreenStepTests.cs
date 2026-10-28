@@ -49,7 +49,9 @@ public sealed class GreenStepTests : IDisposable
         using StringWriter error = new();
         CliContext context = new(new StringReader(string.Empty), output, error, root.FullName, TimeProvider.System);
 
-        ExitCode exitCode = await new RedGreenCommand(context).RunAsync("reset", ["--feature", "f1"], TestContext.Current.CancellationToken);
+        CommandDescriptor reset = CommandRegistry.Match(["redgreen", "reset"])!;
+
+        ExitCode exitCode = await new RedGreenCommand(context).RunAsync(new CommandArguments(reset, ["--feature", "f1"]), TestContext.Current.CancellationToken);
 
         Assert.Equal(ExitCode.Pass, exitCode);
         Assert.Contains("f1: no red/green evidence to discard; nothing was reset.", output.ToString(), StringComparison.Ordinal);
