@@ -89,12 +89,16 @@ public sealed class ShimEngineRecordTests : IDisposable
     {
         string binary = LinkCommand.BinaryPath(project.FullName);
         Directory.CreateDirectory(Path.GetDirectoryName(binary)!);
-        File.WriteAllText(binary, script);
+
+        // A passed check leaves the engine read-only, so a new one is renamed into place, as link does.
+        string temporary = binary + ".new";
+        File.WriteAllText(temporary, script);
         if (!OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(binary, LinkCommand.ExecutableMode);
+            File.SetUnixFileMode(temporary, LinkCommand.ExecutableMode);
         }
 
+        File.Move(temporary, binary, overwrite: true);
         return binary;
     }
 

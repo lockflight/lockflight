@@ -180,7 +180,7 @@ git -C "$cloned" rm -q --cached "${committed#"$cloned"/}"
 check "untracked engine: Write allowed"     0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 # A passed check is remembered until the engine file changes; an engine committed later is caught again.
 touch -t 200001010000 "$cloned/.git/lockflight-engine-checked"
-cp "$ENGINE" "$committed" && git -C "$cloned" add -f "${committed#"$cloned"/}"
+cp -f "$ENGINE" "$committed" && git -C "$cloned" add -f "${committed#"$cloned"/}"
 check "engine committed later: Write blocked" 2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 # link records the engine's SHA-256 beside it; an engine that no longer matches its record is not run.
 git -C "$cloned" rm -q --cached "${committed#"$cloned"/}"
@@ -194,17 +194,41 @@ second=$(date +%s); while [ "$(date +%s)" = "$second" ]; do :; done
 rm -f "$cloned/.git/lockflight-engine-checked"
 check "same second: passed check"              0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 check "same second: unchanged engine allowed"  0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
-cp "$committed" "$WORK/engine-linked" && printf 'replaced' >> "$committed"
+cp -f "$committed" "$WORK/engine-linked" && chmod u+w "$committed" && printf 'replaced' >> "$committed"
 check "same second: replaced engine blocked"   2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 [ "$(date +%s)" = "$((second + 1))" ] || echo "same second: note: the cases above crossed a second boundary"
-cp "$WORK/engine-linked" "$committed"
+cp -f "$WORK/engine-linked" "$committed"
 # The engine itself replaced after link recorded it, the record left as it was: not run, so writes are refused. The last passed
 # check is dated back, as it is when the engine is replaced later: the shim's -nt compares whole seconds on some shells.
-cp "$committed" "$WORK/engine-linked" && touch -t 200001010000 "$cloned/.git/lockflight-engine-checked" && printf 'replaced' >> "$committed"
+cp -f "$committed" "$WORK/engine-linked" && touch -t 200001010000 "$cloned/.git/lockflight-engine-checked" && chmod u+w "$committed" && printf 'replaced' >> "$committed"
 check "engine replaced after link: Write blocked" 2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
 check "engine replaced after link: Read allowed"  0 "$cloned" "$(json "$cloned" Read "$(fp "$cloned/src/a.cs")")"
-cp "$WORK/engine-linked" "$committed"
+cp -f "$WORK/engine-linked" "$committed"
 check "engine restored: Write allowed"        0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+# A replacement that keeps an older modification time: moved into place (a new file) or copied over the engine with cp -p (the
+# same file, written in place). Each twin puts back the linked engine the same way and must still run.
+cp "$WORK/engine-linked" "$WORK/older" && touch -t 200001010000 "$WORK/older" && mv -f "$WORK/older" "$committed"
+check "older engine moved in: twin allowed"   0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+cp "$WORK/engine-linked" "$WORK/older" && chmod u+w "$WORK/older" && printf 'replaced' >> "$WORK/older" && touch -t 200001010000 "$WORK/older"
+mv -f "$WORK/older" "$committed"
+check "older engine moved in: Write blocked"  2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+cp -f "$WORK/engine-linked" "$committed"
+check "engine moved back: Write allowed"      0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+# The pass is remembered with a hard link to the checked engine; without one every call would hash it again.
+if [ "$committed" -ef "$cloned/.git/lockflight-engine-checked.engine" ]; then pass=$((pass+1)); echo "passed check holds the engine: ok"; else fail=$((fail+1)); echo "passed check holds the engine: FAIL"; fi
+# A passed check leaves the engine read-only, so a plain cp -p is refused and -f replaces the file instead of writing into it.
+# Windows has no such check (a read-only engine could not be replaced there), so these two run elsewhere only.
+case "$ENGINE" in
+  *.exe) echo "older engine copied with cp -p: skipped on Windows" ;;
+  *) cp "$WORK/engine-linked" "$WORK/older" && touch -t 200001010000 "$WORK/older"
+     cp -p "$WORK/older" "$committed" 2>/dev/null || cp -pf "$WORK/older" "$committed"
+     check "older engine copied with cp -p: twin allowed" 0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+     chmod u+w "$WORK/older" && printf 'replaced' >> "$WORK/older" && touch -t 200001010000 "$WORK/older"
+     cp -p "$WORK/older" "$committed" 2>/dev/null || cp -pf "$WORK/older" "$committed"
+     check "older engine copied with cp -p: Write blocked" 2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
+     cp -f "$WORK/engine-linked" "$committed"
+     check "engine copied back: Write allowed"   0 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")" ;;
+esac
 printf '%064d\n' 0 > "$cloned/.lockflight/bin/lockflight.sha256"
 touch -t 200001010000 "$cloned/.git/lockflight-engine-checked"
 check "replaced engine: Write blocked"       2 "$cloned" "$(json "$cloned" Write "$(fp "$cloned/src/a.cs")")"
@@ -213,10 +237,11 @@ check "replaced engine: Read allowed"        0 "$cloned" "$(json "$cloned" Read 
 checkexp "replaced engine: approve blocked"  2 cli 1 "$(expansion "$cloned" lockflight:approve spec)" "Nothing was approved"
 
 # An engine that crashes must block, never allow. On Windows the shim prefers lockflight.exe, so the stub there is a real .exe
-# (Git Bash's false.exe, exit 1); elsewhere a script exiting 3.
+# (Git Bash's false.exe, exit 1); elsewhere a script exiting 3. A passed check left the engine read-only, so each stand-in below
+# replaces the file.
 case "$ENGINE" in
   *.exe) cp /usr/bin/false.exe "$proj/.lockflight/bin/lockflight.exe" || { echo "no /usr/bin/false.exe to stand in for a crashing engine"; exit 1; }; crash=1 ;;
-  *) printf '#!/bin/sh\nexit 3\n' > "$proj/.lockflight/bin/lockflight"; crash=3 ;;
+  *) rm -f "$proj/.lockflight/bin/lockflight"; printf '#!/bin/sh\nexit 3\n' > "$proj/.lockflight/bin/lockflight"; chmod +x "$proj/.lockflight/bin/lockflight"; crash=3 ;;
 esac
 check "crashing engine: tool call blocked" 2 "$proj" "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 checktask "crashing engine: task not blocked" "$crash" "$proj"
@@ -228,7 +253,9 @@ checkexp "crashing engine: other slash command" "$crash" cli 1 "$(expansion "$pr
 # An engine older than the plugin refuses the event it does not know; that must not block every task completion.
 case "$ENGINE" in
   *.exe) ;;
-  *) printf '#!/bin/sh\ncat >/dev/null\necho "lockflight: this engine does not know the hook event it was called for; update it with: x" >&2\nexit 2\n' > "$proj/.lockflight/bin/lockflight"
+  *) rm -f "$proj/.lockflight/bin/lockflight"
+     printf '#!/bin/sh\ncat >/dev/null\necho "lockflight: this engine does not know the hook event it was called for; update it with: x" >&2\nexit 2\n' > "$proj/.lockflight/bin/lockflight"
+     chmod +x "$proj/.lockflight/bin/lockflight"
      checktask "older engine: unknown event let through" 0 "$proj" ;;
 esac
 
