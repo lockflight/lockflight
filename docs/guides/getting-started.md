@@ -286,7 +286,7 @@ hold the keys to the two approvals.
 
 The workflow `init` writes installs the engine version the project pins, from nuget.org or the package sources in the
 repository's `nuget.config`. A project set up from a package pins a release that nuget.org has, so its workflow runs on every
-pull request. An engine built from source is a development build (`0.2.0-alpha.7.dev.<commit time>`) that exists only in
+pull request. An engine built from source is a development build (`0.2.0-alpha.8.dev.<commit time>`) that exists only in
 your local feed (`~/.lockflight/feed`), so a workflow that ran on every pull request would fail at the engine install every
 time. So:
 
