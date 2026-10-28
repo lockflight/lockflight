@@ -28,7 +28,9 @@ independent.
      author's tests disagree: show the finding and the named tests to the user and let them decide which is right. Change the
      named test only when the user decides the test is the one that is wrong.
    - **unverified** — no usable reproduction: show it to the user and let them decide. A reproduction that did not compile was
-     already sent back to the reviewer once with the compiler errors; the evidence file lists them under `compileErrors`.
+     already sent back to the reviewer once with the compiler errors; the evidence file lists them under `compileErrors`,
+     and `reproductionProject` names the test project it was built in (on a solution with several test projects, a
+     reproduction built in one that cannot see the cited code never compiles).
      `repaired-passed` means the repaired test passed, which does not count as a rejection.
    - **rejected** — the reproduction passes: tell the user.
    - **reported** (minor/nit findings are not reproduced) — fix when cheap, otherwise list them in the PR body.

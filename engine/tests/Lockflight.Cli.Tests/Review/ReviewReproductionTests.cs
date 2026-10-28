@@ -105,6 +105,23 @@ public sealed class ReviewReproductionTests : IDisposable
     }
 
     [Fact]
+    public async Task TheEvidenceNamesTheTestProjectEachReproductionWasBuiltIn()
+    {
+        await RepositoryAsync();
+        string minor = Repaired.Replace("\"major\"", "\"minor\"", StringComparison.Ordinal).Replace("Discount ignored", "Naming", StringComparison.Ordinal);
+        claude.Answers(Repaired, minor);
+
+        (ExitCode exitCode, string output) = await RunAsync();
+
+        Assert.True(exitCode == ExitCode.Fail, output);
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Directory.GetFiles(ReviewsDirectory(), "*.json").Single()));
+        Dictionary<string, JsonElement> findings = evidence.RootElement.GetProperty("findings").EnumerateArray()
+            .ToDictionary(finding => finding.GetProperty("severity").GetString()!, finding => finding.GetProperty("reproductionProject"));
+        Assert.Equal("tests/Shop.Tests/Shop.Tests.csproj", findings["major"].GetString());
+        Assert.Equal(JsonValueKind.Null, findings["minor"].ValueKind);
+    }
+
+    [Fact]
     public async Task ReproductionsLeaveTheDevelopersFilesAndBuildOutputAlone()
     {
         await RepositoryAsync();

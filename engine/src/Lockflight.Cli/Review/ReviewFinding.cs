@@ -5,7 +5,8 @@ namespace Lockflight.Cli.Review;
 /// <see cref="Carried"/> marks an open finding of an earlier run that this run did not raise; <see cref="State"/> is null for findings
 /// that are not tracked (minor, nit, rejected). <see cref="EarlierReproductions"/> are the reproductions earlier runs gave an open
 /// finding that differ from <see cref="Reproduction"/>: each is re-run too, and the finding is fixed only when all of them pass. <see cref="ReproductionAttempts"/> counts the builds of this run's reproduction (two when it
-/// was repaired after it did not compile), and <see cref="CompileErrors"/> holds a bounded summary of the errors of each attempt that did not compile.
+/// was repaired after it did not compile), <see cref="CompileErrors"/> holds a bounded summary of the errors of each attempt that did not compile, and
+/// <see cref="ReproductionProject"/> is the test project the reproduction was built in (relative to the repository root; null when none was built).
 /// <see cref="SpecQuote"/> is the requirement sentence the reviewer says the finding encodes, and <see cref="SpecAnchor"/> whether the
 /// engine found it in the spec (recorded only; it does not change the outcome). <see cref="Fix"/> is the reviewer's minimal fix (a
 /// unified diff of production files), and <see cref="FixCheck"/> what checking it against the change's own tests showed
@@ -34,6 +35,8 @@ internal sealed record ReviewFinding(
     public int ReproductionAttempts { get; init; }
 
     public IReadOnlyList<string> CompileErrors { get; init; } = [];
+
+    public string? ReproductionProject { get; init; }
 
     public FindingState? State { get; init; }
 
