@@ -20,9 +20,9 @@ internal sealed record StopPassRecord(string Location, string Settings, string T
     public static string TargetName(string projectRoot, string target) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetRelativePath(projectRoot, target).Replace('\\', '/'))))[..NameLength];
 
-    /// <summary>The settings a record is kept under, as a fingerprint of <see cref="InputsHash.EngineAndSettings"/>.</summary>
-    public static string SettingsOf(string projectRoot) =>
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(InputsHash.EngineAndSettings(projectRoot))));
+    /// <summary>The settings a record is kept under: a fingerprint of <see cref="InputsHash.EngineAndSettings"/> and the resolved SDK.</summary>
+    public static string SettingsOf(string projectRoot, string sdk) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{InputsHash.EngineAndSettings(projectRoot)}|sdk:{sdk}")));
 
     public static string PathOf(string projectRoot, string target, string extension) =>
         Path.Combine(projectRoot, RelativeDirectory.Replace('/', Path.DirectorySeparatorChar), TargetName(projectRoot, target) + extension);

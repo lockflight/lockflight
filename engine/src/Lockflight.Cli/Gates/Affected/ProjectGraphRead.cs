@@ -10,5 +10,8 @@ namespace Lockflight.Cli.Gates.Affected;
 /// </param>
 internal sealed record ProjectGraphRead(IReadOnlyList<GraphProject> Projects, string? Problem, bool InheritedTestHints)
 {
+    /// <summary>Every MSBuild file the graph was read from, project files, imports and inherited files alike.</summary>
+    public IReadOnlyList<string> MsBuildFiles { get; init; } = [];
+
     public static ProjectGraphRead Unknown(string problem) => new([], problem, InheritedTestHints: false);
 }

@@ -35,6 +35,9 @@ internal sealed class ProjectFileReading(string projectFile, string repositoryRo
 
     public List<string> ExtraInputs { get; } = [];
 
+    /// <summary>Every MSBuild file read for the project: the project file, its imports and the inherited files.</summary>
+    public IReadOnlyCollection<string> MsBuildFiles => visited;
+
     public bool DeclaresTests { get; private set; }
 
     public bool InheritedTestHints { get; private set; }
@@ -194,7 +197,14 @@ internal sealed class ProjectFileReading(string projectFile, string repositoryRo
             }
             else if (!AffectedPaths.IsUnder(resolved, ProjectDirectoryPath))
             {
-                ExtraInputs.Add(HasWildcard(resolved) ? WildcardRoot(resolved) : resolved);
+                string input = HasWildcard(resolved) ? WildcardRoot(resolved) : resolved;
+                if (!AffectedPaths.IsUnder(input, repositoryRoot))
+                {
+                    Problem = $"{describe(path)} includes '{part}', outside this repository, whose git does not see its changes";
+                    return;
+                }
+
+                ExtraInputs.Add(input);
             }
         }
     }

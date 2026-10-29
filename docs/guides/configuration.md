@@ -396,7 +396,10 @@ without narrowing the definition of done.
     other than C#, F# or Visual Basic, or a project outside the repository or in a nested one;
   - no affected project declares tests (in its file or a file it imports) while a `Directory.Build` or `Directory.Packages`
     file names a test framework, so test projects cannot be told apart;
-  - there is no stop PASS of the target yet under this engine and these settings, nothing changed since it, there is no
+  - an input git does not see: a git-ignored file a project imports or includes (a `local.props`), or an index entry marked
+    assume-unchanged or skip-worktree (a sparse checkout);
+  - there is no stop PASS of the target yet under this engine, these settings and the SDK the target resolves, nothing
+    changed since it, there is no
     single solution, git fails, or the changes affect every project;
   - `gate run --full`.
 - **The cache:** a PASS is remembered under the inputs hash as before. The choice is a function of what that hash covers
@@ -404,6 +407,8 @@ without narrowing the definition of done.
   writes and which already passed; the step's version is part of the key, so a PASS chosen by other rules is not reused.
 
 The choice is made per unit in a workspace, inside the unit's solution, after the unit itself was chosen because it changed.
+A monorepo unit whose projects reference or include files in another unit is not chosen when only that other unit changes
+(the unit's state covers its own directory and the shared build inputs outside every unit); CI's `pr` run builds both.
 
 ### The format step judges the change, not the file
 

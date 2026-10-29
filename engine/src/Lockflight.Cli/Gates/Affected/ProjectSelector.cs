@@ -1,4 +1,5 @@
 using Lockflight.Cli.Lifecycle;
+using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Gates.Affected;
 
@@ -51,7 +52,9 @@ internal static class ProjectSelector
             return ProjectSelection.Everything("git could not read the working tree");
         }
 
-        StopPassRecord record = new(StopPassRecord.PathOf(run.ProjectRoot, run.Target, PassExtension), StopPassRecord.SettingsOf(run.ProjectRoot), tree);
+        // The SDK the target resolves is part of the record: a new one (global.json rolls forward) may judge unchosen projects anew.
+        StopPassRecord record = new(
+            StopPassRecord.PathOf(run.ProjectRoot, run.Target, PassExtension), StopPassRecord.SettingsOf(run.ProjectRoot, await SdkAsync(run, cancellationToken)), tree);
         ProjectSelection selection;
         try
         {
@@ -105,6 +108,11 @@ internal static class ProjectSelector
             return ProjectSelection.Everything(problem);
         }
 
+        if (await PassTree.UnseenInputAsync(repositoryRoot, [.. graph.MsBuildFiles, .. graph.Projects.SelectMany(project => project.ExtraInputs)], Describe, cancellationToken) is string unseen)
+        {
+            return ProjectSelection.Everything(unseen);
+        }
+
         Dictionary<string, string> changedBy = new(AffectedPaths.Comparer);
         foreach (string file in changes)
         {
@@ -141,6 +149,20 @@ internal static class ProjectSelector
         string filter = StopPassRecord.PathOf(run.ProjectRoot, run.Target, FilterExtension);
         await SolutionFilter.WriteAsync(filter, solution, inSolution.Select(project => project.SolutionEntry!), cancellationToken);
         return new ProjectSelection(SelectionKind.Affected, "changes since the last PASS", affected, entries.Count, filter, runsTests);
+    }
+
+    /// <summary>The SDK <c>dotnet</c> resolves in the target (its <c>global.json</c>), asked of the real tool; "none" without one.</summary>
+    private static async Task<string> SdkAsync(GateRunContext run, CancellationToken cancellationToken)
+    {
+        try
+        {
+            ProcessResult sdk = await ProcessRunner.RunAsync("dotnet", ["--version"], run.Target, run.TimeLeft(), cancellationToken);
+            return $"{sdk.ExitCode}:{sdk.Output.Trim()}";
+        }
+        catch (ExecutableNotFoundException)
+        {
+            return "none";
+        }
     }
 
     /// <summary>The solution the build runs: the <c>build:</c> file when it is one, else the target's only solution and no project beside it.</summary>

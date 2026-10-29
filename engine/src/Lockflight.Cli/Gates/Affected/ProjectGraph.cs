@@ -33,6 +33,7 @@ internal static class ProjectGraph
         }
 
         bool inheritedTestHints = false;
+        HashSet<string> msBuildFiles = new(AffectedPaths.Comparer);
         while (pending.TryDequeue(out string? file))
         {
             if (projects.ContainsKey(file))
@@ -52,6 +53,7 @@ internal static class ProjectGraph
             }
 
             inheritedTestHints |= read.InheritedTestHints;
+            msBuildFiles.UnionWith(read.MsBuildFiles);
             projects[file] = new GraphProject(file, solutionEntries.GetValueOrDefault(file), read.References, read.ExtraInputs, read.DeclaresTests);
             foreach (string reference in read.References)
             {
@@ -60,7 +62,10 @@ internal static class ProjectGraph
         }
 
         // The solution's projects first, in its order, then the ones only referenced, in the order they were reached.
-        return new ProjectGraphRead([.. projects.Values.OrderBy(project => project.SolutionEntry is null)], Problem: null, inheritedTestHints);
+        return new ProjectGraphRead([.. projects.Values.OrderBy(project => project.SolutionEntry is null)], Problem: null, inheritedTestHints)
+        {
+            MsBuildFiles = [.. msBuildFiles.Order(StringComparer.Ordinal)],
+        };
     }
 
     /// <summary>Why a project's changes would be invisible to the repository's git: outside it, or inside a nested repository.</summary>

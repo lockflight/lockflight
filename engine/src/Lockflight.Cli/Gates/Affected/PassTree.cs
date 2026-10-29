@@ -31,6 +31,8 @@ internal static class PassTree
                 && Path.GetFullPath(real, repositoryRoot) is string realIndex && File.Exists(realIndex))
             {
                 File.Copy(realIndex, index);
+                // An index newer than the files it lists would make git trust a stale stat of an edit made in the same tick.
+                File.SetLastWriteTimeUtc(index, File.GetLastWriteTimeUtc(realIndex));
             }
 
             Dictionary<string, string> privateIndex = new(StringComparer.Ordinal) { [SnapshotGit.IndexVariable] = index };
@@ -45,6 +47,44 @@ internal static class PassTree
         {
             File.Delete(index);
         }
+    }
+
+    /// <summary>
+    /// Why the tree would not show a change to an input: one of <paramref name="inputs"/> is git-ignored (a <c>local.props</c> a
+    /// <c>Directory.Build.props</c> imports when it exists), or an entry is marked assume-unchanged or skip-worktree (a sparse
+    /// checkout), which <c>git add</c> does not read again. Null when neither; a message too when git cannot say.
+    /// </summary>
+    public static async Task<string?> UnseenInputAsync(string repositoryRoot, IReadOnlyList<string> inputs, Func<string, string> describe, CancellationToken cancellationToken)
+    {
+        string list = Path.Combine(Path.GetTempPath(), $"lockflight-affected-inputs-{Guid.CreateVersion7()}");
+        try
+        {
+            await File.WriteAllTextAsync(list, string.Concat(inputs.Select(input => Path.GetRelativePath(repositoryRoot, input).Replace('\\', '/') + "\0")), cancellationToken);
+            ProcessResult ignored = await ProcessRunner.RunAsync("git", ["check-ignore", "-z", "--stdin"], repositoryRoot, GitTimeLimit, list, cancellationToken);
+            if (ignored.ExitCode == 0 && ignored.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() is string first)
+            {
+                return $"{describe(Path.GetFullPath(first, repositoryRoot))} is git-ignored, so its changes are not seen";
+            }
+
+            if (ignored.ExitCode > 1)
+            {
+                return "git could not say which inputs it ignores";
+            }
+        }
+        finally
+        {
+            File.Delete(list);
+        }
+
+        ProcessResult flags = await SnapshotGit.RunAsync(["ls-files", "-v", "-z"], repositoryRoot, GitTimeLimit, cancellationToken);
+        if (flags.ExitCode != 0)
+        {
+            return "git could not list the index";
+        }
+
+        return flags.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(entry => entry.Length > 2 && (char.IsLower(entry[0]) || entry[0] == 'S')) is string hidden
+            ? $"{hidden[2..]} is marked assume-unchanged or skip-worktree, so git does not read its changes"
+            : null;
     }
 
     /// <summary>The full paths of the files that differ between two trees (a rename as both paths); null when git cannot compare them.</summary>

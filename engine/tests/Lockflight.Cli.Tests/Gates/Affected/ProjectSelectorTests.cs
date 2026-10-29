@@ -97,7 +97,7 @@ public sealed class ProjectSelectorTests : IDisposable
     {
         await CreateGraphAsync();
         Write("src/Api/Api.cs", "class Api { int changed; }\n");
-        Write(file, "<Project />\n");
+        Write(file, file.EndsWith(".json", StringComparison.Ordinal) ? "{}\n" : "<Project />\n");
 
         ProjectSelection selection = await SelectAsync();
 
@@ -508,6 +508,46 @@ public sealed class ProjectSelectorTests : IDisposable
 
         Assert.Equal(greenBase, afterFailure);
         Assert.NotEqual(greenBase, afterPass);
+    }
+
+    [Fact]
+    public async Task AGitIgnoredImportRunsEverything()
+    {
+        await CreateGraphAsync();
+        Write("Directory.Build.props", "<Project><Import Project=\"local.props\" Condition=\"Exists('local.props')\" /></Project>\n");
+        Write(".gitignore", ".lockflight/local/\nlocal.props\n");
+        Write("local.props", "<Project />\n");
+        await CommitAsync();
+        Write("src/Api/Api.cs", "class Api { int changed; }\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.Equal("local.props is git-ignored, so its changes are not seen", selection.Reason);
+    }
+
+    [Fact]
+    public async Task AnEntryGitDoesNotReadAgainRunsEverything()
+    {
+        await CreateGraphAsync();
+        await GitAsync(["update-index", "--skip-worktree", "src/Core/Core.cs"]);
+        Write("src/Api/Api.cs", "class Api { int changed; }\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.Equal("src/Core/Core.cs is marked assume-unchanged or skip-worktree, so git does not read its changes", selection.Reason);
+    }
+
+    [Fact]
+    public async Task AFileLinkedFromOutsideTheRepositoryRunsEverything()
+    {
+        await CreateGraphAsync();
+        Write("src/Cli/Cli.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <Compile Include=\"../../../shared/Clock.cs\" />\n  </ItemGroup>\n</Project>\n");
+        await CommitAsync();
+        Write("src/Api/Api.cs", "class Api { int changed; }\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.Equal("src/Cli/Cli.csproj includes '../../../shared/Clock.cs', outside this repository, whose git does not see its changes", selection.Reason);
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(root);
