@@ -19,7 +19,6 @@ The plugin adds these skills to Claude Code. Claude picks them from what you ask
 | `reset` | **only you can invoke it**: `/lockflight:reset` | Typed by you, the engine shows the red/green evidence it would discard with a one-time code, and discards it when you type the line with the code. |
 | `amend` | **only you can invoke it**: `/lockflight:amend <Class.Method> --reason <why>` | Typed by you, the engine shows the test and the file it would unlock with a one-time code, and records the amend when you type `/lockflight:amend <Class.Method> <code>`. The agent tells you which test is wrong and why, and never amends by itself. |
 | `review` | "review this before the PR" | Runs the review of record and handles confirmed, unverified and rejected findings; open ones stay open across runs until fixed or dismissed by you, and it checks them with `review status` |
-| `retro` | "what keeps going wrong?" | Runs `ledger retro` and walks through the suggested remedies |
 
 The plugin also installs five hooks: `SessionStart` (a short banner), `PreToolUse` (the guard), `UserPromptExpansion`
 (records `/lockflight:approve`, `/lockflight:baseline`, `/lockflight:reset` and `/lockflight:amend` when you type them),
@@ -68,6 +67,15 @@ when the agent returns. Install it next to the core plugin:
 - **Off by uninstalling.** Without the plugin, `/lockflight:feature` uses Spec Kit's commands when the project has Spec
   Kit, and otherwise writes the spec, plan and tasks with you in the main session; it writes the tests in the main session.
   An agent runs only when a Lockflight skill or you name it.
+
+**Advice skills.** The crew also has two skills that judge nothing and say so: their answers are advice, and no gate reads
+them. Both read the engine's facts (`lockflight facts --json`, [the facts document](commands.md#the-facts-document)) and never
+change policy files themselves; a change to a protected file goes through `lockflight propose`.
+
+| Skill | Ask for example | What it does |
+|---|---|---|
+| `rules-audit` | "which of my CLAUDE.md rules are checked by anything?" | Labels each rule in your instruction files as checked by a guardrail, related to a check, or guidance only, and suggests the most deterministic backing for the important ones ([code quality](code-quality.md#rules-audit)) |
+| `retro` | "what keeps going wrong?" | Reads the local ledger, clusters recurring incidents (hook blocks, failing gates, rejected reds, confirmed findings) and suggests a remedy for each, preferring an analyzer or a check over a rule |
 
 The agents use the session's model. The spec writer and the planner have evals in
 [`plugins/lockflight-crew/evals/`](../../plugins/lockflight-crew/evals/) but no benchmark against a plain agent yet. For the

@@ -182,7 +182,7 @@ The lite profile gives you the guard and the gates, without the lifecycle.
      `gates.coverage.collector` is set — patch coverage, as the generated CI workflow does;
    - the Stop gate is **off**; turn it on (`stop.gate: true`) once you know how long build + tests take. It gets at most
      540 s per turn (below the plugin's 600 s Stop hook timeout), whatever `gates.timeoutSeconds` says. Once it is on,
-     `ledger retro` shows how many Stop gates ran, how many the cache of the last PASS answered, and their time in all.
+     the ledger records how many Stop gates ran, how many the cache of the last PASS answered, and their time in all.
 
 ## A repository with an existing Claude Code or Spec Kit setup
 
@@ -310,7 +310,7 @@ project in this release; the lifecycle commands do not depend on either check.
    Optional: the `lockflight-crew` plugin adds a spec writer and a planner for the first steps, and a test author that
    writes each story's failing tests at the red step (`/plugin install lockflight-crew@lockflight`). They are an aid; the
    same checks judge their work. See [the crew](skills.md#the-crew-optional).
-3. Now and then: `.lockflight/bin/lockflight ledger retro` (or ask for a retro) to see recurring incidents and suggested remedies.
+3. Now and then, with the crew plugin installed, ask for a retro (its `retro` skill) to see recurring incidents and suggested remedies, as advice.
 
 ## CI with a development build
 

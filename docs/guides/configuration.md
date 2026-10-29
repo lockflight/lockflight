@@ -307,7 +307,6 @@ checks: a path the repository never had is not reported, and a code-span path co
 | `review [--base ref] [--model name] [--budget usd]` | agent | review (`claude -p`, read-only, schema); of record with the `review:` settings against the merge base of HEAD and the target |
 | `review status [--feature id]` | agent | review runs, open, fixed and dismissed findings, and the pull request summary (read only) |
 | `review dismiss <finding-id> --reason "…"` | **human** | close an open finding, recording who, when and why |
-| `ledger retro [--days 30] [--min 2]` | anyone | recurring incidents and suggested remedies |
 
 Evidence lives in `.lockflight/features/<feature>/` (approvals, `redgreen.json`, `reviews/` with one file per review run and
 `reviews/dismissals/`) and is committed.

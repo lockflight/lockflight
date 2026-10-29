@@ -23,6 +23,8 @@ internal sealed class ProtectedChangesStep : IGateStep
 
     public string CacheKey => StepName;
 
+    public GateMode ModeUnder(GateSettings settings) => GateMode.Report;
+
     public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken) =>
         new(await CheckAsync(run, cancellationToken), facts);
 
