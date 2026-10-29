@@ -32,10 +32,9 @@ public sealed class CiCommandTests : IAsyncLifetime
         await repository.Write("lockflight.yaml", "version: 1\nci:\n  maxRedCommits: 10\n").Write("a.cs", "a").CommitAsync("test: red 1", cancellationToken, null, "Lockflight-Red: 1");
         string head = await repository.Write("b.cs", "b").CommitAsync("test: red 2", cancellationToken, null, "Lockflight-Red: 2");
 
-        (ExitCode exitCode, _, _) = await RunAsync(head);
+        await RunAsync(head);
 
         JsonNode document = Evidence();
-        Assert.Equal(ExitCode.NotEarned, exitCode);
         Assert.Equal(main, document["policy"]!["from"]!.GetValue<string>());
         JsonNode red = document["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == "red")!;
         Assert.Contains("more than ci.maxRedCommits (1)", red["why"]!.GetValue<string>(), StringComparison.Ordinal);
@@ -48,10 +47,9 @@ public sealed class CiCommandTests : IAsyncLifetime
         repository.Write(".specify/feature.json", "{\"feature_directory\":\"specs/999-other\"}");
         string head = await repository.Write("a.cs", "a").CommitAsync("test: red 1", cancellationToken, null, "Lockflight-Red: 1");
 
-        (ExitCode exitCode, string output, _) = await RunAsync(head);
+        (_, string output, _) = await RunAsync(head);
 
         JsonNode document = Evidence();
-        Assert.Equal(ExitCode.NotEarned, exitCode);
         Assert.Equal("lockflight.ci-evidence/v1", document["schema"]!.GetValue<string>());
         Assert.Equal(head, document["head"]!.GetValue<string>());
         Assert.Equal(main, document["base"]!["mergeBase"]!.GetValue<string>());

@@ -1,6 +1,7 @@
 using Lockflight.Cli.Config;
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Routing;
 
 namespace Lockflight.Cli.Ci;
@@ -48,7 +49,7 @@ internal static class CiEvidence
             ["feature"] = null,
             ["changeClass"] = ChangeClassNode(plan.Class.Classification, engineVersion),
             ["redCommits"] = new JsonArray([.. plan.Reds.All.Select(RedCommitNode)]),
-            ["cycles"] = new JsonArray(),
+            ["cycles"] = new JsonArray([.. (run.Findings.Cycles ?? []).Select(CycleNode)]),
             ["testsWithoutRed"] = new JsonArray(),
             ["green"] = null,
             ["trace"] = null,
@@ -70,7 +71,13 @@ internal static class CiEvidence
                 ["exhausted"] = false,
                 ["notRun"] = new JsonArray(),
             },
-            ["builds"] = new JsonArray(),
+            ["builds"] = new JsonArray([.. run.Findings.Builds.Select(build => new JsonObject
+            {
+                ["commit"] = build.Commit,
+                ["purpose"] = build.Purpose,
+                ["seconds"] = Math.Round(build.Seconds, 1),
+                ["outcome"] = TreeOutcomeNames.ToName(build.Outcome),
+            })]),
             ["startedAt"] = Timestamp(run.StartedAt),
             ["finishedAt"] = Timestamp(run.FinishedAt),
         };
@@ -122,6 +129,24 @@ internal static class CiEvidence
         })]),
         ["raises"] = new JsonArray([.. classification.Raises.Select(raise => new JsonObject { ["source"] = raise.Source, ["to"] = ChangeClassNames.ToName(raise.To) })]),
         ["engine"] = engineVersion,
+    };
+
+    private static JsonObject CycleNode(CycleJudgement cycle) => new()
+    {
+        ["label"] = cycle.Red.Label,
+        ["commit"] = cycle.Red.Commit,
+        ["build"] = TreeOutcomeNames.ToName(cycle.Build),
+        ["verdict"] = CheckVerdictNames.ToName(cycle.Verdict),
+        ["why"] = Cap(cycle.Why),
+        ["tests"] = new JsonArray([.. cycle.Tests.Select(test => new JsonObject
+        {
+            ["key"] = Cap(test.Key),
+            ["requirements"] = Strings(test.Requirements.Select(Cap)),
+            ["red"] = RedClassNames.ToName(test.RedClass),
+            ["why"] = cycle.Verdicts.TryGetValue(test.Key, out RedVerdict? verdict) ? Cap(verdict.Why) : null,
+            ["assertionFree"] = test.AssertionFree,
+            ["rows"] = test.Rows,
+        })]),
     };
 
     private static JsonObject RedCommitNode(RedCommit red) => new()
