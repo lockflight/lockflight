@@ -14,14 +14,16 @@ internal static class CliApplication
         Usage: lockflight <command> [options]   (in a project, from its root: .lockflight/bin/lockflight <command> [options])
 
         Setup
-          init [--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab]
-               [--quality] [--architecture-tests] [--dry-run] [--unit-of <shell url> --unit-path <path>]
-               [--speckit-preset <dir>] [--no-link] [--no-sandbox]
+          init [--profile lite|standard] [--preset relaxed|default|strict] [--ci pr|manual|none]
+               [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests] [--dry-run]
+               [--unit-of <shell url> --unit-path <path>] [--speckit-preset <dir>] [--no-link] [--no-sandbox]
                                                         onboard: manifest, tool pin, settings, CLAUDE.md block, CI
                                                         job, link; adopts an existing Claude Code / Spec Kit setup
                                                         (keeps and protects it, marks existing features); --ci:
                                                         the job runs on pull requests, only by hand, or is not written;
                                                         --ci-platform: the CI service the job is for (default github);
+                                                        --preset: the routing thresholds a new manifest spells out
+                                                        (default default);
                                                         --quality: recommended analyzers and code metrics rules (an
                                                         existing file gets a proposal); --architecture-tests: a layer
                                                         dependency test project; --dry-run: print the plan, write
@@ -42,7 +44,8 @@ internal static class CliApplication
                                                         metrics settings, architecture tests, the ledger (read only)
           statusline                                    Claude Code status line: Levi and the last verdict
           update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
-                                                        package feed), re-pin this project
+                                                        package feed), re-pin this project and move its manifest to
+                                                        version 2; update --project --dry-run shows the change
           workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
                                                         engine pin, baselines, workflow); --check reports drift
           link                                          copy the pinned engine to .lockflight/bin/ for the hooks

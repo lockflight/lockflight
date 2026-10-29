@@ -129,9 +129,69 @@ public sealed class UpdateCommandTests : IDisposable
         Assert.Equal(ExitCode.Pass, first);
         Assert.Equal(ToolPin.RunningVersion, ToolPin.ReadPinnedVersion(root.FullName));
         Assert.True(ClaudeMdBlock.IsCurrent(File.ReadAllText(Path.Combine(root.FullName, "CLAUDE.md"))));
-        Assert.Contains("updated dotnet-tools.json, CLAUDE.md", output, StringComparison.Ordinal);
+        Assert.Contains("updated lockflight.yaml, dotnet-tools.json, CLAUDE.md", output, StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(root.FullName, ".lockflight", "bin", OperatingSystem.IsWindows() ? "lockflight.exe" : "lockflight")));
         Assert.Contains("already up to date", again, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AProjectUpdateMigratesAVersionOneManifestAndNamesTheNewChecks()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "# ours\nversion: 1\nprotected: [\"a/**\"]\n");
+        string engine = Path.Combine(home.FullName, "lockflight-native");
+        File.WriteAllText(engine, "native engine");
+
+        (ExitCode exitCode, string output, _) = await ProjectUpdateAsync(new RunningEngine(engine, IsSingleFile: true));
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Manifest migrated = ManifestLocator.Discover(root.FullName).Manifest!;
+        Assert.Equal((2, ApprovalCheckMode.Report, GateMode.Report), (migrated.Version, migrated.Approvals.Check, migrated.Gates.Suppressions));
+        Assert.StartsWith("# ours\nversion: 2\n", File.ReadAllText(Path.Combine(root.FullName, Manifest.FileName)), StringComparison.Ordinal);
+        Assert.Contains("lockflight.yaml is now version 2", output, StringComparison.Ordinal);
+        Assert.Contains("gates.quality.suppressions: report", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADryRunShowsTheChangesAndWritesNothing()
+    {
+        const string before = "version: 1\n";
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), before);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["update", "--project", "--dry-run"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("nothing was written", output, StringComparison.Ordinal);
+        Assert.Contains("+version: 2", output, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(root.FullName, Manifest.FileName)));
+        Assert.False(File.Exists(Path.Combine(root.FullName, "dotnet-tools.json")));
+    }
+
+    [Fact]
+    public async Task AnInvalidVersionOneManifestStopsTheUpdateBeforeAnythingIsWritten()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\ngates:\n  nonsense: 1\n");
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["update", "--project"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("nothing was changed", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(root.FullName, "dotnet-tools.json")));
+    }
+
+    [Fact]
+    public async Task AManifestTheMigrationCannotEditGetsTheSnippetAndStaysAsItIs()
+    {
+        const string before = "version: 1\ngates: { timeoutSeconds: 600 }\n";
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), before);
+        string engine = Path.Combine(home.FullName, "lockflight-native");
+        File.WriteAllText(engine, "native engine");
+
+        (ExitCode exitCode, _, string error) = await ProjectUpdateAsync(new RunningEngine(engine, IsSingleFile: true));
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("Add this by hand", error, StringComparison.Ordinal);
+        Assert.Contains("routing:", error, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(root.FullName, Manifest.FileName)));
     }
 
     [Fact]
