@@ -8,5 +8,8 @@ namespace Lockflight.Cli.Ci;
 /// </summary>
 internal sealed record CycleJudgement(RedCommit Red, TreeOutcome Build, IReadOnlyList<RedGreenTest> Tests, IReadOnlyDictionary<string, RedVerdict> Verdicts, CheckVerdict Verdict, string Why)
 {
+    /// <summary>The new tests' fingerprints at the red commit, by key; a test without one counts as changed since.</summary>
+    public IReadOnlyDictionary<string, string> FingerprintsAtRed { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
     public bool Accepted => Verdict == CheckVerdict.Pass;
 }
