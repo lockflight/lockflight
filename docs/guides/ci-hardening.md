@@ -48,7 +48,10 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
      then `docs.references` — links, anchors, code-span paths and command lines in `CLAUDE.md`, `AGENTS.md` and `.claude/`
      that this PR broke, compared with the merge base (references broken before are listed, not judged); it fails only
      with `gates.docs.references: fail`. It needs the full history (`fetch-depth: 0`, as the workflow checks out);
-  3. `build` → `test` (with coverage when `gates.coverage.collector` is set);
+  3. `build`, then `ef.pendingModelChanges` — when the repository pins `dotnet-ef` in its tool manifest and the PR touches
+     an EF Core project, `dotnet ef migrations has-pending-model-changes` for each of its DbContexts: a model changed without
+     a migration fails (N/A without the pin, unless `gates.ef.pendingModelChanges: fail`), then `test` (with coverage when
+     `gates.coverage.collector` is set);
   4. `coverage.patch` — covered share of the changed coverable lines ≥ `patchThreshold` (default 80 %; N/A below
      `minChangedLines`, default 10, and when `gates.coverage.collector` is not set). A deterministic CI build
      (`ContinuousIntegrationBuild`) may leave `/_/…` source paths in the report; they are read against the repository the

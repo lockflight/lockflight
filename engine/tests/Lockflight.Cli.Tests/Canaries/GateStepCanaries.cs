@@ -11,7 +11,8 @@ namespace Lockflight.Cli.Tests.Canaries;
 /// the violation (a compile error, a failing test, a High advisory, a leaked secret, a file the formatter would change), in a
 /// scratch git repository whose last commit changes a protected file and a C# file, adding a <c>#pragma warning disable</c> the
 /// suppressions step (set to fail) must not pass, and deleting the guide its <c>CLAUDE.md</c> links to, which the references step
-/// (set to fail) must not pass. A step that is anything but PASS is caught;
+/// (set to fail) must not pass. The C# file belongs to a project with EF Core migrations and the repository pins dotnet-ef, so
+/// the EF Core model step runs, and its <c>dotnet ef</c> reports a model changed without a migration. A step that is anything but PASS is caught;
 /// the protected-changes step reports and never fails, so it is caught when it lists the protected file. A step with no planted
 /// case here is MISSED, so a step added to the table without a canary shows up. The harmless twin, the build with a tool that
 /// succeeds, must PASS. <see cref="FullCanaries"/> runs the real build and test tools.
@@ -21,6 +22,8 @@ internal static class GateStepCanaries
     private const string BaseRef = "HEAD~1";
     private const string ChangedSource = "src/Order.cs";
     private const string LinkedGuide = "docs/guide.md";
+    private const string EfToolManifest = """{ "version": 1, "isRoot": true, "tools": { "dotnet-ef": { "version": "10.0.0", "commands": ["dotnet-ef"] } } }""";
+    private const string PendingModelChanges = "Changes have been made to the model since the last migration. Add a new migration.";
     private const string LeakReportOption = "--report-path";
     private const int LeaksFoundExitCode = 99;
 
@@ -81,6 +84,7 @@ internal static class GateStepCanaries
             SecretsStep.StepName => ("secrets: a leaked secret is not a PASS", GateRunFacts.None),
             SuppressionsStep.StepName => ("suppressions: an added #pragma warning disable is not a PASS (gates.quality.suppressions: fail)", GateRunFacts.None),
             DocsReferencesStep.StepName => ("references: a CLAUDE.md link the change broke is not a PASS (gates.docs.references: fail)", GateRunFacts.None),
+            EfPendingModelChangesStep.StepName => ("EF Core: a model changed without a migration is not a PASS (dotnet-ef pinned)", GateRunFacts.None),
             _ => (string.Empty, GateRunFacts.None),
         };
         if (name.Length == 0)
@@ -112,6 +116,11 @@ internal static class GateStepCanaries
         await File.WriteAllTextAsync(scratch.PathOf(".gitignore"), ".lockflight/\n", cancellationToken);
         await File.WriteAllTextAsync(scratch.PathOf(ChangedSource), "class Order\n{\n}\n", cancellationToken);
         await File.WriteAllTextAsync(scratch.PathOf("CLAUDE.md"), $"# Canary\n\nRead [the guide]({LinkedGuide}).\n", cancellationToken);
+        await File.WriteAllTextAsync(scratch.PathOf("src/Canary.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n", cancellationToken);
+        Directory.CreateDirectory(scratch.PathOf("src/Migrations"));
+        await File.WriteAllTextAsync(scratch.PathOf("src/Migrations/CanaryContextModelSnapshot.cs"), "[DbContext(typeof(CanaryContext))]\npartial class CanaryContextModelSnapshot { }\n", cancellationToken);
+        Directory.CreateDirectory(scratch.PathOf(".config"));
+        await File.WriteAllTextAsync(scratch.PathOf(".config/dotnet-tools.json"), EfToolManifest, cancellationToken);
         Directory.CreateDirectory(Path.GetDirectoryName(scratch.PathOf(LinkedGuide))!);
         await File.WriteAllTextAsync(scratch.PathOf(LinkedGuide), "# Guide\n", cancellationToken);
         if (await CanaryGit.CommitAllAsync(scratch.Project, "canary base", initialize: true, cancellationToken) is string baseFailed)
@@ -157,6 +166,8 @@ internal static class GateStepCanaries
                 return new ProcessResult(2, $"{ChangedSource}(3,1): warning WHITESPACE: Fix whitespace formatting.", string.Empty, 0, TimedOut: false);
             case "package":
                 return new ProcessResult(0, PlantedAdvisory, string.Empty, 0, TimedOut: false);
+            case "ef":
+                return new ProcessResult(1, PendingModelChanges, string.Empty, 0, TimedOut: false);
             default:
                 return new ProcessResult(1, $"unexpected arguments: {string.Join(' ', arguments)}", string.Empty, 0, TimedOut: false);
         }

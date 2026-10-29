@@ -13,6 +13,7 @@ public sealed class GateProfilesTests : IDisposable
         ["policy.protected"] = "policy",
         ["quality.suppressions"] = "suppressions",
         ["docs.references"] = "references",
+        ["ef.pendingModelChanges"] = "EF",
         ["coverage.patch"] = "patch coverage",
         ["security.deps"] = "dependencies",
         ["security.secrets"] = "secrets",
