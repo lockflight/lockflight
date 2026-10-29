@@ -39,8 +39,8 @@ internal static class CiStepMigration
     /// <summary>The migrated text; null when the file must be left alone. The file's own text when it is current already.</summary>
     public static string? Migrate(string text)
     {
-        // The CI judge's workflow installs the engine through its action, from the base's lock: nothing to move.
-        if (text.Contains("mode: judge", StringComparison.Ordinal))
+        // The CI judge's pipelines install the engine from the base's lock already (GitHub's through its action): nothing to move.
+        if (text.Contains("mode: judge", StringComparison.Ordinal) || text.Contains(CiShellScripts.JudgeCommand, StringComparison.Ordinal))
         {
             return text;
         }

@@ -9,8 +9,11 @@ namespace Lockflight.Cli.Tests.Init;
 /// </summary>
 public sealed class CiStepMigrationTests
 {
-    /// <summary>The platforms whose current template still installs the engine in a step (GitHub's uses the CI judge's action).</summary>
-    public static TheoryData<string> Platforms() => ["azure", "bitbucket", "gitlab"];
+    /// <summary>The platforms whose current template still runs the gates in one job (GitHub's and Bitbucket's run the CI judge).</summary>
+    public static TheoryData<string> Platforms() => ["azure", "gitlab"];
+
+    /// <summary>The platforms whose current template runs the CI judge.</summary>
+    public static TheoryData<string> JudgePlatforms() => ["github", "bitbucket"];
 
     [Theory]
     [MemberData(nameof(Platforms))]
@@ -25,10 +28,11 @@ public sealed class CiStepMigrationTests
         Assert.Equal(migrated, CiStepMigration.Migrate(migrated!));
     }
 
-    [Fact]
-    public void ALockflight02GitHubWorkflowKeepsItsGatesJobAndMovesToTheEngineLock()
+    [Theory]
+    [MemberData(nameof(JudgePlatforms))]
+    public void ALockflight02PipelineOfAJudgePlatformKeepsItsGatesJobAndMovesToTheEngineLock(string platform)
     {
-        string? migrated = CiStepMigration.Migrate(File.ReadAllText(Path.Combine(CasesDirectory(), "github.yml")));
+        string? migrated = CiStepMigration.Migrate(File.ReadAllText(Path.Combine(CasesDirectory(), $"{platform}.yml")));
 
         Assert.NotNull(migrated);
         Assert.Contains(CiShellScripts.InstallBeginMarker, migrated, StringComparison.Ordinal);
@@ -36,10 +40,12 @@ public sealed class CiStepMigrationTests
         Assert.Equal(migrated, CiStepMigration.Migrate(migrated));
     }
 
-    [Fact]
-    public void TheCiJudgesWorkflowIsCurrentAlready()
+    [Theory]
+    [MemberData(nameof(JudgePlatforms))]
+    public void TheCiJudgesPipelineIsCurrentAlready(string platform)
     {
-        string judge = CiPipeline.Files(CiPlatform.GitHub, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+        Assert.True(CiPlatformNames.TryParse(platform, out CiPlatform parsed));
+        string judge = CiPipeline.Files(parsed, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
 
         Assert.Equal(judge, CiStepMigration.Migrate(judge));
     }
