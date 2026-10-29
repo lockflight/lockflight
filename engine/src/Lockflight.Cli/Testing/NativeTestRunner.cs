@@ -29,8 +29,16 @@ internal static class NativeTestRunner
     /// The batches share <paramref name="timeLimit"/>; null too when it runs out before the last batch.
     /// </summary>
     /// <param name="mode"><see cref="RunnerMode.Mtp"/> for xUnit's MTP options, else the console runner's.</param>
+    /// <param name="suiteFilter">For a whole-suite run: the trait condition, as <c>-trait</c>/<c>-trait-</c> or MTP's <c>--filter-trait</c>/<c>--filter-not-trait</c>.</param>
     public static async Task<TestRunReport?> RunAsync(
-        TestApp app, RunnerMode mode, IReadOnlyList<string>? methodFilters, string workingDirectory, TimeSpan timeLimit, TimeProvider time, CancellationToken cancellationToken)
+        TestApp app,
+        RunnerMode mode,
+        IReadOnlyList<string>? methodFilters,
+        TraitCondition? suiteFilter,
+        string workingDirectory,
+        TimeSpan timeLimit,
+        TimeProvider time,
+        CancellationToken cancellationToken)
     {
         List<ExecutedTest> results = [];
         int? abnormalExitCode = null;
@@ -55,6 +63,11 @@ internal static class NativeTestRunner
                     arguments.AddRange([mode == RunnerMode.Mtp ? "--filter-method" : "-method", method]);
                 }
 
+                if (methodFilters is null && suiteFilter is not null)
+                {
+                    arguments.AddRange(TraitArguments(mode, suiteFilter));
+                }
+
                 ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, workingDirectory, budget.Left, cancellationToken);
                 if (!File.Exists(report))
                 {
@@ -72,6 +85,11 @@ internal static class NativeTestRunner
 
         return new TestRunReport(results, abnormalExitCode);
     }
+
+    /// <summary>A trait condition as the runner's options: <c>-trait-</c>/<c>-trait</c>, or MTP's <c>--filter-not-trait</c>/<c>--filter-trait</c>.</summary>
+    public static string[] TraitArguments(RunnerMode mode, TraitCondition condition) => mode == RunnerMode.Mtp
+        ? [condition.Negated ? "--filter-not-trait" : "--filter-trait", condition.Trait]
+        : [condition.Negated ? "-trait-" : "-trait", condition.Trait];
 
     /// <summary>The runner finished and its exit code says only whether tests passed.</summary>
     private static bool IsTestVerdict(RunnerMode mode, ProcessResult run) =>

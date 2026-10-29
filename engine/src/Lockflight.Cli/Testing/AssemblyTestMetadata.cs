@@ -55,7 +55,10 @@ internal static class AssemblyTestMetadata
                             name,
                             [.. fixture.Requirements.Concat(attributes.Requirements).Distinct(StringComparer.Ordinal)],
                             attributes.SkipReason ?? fixture.SkipReason,
-                            attributes.IsExplicit || fixture.IsExplicit));
+                            attributes.IsExplicit || fixture.IsExplicit)
+                        {
+                            Traits = [.. fixture.Traits, .. attributes.Traits],
+                        });
                     }
                 }
             }

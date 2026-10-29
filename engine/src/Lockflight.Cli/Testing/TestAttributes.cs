@@ -7,8 +7,8 @@ namespace Lockflight.Cli.Testing;
 /// Reads the test attributes of one framework from metadata, without loading the assembly (AOT-safe). xUnit v2 attributes match
 /// by name in any namespace (<c>SkippableFactAttribute</c> derives from <c>FactAttribute</c>), as do MSTest's <c>…TestMethodAttribute</c>
 /// and <c>…TestClassAttribute</c> (custom test attributes derive from them); NUnit's and MSTest's other attributes only in their own
-/// namespace. A requirement is a <c>Requirement</c> trait or property with a string value; an NUnit <c>[Category]</c> is not one, as
-/// it has no name to say what the value is.
+/// namespace. A requirement is a <c>Requirement</c> trait or property with a string value; a category (NUnit's <c>[Category]</c>,
+/// MSTest's <c>[TestCategory]</c>) is not one, as it has no name to say what the value is, but it is a trait a filter can name.
 /// </summary>
 internal static class TestAttributes
 {
@@ -23,9 +23,14 @@ internal static class TestAttributes
     public static TestAttributeSet OfMethod(MetadataReader reader, CustomAttributeHandleCollection attributes, TestFrameworkKind framework) =>
         Read(reader, attributes, framework);
 
-    /// <summary>A class's skip, explicit mark and requirements, which apply to every test in it (xUnit v2's are not read).</summary>
+    /// <summary>
+    /// A class's skip, explicit mark, requirements and traits, which apply to every test in it; of an xUnit v2 class only its
+    /// traits are read (its requirements as before: from the methods).
+    /// </summary>
     public static TestAttributeSet OfClass(MetadataReader reader, CustomAttributeHandleCollection attributes, TestFrameworkKind framework) =>
-        framework == TestFrameworkKind.XunitV2 ? TestAttributeSet.None : Read(reader, attributes, framework) with { IsTest = false };
+        framework == TestFrameworkKind.XunitV2
+            ? TestAttributeSet.None with { Traits = Read(reader, attributes, framework).Traits }
+            : Read(reader, attributes, framework) with { IsTest = false };
 
     /// <summary>An MSTest <c>[TestClass]</c>: MSTest runs the test methods of such classes only.</summary>
     public static bool IsMSTestClass(MetadataReader reader, CustomAttributeHandleCollection attributes) =>
@@ -37,6 +42,7 @@ internal static class TestAttributes
         bool isExplicit = false;
         string? skip = null;
         List<string> requirements = [];
+        List<KeyValuePair<string, string>> traits = [];
         foreach (CustomAttributeHandle handle in attributes)
         {
             CustomAttribute attribute = reader.GetCustomAttribute(handle);
@@ -58,11 +64,23 @@ internal static class TestAttributes
                 case TestAttributeMeaning.Explicit:
                     isExplicit = true;
                     break;
-                case TestAttributeMeaning.Requirement:
+                case TestAttributeMeaning.NamedTrait:
                     ImmutableArray<CustomAttributeTypedArgument<string>> arguments = attribute.DecodeValue(StringTypes.Instance).FixedArguments;
-                    if (arguments.Length == 2 && arguments[0].Value as string == RequirementName && arguments[1].Value is string requirement)
+                    if (arguments.Length == 2 && arguments[0].Value is string traitName && arguments[1].Value is string traitValue)
                     {
-                        requirements.Add(requirement);
+                        traits.Add(KeyValuePair.Create(traitName, traitValue));
+                        if (traitName == RequirementName)
+                        {
+                            requirements.Add(traitValue);
+                        }
+                    }
+
+                    break;
+                case TestAttributeMeaning.Category:
+                    ImmutableArray<CustomAttributeTypedArgument<string>> category = attribute.DecodeValue(StringTypes.Instance).FixedArguments;
+                    if (category.Length == 1 && category[0].Value is string categoryName)
+                    {
+                        traits.AddRange(CategoryTraits(framework).Select(name => KeyValuePair.Create(name, categoryName)));
                     }
 
                     break;
@@ -71,23 +89,28 @@ internal static class TestAttributes
             }
         }
 
-        return new TestAttributeSet(isTest, skip, isExplicit, requirements);
+        return new TestAttributeSet(isTest, skip, isExplicit, requirements, traits);
     }
 
     private static TestAttributeMeaning Meaning(TestFrameworkKind framework, string space, string name) => framework switch
     {
         TestFrameworkKind.XunitV2 when name.EndsWith("FactAttribute", StringComparison.Ordinal) || name.EndsWith("TheoryAttribute", StringComparison.Ordinal) => TestAttributeMeaning.Test,
-        TestFrameworkKind.XunitV2 when name == "TraitAttribute" => TestAttributeMeaning.Requirement,
+        TestFrameworkKind.XunitV2 when name == "TraitAttribute" => TestAttributeMeaning.NamedTrait,
         TestFrameworkKind.NUnit when space != NUnitNamespace => TestAttributeMeaning.None,
         TestFrameworkKind.NUnit when NUnitTestAttributes.Contains(name) => TestAttributeMeaning.Test,
         TestFrameworkKind.NUnit when name == "IgnoreAttribute" => TestAttributeMeaning.Skip,
         TestFrameworkKind.NUnit when name == "ExplicitAttribute" => TestAttributeMeaning.Explicit,
-        TestFrameworkKind.NUnit when name == "PropertyAttribute" => TestAttributeMeaning.Requirement,
+        TestFrameworkKind.NUnit when name == "PropertyAttribute" => TestAttributeMeaning.NamedTrait,
+        TestFrameworkKind.NUnit when name == "CategoryAttribute" => TestAttributeMeaning.Category,
         TestFrameworkKind.MSTest when name.EndsWith("TestMethodAttribute", StringComparison.Ordinal) => TestAttributeMeaning.Test,
         TestFrameworkKind.MSTest when space == MSTestNamespace && name == "IgnoreAttribute" => TestAttributeMeaning.Skip,
-        TestFrameworkKind.MSTest when space == MSTestNamespace && name == "TestPropertyAttribute" => TestAttributeMeaning.Requirement,
+        TestFrameworkKind.MSTest when space == MSTestNamespace && name == "TestPropertyAttribute" => TestAttributeMeaning.NamedTrait,
+        TestFrameworkKind.MSTest when space == MSTestNamespace && name == "TestCategoryAttribute" => TestAttributeMeaning.Category,
         _ => TestAttributeMeaning.None,
     };
+
+    /// <summary>The trait names a category goes by in a VSTest filter: NUnit's adapter takes <c>Category</c> and <c>TestCategory</c>, MSTest's <c>TestCategory</c>.</summary>
+    private static string[] CategoryTraits(TestFrameworkKind framework) => framework == TestFrameworkKind.NUnit ? ["Category", "TestCategory"] : ["TestCategory"];
 
     /// <summary>The namespace and name of an attribute's type; a nested type reference has no namespace of its own.</summary>
     private static (string Namespace, string Name) TypeOf(MetadataReader reader, CustomAttribute attribute)

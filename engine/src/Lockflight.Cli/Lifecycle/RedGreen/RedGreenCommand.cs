@@ -172,11 +172,11 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
         session.Save(started);
         await session.RecordAsync(LedgerSignatures.RedGreenStart, $"{session.Feature.Id}: baseline of {tests.Count} tests in {workspace.Apps.Count} test projects", cancellationToken);
         await context.Output.WriteLineAsync($"Baseline: {tests.Count} tests in {string.Join(", ", started.TestProjects)} (commit {RedGreenSession.Short(started.BaselineCommit)})");
-        if (await WarnAboutFailingBaselineAsync(session, cancellationToken) is IReadOnlyList<ExecutedTest> baselineRun
-            && SuiteChecks.SkippedRows(baselineRun) is { Count: > 0 } skippedRows)
+        if (await WarnAboutFailingBaselineAsync(session, tests, cancellationToken) is RegressionRun baselineRun
+            && (SuiteChecks.SkippedRows(baselineRun.Results) is { Count: > 0 } || baselineRun.Filter is not null))
         {
             // Rows skipped at run time before any change are no new skips at a green.
-            session.Save(started with { BaselineSkippedRows = skippedRows });
+            session.Save(started with { BaselineSkippedRows = SuiteChecks.SkippedRows(baselineRun.Results), BaselineRegressionFilter = baselineRun.Filter });
         }
 
         await context.Output.WriteLineAsync($"Next: declare stubs, write the first story's tests, then run '{EngineCommand.Linked} redgreen red'.");
@@ -185,22 +185,30 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
 
     /// <summary>
     /// Runs the suite once before any change: a test that already fails (often for environmental reasons) would otherwise block every
-    /// green with "other tests fail". Only a person accepts such failures, and the baseline must reach the base branch first. The run's
-    /// results; null when the runner could not run the tests.
+    /// green with "other tests fail". Only a person accepts such failures, and the baseline must reach the base branch first. The run
+    /// is a regression pass: the tests <c>test.stopFilter</c> leaves out do not run. Null when the runner could not run the tests.
     /// </summary>
-    private async Task<IReadOnlyList<ExecutedTest>?> WarnAboutFailingBaselineAsync(RedGreenSession session, CancellationToken cancellationToken)
+    private async Task<RegressionRun?> WarnAboutFailingBaselineAsync(RedGreenSession session, IReadOnlyList<TestCase> inventory, CancellationToken cancellationToken)
     {
-        if (await session.Workspace.RunAsync(null, cancellationToken) is not IReadOnlyList<ExecutedTest> results)
+        if (await session.Workspace.RunRegressionAsync(inventory, cancellationToken) is not RegressionRun regression)
         {
             await context.Output.WriteLineAsync($"WARN the test runner could not run the tests of {session.Workspace.FailedApp}, so tests that already fail are not known yet.");
             return null;
         }
 
+        await session.WarnAboutUnappliedFiltersAsync(regression, cancellationToken);
+        if (regression.Filter is RegressionFilter filter)
+        {
+            await context.Output.WriteLineAsync($"Regression passes: {filter.Describe()}.");
+        }
+
+        IReadOnlyList<ExecutedTest> results = regression.Results;
+
         IReadOnlySet<string> knownFailing = KnownFailingTests.LoadAll(session.Manifest);
         string[] failing = [.. results.Where(result => result.Outcome == TestOutcome.Fail && !knownFailing.Contains(result.Name)).Select(result => result.Name).Distinct().Order(StringComparer.Ordinal)];
         if (failing.Length == 0)
         {
-            return results;
+            return regression;
         }
 
         await context.Output.WriteLineAsync($"WARN {failing.Length} {(failing.Length == 1 ? "test fails" : "tests fail")} before any change: {string.Join(", ", failing.Take(RedGreenSession.MaxTestsListed))}");
@@ -209,7 +217,7 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
             HumanOnlyCommands.AskTheUser("baseline tests") + ", and to merge that baseline in its own pull request first: CI " +
             "takes baselines from the base branch, so one added in the feature's pull request is discarded.");
 
-        return results;
+        return regression;
     }
 
     private async Task<ExitCode> StatusAsync(Feature feature, RedGreenRecord? record)
@@ -221,11 +229,17 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
         }
 
         await context.Output.WriteLineAsync($"{feature.Id}: baseline {record.BaselineTests.Count} tests at {RedGreenSession.Short(record.BaselineCommit)}");
+        if (record.BaselineRegressionFilter is RegressionFilter baselineFilter)
+        {
+            await context.Output.WriteLineAsync($"baseline regression pass: {baselineFilter.Describe()}");
+        }
+
         foreach (RedGreenCycle cycle in record.Cycles)
         {
             string state = cycle.IsOpen ? "RED (test projects locked)" : $"green at {cycle.GreenAt:u}";
             string amended = cycle.OpenAmends.Any() ? $"; amended, writable until the next red: {string.Join(", ", cycle.OpenAmends.SelectMany(amend => amend.Files).Distinct())}" : string.Empty;
-            await context.Output.WriteLineAsync($"cycle {cycle.Number}: {cycle.Tests.Count} tests, {state}{amended}");
+            string filtered = cycle.RegressionFilter is RegressionFilter cycleFilter ? $"; regression pass: {cycleFilter.Describe()}" : string.Empty;
+            await context.Output.WriteLineAsync($"cycle {cycle.Number}: {cycle.Tests.Count} tests, {state}{amended}{filtered}");
         }
 
         foreach (string line in RedGreenAmends.Lines(record))

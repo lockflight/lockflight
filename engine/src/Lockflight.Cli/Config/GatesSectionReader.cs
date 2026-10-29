@@ -156,7 +156,7 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
     {
         if (valueNode is not YamlMappingNode test)
         {
-            return errors.At(valueNode.Start, "'gates.test' must be a mapping (known keys: framework)");
+            return errors.At(valueNode.Start, "'gates.test' must be a mapping (known keys: framework, stopFilter)");
         }
 
         foreach ((YamlNode keyNode, YamlNode value) in test.Children)
@@ -166,17 +166,22 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
                 return errors.NotAName(keyNode);
             }
 
-            if (key != "framework")
+            string? text = (value as YamlScalarNode)?.Value;
+            switch (key)
             {
-                return errors.At(keyNode.Start, $"unknown key 'gates.test.{key}' (known: framework)");
+                case "framework" when text is not null && text.StartsWith("net", StringComparison.Ordinal):
+                    gates = gates with { TestFramework = text };
+                    break;
+                case "framework":
+                    return errors.At(value.Start, "'gates.test.framework' must be a target framework moniker such as net10.0");
+                case "stopFilter" when !string.IsNullOrWhiteSpace(text):
+                    gates = gates with { StopFilter = text };
+                    break;
+                case "stopFilter":
+                    return errors.At(value.Start, "'gates.test.stopFilter' must be a non-empty test filter");
+                default:
+                    return errors.At(keyNode.Start, $"unknown key 'gates.test.{key}' (known: framework, stopFilter)");
             }
-
-            if (value is not YamlScalarNode { Value: string framework } || !framework.StartsWith("net", StringComparison.Ordinal))
-            {
-                return errors.At(value.Start, "'gates.test.framework' must be a target framework moniker such as net10.0");
-            }
-
-            gates = gates with { TestFramework = framework };
         }
 
         return null;

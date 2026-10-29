@@ -4,4 +4,7 @@ namespace Lockflight.Cli.Testing;
 internal sealed record TestApp(string ProjectDirectory, string AssemblyPath, RunnerMode Mode = RunnerMode.Unknown)
 {
     public string AssemblyName => Path.GetFileNameWithoutExtension(AssemblyPath);
+
+    /// <summary>The <c>test.stopFilter</c> of the directory the app was built in: what a whole-suite regression run leaves out; null for none.</summary>
+    public string? StopFilter { get; init; }
 }

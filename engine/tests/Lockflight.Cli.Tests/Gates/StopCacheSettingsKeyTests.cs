@@ -20,6 +20,7 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
           build: App.sln
           test:
             framework: net8.0
+            stopFilter: Category!=Slow
           coverage:
             collector: coverlet
             patchThreshold: 70
@@ -47,7 +48,8 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
         { "stop.target", "  target: services", "  target: services/orders" },
         { "gates.timeoutSeconds", "  timeoutSeconds: 300", "  timeoutSeconds: 301" },
         { "gates.build", "  build: App.sln", "  build: Other.sln" },
-        { "gates.test.framework", "    framework: net8.0\n  coverage:", "    framework: net9.0\n  coverage:" },
+        { "gates.test.framework", "    framework: net8.0\n    stopFilter", "    framework: net9.0\n    stopFilter" },
+        { "gates.test.stopFilter", "    stopFilter: Category!=Slow\n  coverage:", "    stopFilter: Category!=Integration\n  coverage:" },
         { "gates.coverage.collector", "    collector: coverlet", "    collector: microsoft" },
         { "gates.coverage.patchThreshold", "    patchThreshold: 70", "    patchThreshold: 71" },
         { "gates.coverage.minChangedLines", "    minChangedLines: 5", "    minChangedLines: 6" },
@@ -78,7 +80,7 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
 
     /// <summary>A field added to one of these records must join the key, and a case above, before this list is updated.</summary>
     [Theory]
-    [InlineData(typeof(GateSettings), "BuildFile,Coverage,DocsReferences,EfPendingModelChanges,Suppressions,TestFramework,TimeoutSeconds")]
+    [InlineData(typeof(GateSettings), "BuildFile,Coverage,DocsReferences,EfPendingModelChanges,StopFilter,Suppressions,TestFramework,TimeoutSeconds")]
     [InlineData(typeof(CoverageSettings), "Collector,MinChangedLines,PatchThreshold")]
     [InlineData(typeof(Unit), "Build,Kind,Path,StopFilter,TestFramework")]
     public void EverySettingsFieldIsKnownToTheKey(Type settings, string fields) =>

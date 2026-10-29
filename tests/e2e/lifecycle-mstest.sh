@@ -36,7 +36,20 @@ setup() {
     awk '!/EnableMSTestRunner/' tests/Lending.Tests/Lending.Tests.csproj > csproj.new && mv csproj.new tests/Lending.Tests/Lending.Tests.csproj
     printf '{\n  "sdk": { "version": "10.0.102", "rollForward": "latestFeature" }\n}\n' > global.json
   fi
-  git init -q; git config user.email dev@example.com; printf 'version: 1\n' > lockflight.yaml
+  # A test that needs a database: test.stopFilter keeps it out of red/green's regression passes (the pr gate and CI run it).
+  cat > tests/Lending.Tests/DatabaseTests.cs <<'CS'
+namespace Lending.Tests;
+
+[TestClass]
+public sealed class DatabaseTests
+{
+    [TestMethod]
+    [TestCategory("Integration")]
+    public void NeedsADatabase() => Assert.Fail("no database here");
+}
+CS
+  git init -q; git config user.email dev@example.com
+  printf 'version: 1\ngates:\n  test:\n    stopFilter: "TestCategory!=Integration"\n' > lockflight.yaml
   printf 'bin/\nobj/\n.lockflight/ledger/\n' > .gitignore; git add -A; git commit -qm base
   F=specs/20261014-120000-loans; mkdir -p $F
   cat > $F/spec.md <<'MD'
@@ -74,7 +87,8 @@ MD
 
 # cycle_one <platform label>: the stub cycle, then green and trace.
 cycle_one() {
-  expect 0 "[$1] redgreen start lists the MSTest tests from metadata" "2 tests" -- "$E" redgreen start
+  expect 0 "[$1] redgreen start lists the MSTest tests from metadata" "3 tests" -- "$E" redgreen start
+  expect 0 "[$1] the baseline's regression pass left the database test out" "test.stopFilter 'TestCategory!=Integration' left out 1 test" -- "$E" redgreen status
   insert_before src/Lending/Catalog.cs "    public int Copies(string title) => copies.GetValueOrDefault(title);" \
     "    public void Lend(string title) => throw new NotImplementedException();
 
@@ -116,7 +130,7 @@ CS
     else if ($0 ~ /public int OnShelf\(string title\) => throw/) print "    public int OnShelf(string title) => Copies(title) - lent.GetValueOrDefault(title);";
     else if ($0 ~ /private readonly Dictionary<string, int> copies/) { print; print "\n    private readonly Dictionary<string, int> lent = new(StringComparer.Ordinal);" }
     else print }' src/Lending/Catalog.cs > Catalog.new && mv Catalog.new src/Lending/Catalog.cs
-  expect 0 "[$1] green: the cycle's tests and the suite pass" "nothing deleted, skipped or made explicit" -- "$E" redgreen green
+  expect 0 "[$1] green: the cycle's tests and the suite pass, the database test left out" "Regression pass: test.stopFilter 'TestCategory!=Integration' left out 1 test" -- "$E" redgreen green
   expect 0 "[$1] trace maps both requirements to their red-then-green tests" "FR-011" -- "$E" trace
 }
 
