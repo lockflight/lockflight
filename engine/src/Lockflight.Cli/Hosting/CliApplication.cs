@@ -52,10 +52,13 @@ internal static class CliApplication
           version                                       print the engine version
 
         Gates
-          gate run [--profile edit|stop|pr] [--path <dir>] [--unit <path>[,…]] [--base <ref>] [--result <file>]
-                                                        run the quality gates (default profile: stop; --base also
-                                                        scopes format and coverage to the branch's changes; at a
-                                                        workspace root, every changed unit or the --unit ones)
+          gate run [--profile edit|stop|pr] [--path <dir>] [--unit <path>[,…]] [--base <ref>] [--result <file>] [--full]
+                                                        run the quality gates (default profile: stop, which builds
+                                                        and tests the projects changed since its last PASS
+                                                        and their dependents;
+                                                        --full: every project; --base also scopes format and
+                                                        coverage to the branch's changes; at a workspace root,
+                                                        every changed unit or the --unit ones)
           hook <event>                                  Claude Code hook decision, hook JSON on stdin; events:
                                                         {string.Join(", ", HookEvents())}
 

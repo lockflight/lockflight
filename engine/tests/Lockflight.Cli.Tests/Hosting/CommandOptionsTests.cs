@@ -38,6 +38,8 @@ public sealed class CommandOptionsTests : IDisposable
     [InlineData("gate", "run", "--profil", "pr")]
     [InlineData("gate", "run", "--profile")]
     [InlineData("gate", "run", "--base", "-x")]
+    [InlineData("gate", "run", "--profile", "pr", "--full")]
+    [InlineData("gate", "run", "--profile", "edit", "--full")]
     [InlineData("trace", "--feature")]
     [InlineData("review", "--modle", "opus")]
     [InlineData("phase", "check", "specify", "--featur", "f1")]
