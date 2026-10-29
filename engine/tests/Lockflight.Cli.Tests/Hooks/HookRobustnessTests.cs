@@ -163,11 +163,20 @@ public sealed class HookRobustnessTests : IDisposable
     [InlineData("not a version")]
     public async Task APluginSatisfiedByTheEngineAddsNoNotice(string minimum)
     {
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
         Dictionary<string, string> environment = new() { [EnvironmentVariables.PluginMinimumEngine] = minimum };
 
         (_, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName, environment);
 
         Assert.False(JsonDocument.Parse(output).RootElement.TryGetProperty("systemMessage", out _));
+    }
+
+    [Fact]
+    public async Task AVersionOneManifestIsNamedToThePersonAtSessionStart()
+    {
+        (_, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName);
+
+        Assert.Contains("lockflight.yaml is version 1", JsonDocument.Parse(output).RootElement.GetProperty("systemMessage").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
