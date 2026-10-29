@@ -23,6 +23,21 @@ public sealed class FactsCommandTests : IDisposable
         Assert.Contains("secrets/**", protectedPaths);
         Assert.Contains(Manifest.FileName, protectedPaths);
         Assert.Equal(Manifest.FileName, facts.RootElement.GetProperty("manifest").GetProperty("file").GetString());
+        Assert.Equal(JsonValueKind.Null, facts.RootElement.GetProperty("manifest").GetProperty("shell").ValueKind);
+    }
+
+    [Fact]
+    public async Task AUnitOfAShellNamesItsShell()
+    {
+        Write(Manifest.FileName, "version: 2\nshell:\n  url: \"https://github.com/example/shell.git\"\n  unit: services/orders\n");
+        await CommitAsync();
+
+        using JsonDocument facts = await FactsAsync();
+
+        JsonElement shell = facts.RootElement.GetProperty("manifest").GetProperty("shell");
+        Assert.Equal("https://github.com/example/shell.git", shell.GetProperty("url").GetString());
+        Assert.Equal("services/orders", shell.GetProperty("unit").GetString());
+        Assert.Equal(JsonValueKind.Null, shell.GetProperty("ref").ValueKind);
     }
 
     [Fact]
@@ -52,6 +67,7 @@ public sealed class FactsCommandTests : IDisposable
         Assert.Equal("report", modes["policy.protected"]);
         Assert.Equal("fail", modes["quality.suppressions"]);
         Assert.Contains("docs.references", modes.Keys);
+        Assert.Equal("auto", modes["ef.pendingModelChanges"]);
         Assert.Equal("fail", modes["build"]);
         Assert.Equal("unit", pr.GetProperty("steps").EnumerateArray().Single(step => step.GetProperty("name").GetString() == "build").GetProperty("scope").GetString());
     }

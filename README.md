@@ -62,7 +62,7 @@ hold the keys to the two that need a person.
 | **Deterministic gates**<br>Format, build with no new warnings, tests, patch coverage, vulnerable packages, secrets. `PASS`, `FAIL` or `NOT-EARNED`, never "probably". | **Protected paths**<br>The files that define the rules can't be changed by the agent, through edits or the shell ([full list](docs/guides/configuration.md#built-in-protected-paths)). |
 | **Spec-driven, [Spec Kit](https://github.com/github/spec-kit) optional**<br>A [documented spec format](docs/guides/spec-contract.md): requirement IDs, approvals you give, checks between phases. Written by the crew, by hand, or by Spec Kit with a preset. | **Red/green evidence**<br>New tests must fail before the code exists and pass after, locked while red. xUnit v3 and v2. |
 | **Requirement trace**<br>A matrix of every requirement and the tests that went red, then green, for it. | **Evidence-bound review**<br>An independent reviewer whose blocking findings count only with a failing reproduction test. |
-| **Adopts your setup**<br>Keeps your hooks, skills, agents and Spec Kit, protects them and flags conflicts. `adopt undo` reverts it. | **One repo or twenty**<br>Workspace shells with service repositories beneath: only changed services are built, and each keeps its own CI policy. |
+| **Adopts your setup**<br>Keeps your hooks, skills, agents and Spec Kit, protects them and flags conflicts. `init --dry-run` shows the plan first. | **One repo or twenty**<br>Workspace shells with service repositories beneath: only changed services are built, and each keeps its own CI policy. |
 
 <table>
 <tr>
@@ -128,10 +128,8 @@ The guard is on, and `.lockflight/bin/lockflight gate run` runs format → build
 [getting-started guide](docs/guides/getting-started.md) covers the profiles (`lite` for gates and guard, `standard` for the
 full lifecycle), monorepos, workspace shells and the status line.
 
-**Already have a Claude Code or Spec Kit setup?** Only then: `.lockflight/bin/lockflight adopt plan` writes a plan of what it
-keeps, protects and flags, and ends with the exact `adopt apply` line. Approvals and adoption are yours to run, in a separate
-terminal window: the engine refuses them inside an agent session, a `!` command in Claude Code included. Apply backs up
-first, and `adopt undo` reverts it.
+**Already have a Claude Code or Spec Kit setup?** `init` adopts it: `init --dry-run` prints what it keeps, protects and
+flags, and writes nothing. Commit init's changes as one commit; `git revert` undoes it.
 
 > [!NOTE]
 > **Preview.** `Lockflight.Cli` is published on nuget.org as a prerelease (`--prerelease` above); the design can still change

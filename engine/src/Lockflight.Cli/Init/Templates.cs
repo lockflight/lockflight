@@ -217,7 +217,7 @@ internal static class Templates
 
         """;
 
-    public static IReadOnlyList<string> GitIgnoreEntries { get; } = [".lockflight/bin/", ".lockflight/ledger/", ".lockflight/local/", ".lockflight/backup/", ".lockflight/adopt/", ".claude/worktrees/"];
+    public static IReadOnlyList<string> GitIgnoreEntries { get; } = [".lockflight/bin/", ".lockflight/ledger/", ".lockflight/local/", ".claude/worktrees/"];
 
     /// <summary>The manifest <c>init</c> writes, with the stop-gate comment of the chosen profile.</summary>
     public static string Manifest(InitProfile profile) =>

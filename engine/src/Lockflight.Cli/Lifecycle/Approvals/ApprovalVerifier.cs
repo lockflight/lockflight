@@ -43,7 +43,7 @@ internal sealed class ApprovalVerifier(CliContext context, string root)
         bool allGood = true;
         foreach (string id in ids)
         {
-            // A feature that predates Lockflight needs no approval until it has Lockflight records of its own (adopt apply).
+            // A feature that predates Lockflight needs no approval until it has Lockflight records of its own (marked by init).
             if (requested is null && adopted.Contains(id) && !Directory.Exists(FeatureLocator.Resolve(root, id).Feature?.RecordDirectory ?? string.Empty))
             {
                 await context.Output.WriteLineAsync($"NOTE {id}: predates Lockflight (adopted) — no approval required");

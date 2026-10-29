@@ -285,7 +285,7 @@ autonomy:                       # reserved: validated, no effect in this version
   budgetUsd: 5.00
   timeMinutes: 60
 
-shell:                          # this repository is a unit of a workspace shell (not together with units:)
+shell:                          # this repository is a unit of a workspace shell (not together with units:; init --unit-of writes it)
   url: git@github.com:example/shell.git   # https:// or SSH; never with credentials (use a deploy key or a CI secret)
   ref: main                     # optional: the shell's branch (default: its default branch)
   unit: services/orders         # this repository's path among the shell's units
@@ -326,7 +326,7 @@ judged. See [what the shell write detection sees](guardrails-and-boundaries.md#w
 | `.github/workflows/lockflight-gates.yml`, `.azure-pipelines/lockflight-gates.yml`, `.gitlab/ci/lockflight-gates.yml` | the CI job that judges pull requests |
 | `.gitlab-ci.yml`, `bitbucket-pipelines.yml` | the one pipeline file that decides whether the job runs at all on GitLab and Bitbucket: see [CI on other platforms](ci-other-platforms.md) |
 
-`init` and `adopt apply` also write an `Edit` deny rule for each protected path into `.claude/settings.json`, so Claude Code
+`init` also writes an `Edit` deny rule for each protected path into `.claude/settings.json`, so Claude Code
 refuses its own file tools there: see [permission deny rules](guardrails-and-boundaries.md#permission-deny-rules).
 
 The protected paths that exist are also listed as Claude Code sandbox write denials in `.claude/settings.json`, where the
