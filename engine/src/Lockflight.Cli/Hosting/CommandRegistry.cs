@@ -67,6 +67,7 @@ internal static class CommandRegistry
             Listing = CommandListing.Unlisted,
         },
         new(["ci"], CommandAudience.Anyone, [JudgeInputsReader.HeadOption, JudgeInputsReader.BaseOption, JudgeInputsReader.BranchOption, JudgeInputsReader.PlatformOption, JudgeInputsReader.EventOption, JudgeInputsReader.EvidenceOption, JudgeInputsReader.ShellOption], [JudgeInputsReader.NoReviewFlag, CiCommand.PlanFlag], CommandOperands.Options, OptionParsing.Shared, context => new CiCommand(context)),
+        new(["ci", "report"], CommandAudience.Anyone, [CiReportCommand.EvidenceOption, CiReportCommand.ReviewOption, CiReportCommand.HeadOption, CiReportCommand.ContextOption, CiReportCommand.OutOption], [], CommandOperands.Options, OptionParsing.Shared, context => new CiReportCommand(context)),
         new(["workspace", "sync"], CommandAudience.Anyone, [], ["--check"], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceSyncCommand(context)),
         new(["adopt", "plan"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
         new(["adopt", "apply"], CommandAudience.Human, ["--speckit-preset"], ["--skip-speckit", "--no-sandbox"], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),

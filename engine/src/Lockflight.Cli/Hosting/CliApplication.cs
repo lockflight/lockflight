@@ -103,6 +103,10 @@ internal static class CliApplication
                                                         policy: the red commits (Lockflight-Red trailer), the change
                                                         class and each check, into evidence.json; --plan prints the
                                                         steps without building (local: HEAD against the target)
+          ci report --evidence <dir> --head <sha> --out <dir> [--review <dir>] [--context gates|lockflight/judge]
+                                                        join the judge's evidence and the review's result into
+                                                        verdict.json, the PR comment and the job summary; exits
+                                                        with the context's verdict
 
         Exit codes
           0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)
