@@ -54,7 +54,30 @@ public sealed class TestAppsTests : IDisposable
         Assert.Equal(ProjectEvaluationFailure.TimedOut, unevaluated.Failure);
     }
 
+    [Fact]
+    public async Task NUnitProjectsRunOnTheTestingPlatformWhenTheyAreTestingPlatformApplications()
+    {
+        TestProject("tests/NUnit.Vs/NUnit.Vs.csproj", onTestingPlatform: false, "nunit.framework.dll");
+        TestProject("tests/NUnit.Mtp/NUnit.Mtp.csproj", onTestingPlatform: true, "nunit.framework.dll");
+        TestProject("tests/Other/Other.csproj", onTestingPlatform: false, "tunit.core.dll");
+
+        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeLimit, TimeProvider.System, TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [("NUnit.Mtp", RunnerMode.NUnitMtp), ("NUnit.Vs", RunnerMode.NUnit)],
+            discovery.Apps.Select(app => (app.AssemblyName, app.Mode)).Order());
+    }
+
     public void Dispose() => root.Delete(recursive: true);
+
+    /// <summary>A test project whose build output holds the framework's assembly (an empty stand-in: discovery only looks for the file).</summary>
+    private void TestProject(string relativePath, bool onTestingPlatform, string frameworkAssembly)
+    {
+        WriteProject(relativePath, $"<PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsTestingPlatformApplication>{(onTestingPlatform ? "true" : "false")}</IsTestingPlatformApplication></PropertyGroup>");
+        string output = Path.Combine(root.FullName, Path.GetDirectoryName(relativePath)!, "bin", "Debug", "net10.0");
+        Directory.CreateDirectory(output);
+        File.WriteAllText(Path.Combine(output, frameworkAssembly), string.Empty);
+    }
 
     private void WriteProject(string relativePath, string body)
     {

@@ -206,7 +206,9 @@ The gate could not judge, and NOT-EARNED is never a pass. The line under the ste
   filter; fix it in `lockflight.yaml`);
 - gitleaks is not installed (set `LOCKFLIGHT_GITLEAKS` or put it on `PATH`);
 - `claude` is not on `PATH` for `review`;
-- red/green found no xUnit test project (xUnit v3, or xUnit v2 on VSTest; other test frameworks get the gates only);
+- red/green found no test project it can drive (xUnit v3, xUnit v2 on VSTest, or NUnit; other test frameworks get the gates only);
+- red/green could not list an NUnit project's tests: the line says what the project needs, `Microsoft.Testing.Extensions.TrxReport`
+  for NUnit's runner on Microsoft.Testing.Platform or `Microsoft.NET.Test.Sdk` for VSTest;
 - red/green or `trace` says a project "could not be evaluated": see [below](#redgreen-or-trace-says-a-project-could-not-be-evaluated);
 - `format` could not list the changed lines (with `--base`, a shallow checkout: use `fetch-depth: 0`).
 
@@ -234,7 +236,7 @@ also rewrites the rest of the file, which an upstream pull request may not want.
 ## Red/green or trace says a project "could not be evaluated"
 
 After the build, the engine evaluates every `.csproj` under the root (or the unit) with `dotnet msbuild -getProperty` to find
-the xUnit test projects. When one of those evaluations fails or times out, the engine cannot tell whether the project holds
+the xUnit and NUnit test projects. When one of those evaluations fails or times out, the engine cannot tell whether the project holds
 tests, and a test project left out would make the run look complete when it is not. So the step is NOT-EARNED, and the line
 names the project with the first line of msbuild's error, or says it timed out.
 

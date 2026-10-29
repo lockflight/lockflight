@@ -6,7 +6,7 @@ internal enum RedClass
     /// <summary>Accepted: the test fails with <c>NotImplementedException</c> thrown by production code (a declared stub).</summary>
     RedStub = 1,
 
-    /// <summary>Accepted: the test calls production code and fails on an assertion (xUnit or a recognised assertion or mocking library).</summary>
+    /// <summary>Accepted: the test calls production code and fails on an assertion (xUnit, NUnit or a recognised assertion or mocking library).</summary>
     RedAssert = 2,
 
     /// <summary>

@@ -18,7 +18,7 @@ evidence. This page takes you from nothing to a first green gate.
 | The engine | The .NET 10 SDK, plus the SDK your project needs (the engine runs whatever SDK the project's `global.json` pins). git. |
 | Claude Code | 2.1.295 or newer: from that version a guard hook that times out blocks the tool call. `doctor` checks it. |
 | Your project | SDK-style .NET 8, 9 or 10. .NET Framework projects are not supported. |
-| Tests | xUnit v3 (Microsoft.Testing.Platform): everything. xUnit v2 (VSTest): supported, red/green and trace included. NUnit and MSTest: the gates only, no red/green or trace yet. |
+| Tests | xUnit v3 (Microsoft.Testing.Platform): everything. xUnit v2 (VSTest) and NUnit (VSTest, or Microsoft.Testing.Platform with its TRX report): red/green and trace included; tag tests with `[Trait("Requirement", "FR-001")]` (xUnit) or `[Property("Requirement", "FR-001")]` (NUnit). MSTest: the gates only, no red/green or trace yet. Review reproductions are written as xUnit tests. |
 | The `pr` profile's secrets step | [gitleaks](https://github.com/gitleaks/gitleaks) on `PATH` (or `LOCKFLIGHT_GITLEAKS`); without it the step is NOT-EARNED. The generated CI workflow downloads its own. |
 | Spec Kit, if you use it (optional in the standard profile) | `uv` and Python 3 with PyYAML. |
 

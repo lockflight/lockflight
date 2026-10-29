@@ -22,7 +22,7 @@ internal sealed class TestCodeScanner(string assemblyPath, IReadOnlySet<string> 
     /// <summary>Assemblies whose every method is an assertion or builds one (xUnit, NUnit, MSTest, FluentAssertions, Shouldly, Verify).</summary>
     private static readonly HashSet<string> AssertionAssemblies = new(
         [
-            "xunit.assert", "xunit.v3.assert", "nunit.framework", "Microsoft.VisualStudio.TestPlatform.TestFramework", "MSTest.TestFramework",
+            "xunit.assert", "xunit.v3.assert", "nunit.framework", "nunit.framework.legacy", "Microsoft.VisualStudio.TestPlatform.TestFramework", "MSTest.TestFramework",
             "FluentAssertions", "AwesomeAssertions", "Shouldly", "Verify", "Verify.Xunit", "Verify.XunitV3", "Verify.NUnit", "Verify.MSTest",
         ],
         StringComparer.OrdinalIgnoreCase);
