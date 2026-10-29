@@ -85,7 +85,10 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
             ? $"{evaluation.Classified.Count} new tests, each RED_STUB or RED_ASSERT"
             : $"{rejected.Length} of {evaluation.Classified.Count} new tests do not fail for the right reason: "
               + string.Join("; ", rejected.Select(test => test.RedClass).Distinct().Select(redClass => $"{RedClassNames.ToName(redClass)} ({RedClassFixes.For(redClass)})"));
-        return new CycleJudgement(red, tree.Outcome, evaluation.Classified, evaluation.Verdicts, rejected.Length == 0 ? CheckVerdict.Pass : CheckVerdict.Fail, why);
+        return new CycleJudgement(red, tree.Outcome, evaluation.Classified, evaluation.Verdicts, rejected.Length == 0 ? CheckVerdict.Pass : CheckVerdict.Fail, why)
+        {
+            FingerprintsAtRed = fresh.Where(test => tree.Fingerprints.ContainsKey(test.Key)).ToDictionary(test => test.Key, test => tree.Fingerprints[test.Key], StringComparer.Ordinal),
+        };
     }
 
     /// <summary>A known test (at the fork point or new at an earlier red) deleted, newly skipped or made explicit at this red.</summary>
