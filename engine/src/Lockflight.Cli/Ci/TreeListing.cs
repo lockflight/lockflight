@@ -7,4 +7,8 @@ namespace Lockflight.Cli.Ci;
 /// tests it lists (null unless <see cref="TreeOutcome.Ok"/>) and, when it did not end well, why (the build's error lines for a
 /// failed build).
 /// </summary>
-internal sealed record TreeListing(string Commit, TreeOutcome Outcome, TestWorkspace Workspace, IReadOnlyList<TestCase>? Inventory, string? Detail);
+internal sealed record TreeListing(string Commit, TreeOutcome Outcome, TestWorkspace Workspace, IReadOnlyList<TestCase>? Inventory, string? Detail)
+{
+    /// <summary>What a later tree is compared with: the listed tests, none when the tree has no test project yet; null when unknown.</summary>
+    public IReadOnlyList<TestCase>? AsBaseline => Outcome == TreeOutcome.NoTestApps ? [] : Inventory;
+}
