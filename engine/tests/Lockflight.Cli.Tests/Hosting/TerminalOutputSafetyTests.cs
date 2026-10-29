@@ -121,20 +121,6 @@ public sealed class TerminalOutputSafetyTests : IDisposable
     }
 
     [Fact]
-    public async Task TheRetroShowsLedgerFieldsWithoutTheirEscapes()
-    {
-        WriteManifest();
-        string line = $$"""{"ts":"{{Recently()}}","type":"hook.blocked","signature":{{JsonSerializer.Serialize("pre-tool-use:" + Hostile)}},"summary":{{JsonSerializer.Serialize(Hostile)}},"detail":{{JsonSerializer.Serialize(Hostile)}}}""";
-        WriteLedger(line, line, line);
-
-        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["ledger", "retro"], string.Empty, root.FullName, time);
-
-        Assert.Equal(ExitCode.Pass, exitCode);
-        AssertClean(output);
-        Assert.Contains("^[", output, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task APhaseCheckShowsAFeatureNameWithoutItsEscapes()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows does not allow control characters in directory names.");

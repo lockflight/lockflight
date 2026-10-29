@@ -29,6 +29,8 @@ internal sealed class DocsReferencesStep : IGateStep
 
     public string CacheKey => StepName;
 
+    public GateMode ModeUnder(GateSettings settings) => settings.DocsReferences;
+
     public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken)
     {
         GateMode mode = run.Settings.DocsReferences;

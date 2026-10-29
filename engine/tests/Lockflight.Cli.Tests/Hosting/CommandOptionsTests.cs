@@ -42,8 +42,8 @@ public sealed class CommandOptionsTests : IDisposable
     [InlineData("review", "--modle", "opus")]
     [InlineData("phase", "check", "specify", "--featur", "f1")]
     [InlineData("redgreen", "status", "f1")]
-    [InlineData("ledger", "retro", "--days", "soon")]
-    [InlineData("ledger", "retro", "--days", "0")]
+    [InlineData("facts", "--jsn")]
+    [InlineData("facts", "--json", "--json")]
     public async Task ACommandWithAnOptionItDoesNotTakeExitsWithAConfigurationError(params string[] args)
     {
         (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(args, "", workingDirectory.FullName);
