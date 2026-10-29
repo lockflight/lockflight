@@ -18,6 +18,12 @@ internal sealed record GateSettings(string? TestFramework, int TimeoutSeconds, C
     /// <summary>How the pr profile's <c>docs.references</c> step judges (<c>gates.docs.references</c>); absent, it reports only.</summary>
     public GateMode DocsReferences { get; init; } = GateMode.Report;
 
+    /// <summary>
+    /// How the pr profile's <c>ef.pendingModelChanges</c> step judges (<c>gates.ef.pendingModelChanges</c>); absent, <c>auto</c>: it
+    /// runs and can fail only when the repository pins <c>dotnet-ef</c> in a tool manifest.
+    /// </summary>
+    public GateMode EfPendingModelChanges { get; init; } = GateMode.Auto;
+
     public const int DefaultTimeoutSeconds = 600;
     public const int MaxTimeoutSeconds = 7200;
 
