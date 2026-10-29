@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: planner-passes
+description: "The planner writes plan.md and tasks.md for an approved spec, stubs then tests then implementation per story, and runs phase check tasks as its verdict."
+tags: [boundary]
+context:
+  scaffold_script: scaffold.sh

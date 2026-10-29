@@ -45,8 +45,14 @@ Windows, Git Bash; for the standard profile, `uv` and a working `python3 -c "imp
 
 ## 3. Choose with the user
 
-- **Profile:** **lite** (the default) — gates and guard; **standard** — adds the spec-driven lifecycle: Spec Kit, approvals,
-  red/green with xUnit v3 or v2, review and trace.
+- **Profile:** **lite** (the default) — gates and guard; **standard** — adds the spec-driven lifecycle: spec and tasks in
+  the spec contract, approvals, red/green with xUnit v3 or v2, review and trace.
+- **Spec Kit** (standard profile only, in a project without `.specify/`): **without** (recommended unless the team uses
+  Spec Kit) — the `lockflight-crew` plugin's spec writer and planner, or the session with the user, write the spec and tasks
+  in the contract, with no Python needed; **with** — Spec Kit's `/speckit-*` commands and the Lockflight preset (step 4),
+  which need `uv` and Python 3 with PyYAML. Say that without Spec Kit, `doctor` still reports its Lockflight preset check
+  as failing in this release, and that the lifecycle commands do not depend on it. For the crew, they run
+  `/plugin install lockflight-crew@lockflight`.
 - **CI trigger** for `.github/workflows/lockflight-gates.yml`, which runs the `pr` gates: **pr** (every pull request and push
   to `main`), **manual** (only when started by hand) or **none** (no workflow). Recommend **pr**: the project pins a release
   from nuget.org. Only an engine built from source (a `.dev.` version) needs **manual** until the project pins a release.
@@ -61,7 +67,7 @@ Windows, Git Bash; for the standard profile, `uv` and a working `python3 -c "imp
 
 ## 4. Spec Kit for a new standard project (before `init`)
 
-Only for the standard profile in a project **without** `.specify/`. Do it before step 5: once `init` has linked the project,
+Only when the user chose Spec Kit, for the standard profile in a project **without** `.specify/`. Do it before step 5: once `init` has linked the project,
 Spec Kit's own files (`.claude/skills/speckit-*`) are protected, and the guard cannot see a command that writes them itself,
 so you must not run one then.
 

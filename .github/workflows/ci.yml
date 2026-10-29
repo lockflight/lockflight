@@ -94,6 +94,12 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/lifecycle-xunit2.sh "$RUNNER_TEMP/lifecycle-xunit2"
+      - name: The spec contract's example passes the phase checks, without Spec Kit
+        shell: bash
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/e2e/spec-contract.sh "$RUNNER_TEMP/spec-contract"
       - name: Workspace gates end to end (units, VSTest and MTP, per-unit stop cache)
         shell: bash
         run: |

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: planner-spec-conflict
+description: "When a scenario contradicts its requirement, the planner leaves spec.md alone and reports blocked with what a person must decide."
+tags: [boundary]
+context:
+  scaffold_script: scaffold.sh

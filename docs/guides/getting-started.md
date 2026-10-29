@@ -20,7 +20,7 @@ evidence. This page takes you from nothing to a first green gate.
 | Your project | SDK-style .NET 8, 9 or 10. .NET Framework projects are not supported. |
 | Tests | xUnit v3 (Microsoft.Testing.Platform): everything. xUnit v2 (VSTest): supported, red/green and trace included. NUnit and MSTest: the gates only, no red/green or trace yet. |
 | The `pr` profile's secrets step | [gitleaks](https://github.com/gitleaks/gitleaks) on `PATH` (or `LOCKFLIGHT_GITLEAKS`); without it the step is NOT-EARNED. The generated CI workflow downloads its own. |
-| The standard profile | `uv` (for Spec Kit) and Python 3 with PyYAML. |
+| Spec Kit, if you use it (optional in the standard profile) | `uv` and Python 3 with PyYAML. |
 
 ## Install from source
 
@@ -204,7 +204,8 @@ Given/When/Then acceptance scenario; others are stories not headed `### User Sto
 `- **FR-001**: …`, or template placeholders left in. `lockflight approve` and `/lockflight:approve` run that check
 themselves and refuse to approve such a spec, listing what fails. Such a feature needs no approval as long as it stays as it
 was adopted: `approve verify --base` accepts it until it gets Lockflight records of its own. To bring it under the lifecycle,
-add the missing scenarios (or requirements), or rewrite the spec to Spec Kit's template (`.specify/templates/spec-template.md`).
+add the missing scenarios (or requirements), or rewrite the spec to [the spec contract](spec-contract.md) (Spec Kit's
+template, `.specify/templates/spec-template.md`, follows it).
 Then run the check until it passes, and approve. `lockflight review` does not need a spec approval: it needs the feature's `spec.md`,
 whose requirements it reviews against, and a change to review.
 
@@ -254,13 +255,25 @@ describes the unit repositories' CI.
 Everything above, plus the lifecycle. A change climbs it stage by stage, and each gate opens only when its check passes; you
 hold the keys to the two approvals.
 
+Each feature is three Markdown files under `specs/<id>/` in a documented format, [the spec contract](spec-contract.md). Who
+writes them is your choice, and the checks are the same for all three:
+
+- **the crew** (`/plugin install lockflight-crew@lockflight`): its spec writer and planner write them until the phase checks
+  pass; no Spec Kit and no Python needed;
+- **Spec Kit** with the Lockflight preset: its `/speckit-*` commands, if your team already uses it or wants it;
+- **you**, by hand, or the session with you, following the contract.
+
+Without Spec Kit, `doctor` still reports its Lockflight preset check as failing (and warns about PyYAML) in a standard
+project in this release; the lifecycle commands do not depend on either check.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/lock-flight-dark.svg">
   <img src="../assets/lock-flight-light.svg" alt="The lifecycle as a canal lock flight: spec and tasks, each approved by you; red, where new tests fail first; green, where they pass with nothing deleted; trace, where every requirement has a test; review, where findings need a failing test; and the pull request, with the same checks in CI." width="100%">
 </picture>
 
-1. `~/.lockflight/bin/lockflight init --profile standard` at the repository root, then set up Spec Kit with the Lockflight
-   preset (the init skill does this with you, and `init` prints these lines with the preset's path filled in):
+1. `~/.lockflight/bin/lockflight init --profile standard` at the repository root. If you want Spec Kit, set it up with the
+   Lockflight preset (the init skill does this with you, and `init` prints these lines with the preset's path filled in);
+   otherwise skip to the commit and `doctor` at the end of this step:
    ```sh
    uvx --from specify-cli==1.1.3 specify init --here --force --integration claude --script sh
    uvx --from specify-cli==1.1.3 specify preset add --dev <plugin>/speckit-preset
@@ -283,9 +296,9 @@ hold the keys to the two approvals.
 
    | Step | Who | Check |
    |---|---|---|
-   | `/speckit-specify`, `/speckit-clarify` | agent + you | `lockflight phase check specify` |
+   | write `spec.md`: the crew's spec writer, `/speckit-specify` and `/speckit-clarify`, or by hand | agent + you | `lockflight phase check specify` |
    | approve the spec | **you**: type `/lockflight:approve spec` in Claude Code, review what the engine shows, then type the line with its code; or, in a separate terminal window (not `!` in Claude Code), `.lockflight/bin/lockflight approve spec [--sign]` | hash-bound record |
-   | `/speckit-plan`, `/speckit-tasks` | agent | `lockflight phase check tasks` |
+   | write `plan.md` and `tasks.md`: the crew's planner, `/speckit-plan` and `/speckit-tasks`, or by hand | agent | `lockflight phase check tasks` |
    | approve the tasks | **you**, the same way: `/lockflight:approve tasks`, or `.lockflight/bin/lockflight approve tasks [--sign]` | hash-bound record |
    | per story: stubs → tests → `redgreen red` → implement → `redgreen green` | agent | red must fail in production code; tests locked until green |
    | a test turns out wrong during red | **you**: `/lockflight:amend <Class.Method> --reason <why>` in Claude Code, or `.lockflight/bin/lockflight redgreen amend` in a separate terminal window | the next `redgreen red` must fail in production code again |
@@ -294,9 +307,9 @@ hold the keys to the two approvals.
 
    Approvals are your decision: the agent cannot give them. Inside Claude Code only what you type yourself counts
    (`/lockflight:approve`); the engine refuses `lockflight approve` run from the session, a `!` command included.
-   Optional: the `lockflight-crew` plugin adds a test author that writes each story's failing tests at the red step
-   (`/plugin install lockflight-crew@lockflight`). It is an aid; the same checks judge its work. See
-   [the crew](skills.md#the-crew-optional).
+   Optional: the `lockflight-crew` plugin adds a spec writer and a planner for the first steps, and a test author that
+   writes each story's failing tests at the red step (`/plugin install lockflight-crew@lockflight`). They are an aid; the
+   same checks judge their work. See [the crew](skills.md#the-crew-optional).
 3. Now and then: `.lockflight/bin/lockflight ledger retro` (or ask for a retro) to see recurring incidents and suggested remedies.
 
 ## CI with a development build
