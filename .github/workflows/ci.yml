@@ -249,6 +249,8 @@ jobs:
         run: sh tests/install/user-path.sh
       - name: The marketplace pin check refuses incoherent pins
         run: bash tests/install/marketplace-ref.sh
+      - name: The release's engine hashes describe the packages
+        run: bash tests/release/engine-hashes.sh
       # The marketplace users add serves the plugins from a release tag; it must name a pushed tag whose plugins have the tag's
       # version, with the engine on nuget.org (docs/engineering/releasing.md).
       - name: The marketplace serves a published release

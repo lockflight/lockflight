@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# scripts/engine-hashes.py on hand-made packages: the hashes are of the executable inside each RID package, merge needs exactly
+# the released platforms, and verify catches a package, a pointer or a file that does not match.
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")/../.." && pwd)
+script="$root/scripts/engine-hashes.py"
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+version=0.0.0-ci.7
+commit=0123456789abcdef0123456789abcdef01234567
+rids="linux-arm64 linux-x64 osx-arm64 osx-x64 win-x64"
+failures=0
+
+ok() { echo "ok   $1"; }
+bad() { echo "FAIL $1"; failures=$((failures + 1)); }
+expect_failure() { local label="$1"; shift; if "$@" > "$work/out" 2>&1; then bad "$label (it passed)"; else ok "$label"; fi; }
+
+# make_package <path> <entry> <content>...: a zip with each entry holding its content (@<file>: that file's bytes).
+make_package() {
+  python3 -I - "$@" <<'PY'
+import sys, zipfile
+path, rest = sys.argv[1], sys.argv[2:]
+with zipfile.ZipFile(path, "w") as archive:
+    for entry, content in zip(rest[::2], rest[1::2]):
+        archive.writestr(entry, open(content[1:], "rb").read() if content.startswith("@") else content)
+PY
+}
+
+mkdir -p "$work/packages" "$work/out-rid"
+for rid in $rids; do
+  exe=lockflight; case "$rid" in win-*) exe=lockflight.exe ;; esac
+  make_package "$work/packages/Lockflight.Cli.$rid.$version.nupkg" "tools/any/$rid/$exe" "engine for $rid" "tools/any/$rid/DotnetToolSettings.xml" "<x/>"
+  python3 -I "$script" rid --package "$work/packages/Lockflight.Cli.$rid.$version.nupkg" --rid "$rid" --version "$version" --out "$work/out-rid" > /dev/null
+done
+
+expected=$(printf 'engine for linux-x64' | shasum -a 256 | cut -d ' ' -f 1)
+actual=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$work/out-rid/hash-linux-x64.json")
+if [ "$actual" = "$expected" ]; then ok "the hash is of the executable, not of the package"; else bad "hash $actual, expected $expected"; fi
+if [ "$(cat "$work/out-rid/lockflight-$version-win-x64.exe")" = "engine for win-x64" ]; then ok "the bare executable is extracted"; else bad "bare executable"; fi
+
+python3 -I "$script" merge --dir "$work/out-rid" --version "$version" --commit "$commit" --out "$work/engine-hashes.json" > /dev/null
+first=$(python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); print(list(d)[0], d["schema"], ",".join(d["binaries"]))' "$work/engine-hashes.json")
+if [ "$first" = "schema lockflight.engine-hashes/v1 linux-arm64,linux-x64,osx-arm64,osx-x64,win-x64" ]; then ok "merge writes the schema first and every platform"; else bad "merge wrote: $first"; fi
+
+make_package "$work/packages/Lockflight.Cli.$version.nupkg" engine-hashes.json "@$work/engine-hashes.json"
+if python3 -I "$script" verify --hashes "$work/engine-hashes.json" --packages "$work/packages" --pointer "$work/packages/Lockflight.Cli.$version.nupkg" > "$work/out" 2>&1; then
+  ok "verify accepts the packages the file describes"
+else
+  bad "verify refused matching packages: $(cat "$work/out")"
+fi
+
+mkdir -p "$work/missing" && cp "$work/out-rid"/hash-linux-*.json "$work/missing/"
+expect_failure "merge refuses a missing platform" python3 -I "$script" merge --dir "$work/missing" --version "$version" --commit "$commit" --out "$work/x.json"
+expect_failure "merge refuses a commit that is not 40 hex" python3 -I "$script" merge --dir "$work/out-rid" --version "$version" --commit abc --out "$work/x.json"
+expect_failure "rid refuses an unknown platform" python3 -I "$script" rid --package "$work/packages/Lockflight.Cli.linux-x64.$version.nupkg" --rid linux-musl-x64 --version "$version" --out "$work/x"
+
+make_package "$work/two.nupkg" tools/any/linux-x64/lockflight a tools/net10.0/linux-x64/lockflight b
+expect_failure "rid refuses a package with two executables" python3 -I "$script" rid --package "$work/two.nupkg" --rid linux-x64 --version "$version" --out "$work/x"
+
+cp -R "$work/packages" "$work/tampered"
+make_package "$work/tampered/Lockflight.Cli.osx-arm64.$version.nupkg" tools/any/osx-arm64/lockflight "another engine"
+expect_failure "verify catches a package whose executable changed" python3 -I "$script" verify --hashes "$work/engine-hashes.json" --packages "$work/tampered"
+
+make_package "$work/pointer-old.nupkg" engine-hashes.json '{"schema": "lockflight.engine-hashes/v1"}'
+expect_failure "verify catches a pointer with another engine-hashes.json" python3 -I "$script" verify --hashes "$work/engine-hashes.json" --packages "$work/packages" --pointer "$work/pointer-old.nupkg"
+
+make_package "$work/pointer-none.nupkg" README.md x
+expect_failure "verify catches a pointer without engine-hashes.json" python3 -I "$script" verify --hashes "$work/engine-hashes.json" --packages "$work/packages" --pointer "$work/pointer-none.nupkg"
+
+[ "$failures" -eq 0 ] || { echo "$failures check(s) failed"; exit 1; }
+echo "all engine-hashes checks passed"

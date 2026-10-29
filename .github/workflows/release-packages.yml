@@ -3,9 +3,12 @@
 # Runs for a pushed version tag (vX.Y.Z[-pre]), or by manual dispatch from such a tag ("Use workflow from" = the tag; with
 # publish off it is a dry run). A dispatch from a branch is a dry run only: it builds 0.0.0-ci.<run number>, skips the tag
 # and plugin-version checks, and refuses publish on. Every RID is built, tested, installed from a local feed, linked into a
-# project and run through the hook compatibility suite before anything is pushed. Pushing needs the `nuget` environment, whose required reviewers
-# approve each release, and uses nuget.org Trusted Publishing (OIDC): no API key is stored. The GitHub Release is created as a
-# draft for the maintainer to edit and publish. Setup: docs/engineering/releasing.md. Versions are never re-published.
+# project and run through the hook compatibility suite before anything is pushed. Each RID job hashes the executable inside
+# its package; the pointer package carries the merged engine-hashes.json (lockflight.engine-hashes/v1), and a verify job
+# re-extracts every package against it, on dry runs too. Pushing needs the `nuget` environment, whose required reviewers
+# approve each release, and uses nuget.org Trusted Publishing (OIDC): no API key is stored. The pushed packages are downloaded
+# back and checked again. The GitHub Release is published at once, so the hashes are downloadable as soon as the packages are
+# on nuget.org; the maintainer edits its notes afterwards. Setup: docs/engineering/releasing.md. Versions are never re-published.
 name: release-packages
 
 on:
@@ -14,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: "Push to nuget.org and draft the GitHub Release (off = build and smoke-test only)"
+        description: "Push to nuget.org and publish the GitHub Release (off = build, smoke-test and verify the hashes only)"
         type: boolean
         default: false
 
@@ -146,14 +149,33 @@ jobs:
           echo "ENGINE=$linked" >> "$GITHUB_ENV"
       - name: Hook compatibility suite on the linked engine
         run: sh tests/compat/probe-suite.sh
+      # The hash of the executable inside the package (nuget.org's signature changes the package's bytes, not this file's),
+      # and the bare executable for the GitHub Release.
+      - name: Hash the executable in the package
+        run: |
+          python=$(command -v python3 || command -v python)
+          "$python" -I scripts/engine-hashes.py rid --package "packages/Lockflight.Cli.$RID.$VERSION.nupkg" --rid "$RID" \
+            --version "$VERSION" --out binary
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: package-${{ matrix.rid }}
           path: packages/*.nupkg
           if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hash-${{ matrix.rid }}
+          path: binary/hash-${{ matrix.rid }}.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binary-${{ matrix.rid }}
+          path: binary/lockflight-*
+          if-no-files-found: error
 
+  # After every RID job: the pointer carries engine-hashes.json, so a client that sees the pointer can also check every RID
+  # package against it.
   pointer:
-    needs: version
+    needs: [version, rid]
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.version.outputs.version }}
@@ -162,9 +184,23 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: engine/global.json
-      - name: Pack the pointer package
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: hash-*
+          merge-multiple: true
+          path: hashes
+      - name: Merge the executable hashes (exactly one per platform)
+        run: |
+          python3 -I scripts/engine-hashes.py merge --dir hashes --version "$VERSION" --commit "$GITHUB_SHA" --out engine-hashes.json
+          cat engine-hashes.json
+      - name: Pack the pointer package with engine-hashes.json
         working-directory: engine
-        run: dotnet pack src/Lockflight.Cli -c Release -o ../packages -p:Version="$VERSION" -nologo
+        run: dotnet pack src/Lockflight.Cli -c Release -o ../packages -p:Version="$VERSION" -p:EngineHashesFile="$GITHUB_WORKSPACE/engine-hashes.json" -nologo
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-hashes
+          path: engine-hashes.json
+          if-no-files-found: error
       - name: Software bill of materials (CycloneDX)
         env:
           CYCLONEDX_VERSION: 6.3.1
@@ -184,8 +220,46 @@ jobs:
           path: sbom/*.json
           if-no-files-found: error
 
-  publish:
+  # The file that ships must describe the packages that ship: every RID package re-extracted and compared, and the pointer's
+  # copy byte-identical. Runs on dry runs too.
+  verify:
     needs: [version, rid, pointer]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: packages
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-hashes
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: binary-*
+          merge-multiple: true
+          path: binaries
+      - name: Re-extract every package against engine-hashes.json
+        run: |
+          python3 -I scripts/engine-hashes.py verify --hashes engine-hashes.json --packages packages \
+            --pointer "packages/Lockflight.Cli.$VERSION.nupkg"
+      - name: The bare executables are the packaged ones
+        run: |
+          count=$(find binaries -name 'lockflight-*' | wc -l)
+          [ "$count" -eq 5 ] || { echo "::error::expected 5 executables, found $count"; exit 1; }
+          for rid in linux-arm64 linux-x64 osx-arm64 osx-x64 win-x64; do
+            suffix=""; case "$rid" in win-*) suffix=.exe ;; esac
+            expected=$(jq -r --arg rid "$rid" '.binaries[$rid].sha256' engine-hashes.json)
+            actual=$(sha256sum "binaries/lockflight-$VERSION-$rid$suffix" | cut -d ' ' -f 1)
+            [ "$actual" = "$expected" ] || { echo "::error::lockflight-$VERSION-$rid$suffix is $actual, engine-hashes.json says $expected"; exit 1; }
+          done
+          echo "Hashes verified for $VERSION" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: [version, rid, pointer, verify]
     if: ${{ needs.version.outputs.publish == 'true' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     environment: nuget
@@ -196,17 +270,29 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: package-*
           merge-multiple: true
+          path: packages
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: binary-*
+          merge-multiple: true
+          path: packages
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-hashes
           path: packages
       - name: Checksums
         working-directory: packages
         run: |
           count=$(find . -name '*.nupkg' | wc -l)
           [ "$count" -eq 6 ] || { echo "::error::expected 6 packages, found $count"; exit 1; }
-          sha256sum -- *.nupkg > SHA256SUMS
+          count=$(find . -name 'lockflight-*' | wc -l)
+          [ "$count" -eq 5 ] || { echo "::error::expected 5 executables, found $count"; exit 1; }
+          sha256sum -- *.nupkg lockflight-* engine-hashes.json > SHA256SUMS
           cat SHA256SUMS
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -218,16 +304,35 @@ jobs:
         id: login
         with:
           user: ${{ vars.NUGET_USER }}
-      # RID packages first and the pointer last: a client never sees a pointer whose RID packages are missing.
+      # RID packages first and the pointer last: a client never sees a pointer whose RID packages are missing. A RID package
+      # that already exists fails the push: Native AOT builds are not guaranteed reproducible, so a re-run would leave older
+      # packages on nuget.org beside hashes of new bytes.
       - name: Push to nuget.org
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
           source=https://api.nuget.org/v3/index.json
           for package in packages/Lockflight.Cli.*."$VERSION".nupkg; do
-            dotnet nuget push "$package" --source "$source" --api-key "$NUGET_API_KEY" --skip-duplicate
+            dotnet nuget push "$package" --source "$source" --api-key "$NUGET_API_KEY"
           done
           dotnet nuget push "packages/Lockflight.Cli.$VERSION.nupkg" --source "$source" --api-key "$NUGET_API_KEY" --skip-duplicate
+      # What nuget.org serves (with its repository signature added) must still hold the hashed executables. Validation and
+      # indexing take minutes, so each package is polled for up to 30 minutes.
+      - name: Download the pushed packages back and verify them
+        run: |
+          base=https://api.nuget.org/v3-flatcontainer
+          mkdir -p served
+          lower=$(printf '%s' "$VERSION" | tr '[:upper:]' '[:lower:]')
+          for id in lockflight.cli lockflight.cli.linux-arm64 lockflight.cli.linux-x64 lockflight.cli.osx-arm64 lockflight.cli.osx-x64 lockflight.cli.win-x64; do
+            name=$(printf '%s' "$id" | sed 's/^lockflight\.cli/Lockflight.Cli/')
+            for attempt in $(seq 1 60); do
+              if curl -fsSLo "served/$name.$VERSION.nupkg" "$base/$id/$lower/$id.$lower.nupkg"; then break; fi
+              [ "$attempt" -eq 60 ] && { echo "::error::nuget.org does not serve $id $VERSION after 30 minutes"; exit 1; }
+              sleep 30
+            done
+          done
+          python3 -I scripts/engine-hashes.py verify --hashes packages/engine-hashes.json --packages served \
+            --pointer "served/Lockflight.Cli.$VERSION.nupkg"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: checksums
@@ -258,11 +363,14 @@ jobs:
           args: --latest --strip header
         env:
           OUTPUT: release-notes.md
-      - name: Create the draft GitHub Release
+      # Published, not drafted: engine-hashes.json must be downloadable the moment the packages are on nuget.org (update
+      # compares the feed's copy with this one). Edit the notes afterwards.
+      - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$TAG" --verify-tag --draft $prerelease --title "Lockflight $VERSION" \
-            --notes-file release-notes.md release/*.nupkg release/SHA256SUMS release/*.cdx.json
+          gh release create "$TAG" --verify-tag $prerelease --title "Lockflight $VERSION" \
+            --notes-file release-notes.md release/*.nupkg release/lockflight-* release/engine-hashes.json \
+            release/SHA256SUMS release/*.cdx.json
