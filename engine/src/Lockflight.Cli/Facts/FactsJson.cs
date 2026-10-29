@@ -110,6 +110,19 @@ internal static class FactsJson
         }
 
         writer.WriteEndArray();
+        if (manifest.Shell is ShellSettings shell)
+        {
+            writer.WriteStartObject("shell");
+            writer.WriteString("url", shell.Url);
+            WriteOptional(writer, "ref", shell.Ref);
+            WriteOptional(writer, "unit", shell.Unit);
+            writer.WriteEndObject();
+        }
+        else
+        {
+            writer.WriteNull("shell");
+        }
+
         writer.WriteStartObject("review");
         writer.WriteString("model", manifest.Review.Model);
         writer.WriteNumber("budgetUsd", manifest.Review.BudgetUsd);

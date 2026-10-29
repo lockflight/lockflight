@@ -315,15 +315,15 @@ script, so Claude Code needs **Git Bash**; `doctor` checks for it.
 
 ## "records a human decision and does not run inside a Claude Code session"
 
-`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo` and `update` are refused when `CLAUDECODE=1` is set. That variable
+`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss` and `update` are refused when `CLAUDECODE=1` is set. That variable
 is set inside Claude Code sessions, and a command typed with the `!` prefix runs inside the session too, so it is refused as
 well. Open a separate terminal window and paste the line the refusal prints: it changes to the project root and runs the same
 command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approve spec`.
 
 ## Uninstall
 
-1. In each project, if you ran `adopt apply`, first open a separate terminal window and run
-   `.lockflight/bin/lockflight adopt undo` there, to revert what it changed.
+1. In each project where init's changes are still one commit of their own, `git revert` it; otherwise remove by hand what
+   the steps below list.
 2. In a standard-profile project, remove the Spec Kit preset: `uvx --from specify-cli==1.1.3 specify preset remove lockflight`.
    Spec Kit itself (`.specify/`, the `speckit-*` skills) is yours to keep or remove.
 3. In each project, remove what `init` added: `lockflight.yaml`, `.lockflight/`, the tool pin (the `lockflight.cli` entry
