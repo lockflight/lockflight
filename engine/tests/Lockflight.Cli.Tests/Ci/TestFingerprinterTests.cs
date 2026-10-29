@@ -64,6 +64,38 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DataMembersFixturesStaticValuesAndOverridesCountToo()
+    {
+        const string Theory = """
+                public static TheoryData<int> Cases => new() { 2 };
+
+                [Theory]
+                [MemberData(nameof(Cases))]
+                public void UsesFrameworkCode(int factor) => Assert.True(Clock.Now() + Seed.Value + factor > 0);
+
+                private static IClock Clock { get; } = new FakeClock();
+            """;
+        repository.WriteCode(Production, Theory, "IClassFixture<SeedFixture>")
+            .Write("tests/Shop.Tests/Support.cs", Support("1", "2", "3"));
+        string original = await FingerprintAsync("UsesFrameworkCode");
+
+        repository.WriteCode(Production, Theory.Replace("new() { 2 }", "new() { 0 }", StringComparison.Ordinal), "IClassFixture<SeedFixture>");
+        string data = await FingerprintAsync("UsesFrameworkCode");
+        Assert.NotEqual(original, data);
+
+        repository.Write("tests/Shop.Tests/Support.cs", Support("9", "2", "3"));
+        string fixture = await FingerprintAsync("UsesFrameworkCode");
+        Assert.NotEqual(data, fixture);
+
+        repository.Write("tests/Shop.Tests/Support.cs", Support("9", "8", "3"));
+        string value = await FingerprintAsync("UsesFrameworkCode");
+        Assert.NotEqual(fixture, value);
+
+        repository.Write("tests/Shop.Tests/Support.cs", Support("9", "8", "7"));
+        Assert.NotEqual(value, await FingerprintAsync("UsesFrameworkCode"));
+    }
+
+    [Fact]
     public async Task ATestThatIsNotInTheAssemblyHasNoFingerprint()
     {
         await BuildAsync();
@@ -75,11 +107,38 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
 
     private string AssemblyPath => Path.Combine(repository.Root, "tests", "Shop.Tests", "bin", "Debug", "net10.0", "Shop.Tests.dll");
 
-    private async Task<string> FingerprintAsync()
+    private static string Support(string fixtureSeed, string staticValue, string clock) => $$"""
+        namespace Shop.Tests;
+
+        public sealed class SeedFixture
+        {
+            public SeedFixture() => Seeded = {{fixtureSeed}};
+
+            public int Seeded { get; }
+        }
+
+        internal static class Seed
+        {
+            public static readonly int Value = {{staticValue}};
+        }
+
+        public interface IClock
+        {
+            int Now();
+        }
+
+        internal sealed class FakeClock : IClock
+        {
+            public int Now() => {{clock}};
+        }
+
+        """;
+
+    private async Task<string> FingerprintAsync(string test = Test)
     {
         await BuildAsync();
         using TestFingerprinter fingerprinter = new(AssemblyPath, new HashSet<string> { "Shop", "Shop.Tests" });
-        string? fingerprint = fingerprinter.Fingerprint(TestClass, Test);
+        string? fingerprint = fingerprinter.Fingerprint(TestClass, test);
         Assert.NotNull(fingerprint);
         return fingerprint;
     }

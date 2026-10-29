@@ -30,12 +30,13 @@ internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
             string red = cycle.Red.Commit;
             HashSet<string> atRed = [.. await JudgeGit.TreeFilesAsync(root, red, cancellationToken) ?? []];
             string[] changedInputs = [.. (await JudgeGit.ChangedFilesAsync(root, red, plan.Inputs.Head, cancellationToken) ?? []).Where(atRed.Contains).Where(side.IsTestSide)];
+            IReadOnlySet<string> helpers = await side.HelperSourcesAsync(root, red, changedInputs, cancellationToken);
             List<RedGreenTest> amended = [];
             foreach (RedGreenTest test in cycle.Tests)
             {
                 TestCase? atHead = headInventory.FirstOrDefault(candidate => candidate.Key == test.Key);
                 string assembly = test.Key[..test.Key.IndexOf(':', StringComparison.Ordinal)];
-                string[] inputs = [.. changedInputs.Where(path => side.AffectsBeyondCode(path, assembly))];
+                string[] inputs = [.. changedInputs.Where(path => side.Affects(path, assembly, helpers))];
                 if (atHead is null)
                 {
                     results.Add(new SinceRedTest(test.Key, cycle.Red.Label!, SinceRed.MissingAtHead, "deleted or renamed after its red", [], null));

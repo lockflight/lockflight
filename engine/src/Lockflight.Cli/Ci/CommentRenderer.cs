@@ -24,7 +24,7 @@ internal static class CommentRenderer
         string head = verdict["head"]?.GetValue<string>() ?? "unknown";
         StringBuilder top = new();
         top.Append($"{Marker} head={Hex(head)} -->\n");
-        string overall = verdict["verdict"]?.GetValue<string>() ?? "ERROR";
+        string overall = CommentText.Plain(verdict["verdict"]?.GetValue<string>() ?? "ERROR");
         string feature = verdict["feature"]?["id"]?.GetValue<string>() is string id ? $" · {CommentText.Code(id)}" : string.Empty;
         string changeClass = verdict["changeClass"]?["class"]?.GetValue<string>() ?? "?";
         string preset = verdict["changeClass"]?["policy"]?["preset"]?.GetValue<string>() is "interim" ? " (interim)" : string.Empty;
@@ -41,8 +41,8 @@ internal static class CommentRenderer
         {
             string checkId = check?["id"]?.GetValue<string>() ?? "?";
             string title = CheckIdNames.Parse(checkId) is CheckId known ? CheckIdNames.Title(known) : CommentText.Plain(checkId);
-            string level = check?["requirement"]?.GetValue<string>() ?? "?";
-            string shown = level == "off" ? "—" : check?["verdict"]?.GetValue<string>() ?? "?";
+            string level = CommentText.Plain(check?["requirement"]?.GetValue<string>() ?? "?");
+            string shown = level == "off" ? "—" : CommentText.Plain(check?["verdict"]?.GetValue<string>() ?? "?");
             top.Append($"| {title} | {shown} | {level} | {CommentText.Plain(check?["why"]?.GetValue<string>())} |\n");
         }
 
@@ -81,7 +81,7 @@ internal static class CommentRenderer
 
     private static string Contexts(JsonNode verdict) =>
         verdict["contexts"] is JsonObject contexts
-            ? $"Status: {string.Join(" · ", contexts.Select(context => $"`{context.Key}` {context.Value?.GetValue<string>()}"))}\n\n"
+            ? $"Status: {string.Join(" · ", contexts.Select(context => $"{CommentText.Code(context.Key)} {CommentText.Plain(context.Value?.GetValue<string>())}"))}\n\n"
             : string.Empty;
 
     private static IEnumerable<string> Sections(JsonNode verdict)
@@ -95,13 +95,13 @@ internal static class CommentRenderer
                 JsonArray tests = cycle?["tests"]?.AsArray() ?? [];
                 if (tests.Count == 0)
                 {
-                    table.Append($"| {CommentText.Plain(cycle?["label"]?.GetValue<string>())} | `{Short(cycle?["commit"]?.GetValue<string>() ?? string.Empty)}` | — | {cycle?["verdict"]?.GetValue<string>()} | | |\n");
+                    table.Append($"| {CommentText.Plain(cycle?["label"]?.GetValue<string>())} | `{Short(cycle?["commit"]?.GetValue<string>() ?? string.Empty)}` | — | {CommentText.Plain(cycle?["verdict"]?.GetValue<string>())} | | |\n");
                 }
 
                 foreach (JsonNode? test in tests)
                 {
                     table.Append($"| {CommentText.Plain(cycle?["label"]?.GetValue<string>())} | `{Short(cycle?["commit"]?.GetValue<string>() ?? string.Empty)}` | {CommentText.Code(test?["key"]?.GetValue<string>())} | "
-                        + $"{test?["red"]?.GetValue<string>()} | {test?["sinceRed"]?.GetValue<string>() ?? "—"} | {test?["atHead"]?.GetValue<string>() ?? "—"} |\n");
+                        + $"{CommentText.Plain(test?["red"]?.GetValue<string>())} | {CommentText.Plain(test?["sinceRed"]?.GetValue<string>() ?? "—")} | {CommentText.Plain(test?["atHead"]?.GetValue<string>() ?? "—")} |\n");
                 }
             }
 
@@ -127,7 +127,7 @@ internal static class CommentRenderer
             foreach (JsonNode? row in rows)
             {
                 string tests = string.Join("<br>", (row?["tests"]?.AsArray() ?? []).Select(test => CommentText.Code(test?.GetValue<string>())));
-                trace.Append($"| {CommentText.Plain(row?["requirement"]?.GetValue<string>())} | {(tests.Length > 0 ? tests : "—")} | {row?["status"]?.GetValue<string>()} |\n");
+                trace.Append($"| {CommentText.Plain(row?["requirement"]?.GetValue<string>())} | {(tests.Length > 0 ? tests : "—")} | {CommentText.Plain(row?["status"]?.GetValue<string>())} |\n");
             }
 
             yield return trace.Append("\n</details>\n").ToString();

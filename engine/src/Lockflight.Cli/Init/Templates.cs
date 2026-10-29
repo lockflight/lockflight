@@ -97,6 +97,7 @@ internal static class Templates
             timeout-minutes: 55
             outputs:
               verdict: ${{ steps.judge.outputs.verdict }}
+              base: ${{ steps.base.outputs.sha }}
             steps:
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
                 with:
@@ -166,7 +167,7 @@ internal static class Templates
             steps:
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
                 with:
-                  ref: ${{ github.event.pull_request.base.sha || github.sha }}
+                  ref: ${{ github.event_name == 'pull_request' && (needs.judge.outputs.base || github.event.pull_request.base.sha) || github.sha }}
                   persist-credentials: false
               - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
                 with:
@@ -175,7 +176,7 @@ internal static class Templates
                 with:
                   mode: report
                   head: ${{ github.event.pull_request.head.sha || github.sha }}
-                  base: ${{ github.event.pull_request.base.sha || github.sha }}
+                  base: ${{ github.event_name == 'pull_request' && (needs.judge.outputs.base || github.event.pull_request.base.sha) || github.sha }}
                   context: gates
                   comment: "true"
 
@@ -187,7 +188,7 @@ internal static class Templates
             steps:
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
                 with:
-                  ref: ${{ github.event.pull_request.base.sha || github.sha }}
+                  ref: ${{ github.event_name == 'pull_request' && (needs.judge.outputs.base || github.event.pull_request.base.sha) || github.sha }}
                   persist-credentials: false
               - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
                 with:
@@ -196,7 +197,7 @@ internal static class Templates
                 with:
                   mode: report
                   head: ${{ github.event.pull_request.head.sha || github.sha }}
-                  base: ${{ github.event.pull_request.base.sha || github.sha }}
+                  base: ${{ github.event_name == 'pull_request' && (needs.judge.outputs.base || github.event.pull_request.base.sha) || github.sha }}
                   context: lockflight/judge
 
         """;

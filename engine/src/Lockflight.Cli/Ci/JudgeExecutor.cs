@@ -60,8 +60,11 @@ internal static class JudgeExecutor
                 ? (CheckVerdict.NotEarned, budget.Why(trees.Builds.Count), null, null)
                 : await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: false, cancellationToken) is string notMoved
                 ? (CheckVerdict.Error, notMoved, null, null)
-                : await GatesJudge.RunAsync(worktree, plan, context, plan.Inputs.EvidenceDirectory, cancellationToken);
-            if (head.Listing.Outcome == TreeOutcome.NoTestApps && gates.TestStep is string testStep)
+                : await GatesJudge.RunAsync(worktree, plan, context, plan.Inputs.EvidenceDirectory, budget, cancellationToken);
+            // Only when the base had none either: a pull request that turns the test projects into ones red/green cannot run must
+            // not lose the check that nothing was deleted.
+            bool baseHadNone = baseListing is null || baseListing.Outcome == TreeOutcome.NoTestApps;
+            if (head.Listing.Outcome == TreeOutcome.NoTestApps && baseHadNone && gates.TestStep is string testStep)
             {
                 // Without a test project red/green can run, the gates' own test step judges the suite at head.
                 greenAtHead = greenAtHead with

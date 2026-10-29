@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -24,6 +25,7 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
     private const byte TwoBytePrefix = 0xFE;
     private const byte SwitchOpCode = 0x45;
     private const byte StringOpCode = 0x72;
+    private const byte CallVirtOpCode = 0x6F;
 
     private static readonly string[] CompilerAttributes = ["]System.Runtime.CompilerServices.", "]System.Diagnostics."];
     private static readonly HashSet<byte> MethodOps = [0x27, 0x28, 0x6F, 0x73];
@@ -93,6 +95,7 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             }
 
             pending.Enqueue(roots[0]);
+            EnqueueFrameworkCode(type, test);
             for (TypeDefinitionHandle? current = type; current is TypeDefinitionHandle currentType; current = BaseInAssembly(currentType))
             {
                 foreach (MethodDefinitionHandle constructor in MethodsNamed(currentType, ".ctor").Concat(MethodsNamed(currentType, ".cctor")))
@@ -216,7 +219,12 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
                 }
                 else if (MethodOps.Contains(code) || TokenOps.Contains(code))
                 {
-                    Operand(MetadataTokens.EntityHandle(il.ReadInt32()));
+                    EntityHandle token = MetadataTokens.EntityHandle(il.ReadInt32());
+                    Operand(token);
+                    if (code == CallVirtOpCode)
+                    {
+                        EnqueueOverrides(token);
+                    }
                 }
                 else if (code == StringOpCode)
                 {
@@ -246,6 +254,124 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             foreach (MethodDefinitionHandle own in OwnMethods(token))
             {
                 pending.Enqueue(own);
+            }
+
+            // A static field's value comes from its type's static constructor.
+            if (token.Kind == HandleKind.FieldDefinition)
+            {
+                EnqueueAll(reader.GetFieldDefinition((FieldDefinitionHandle)token).GetDeclaringType(), ".cctor");
+            }
+        }
+
+        /// <summary>
+        /// A virtual or interface call reaches whichever override runs: every virtual method of this assembly with the same name,
+        /// unless the called member belongs to the base class library, whose overrides (ToString, Equals, Dispose) are everywhere.
+        /// </summary>
+        private void EnqueueOverrides(EntityHandle token)
+        {
+            string? name = null;
+            if (token.Kind == HandleKind.MethodDefinition)
+            {
+                MethodDefinition method = reader.GetMethodDefinition((MethodDefinitionHandle)token);
+                name = (method.Attributes & MethodAttributes.Virtual) != 0 ? reader.GetString(method.Name) : null;
+            }
+            else if (token.Kind == HandleKind.MemberReference)
+            {
+                MemberReference member = reader.GetMemberReference((MemberReferenceHandle)token);
+                string parent = member.Parent.Kind == HandleKind.TypeReference ? ReferenceName((TypeReferenceHandle)member.Parent) : string.Empty;
+                name = parent.Contains("]System.", StringComparison.Ordinal) || parent.Contains("]Microsoft.", StringComparison.Ordinal) ? null : reader.GetString(member.Name);
+            }
+
+            if (name is null)
+            {
+                return;
+            }
+
+            foreach (MethodDefinitionHandle handle in reader.MethodDefinitions)
+            {
+                MethodDefinition candidate = reader.GetMethodDefinition(handle);
+                if ((candidate.Attributes & MethodAttributes.Virtual) != 0 && reader.GetString(candidate.Name) == name)
+                {
+                    pending.Enqueue(handle);
+                }
+            }
+        }
+
+        /// <summary>
+        /// What the test framework calls around the test rather than the test itself: the members a data attribute names
+        /// (<c>MemberData</c>, <c>ClassData</c>, NUnit's <c>TestCaseSource</c>) and the fixtures the class takes
+        /// (<c>IClassFixture&lt;T&gt;</c> and the like), all of their code.
+        /// </summary>
+        private void EnqueueFrameworkCode(TypeDefinitionHandle type, MethodDefinition test)
+        {
+            foreach (CustomAttributeHandle handle in test.GetCustomAttributes())
+            {
+                CustomAttribute attribute = reader.GetCustomAttribute(handle);
+                string constructor = Token(attribute.Constructor);
+                if (!constructor.Contains("DataAttribute", StringComparison.Ordinal) && !constructor.Contains("SourceAttribute", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                CustomAttributeValue<string> value = attribute.DecodeValue(new AttributeTypes(Names));
+                foreach (object? argument in value.FixedArguments.Select(argument => argument.Value).Concat(value.NamedArguments.Select(argument => argument.Value)))
+                {
+                    if (argument is string named)
+                    {
+                        foreach (TypeDefinitionHandle candidate in reader.TypeDefinitions)
+                        {
+                            EnqueueAll(candidate, named);
+                            EnqueueAll(candidate, $"get_{named}");
+                            if (PlainName(candidate) == named || PlainName(candidate).EndsWith("." + named, StringComparison.Ordinal))
+                            {
+                                EnqueueAll(candidate, name: null);
+                            }
+                        }
+                    }
+                }
+
+                EnqueueAll(type, ".cctor");
+            }
+
+            for (TypeDefinitionHandle? current = type; current is TypeDefinitionHandle currentType; current = BaseInAssembly(currentType))
+            {
+                foreach (InterfaceImplementationHandle implementation in reader.GetTypeDefinition(currentType).GetInterfaceImplementations())
+                {
+                    EntityHandle contract = reader.GetInterfaceImplementation(implementation).Interface;
+                    if (contract.Kind != HandleKind.TypeSpecification)
+                    {
+                        continue;
+                    }
+
+                    BlobReader signature = reader.GetBlobReader(reader.GetTypeSpecification((TypeSpecificationHandle)contract).Signature);
+                    if (signature.ReadSignatureTypeCode() != SignatureTypeCode.GenericTypeInstance)
+                    {
+                        continue;
+                    }
+
+                    signature.ReadSignatureTypeCode();
+                    signature.ReadTypeHandle();
+                    int count = signature.ReadCompressedInteger();
+                    for (int index = 0; index < count; index++)
+                    {
+                        if (signature.ReadSignatureTypeCode() is SignatureTypeCode.TypeHandle && signature.ReadTypeHandle() is { Kind: HandleKind.TypeDefinition } fixture)
+                        {
+                            EnqueueAll((TypeDefinitionHandle)fixture, name: null);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>Every method of <paramref name="type"/> named <paramref name="name"/> (all of them when null).</summary>
+        private void EnqueueAll(TypeDefinitionHandle type, string? name)
+        {
+            foreach (MethodDefinitionHandle handle in reader.GetTypeDefinition(type).GetMethods())
+            {
+                if (name is null || reader.GetString(reader.GetMethodDefinition(handle).Name) == name)
+                {
+                    pending.Enqueue(handle);
+                }
             }
         }
 

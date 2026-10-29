@@ -60,9 +60,15 @@ internal static class CiJudgeCanaries
     {
         ["schema"] = CiEvidence.Schema,
         ["head"] = head,
-        ["checks"] = new JsonArray(
-            new JsonObject { ["id"] = "green", ["context"] = "gates", ["verdict"] = "PASS", ["requirement"] = "required", ["why"] = "ok" },
-            new JsonObject { ["id"] = "review", ["context"] = "lockflight/judge", ["verdict"] = "SKIPPED", ["requirement"] = "required", ["why"] = "joined by the report" }),
+        ["event"] = "pr",
+        ["checks"] = new JsonArray([.. Enum.GetValues<CheckId>().Select(id => (JsonNode)new JsonObject
+        {
+            ["id"] = CheckIdNames.ToName(id),
+            ["context"] = StatusContextNames.ToName(StatusContextNames.Of(id)),
+            ["verdict"] = id == CheckId.Review ? "SKIPPED" : "PASS",
+            ["requirement"] = "required",
+            ["why"] = id == CheckId.Review ? "joined by the report" : "ok",
+        })]),
     };
 
     private static async Task<CanaryReport> ImplementationInRedAsync(CancellationToken cancellationToken)

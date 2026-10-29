@@ -91,7 +91,9 @@ runs:
         LF_ENGINE: ${{ inputs.engine }}
       run: |
         if [ -n "$LF_ENGINE" ]; then echo "LF_LOCKFLIGHT=$LF_ENGINE" >> "$GITHUB_ENV"; exit 0; fi
-        policy="${LF_BASE:-$LF_HEAD}"
+        # A push's previous commit may be all zeros (a new branch) or gone (a force-push): the head's own pin then applies.
+        policy="$LF_HEAD"
+        if [ -n "$LF_BASE" ] && git cat-file -e "$LF_BASE^{commit}" 2>/dev/null; then policy="$LF_BASE"; fi
         pin=""
         for manifest in .config/dotnet-tools.json dotnet-tools.json; do
           if git cat-file -e "$policy:$manifest" 2>/dev/null; then pin=$(git show "$policy:$manifest"); break; fi
@@ -121,8 +123,9 @@ runs:
         if [ -n "$LF_BRANCH" ]; then args+=(--branch "$LF_BRANCH"); fi
         if [ "$LF_REVIEW" != "true" ]; then args+=(--no-review-expected); fi
         set +e
-        "$LF_LOCKFLIGHT" "${args[@]}" | tee -a "$GITHUB_STEP_SUMMARY"
-        code=${PIPESTATUS[0]}
+        # The output names pull request text (tests, build lines); it goes to the log only, and the report writes the summary.
+        "$LF_LOCKFLIGHT" "${args[@]}"
+        code=$?
         set -e
         mkdir -p artifacts/lockflight
         if [ -f "$RUNNER_TEMP/lockflight-evidence/gates-result.json" ]; then cp "$RUNNER_TEMP/lockflight-evidence/gates-result.json" artifacts/lockflight/result.json; fi
