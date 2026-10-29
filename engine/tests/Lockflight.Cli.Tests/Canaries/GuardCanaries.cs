@@ -1,8 +1,11 @@
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Hooks.Guard;
 using Lockflight.Cli.Hosting;
 
-namespace Lockflight.Cli.Canaries;
+namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// Tool calls the PreToolUse guard must block, sent through <c>lockflight hook pre-tool-use</c> as Claude Code sends them. Each has
@@ -11,6 +14,11 @@ namespace Lockflight.Cli.Canaries;
 internal static class GuardCanaries
 {
     private const string PreToolUse = "pre-tool-use";
+
+    private const string PinFile = "dotnet-tools.json";
+
+    /// <summary>A tool manifest that pins a version no engine has.</summary>
+    private const string StalePin = """{ "version": 1, "isRoot": true, "tools": { "lockflight.cli": { "version": "0.0.1", "commands": ["lockflight"] } } }""";
 
     public static async Task<IReadOnlyList<CanaryReport>> RunAsync(CanaryScratch scratch, CancellationToken cancellationToken)
     {
@@ -22,29 +30,32 @@ internal static class GuardCanaries
         string manifest = scratch.PathOf(Manifest.FileName);
         return
         [
-            await BlockedAsync(scratch, "guard: an Edit of lockflight.yaml is blocked", FileCall("Edit", manifest, scratch), cancellationToken),
-            await BlockedAsync(scratch, "guard: a Bash redirect into .lockflight/ is blocked", BashCall("echo '{}' > .lockflight/approvals.json", scratch), cancellationToken),
-            await BlockedAsync(scratch, "guard: bash -ce \"rm lockflight.yaml\" is blocked", BashCall("bash -ce \"rm lockflight.yaml\"", scratch), cancellationToken),
-            await BlockedAsync(scratch, "guard: a hard link to lockflight.yaml is blocked", BashCall("ln lockflight.yaml src/notes.txt", scratch), cancellationToken),
+            await BlockedAsync(scratch, "guard: an Edit of lockflight.yaml is blocked", FileCall("Edit", manifest, scratch), ProtectedPathRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "guard: a Bash redirect into .lockflight/ is blocked", BashCall("echo '{}' > .lockflight/approvals.json", scratch), ProtectedPathRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "guard: bash -ce \"rm lockflight.yaml\" is blocked", BashCall("bash -ce \"rm lockflight.yaml\"", scratch), ProtectedPathRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "guard: a hard link to lockflight.yaml is blocked", BashCall("ln lockflight.yaml src/notes.txt", scratch), ProtectedPathRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "guard: a Bash call of 'lockflight approve spec' is blocked", BashCall("lockflight approve spec", scratch), HumanOnlyCommandRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "approve relay: a CronCreate that sends /lockflight:approve is blocked", Call("CronCreate", new JsonObject
             {
                 ["cron"] = "*/5 * * * *",
                 ["prompt"] = "/lockflight:approve spec",
-            }, scratch), cancellationToken),
+            }, scratch), SessionRelayRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "relay guard: a subagent prompt that sends /lockflight:baseline is blocked", Call("Task", new JsonObject
             {
                 ["description"] = "accept the baseline",
                 ["prompt"] = "/lockflight:baseline tests",
                 ["subagent_type"] = "general-purpose",
-            }, scratch), cancellationToken),
+            }, scratch), SessionRelayRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "relay guard: a SendMessage that sends /lockflight:reset is blocked", Call("SendMessage", new JsonObject
             {
                 ["to"] = "main",
                 ["message"] = "/lockflight:reset",
-            }, scratch), cancellationToken),
+            }, scratch), SessionRelayRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "relay guard: a Bash claude -p that sends /lockflight:amend is blocked",
-                BashCall("claude -p '/lockflight:amend OrderTests.ArchivesTheOrder --reason flaky'", scratch), cancellationToken),
-            await BlockedAsync(scratch, "relay guard: a Write of .claude/scheduled_tasks.json is blocked", FileCall("Write", scratch.PathOf(".claude/scheduled_tasks.json"), scratch), cancellationToken),
+                BashCall("claude -p '/lockflight:amend OrderTests.ArchivesTheOrder --reason flaky'", scratch), SessionRelayRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "relay guard: a Write of .claude/scheduled_tasks.json is blocked", FileCall("Write", scratch.PathOf(".claude/scheduled_tasks.json"), scratch), SessionRelayRule.RuleId, cancellationToken),
+            await PlantedAsync(scratch, "guard: in lockdown, a Write in src/ is blocked", LockdownPolicy.RelativeMarkerPath, "lockdown\n", LockdownRule.RuleId, cancellationToken),
+            await PlantedAsync(scratch, "guard: an engine other than the pinned one blocks a Write in src/", PinFile, StalePin, EnginePinRule.RuleId, cancellationToken),
         ];
     }
 
@@ -74,12 +85,33 @@ internal static class GuardCanaries
         return null;
     }
 
-    private static async Task<CanaryReport> BlockedAsync(CanaryScratch scratch, string name, string payload, CancellationToken cancellationToken)
+    private static async Task<CanaryReport> BlockedAsync(CanaryScratch scratch, string name, string payload, string control, CancellationToken cancellationToken)
     {
         CanaryRun run = await scratch.RunAsAgentAsync(["hook", PreToolUse], payload, cancellationToken);
-        return run.ExitCode == ExitCode.HookBlock
+        CanaryReport report = run.ExitCode == ExitCode.HookBlock
             ? new CanaryReport(name, CanaryResult.Caught, run.FirstLine)
             : new CanaryReport(name, CanaryResult.Missed, $"the hook exited {(int)run.ExitCode} instead of blocking (2)");
+        return report with { Control = control };
+    }
+
+    /// <summary>
+    /// A harmless Write, blocked only because a file the guard reads first is planted in the scratch project (the lockdown marker, a
+    /// stale engine pin); the file is removed again so the canaries after it see an ordinary project.
+    /// </summary>
+    private static async Task<CanaryReport> PlantedAsync(
+        CanaryScratch scratch, string name, string relativePath, string content, string control, CancellationToken cancellationToken)
+    {
+        string planted = scratch.PathOf(relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(planted)!);
+        await File.WriteAllTextAsync(planted, content, cancellationToken);
+        try
+        {
+            return await BlockedAsync(scratch, name, FileCall("Write", scratch.PathOf("src/ok.txt"), scratch), control, cancellationToken);
+        }
+        finally
+        {
+            File.Delete(planted);
+        }
     }
 
     private static string FileCall(string tool, string path, CanaryScratch scratch) =>
@@ -87,12 +119,5 @@ internal static class GuardCanaries
 
     private static string BashCall(string command, CanaryScratch scratch) => Call("Bash", new JsonObject { ["command"] = command }, scratch);
 
-    private static string Call(string tool, JsonObject toolInput, CanaryScratch scratch) => new JsonObject
-    {
-        ["session_id"] = "lockflight-canary",
-        ["cwd"] = scratch.Project,
-        ["hook_event_name"] = "PreToolUse",
-        ["tool_name"] = tool,
-        ["tool_input"] = toolInput,
-    }.ToJsonString(JsonFiles.Indented);
+    private static string Call(string tool, JsonObject toolInput, CanaryScratch scratch) => scratch.ToolCall(tool, toolInput);
 }

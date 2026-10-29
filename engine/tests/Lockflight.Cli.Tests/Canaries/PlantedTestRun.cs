@@ -1,4 +1,4 @@
-namespace Lockflight.Cli.Canaries;
+namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// A test run the test gate is shown without running it: Microsoft.Testing.Platform's exit code and console summary, and the TRX

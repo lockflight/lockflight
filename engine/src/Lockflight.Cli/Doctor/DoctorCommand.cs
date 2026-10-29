@@ -7,13 +7,19 @@ using Lockflight.Cli.Processes;
 namespace Lockflight.Cli.Doctor;
 
 /// <summary>
-/// <c>lockflight doctor</c>: readiness report; exits <see cref="ExitCode.Fail"/> when any check fails. With <c>--canaries</c> (or
-/// <c>--canaries=full</c>) it runs the canary self-test instead (<see cref="CanarySuite"/>).
+/// <c>lockflight doctor</c>: readiness report; exits <see cref="ExitCode.Fail"/> when any check fails. With <c>--self-test</c> it
+/// runs the self-test canaries instead (<see cref="SelfTestSuite"/>). <c>--canaries</c> and <c>--canaries=full</c> are deprecated
+/// names for <c>--self-test</c>, kept so an older plugin's doctor skill still works; the full canary suite moved to the engine's
+/// tests.
 /// </summary>
 internal sealed class DoctorCommand(CliContext context) : ICommand
 {
+    public const string SelfTestFlag = "--self-test";
+
+    /// <summary>Deprecated: the self-test's name before the full canary suite moved to the engine's tests.</summary>
     public const string CanariesFlag = "--canaries";
 
+    /// <summary>Deprecated: as <see cref="CanariesFlag"/>; nothing is built any more.</summary>
     public const string FullCanariesFlag = "--canaries=full";
 
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
@@ -25,9 +31,15 @@ internal sealed class DoctorCommand(CliContext context) : ICommand
 
         if (options.Flag(CanariesFlag) || options.Flag(FullCanariesFlag))
         {
-            CanaryMode mode = options.Flag(FullCanariesFlag) ? CanaryMode.Full : CanaryMode.Fast;
-            await context.Error.WriteLineAsync($"lockflight: planting canaries in a temporary scratch project{(mode == CanaryMode.Full ? " (full: builds and runs a generated project)" : string.Empty)}…");
-            return await CanarySuite.ReportAsync(await CanarySuite.RunAsync(mode, context.Time, cancellationToken), mode, context.Output);
+            await context.Error.WriteLineAsync(
+                $"lockflight: {(options.Flag(FullCanariesFlag) ? FullCanariesFlag : CanariesFlag)} is deprecated; it runs {SelfTestFlag}. "
+                + "The full canary suite is part of the engine's tests and runs in CI.");
+        }
+
+        if (options.Flag(SelfTestFlag) || options.Flag(CanariesFlag) || options.Flag(FullCanariesFlag))
+        {
+            await context.Error.WriteLineAsync("lockflight: planting the self-test canaries in a temporary scratch project…");
+            return await SelfTestSuite.RunAndReportAsync(context.Time, context.Output, cancellationToken);
         }
 
         string root = ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory;

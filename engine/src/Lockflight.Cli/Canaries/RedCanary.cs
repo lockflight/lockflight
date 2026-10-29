@@ -4,11 +4,11 @@ using Lockflight.Cli.Testing;
 namespace Lockflight.Cli.Canaries;
 
 /// <summary>
-/// A red whose test fails by <c>Assert.Fail</c> must be rejected (RED_IN_TEST): it fails whatever the production code does. Judged as
-/// <c>redgreen red</c> judges a run; the harmless twin, an assertion on production code's result, must be accepted (RED_ASSERT).
-/// The full mode runs a real red (<see cref="CanaryProject"/>).
+/// The self-test's red canary: a red whose test fails by <c>Assert.Fail</c> must be classified RED_IN_TEST and rejected (it fails
+/// whatever the production code does). Judged as <c>redgreen red</c> judges a run; the harmless twin, an assertion on production
+/// code's result, must be accepted (RED_ASSERT). The engine's canary suite also runs a real red on a generated project.
 /// </summary>
-internal static class RedCanaries
+internal static class RedCanary
 {
     private const string TestClass = "Canary.Tests.CanaryTests";
 

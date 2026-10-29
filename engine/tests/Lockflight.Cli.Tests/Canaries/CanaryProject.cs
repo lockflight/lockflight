@@ -1,6 +1,7 @@
+using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Processes;
 
-namespace Lockflight.Cli.Canaries;
+namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// The full mode's generated .NET project in a scratch area: a production library and an xUnit v3 test project on

@@ -10,8 +10,8 @@ internal enum CanaryResult
     Missed = 1,
 
     /// <summary>
-    /// The canary could not judge: its harmless twin was rejected too (so a rejection proves nothing), or the generated project
-    /// could not be built. Counts as a failure, never as caught.
+    /// The canary could not judge: its harmless twin was rejected too (so a rejection proves nothing), or what it needs (git, a
+    /// generated project that builds) is missing. Counts as a failure, never as caught.
     /// </summary>
     Broken = 2,
 }

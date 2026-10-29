@@ -332,9 +332,11 @@ Setup
                                                 --quality: recommended analyzers and code metrics rules (an
                                                 existing file gets a proposal); --architecture-tests: a layer
                                                 dependency test project
-  doctor [--canaries[=full]]                    readiness report with fixes; --canaries: plant a violation
-                                                before every control in a scratch project and report each
-                                                as caught or missed (=full also builds and runs one)
+  doctor [--self-test]                          readiness report with fixes; --self-test: plant a violation
+                                                before the guard, a human-only command, the linked engine
+                                                check, the test gate and red in a scratch project and
+                                                report each as caught or missed (seconds, no build;
+                                                --canaries is a deprecated name for it)
   docs check                                    references in CLAUDE.md, rules, skills, the constitution
                                                 and docs/ that no longer resolve (links, anchors, deleted or
                                                 moved paths, engine and plugin commands) and instruction
