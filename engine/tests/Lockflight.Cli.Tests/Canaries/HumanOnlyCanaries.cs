@@ -21,6 +21,7 @@ internal static class HumanOnlyCanaries
             ["baseline build"] = ["--path", NoFeature],
             ["baseline tests"] = ["--path", NoFeature],
             ["baseline deps"] = ["--path", NoFeature],
+            ["baseline suppressions"] = [],
             ["redgreen reset"] = ["--feature", NoFeature],
             ["redgreen amend"] = [NoFeature, "--reason", "canary", "--feature", NoFeature],
             ["review dismiss"] = [NoFeature, "--reason", "canary"],

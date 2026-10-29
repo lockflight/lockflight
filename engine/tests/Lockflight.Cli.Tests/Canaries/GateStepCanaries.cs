@@ -9,7 +9,8 @@ namespace Lockflight.Cli.Tests.Canaries;
 /// <summary>
 /// Every registered gate step (<see cref="GateProfiles"/>) judged on a planted violation: its tool is replaced by one that reports
 /// the violation (a compile error, a failing test, a High advisory, a leaked secret, a file the formatter would change), in a
-/// scratch git repository whose last commit changes a protected file and a C# file. A step that is anything but PASS is caught;
+/// scratch git repository whose last commit changes a protected file and a C# file, adding a <c>#pragma warning disable</c> the
+/// suppressions step (set to fail) must not pass. A step that is anything but PASS is caught;
 /// the protected-changes step reports and never fails, so it is caught when it lists the protected file. A step with no planted
 /// case here is MISSED, so a step added to the table without a canary shows up. The harmless twin, the build with a tool that
 /// succeeds, must PASS. <see cref="FullCanaries"/> runs the real build and test tools.
@@ -76,6 +77,7 @@ internal static class GateStepCanaries
             CoverageStep.StepName => ("coverage: a configured collector without a coverage report is not a PASS", afterTests),
             DependencyStep.StepName => ("dependencies: a Critical advisory is not a PASS", GateRunFacts.None),
             SecretsStep.StepName => ("secrets: a leaked secret is not a PASS", GateRunFacts.None),
+            SuppressionsStep.StepName => ("suppressions: an added #pragma warning disable is not a PASS (gates.quality.suppressions: fail)", GateRunFacts.None),
             _ => (string.Empty, GateRunFacts.None),
         };
         if (name.Length == 0)
@@ -83,9 +85,12 @@ internal static class GateStepCanaries
             return new CanaryReport($"gate step '{step.Name}': a planted violation", CanaryResult.Missed, CanaryCoverageTests.MissingGateStepCanary);
         }
 
-        GateRunContext judged = step.Name == CoverageStep.StepName
-            ? run with { Settings = run.Settings with { Coverage = run.Settings.Coverage with { Collector = CoverageCollector.Coverlet } } }
-            : run;
+        GateRunContext judged = step.Name switch
+        {
+            CoverageStep.StepName => run with { Settings = run.Settings with { Coverage = run.Settings.Coverage with { Collector = CoverageCollector.Coverlet } } },
+            SuppressionsStep.StepName => run with { Settings = run.Settings with { Suppressions = GateMode.Fail } },
+            _ => run,
+        };
         GateStep result = (await step.RunAsync(judged, facts, cancellationToken)).Step;
         if (step.Name == ProtectedChangesStep.StepName)
         {
@@ -108,7 +113,7 @@ internal static class GateStepCanaries
         }
 
         await File.AppendAllTextAsync(scratch.PathOf(Manifest.FileName), "protected:\n  - \"docs/**\"\n", cancellationToken);
-        await File.WriteAllTextAsync(scratch.PathOf(ChangedSource), "class Order\n{\n  string key = \"planted\";\n}\n", cancellationToken);
+        await File.WriteAllTextAsync(scratch.PathOf(ChangedSource), "class Order\n{\n#pragma warning disable CS0414\n  string key = \"planted\";\n}\n", cancellationToken);
         return await CanaryGit.CommitAllAsync(scratch.Project, "canary change", initialize: false, cancellationToken);
     }
 
