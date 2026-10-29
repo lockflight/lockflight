@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Updating;
 
@@ -11,7 +12,7 @@ internal sealed class SessionStartHandler : IHookHandler
 
     public HookFailurePolicy OnEngineError(HookFailureState state) => HookFailurePolicy.Allow;
 
-    public bool Claims(HookInput input) => true;
+    public bool Claims(HookRequest input) => true;
 
     public Task<HookReply> DecideAsync(HookInvocation invocation, CancellationToken cancellationToken) =>
         Task.FromResult(new HookReply(

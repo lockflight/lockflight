@@ -1,5 +1,7 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks.Adapters;
 using Lockflight.Cli.Hooks.Events;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Lifecycle.Approvals;
@@ -46,7 +48,16 @@ internal sealed class HookCommand(CliContext context) : ICommand
         expanding = hookEvent == HookEvent.UserPromptExpansion ? SessionCommands.MentionedIn(rawInput) : null;
         await new HookPayloadLog(context.Time, context.Environment, context.Error).AppendAsync(hookEvent, rawInput, cancellationToken);
 
-        HookInput? input = HookInput.Parse(rawInput);
+        HookAdapterResult adapted = HookAdapters.Parse(context.Environment, rawInput, hookEvent);
+        if (adapted.Status == HookAdapterStatus.UnknownAdapter)
+        {
+            // Fails closed where an engine error would: a tool call, or a typed human command that must not reach the agent.
+            HookFailurePolicy policy = HookHandlers.For(hookEvent)?.OnEngineError(new HookFailureState(expanding is not null)) ?? HookFailurePolicy.Block;
+            await context.Error.WriteLineAsync(adapted.Message);
+            return policy == HookFailurePolicy.Block ? ExitCode.HookBlock : ExitCode.Pass;
+        }
+
+        HookRequest? input = adapted.Request;
         if (expanding is not null && input is not null)
         {
             expanding = SessionCommands.Of(input);
@@ -118,13 +129,10 @@ internal sealed class HookCommand(CliContext context) : ICommand
         return null;
     }
 
-    /// <summary>CLAUDE_PROJECT_DIR stays at the session's root after `cd` or entering a worktree; the payload cwd does not.</summary>
-    private string ProjectDirectory(HookInput input) =>
-        context.Environment.Get(EnvironmentVariables.ClaudeProjectDirectory) is string projectDirectory && projectDirectory.Length > 0
-            ? projectDirectory
-            : input.WorkingDirectory ?? context.WorkingDirectory;
+    /// <summary>The session's root (Claude Code: CLAUDE_PROJECT_DIR) stays put after `cd` or entering a worktree; the payload cwd does not.</summary>
+    private string ProjectDirectory(HookRequest input) => input.Session.ProjectDirectory ?? input.WorkingDirectory ?? context.WorkingDirectory;
 
-    private async Task<ExitCode> ReportAsync(HookDecision decision, HookEvent hookEvent, string? projectRoot, HookInput? input, CancellationToken cancellationToken)
+    private async Task<ExitCode> ReportAsync(HookDecision decision, HookEvent hookEvent, string? projectRoot, HookRequest? input, CancellationToken cancellationToken)
     {
         if (decision.Outcome == HookOutcome.Allow)
         {
@@ -136,7 +144,7 @@ internal sealed class HookCommand(CliContext context) : ICommand
         {
             LedgerEvent blocked = new(LedgerEventType.HookBlocked, $"{HookEventNames.ToName(hookEvent)}:{decision.Code}", decision.Code ?? "blocked", decision.Reason)
             {
-                Context = input is null ? null : new LedgerEventContext(input.ToolName, input.Command ?? input.FilePath, input.SessionId, input.Agent ?? "main"),
+                Context = input is null ? null : new LedgerEventContext(input.Tool.Name, input.Command ?? input.FilePath, input.Session.Id, input.Session.Agent ?? "main"),
             };
             await new LedgerWriter(projectRoot, context.Time).AppendAsync(blocked, cancellationToken);
         }

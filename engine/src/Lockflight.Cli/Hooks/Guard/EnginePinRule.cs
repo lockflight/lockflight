@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Hooks.Guard;
@@ -17,7 +18,7 @@ internal sealed class EnginePinRule : IGuardRule
     public ValueTask<GuardBlock?> CheckAsync(GuardFacts facts, CancellationToken cancellationToken) =>
         ValueTask.FromResult(LockdownPolicy.IsActive(facts.Manifest.Root) ? null : PinMismatch(facts.Input, facts.Manifest));
 
-    private static GuardBlock? PinMismatch(HookInput input, Manifest manifest)
+    private static GuardBlock? PinMismatch(HookRequest input, Manifest manifest)
     {
         ToolPinReading pin = ToolPin.ReadPin(manifest.Root);
         bool mismatch = pin.Status == ToolPinStatus.Unreadable

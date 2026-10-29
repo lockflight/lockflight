@@ -1,5 +1,6 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Hooks.Requests;
 
 namespace Lockflight.Cli.Hooks;
 
@@ -12,7 +13,7 @@ namespace Lockflight.Cli.Hooks;
 /// </summary>
 internal static class TaskCompletedGate
 {
-    public static async Task<HookDecision> DecideAsync(Manifest manifest, HookInput input, CancellationToken cancellationToken)
+    public static async Task<HookDecision> DecideAsync(Manifest manifest, HookRequest input, CancellationToken cancellationToken)
     {
         if (!manifest.StopGate)
         {
@@ -26,7 +27,7 @@ internal static class TaskCompletedGate
         }
 
         if (await new StopGateCache(manifest.Root, unitPath: null).PassedWithAsync(inputsHash, cancellationToken)
-            || await new StopBlockRecord(manifest.Root).BlockedAsync(input.SessionId, inputsHash, cancellationToken))
+            || await new StopBlockRecord(manifest.Root).BlockedAsync(input.Session.Id, inputsHash, cancellationToken))
         {
             return HookDecision.Allow;
         }

@@ -66,6 +66,17 @@ The shim has three states:
 - **Engine missing, stale or unreadable configuration:** recovery mode. Reads and the exact restore command are allowed;
   everything else is blocked with the fix.
 
+Inside the engine, a hook call is a client-neutral request (`lockflight.hook-request/v1`): the tool's **kind** (`read`,
+`search`, `edit`, `write`, `shell` with its dialect, `notebook`, `fetch`, `agent`, `other`), whether it writes the files it
+names, those paths, the command, the session and the working directory. The Claude Code adapter
+(`Hooks/Adapters/ClaudeCodeAdapter.cs`) translates Claude Code's payload into it, and the guard decides on kinds, never on tool
+names: an unknown tool is `other` and is judged like any unknown tool, and one whose input names a file path (an MCP tool's
+`path`) is guarded as a file write. `LOCKFLIGHT_HOOK_ADAPTER` picks the adapter (unset: Claude Code); it is never a
+command-line argument, because an older engine refuses any argument after `hook <event>`. `neutral` reads the request JSON
+itself, for tests and outside adapters. The request format is experimental, not a frozen contract, until a second client's
+adapter exists. The shim keeps Claude Code's names for its own recovery decisions, and a test keeps them in sync with the
+adapter's table.
+
 The contract with Claude Code: a block is **exit 2 with the reason on stderr**; structured answers go to stdout as JSON.
 `PreToolUse` is registered with `onFailure: "block"`, so a guard that cannot start blocks rather than allows. Claude Code does
 not offer that for `Stop`, which is why the Stop gate is best effort and CI is the definition of done.
@@ -216,6 +227,7 @@ code from the repository it judges.
 |---|---|---|
 | A command | `ICommand` | `Hosting/CommandRegistry.cs` (words, audience, options, operands); the help text in `CliApplication` is written by hand and tested against the registry |
 | A hook event | `IHookHandler` | `Hooks/Events/HookHandlers.cs` |
+| A hook client | an adapter to `HookRequest` | `Hooks/Adapters/HookAdapters.cs`, selected by `LOCKFLIGHT_HOOK_ADAPTER` |
 | A guard rule | `IGuardRule` (it can block, never allow) | `Hooks/Guard/GuardRules.cs`, once per call or per root |
 | A gate step | `IGateStep` | `Gates/GateProfiles.cs`, per profile: root first, per unit, root last |
 | A lifecycle test runner | `ITestRunner` | `Testing/TestRunners.cs`, with its place in the probe order |

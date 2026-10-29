@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Lifecycle.Approvals;
@@ -18,7 +19,7 @@ internal sealed class UserPromptExpansionHandler : IHookHandler
 
     public HookFailurePolicy OnEngineError(HookFailureState state) => state.ExpandingSessionCommand ? HookFailurePolicy.Block : HookFailurePolicy.Allow;
 
-    public bool Claims(HookInput input) => SessionCommands.Of(input) is not null;
+    public bool Claims(HookRequest input) => SessionCommands.Of(input) is not null;
 
     public async Task<HookReply> DecideAsync(HookInvocation invocation, CancellationToken cancellationToken)
     {

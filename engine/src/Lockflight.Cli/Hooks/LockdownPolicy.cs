@@ -1,3 +1,5 @@
+using Lockflight.Cli.Hooks.Requests;
+
 namespace Lockflight.Cli.Hooks;
 
 /// <summary>
@@ -10,7 +12,7 @@ internal static class LockdownPolicy
 
     public static bool IsActive(string projectRoot) => File.Exists(Path.Combine(projectRoot, RelativeMarkerPath));
 
-    public static HookDecision Decide(HookInput input) =>
+    public static HookDecision Decide(HookRequest input) =>
         ReadOnlyTools.Allows(input)
             ? HookDecision.Allow
             : HookDecision.Block("lockdown", $"lockflight: the project is in lockdown ({RelativeMarkerPath} exists); only reading is allowed until a human removes it.");
