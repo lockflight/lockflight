@@ -7,29 +7,25 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
 /// Hash-bound approval records in <c>.lockflight/features/&lt;id&gt;/approvals/&lt;phase&gt;.json</c> (protected; written only by
-/// <c>lockflight approve</c>). <c>approvedBy</c> is the git user name — a label, not an identity; identity comes from a signature.
+/// <c>lockflight approve</c>). <c>approvedBy</c> is the git user name — a label, not an identity. A <c>.sig</c> file a 0.2 engine wrote next to a
+/// record is ignored.
 /// </summary>
 internal sealed class ApprovalStore(Feature feature)
 {
-    public const string SignatureNamespace = "lockflight-approval";
-
     private const string Schema = "lockflight.approval/v1";
 
     public string RecordPath(ApprovalPhase phase) => Path.Combine(feature.RecordDirectory, "approvals", $"{ApprovalPhaseNames.ToName(phase)}.json");
 
-    /// <summary>Writes the record over <paramref name="artifacts"/> (the hashes the person approved) and drops an older signature.</summary>
+    /// <summary>Writes the record over <paramref name="artifacts"/> (the hashes the person approved).</summary>
     public string Save(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> artifacts, string approvedBy, DateTimeOffset at, string engineVersion)
     {
         string path = RecordPath(phase);
         JsonFiles.Write(path, Render(phase, artifacts, approvedBy, at, engineVersion));
-
-        // A signature belongs to the record it was made over; a new record makes it meaningless (and ssh-keygen would prompt to overwrite it).
-        File.Delete(path + ".sig");
         return path;
     }
 
-    /// <summary>The approval record's content, for <see cref="Save"/> or a file signed before it replaces the record.</summary>
-    public JsonObject Render(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> artifacts, string approvedBy, DateTimeOffset at, string engineVersion)
+    /// <summary>The approval record's content.</summary>
+    private JsonObject Render(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> artifacts, string approvedBy, DateTimeOffset at, string engineVersion)
     {
         JsonObject hashes = [];
         foreach ((string name, string hash) in artifacts)

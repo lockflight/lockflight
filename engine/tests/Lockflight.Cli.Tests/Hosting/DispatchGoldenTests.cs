@@ -85,7 +85,7 @@ public sealed class DispatchGoldenTests : IDisposable
         ["phase", "check", "specify", "extra"],
         ["review", "dismiss"],
         ["redgreen", "amend"],
-        ["approve", "spec", "--sign", "--sign"],
+        ["approve", "spec", "--sign"],
         ["approve", "verify", "--feature", "a", "--base", "b"],
     ];
 

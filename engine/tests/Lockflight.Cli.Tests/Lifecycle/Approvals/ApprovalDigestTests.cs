@@ -19,7 +19,7 @@ public sealed class ApprovalDigestTests : IDisposable
         IReadOnlyList<ArtifactSnapshot> snapshot = store.Snapshot(ApprovalPhase.Spec);
         File.WriteAllText(Feature.SpecPath, "- **FR-009**: Swapped in [NEEDS CLARIFICATION: x]\n");
 
-        string digest = ApprovalDigest.Render(Feature, ApprovalPhase.Spec, snapshot, store.Check(ApprovalPhase.Spec), "k7m2qx", string.Empty);
+        string digest = ApprovalDigest.Render(Feature, ApprovalPhase.Spec, snapshot, store.Check(ApprovalPhase.Spec), "k7m2qx");
 
         Assert.Contains("Requirements (1): FR-001", digest, StringComparison.Ordinal);
         Assert.DoesNotContain("FR-009", digest, StringComparison.Ordinal);

@@ -131,7 +131,7 @@ public sealed class DocsDriftTests : IDisposable
     public async Task PlaceholdersAlternativesAndUsageBracketsAreNotDrift()
     {
         Write("docs/run.md", """
-            `lockflight approve spec|tasks [--sign]` `lockflight propose <path> --from <file>` `lockflight approve`
+            `lockflight approve spec|tasks [--feature <id>]` `lockflight propose <path> --from <file>` `lockflight approve`
             `lockflight <command> --help` `lockflight baseline <build|tests|deps>` `lockflight doctor --canaries[=full]`
             `lockflight gate run --profile=pr` `lockflight redgreen amend <test> --reason "<why>"`
             """);

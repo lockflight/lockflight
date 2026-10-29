@@ -73,8 +73,8 @@ internal static class CliApplication
 
         Human decisions (approve, redgreen reset|amend, review dismiss, baseline, adopt apply|undo and update refuse to run inside a
         Claude Code session, a `!` command included: run them in a separate terminal window)
-          approve spec|tasks [--feature <id>] [--sign [--key <file>]]
-                                                        approve the feature's artifacts, optionally SSH-signed;
+          approve spec|tasks [--feature <id>]           approve the feature's artifacts (a local record; the
+                                                        approval of record is the pull request's review);
                                                         in Claude Code, type /lockflight:approve spec|tasks instead
           redgreen reset [--feature <id>]               discard the feature's red/green evidence
           redgreen amend <test> --reason "<text>" [--feature <id>]
@@ -90,8 +90,8 @@ internal static class CliApplication
                                                         unless --force
 
         CI
-          approve verify (--feature <id> | --base <ref>) [--allowed-signers <file>] [--require spec,tasks]
-                                                        check approval records, artifact hashes and signatures;
+          approve verify (--feature <id> | --base <ref>) [--require spec,tasks]
+                                                        check approval records and artifact hashes;
                                                         exactly one of --feature or --base (never the active feature)
           gate run --profile pr [--base <ref>] [--result <file>]
                                                         stop steps plus policy, suppressions, references,
