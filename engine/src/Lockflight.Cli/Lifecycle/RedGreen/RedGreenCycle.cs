@@ -1,3 +1,5 @@
+using Lockflight.Cli.Testing;
+
 namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
@@ -14,6 +16,9 @@ internal sealed record RedGreenCycle(int Number, DateTimeOffset RedAt, DateTimeO
     public string? Snapshot { get; init; }
 
     public IReadOnlyDictionary<string, string> TestFiles { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>What the green's regression pass left out by <c>test.stopFilter</c>; null when it ran every test.</summary>
+    public RegressionFilter? RegressionFilter { get; init; }
 
     public bool IsOpen => GreenAt is null;
 

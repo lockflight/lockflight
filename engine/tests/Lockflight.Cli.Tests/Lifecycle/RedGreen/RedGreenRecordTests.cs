@@ -54,6 +54,34 @@ public sealed class RedGreenRecordTests : IDisposable
     }
 
     [Fact]
+    public void TheRegressionFiltersOfTheBaselineAndOfAGreenRoundTripAndAreLeftOutWithoutOne()
+    {
+        string path = Path.Combine(root.FullName, ".lockflight", "features", "f1", RedGreenRecord.FileName);
+        RedGreenRecord record = new()
+        {
+            BaselineCommit = "abc",
+            BaselineAt = DateTimeOffset.UnixEpoch,
+            BaselineTests = new HashSet<string> { "T:A.B" },
+            TestProjects = ["tests/Shop.Tests"],
+        };
+        record.Cycles.Add(new RedGreenCycle(1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, [new RedGreenTest("T:A.C", "A.C", RedClass.RedStub, [])]));
+        record.Save(path, "f1");
+        Assert.DoesNotContain("regressionFilter", File.ReadAllText(path), StringComparison.Ordinal);
+
+        RedGreenRecord filtered = record with { BaselineRegressionFilter = new(["Category!=Integration"], 2) { ExcludedTests = ["T:A.B", "T:A.D"] } };
+        filtered.Cycles[0] = filtered.Cycles[0] with { RegressionFilter = new(["Category!=Integration", "Category!=Slow"], 3) };
+        filtered.Save(path, "f1");
+        RedGreenRecord loaded = RedGreenRecord.Load(path)!;
+
+        Assert.Equal(["Category!=Integration"], loaded.BaselineRegressionFilter!.Filters);
+        Assert.Equal(2, loaded.BaselineRegressionFilter.Excluded);
+        Assert.Equal(["T:A.B", "T:A.D"], loaded.BaselineRegressionFilter.ExcludedTests);
+        Assert.Null(loaded.Cycles[0].RegressionFilter!.ExcludedTests);
+        Assert.Equal(["Category!=Integration", "Category!=Slow"], loaded.Cycles[0].RegressionFilter!.Filters);
+        Assert.Equal(3, loaded.Cycles[0].RegressionFilter!.Excluded);
+    }
+
+    [Fact]
     public void AnAssertionFreeTestRoundTripsAndOtherTestsReadAsAsserting()
     {
         string path = Path.Combine(root.FullName, ".lockflight", "features", "f1", RedGreenRecord.FileName);

@@ -60,10 +60,33 @@ public sealed class AssemblyTestMetadataTests
     }
 
     [Fact]
+    public void TraitsAndCategoriesAreReadForTheStopFilterOnTheMethodAndItsClass()
+    {
+        Assert.Equal(
+            [KeyValuePair.Create("Category", "FR-002"), KeyValuePair.Create("TestCategory", "FR-002")],
+            Single(Tests(TestFrameworkKind.NUnit), "NUnitFixture.Categorised").Traits);
+        Assert.Equal(
+            [KeyValuePair.Create("Requirement", "FR-003"), KeyValuePair.Create("Category", "Integration"), KeyValuePair.Create("TestCategory", "Integration"), KeyValuePair.Create("Requirement", "FR-004")],
+            Single(Tests(TestFrameworkKind.NUnit), "NUnitInternalFixture.Marked").Traits);
+        Assert.Equal(
+            [KeyValuePair.Create("Requirement", "FR-001"), KeyValuePair.Create("TestCategory", "Integration")],
+            Single(Tests(TestFrameworkKind.MSTest), "MSTestFixture.Plain").Traits);
+    }
+
+    [Fact]
+    public void AnXunitV2ClassTraitIsATraitOfItsTestsButNoRequirement()
+    {
+        TestCase test = Single(Tests(TestFrameworkKind.XunitV2), "XunitV2.XunitV2Fixture.Traited");
+
+        Assert.Equal([KeyValuePair.Create("Category", "Integration"), KeyValuePair.Create("Requirement", "FR-001")], test.Traits);
+        Assert.Equal(["FR-001"], test.Requirements);
+    }
+
+    [Fact]
     public void EachFrameworkReadsOnlyItsOwnAttributes()
     {
         // xUnit v2's attributes match by name in any namespace (custom ones derive from them), so NUnit's [Theory] reads as one.
-        Assert.Equal(["NUnitFixture.Theory"], Methods(TestFrameworkKind.XunitV2));
+        Assert.Equal(["NUnitFixture.Theory", "XunitV2.XunitV2Fixture.Traited"], Methods(TestFrameworkKind.XunitV2));
         Assert.DoesNotContain(Methods(TestFrameworkKind.NUnit), name => name.StartsWith("MSTest", StringComparison.Ordinal));
         Assert.DoesNotContain(Methods(TestFrameworkKind.MSTest), name => name.StartsWith("NUnit", StringComparison.Ordinal));
     }

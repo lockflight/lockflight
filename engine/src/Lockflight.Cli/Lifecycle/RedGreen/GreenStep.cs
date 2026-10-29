@@ -56,35 +56,56 @@ internal sealed class GreenStep(RedGreenSession session)
 
         // Fail fast: the cycle's own tests first, so a still-stubbed green does not wait for the whole suite.
         TestCase[] cycleTests = [.. inventory.Where(test => open.Tests.Any(cycleTest => cycleTest.Key == test.Key))];
-        if (cycleTests.Length > 0 && await workspace.RunAsync(cycleTests, cancellationToken) is IReadOnlyList<ExecutedTest> cycleResults
+        IReadOnlyList<ExecutedTest>? cycleResults = cycleTests.Length > 0 ? await workspace.RunAsync(cycleTests, cancellationToken) : null;
+        if (cycleResults is not null
             && cycleTests.Where(test => !SuiteChecks.PassedEveryRow(cycleResults, test.Key)).Select(test => test.MethodFilter).ToArray() is { Length: > 0 } stillFailing)
         {
             return await RejectAsync(open, [$"cycle tests not passing: {string.Join(", ", stillFailing.Take(RedGreenSession.MaxTestsListed))} (the rest of the suite was not run)"], cancellationToken);
         }
 
-        if (await workspace.RunAsync(null, cancellationToken) is not IReadOnlyList<ExecutedTest> results)
+        if (await workspace.RunRegressionAsync(inventory, cancellationToken) is not RegressionRun regression)
         {
             return await session.BrokenAsync($"the test runner could not run the tests of {workspace.FailedApp}", cancellationToken);
         }
 
-        List<string> problems = [.. IncompleteRun(record, inventory, results, workspace.AbnormalExit)];
+        await session.WarnAboutUnappliedFiltersAsync(regression, cancellationToken);
+
+        // A stop filter never leaves the cycle's own tests out of a green: those it excludes are judged by the fail-fast run.
+        IReadOnlyList<ExecutedTest> results = [.. regression.Results, .. (cycleResults ?? []).Where(row => regression.Excluded.Contains(row.Key))];
+        List<string> problems = [.. IncompleteRun(record, inventory, results, workspace.AbnormalExit, regression.Excluded)];
         problems.AddRange(SuiteChecks.GreenProblems(record, open, inventory, results, KnownFailingTests.LoadAll(session.Manifest)));
+        if (SuiteChecks.NewlyLeftOut(record, regression.Excluded) is { Length: > 0 } leftOut)
+        {
+            problems.Add(
+                $"known tests newly left out by test.stopFilter (a trait or filter added since the baseline): {string.Join(", ", leftOut.Take(RedGreenSession.MaxTestsListed))}; " +
+                "remove the trait, or keep the filter as it was; a person can discard the evidence with redgreen reset");
+        }
         if (problems.Count > 0)
         {
             return await RejectAsync(open, problems, cancellationToken);
         }
 
-        session.Save(record with { Cycles = [.. record.Cycles.SkipLast(1), open with { GreenAt = session.Context.Time.GetUtcNow() }] });
+        session.Save(record with
+        {
+            Cycles = [.. record.Cycles.SkipLast(1), open with { GreenAt = session.Context.Time.GetUtcNow(), RegressionFilter = regression.Filter }],
+        });
         await session.RecordAsync(LedgerSignatures.GreenAccepted, $"{session.Feature.Id}: cycle {open.Number}", cancellationToken);
         await session.Output.WriteLineAsync($"Green: cycle {open.Number} closed — {open.Tests.Count} tests pass, {results.Count} test cases run, nothing deleted, skipped or made explicit. Test projects unlocked.");
+        if (regression.Filter is RegressionFilter filter)
+        {
+            await session.Output.WriteLineAsync($"Regression pass: {filter.Describe()}.");
+        }
+
         return ExitCode.Pass;
     }
 
     /// <summary>
     /// Why the full run cannot vouch for the suite: the runner ended abnormally, or known tests that are still in the inventory (and
-    /// not explicit, which a normal run never executes) are missing from its report.
+    /// neither explicit, which a normal run never executes, nor left out by the stop filter, <paramref name="excluded"/>) are
+    /// missing from its report.
     /// </summary>
-    public static IEnumerable<string> IncompleteRun(RedGreenRecord record, IReadOnlyList<TestCase> inventory, IReadOnlyList<ExecutedTest> results, string? abnormalExit)
+    public static IEnumerable<string> IncompleteRun(
+        RedGreenRecord record, IReadOnlyList<TestCase> inventory, IReadOnlyList<ExecutedTest> results, string? abnormalExit, IReadOnlySet<string> excluded)
     {
         if (abnormalExit is not null)
         {
@@ -94,7 +115,7 @@ internal sealed class GreenStep(RedGreenSession session)
         HashSet<string> reported = [.. results.Select(result => result.Key)];
         IReadOnlySet<string> known = record.KnownTests;
         string[] missing = [.. inventory
-            .Where(test => !test.IsExplicit && known.Contains(test.Key) && !reported.Contains(test.Key))
+            .Where(test => !test.IsExplicit && known.Contains(test.Key) && !reported.Contains(test.Key) && !excluded.Contains(test.Key))
             .Select(test => test.Key)
             .Order(StringComparer.Ordinal)];
         if (missing.Length > 0)

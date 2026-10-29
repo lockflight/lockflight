@@ -4,6 +4,7 @@ using System.Xml;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Gates.Steps;
 
@@ -231,13 +232,9 @@ internal sealed partial class TestStep : IGateStep
     /// A VSTest-style trait condition (<c>Category!=Integration</c>, <c>Category=Fast</c>) as xUnit v3's own options; null for
     /// anything else, which Microsoft.Testing.Platform cannot express the same way.
     /// </summary>
-    public static string[]? TraitFilter(string filter)
-    {
-        Match match = TraitCondition().Match(filter);
-        return !match.Success ? null : match.Groups["not"].Success
-            ? ["--filter-not-trait", $"{match.Groups["name"].Value}={match.Groups["value"].Value}"]
-            : ["--filter-trait", $"{match.Groups["name"].Value}={match.Groups["value"].Value}"];
-    }
+    public static string[]? TraitFilter(string filter) => TraitCondition.Parse(filter) is not TraitCondition condition
+        ? null
+        : [condition.Negated ? "--filter-not-trait" : "--filter-trait", condition.Trait];
 
     /// <summary>
     /// PASS when every failure is a known one: each named failure is in the baseline and the named failures account for every failure
@@ -291,9 +288,6 @@ internal sealed partial class TestStep : IGateStep
         MatchCollection matches = figure.Matches(output);
         return matches.Count == 0 ? null : matches.Sum(match => int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture));
     }
-
-    [GeneratedRegex(@"^\s*(?<name>[A-Za-z_][A-Za-z0-9_.]*)\s*(?<not>!)?=\s*(?<value>[^&|()!=]+?)\s*$")]
-    private static partial Regex TraitCondition();
 
     [GeneratedRegex(@"^\s*Exit code: 5\s*$", RegexOptions.Multiline)]
     private static partial Regex ModuleExitedWithInvalidCommandLine();

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Lifecycle.RedGreen;
 
@@ -30,6 +31,9 @@ internal sealed record RedGreenRecord
     /// tests with such rows are listed; a record written before this field existed reads as "none".
     /// </summary>
     public IReadOnlyDictionary<string, int> BaselineSkippedRows { get; init; } = new Dictionary<string, int>(StringComparer.Ordinal);
+
+    /// <summary>What the baseline's regression pass (<c>redgreen start</c>) left out by <c>test.stopFilter</c>; null when it ran every test.</summary>
+    public RegressionFilter? BaselineRegressionFilter { get; init; }
 
     /// <summary>
     /// Tests already marked <c>Explicit = true</c> when the baseline was taken; any other explicit test fails a red or a green. A record
@@ -71,6 +75,7 @@ internal sealed record RedGreenRecord
             BaselineExplicit = Strings(baseline["explicit"]).ToHashSet(StringComparer.Ordinal),
             BaselineSkippedRows = (baseline["skippedRows"] as JsonObject ?? new JsonObject()).Where(entry => entry.Value is not null)
                 .ToDictionary(entry => entry.Key, entry => entry.Value!.GetValue<int>(), StringComparer.Ordinal),
+            BaselineRegressionFilter = ReadFilter(baseline["regressionFilter"]),
             TestProjects = Strings(root["testProjects"]),
             Cycles = [.. (root["cycles"] as JsonArray ?? []).OfType<JsonObject>().Select(ReadCycle)],
         };
@@ -132,6 +137,11 @@ internal sealed record RedGreenRecord
                 saved["amends"] = AmendsArray(cycle.Amends);
             }
 
+            if (cycle.RegressionFilter is RegressionFilter cycleFilter)
+            {
+                saved["regressionFilter"] = FilterObject(cycleFilter);
+            }
+
             cycles.Add((JsonNode)saved);
         }
 
@@ -152,6 +162,11 @@ internal sealed record RedGreenRecord
             }
 
             baseline["skippedRows"] = rows;
+        }
+
+        if (BaselineRegressionFilter is RegressionFilter baselineFilter)
+        {
+            baseline["regressionFilter"] = FilterObject(baselineFilter);
         }
 
         JsonObject root = new()
@@ -191,6 +206,25 @@ internal sealed record RedGreenRecord
         return saved;
     }
 
+    /// <summary><c>{ "filters": ["Category!=Integration"], "excluded": 3, "excludedTests": [...] }</c>.</summary>
+    private static JsonObject FilterObject(RegressionFilter filter)
+    {
+        JsonObject saved = new() { ["filters"] = Array(filter.Filters), ["excluded"] = filter.Excluded };
+        if (filter.ExcludedTests is IReadOnlyList<string> tests)
+        {
+            saved["excludedTests"] = Array(tests);
+        }
+
+        return saved;
+    }
+
+    private static RegressionFilter? ReadFilter(JsonNode? node) => node is JsonObject filter
+        ? new RegressionFilter(Strings(filter["filters"]), filter["excluded"]?.GetValue<int>() ?? 0)
+        {
+            ExcludedTests = filter["excludedTests"] is JsonArray ? Strings(filter["excludedTests"]) : null,
+        }
+        : null;
+
     private static RedGreenAmend ReadAmend(JsonObject amend) => new(
         amend["test"]?.GetValue<string>() ?? string.Empty,
         amend["method"]?.GetValue<string>() ?? string.Empty,
@@ -221,6 +255,7 @@ internal sealed record RedGreenRecord
     {
         Amends = [.. (cycle["amends"] as JsonArray ?? []).OfType<JsonObject>().Select(ReadAmend)],
         Snapshot = cycle["snapshot"]?.GetValue<string>(),
+        RegressionFilter = ReadFilter(cycle["regressionFilter"]),
         TestFiles = (cycle["testFiles"] as JsonObject ?? new JsonObject()).Where(entry => entry.Value is not null)
             .ToDictionary(entry => entry.Key, entry => entry.Value!.GetValue<string>(), StringComparer.Ordinal),
     };

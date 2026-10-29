@@ -37,6 +37,17 @@ internal sealed class RedGreenSession(CliContext context, Manifest manifest, Fea
     public async Task RecordAsync(string signature, string summary, string? detail, CancellationToken cancellationToken) =>
         await new LedgerWriter(manifest.Root, context.Time).AppendAsync(new LedgerEvent(LedgerEventType.EvidenceRecorded, signature, summary, detail), cancellationToken);
 
+    /// <summary>Says which <c>test.stopFilter</c> values a regression pass could not apply, so it ran every test of those projects.</summary>
+    public async Task WarnAboutUnappliedFiltersAsync(RegressionRun regression, CancellationToken cancellationToken)
+    {
+        foreach (string filter in regression.Unsupported)
+        {
+            await context.Output.WriteLineAsync(
+                $"WARN test.stopFilter '{filter}' is not one trait condition (Name=Value or Name!=Value), so red/green's regression pass ran every test.".AsMemory(),
+                cancellationToken);
+        }
+    }
+
     /// <summary>The step judged the tests and refused (exit 1).</summary>
     public async Task<ExitCode> FailAsync(string message, CancellationToken cancellationToken)
     {

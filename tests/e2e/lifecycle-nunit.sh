@@ -38,7 +38,19 @@ setup() {
          /<PackageReference Include="NUnit" / { print "    <PackageReference Include=\"Microsoft.Testing.Extensions.TrxReport\" Version=\"2.5.1\" />" }' \
       tests/Inventory.Tests/Inventory.Tests.csproj > csproj.new && mv csproj.new tests/Inventory.Tests/Inventory.Tests.csproj
   fi
-  git init -q; git config user.email dev@example.com; printf 'version: 1\n' > lockflight.yaml
+  # A test that needs a database: test.stopFilter keeps it out of red/green's regression passes (the pr gate and CI run it).
+  cat > tests/Inventory.Tests/DatabaseTests.cs <<'CS'
+namespace Inventory.Tests;
+
+public sealed class DatabaseTests
+{
+    [Test]
+    [Category("Integration")]
+    public void NeedsADatabase() => Assert.Fail("no database here");
+}
+CS
+  git init -q; git config user.email dev@example.com
+  printf 'version: 1\ngates:\n  test:\n    stopFilter: "Category!=Integration"\n' > lockflight.yaml
   printf 'bin/\nobj/\n.lockflight/ledger/\n' > .gitignore; git add -A; git commit -qm base
   F=specs/20261013-120000-reservations; mkdir -p $F
   cat > $F/spec.md <<'MD'
@@ -76,7 +88,8 @@ MD
 
 # cycle_one <platform label>: the stub cycle, then green and trace.
 cycle_one() {
-  expect 0 "[$1] redgreen start lists the NUnit tests from metadata" "2 tests" -- "$E" redgreen start
+  expect 0 "[$1] redgreen start lists the NUnit tests from metadata" "3 tests" -- "$E" redgreen start
+  expect 0 "[$1] the baseline's regression pass left the database test out" "test.stopFilter 'Category!=Integration' left out 1 test" -- "$E" redgreen status
   insert_before src/Inventory/Stock.cs "    public int OnHand(string sku) => onHand.GetValueOrDefault(sku);" \
     "    public void Reserve(string sku, int quantity) => throw new NotImplementedException();
 
@@ -116,7 +129,7 @@ CS
     else if ($0 ~ /public int Available\(string sku\) => throw/) print "    public int Available(string sku) => OnHand(sku) - reserved.GetValueOrDefault(sku);";
     else if ($0 ~ /private readonly Dictionary<string, int> onHand/) { print; print "\n    private readonly Dictionary<string, int> reserved = new(StringComparer.Ordinal);" }
     else print }' src/Inventory/Stock.cs > Stock.new && mv Stock.new src/Inventory/Stock.cs
-  expect 0 "[$1] green: the cycle's tests and the suite pass" "nothing deleted, skipped or made explicit" -- "$E" redgreen green
+  expect 0 "[$1] green: the cycle's tests and the suite pass, the database test left out" "Regression pass: test.stopFilter 'Category!=Integration' left out 1 test" -- "$E" redgreen green
   expect 0 "[$1] trace maps both requirements to their red-then-green tests" "FR-011" -- "$E" trace
 }
 
@@ -192,6 +205,26 @@ expect 0 "[vstest] an NUnit assertion failure on a production value is an accept
 awk '{ if ($0 ~ /public bool IsTracked\(string sku\) => false;/) print "    public bool IsTracked(string sku) => onHand.ContainsKey(sku);"; else print }' \
   src/Inventory/Stock.cs > Stock.new && mv Stock.new src/Inventory/Stock.cs
 expect 0 "[vstest] green with a parameterized fixture's tests" -- "$E" redgreen green
+
+# A known test that ran at the baseline cannot be moved out of the regression pass by giving it the filtered category.
+awk '{ if ($0 ~ /public void ReceivingAddsToWhatIsOnHand/) print "    [Category(\"Integration\")]"; print }' \
+  tests/Inventory.Tests/StockTests.cs > StockTests.new && mv StockTests.new tests/Inventory.Tests/StockTests.cs
+insert_before src/Inventory/Stock.cs "    public int OnHand(string sku) => onHand.GetValueOrDefault(sku);" \
+  "    public int Kinds() => throw new NotImplementedException();
+"
+cat > tests/Inventory.Tests/KindsTests.cs <<'CS'
+namespace Inventory.Tests;
+
+public sealed class KindsTests
+{
+    [Test]
+    [Property("Requirement", "FR-011")]
+    public void CountsTheKindsOfItems() => Assert.That(new Stock().Kinds(), Is.EqualTo(0));
+}
+CS
+expect 0 "[vstest] a stub red for the next cycle" "RED_STUB" -- "$E" redgreen red
+awk '{ if ($0 ~ /public int Kinds\(\) => throw/) print "    public int Kinds() => onHand.Count;"; else print }' src/Inventory/Stock.cs > Stock.new && mv Stock.new src/Inventory/Stock.cs
+expect 1 "[vstest] a known test newly given the filtered category is refused at green" "known tests newly left out by test.stopFilter" -- "$E" redgreen green
 
 # --- Microsoft.Testing.Platform ----------------------------------------------------------------------------------------
 setup "$BASE/mtp" mtp
