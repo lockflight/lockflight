@@ -42,7 +42,8 @@ internal sealed class CiCommand(CliContext context) : ICommand
             return ExitCode.Pass;
         }
 
-        JudgeRun run = new(plan, JudgeChecks.FromPlan(plan), startedAt, context.Time.GetUtcNow());
+        JudgeFindings findings = await JudgeExecutor.RunAsync(plan, context.Environment, context.Time, cancellationToken);
+        JudgeRun run = new(plan, findings, JudgeChecks.Decide(plan, findings), startedAt, context.Time.GetUtcNow());
         string path = Path.Combine(inputs.EvidenceDirectory, inputs.Platform == JudgePlatform.Local ? CiEvidence.LocalFileName : CiEvidence.FileName);
         JsonFiles.Write(path, CiEvidence.Build(run, ToolPin.RunningVersion, RuntimeInformation.RuntimeIdentifier));
         await WriteSummaryAsync(run, path);
