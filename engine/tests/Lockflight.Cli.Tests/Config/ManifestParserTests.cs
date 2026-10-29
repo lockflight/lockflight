@@ -156,6 +156,9 @@ public sealed class ManifestParserTests
     [InlineData("gates:\n  coverage:\n    collector: dotcover\n", "gates.coverage.collector")]
     [InlineData("gates:\n  coverage:\n    patchThreshold: 101\n", "gates.coverage.patchThreshold")]
     [InlineData("gates:\n  coverage:\n    branch: 80\n", "unknown key 'gates.coverage.branch'")]
+    [InlineData("gates:\n  quality: fail\n", "'gates.quality' must be a mapping")]
+    [InlineData("gates:\n  quality:\n    suppressions: warn\n", "'gates.quality.suppressions' must be fail, report or off")]
+    [InlineData("gates:\n  quality:\n    analyzers: fail\n", "unknown key 'gates.quality.analyzers'")]
     public void InvalidGateSettingsAreRejectedWithTheKey(string yaml, string expectedFragment)
     {
         ManifestLoadResult result = Parse(yaml);
@@ -163,6 +166,14 @@ public sealed class ManifestParserTests
         Assert.Equal(ManifestLoadStatus.Invalid, result.Status);
         Assert.Contains(expectedFragment, result.Error!.Message, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData("version: 1\n", "report")]
+    [InlineData("version: 1\ngates:\n  quality:\n    suppressions: fail\n", "fail")]
+    [InlineData("version: 1\ngates:\n  quality:\n    suppressions: report\n", "report")]
+    [InlineData("version: 1\ngates:\n  quality:\n    suppressions: off\n", "off")]
+    public void TheSuppressionsStepReportsUnlessTheManifestSaysOtherwise(string yaml, string expected) =>
+        Assert.Equal(expected, GateModeNames.ToName(Parse(yaml).Manifest!.Gates.Suppressions));
 
     [Theory]
     [InlineData("[a, b]: 1\n")]

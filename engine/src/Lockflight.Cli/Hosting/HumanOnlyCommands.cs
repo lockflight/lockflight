@@ -49,8 +49,8 @@ internal static partial class HumanOnlyCommands
     {
         ["approve", string phase, ..] when phase is "spec" or "tasks" => $"/lockflight:approve {phase}",
         ["approve", ..] => "/lockflight:approve spec|tasks",
-        ["baseline", string kind, ..] when kind is "build" or "tests" or "deps" => $"/lockflight:baseline {kind}",
-        ["baseline", ..] => "/lockflight:baseline build|tests|deps",
+        ["baseline", string kind, ..] when kind is "build" or "tests" or "deps" or "suppressions" => $"/lockflight:baseline {kind}",
+        ["baseline", ..] => "/lockflight:baseline build|tests|deps|suppressions",
         ["redgreen", "reset", ..] => "/lockflight:reset",
         ["redgreen", "amend", string rest] => $"/lockflight:amend {rest.Replace("\"", string.Empty, StringComparison.Ordinal)}",
         ["redgreen", "amend"] => "/lockflight:amend <test> --reason <why>",

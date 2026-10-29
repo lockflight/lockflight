@@ -81,6 +81,7 @@ internal static class CliApplication
           review dismiss <finding-id> --reason "<text>" [--feature <id>]
                                                         close an open review finding, recording who, when and why
           baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories
+          baseline suppressions                         accept the suppressions the branch adds (file and rule)
           adopt apply [--speckit-preset <dir>] [--skip-speckit] [--no-sandbox]
                                                         apply the reviewed adoption plan (backs up first)
           adopt undo [--backup <id>] [--force]          revert what apply changed; files changed since are kept
@@ -91,7 +92,8 @@ internal static class CliApplication
                                                         check approval records, artifact hashes and signatures;
                                                         exactly one of --feature or --base (never the active feature)
           gate run --profile pr [--base <ref>] [--result <file>]
-                                                        stop steps plus policy, patch coverage, dependencies, secrets
+                                                        stop steps plus policy, suppressions, patch coverage,
+                                                        dependencies, secrets
 
         Exit codes
           0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)

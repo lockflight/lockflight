@@ -39,6 +39,7 @@ internal static class CommandRegistry
         new(["baseline", "build"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
         new(["baseline", "tests"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
         new(["baseline", "deps"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
+        new(["baseline", "suppressions"], CommandAudience.Human, [], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
         new(["gate", "run"], CommandAudience.Anyone, ["--profile", "--path", "--unit", "--base", "--result"], [], CommandOperands.Options, OptionParsing.Shared, context => new GateCommand(context)),
         new(["phase", "check"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.AtLeastOne, OptionParsing.Shared, context => new PhaseCommand(context)),
         new(["redgreen", "start"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),

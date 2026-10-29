@@ -22,7 +22,7 @@ public sealed class GateRunnerTests : IDisposable
     [Theory]
     [InlineData("edit", "format")]
     [InlineData("stop", "format,build,test")]
-    [InlineData("pr", "policy.protected,format,build,test,coverage.patch,security.deps,security.secrets")]
+    [InlineData("pr", "policy.protected,format,quality.suppressions,build,test,coverage.patch,security.deps,security.secrets")]
     public async Task EachProfileRunsItsStepsInTheTablesOrder(string profileName, string expected)
     {
         Assert.True(GateProfileNames.TryParse(profileName, out GateProfile profile));
@@ -38,7 +38,7 @@ public sealed class GateRunnerTests : IDisposable
     {
         GateResult result = await RunAsync(GateProfile.PullRequest, failing: "build");
 
-        Assert.Equal("policy.protected,format,build", string.Join(',', result.Steps.Select(step => step.Name)));
+        Assert.Equal("policy.protected,format,quality.suppressions,build", string.Join(',', result.Steps.Select(step => step.Name)));
         Assert.Equal(Verdict.Fail, result.Verdict);
         Assert.DoesNotContain(calls, call => call.StartsWith("dotnet test", StringComparison.Ordinal));
         Assert.Null(result.TestsTotal);
@@ -57,6 +57,8 @@ public sealed class GateRunnerTests : IDisposable
 
     private async Task<GateResult> RunAsync(GateProfile profile, string? failing)
     {
+        // The suppressions step asks git what changed: an empty repository has no changes.
+        await ProcessRunner.RunAsync("git", ["init", "-q"], root.FullName, TestContext.Current.CancellationToken);
         GateRunContext run = new(root.FullName, root.FullName, profile, GateSettings.Default, BaseRef: null, TimeProvider.System)
         {
             Processes = (fileName, arguments, workingDirectory, timeLimit, cancellationToken) => FakeToolAsync(fileName, arguments, failing),

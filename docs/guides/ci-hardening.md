@@ -40,13 +40,18 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
   `--ci pr`; see [CI with a development build](getting-started.md#ci-with-a-development-build).
 - **`gate run --profile pr --base <base sha>`**, in this order:
   1. `policy.protected` — lists protected files the PR changes (never fails; the list goes to the job summary);
-  2. `format` → `build` → `test` (with coverage when `gates.coverage.collector` is set);
-  3. `coverage.patch` — covered share of the changed coverable lines ≥ `patchThreshold` (default 80 %; N/A below
+  2. `format`, then `quality.suppressions` — suppressions the PR adds (`#pragma warning disable`, `[SuppressMessage]`,
+     `<NoWarn>`, a lowered `.editorconfig` severity, `#nullable disable`, `[ExcludeFromCodeCoverage]` …), by file, line and
+     rule; it fails only with `gates.quality.suppressions: fail` (the default, `report`, lists them). A needed one is accepted
+     with `baseline suppressions`, merged in its own pull request like every baseline. With the manifest and the baseline taken
+     from the base branch and the check required, a PR cannot switch the step off or accept its own suppressions;
+  3. `build` → `test` (with coverage when `gates.coverage.collector` is set);
+  4. `coverage.patch` — covered share of the changed coverable lines ≥ `patchThreshold` (default 80 %; N/A below
      `minChangedLines`, default 10, and when `gates.coverage.collector` is not set). A deterministic CI build
      (`ContinuousIntegrationBuild`) may leave `/_/…` source paths in the report; they are read against the repository the
      tests were built in;
-  4. `security.deps` — no new High/Critical advisories;
-  5. `security.secrets` — gitleaks over the PR's commits, uncommitted changes, and untracked files that git does not ignore.
+  5. `security.deps` — no new High/Critical advisories;
+  6. `security.secrets` — gitleaks over the PR's commits, uncommitted changes, and untracked files that git does not ignore.
      False positives go to `.gitleaksignore`, reviewed by a human. An added inline `gitleaks:allow` comment fails the step.
      The engine's own recorded hashes are not findings: a generic-key hit in a red/green, approval or review record under
      `.lockflight/features/<id>/` whose whole match is a JSON name and a bare 40- or 64-digit lowercase hex value (a commit id

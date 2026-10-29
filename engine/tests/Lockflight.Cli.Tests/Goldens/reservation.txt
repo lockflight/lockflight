@@ -10,6 +10,7 @@ hook: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
 baseline build: reserved=True words=baseline build shell=baseline build powershell=baseline build rule=Checked
 baseline tests: reserved=True words=baseline tests shell=baseline tests powershell=baseline tests rule=Checked
 baseline deps: reserved=True words=baseline deps shell=baseline deps powershell=baseline deps rule=Checked
+baseline suppressions: reserved=True words=baseline suppressions shell=baseline suppressions powershell=baseline suppressions rule=Checked
 gate run: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
 phase check: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
 redgreen start: reserved=False words=- shell=- powershell=- rule=GuidanceOnly

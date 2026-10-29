@@ -5,7 +5,7 @@ namespace Lockflight.Cli.Gates.Baselines;
 
 /// <summary>
 /// <c>lockflight baseline build|tests|deps [--path dir]</c>: accept the current build warnings, failing tests or advisories of a
-/// brownfield project. A human decision — the guard blocks this command inside agent sessions, and CI reads baselines from the base branch.
+/// brownfield project; <c>lockflight baseline suppressions</c>: accept the suppressions the branch adds, by file and rule. A human decision — the guard blocks this command inside agent sessions, and CI reads baselines from the base branch.
 /// </summary>
 internal sealed class BaselineCommand(CliContext context) : ICommand
 {

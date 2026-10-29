@@ -9,8 +9,8 @@ using Lockflight.Cli.Processes;
 namespace Lockflight.Cli.Gates.Baselines;
 
 /// <summary>
-/// <c>/lockflight:baseline build|tests|deps [--path unit]</c> typed by the person in Claude Code: <c>lockflight baseline</c> in two
-/// steps (<see cref="SessionCommandGate"/>). The first runs what the baseline is taken from and shows every entry it would accept,
+/// <c>/lockflight:baseline build|tests|deps|suppressions [--path unit]</c> typed by the person in Claude Code: <c>lockflight
+/// baseline</c> in two steps (<see cref="SessionCommandGate"/>). The first runs what the baseline is taken from and shows every entry it would accept,
 /// with a code bound to those entries and to the state of the files (<see cref="WorkingTreeFingerprint"/>); the second, with that
 /// code and only while no file changed, writes exactly those entries, without running anything again.
 /// </summary>
@@ -33,6 +33,7 @@ internal sealed class SessionBaseline(CliContext context, Manifest manifest) : I
             new("baseline-build", "baseline", _ => $"/{CommandName} build <code>"),
             new("baseline-tests", "baseline", _ => $"/{CommandName} tests <code>"),
             new("baseline-deps", "baseline", _ => $"/{CommandName} deps <code>"),
+            new("baseline-suppressions", "baseline", _ => $"/{CommandName} suppressions <code>"),
         ]);
 
     /// <summary>The longest a first step may run: below the plugin's 600-second hook time limit, leaving time to answer.</summary>
@@ -55,7 +56,7 @@ internal sealed class SessionBaseline(CliContext context, Manifest manifest) : I
 
         if (words.Length == 0 || !BaselineKindNames.TryParse(words[0], out BaselineKind kind))
         {
-            return Refuse(new SessionRefusal("usage", $"type /{CommandName} build, tests or deps (optionally with --path <unit>)"), words);
+            return Refuse(new SessionRefusal("usage", $"type /{CommandName} build, tests, deps or suppressions (optionally with --path <unit>)"), words);
         }
 
         if (SessionCommandGate.SplitCode(words[1..], ValueOptions) is not { } split
@@ -242,7 +243,7 @@ internal sealed class SessionBaseline(CliContext context, Manifest manifest) : I
     /// <summary>A refusal that ends with the command for a separate terminal, with the options the person typed (never the code).</summary>
     private SessionCommandResult Refuse(SessionRefusal refusal, string[] words)
     {
-        string kind = words.Length > 0 && BaselineKindNames.TryParse(words[0], out BaselineKind parsed) ? BaselineKindNames.ToName(parsed) : "build|tests|deps";
+        string kind = words.Length > 0 && BaselineKindNames.TryParse(words[0], out BaselineKind parsed) ? BaselineKindNames.ToName(parsed) : "build|tests|deps|suppressions";
         string[] options = words.Length > 1 && SessionCommandGate.SplitCode(words[1..], ValueOptions) is { } split ? split.OptionWords : [];
         return Gate.Refuse(refusal, Gate.Terminal(kind, options));
     }
