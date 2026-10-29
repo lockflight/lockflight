@@ -1,0 +1,61 @@
+{
+  "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "mergeBase": "cccccccccccccccccccccccccccccccccccccccc",
+  "policy": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "changeClass": "behaviour",
+  "redCommits": [
+    {
+      "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "label": "1",
+      "forkPoint": null,
+      "superseded": true,
+      "malformed": null,
+      "subject": "test(012-checkout): red for US1"
+    },
+    {
+      "commit": "ffffffffffffffffffffffffffffffffffffffff",
+      "label": null,
+      "forkPoint": null,
+      "superseded": false,
+      "malformed": "'x' is not a cycle number (a positive whole number such as 2)",
+      "subject": "test: bad"
+    },
+    {
+      "commit": "dddddddddddddddddddddddddddddddddddddddd",
+      "label": "1",
+      "forkPoint": "cccccccccccccccccccccccccccccccccccccccc",
+      "superseded": false,
+      "malformed": null,
+      "subject": "test(012-checkout): red for US1 again"
+    }
+  ],
+  "checks": {
+    "red": "required",
+    "tests.sinceRed": "required",
+    "tests.existingChanged": "advisory",
+    "tests.hostTampering": "required",
+    "green": "required",
+    "trace": "advisory",
+    "gates": "required",
+    "review": "advisory",
+    "approvals": "advisory"
+  },
+  "steps": [
+    {
+      "id": "P0",
+      "commit": null,
+      "purpose": "inputs",
+      "work": "git only",
+      "builds": 0
+    },
+    {
+      "id": "P3",
+      "commit": "dddddddddddddddddddddddddddddddddddddddd",
+      "purpose": "red 1",
+      "work": "build, list, run",
+      "builds": 1
+    }
+  ],
+  "builds": 1
+}

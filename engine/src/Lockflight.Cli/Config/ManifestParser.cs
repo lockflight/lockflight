@@ -10,8 +10,8 @@ namespace Lockflight.Cli.Config;
 /// </summary>
 internal sealed class ManifestParser(string root, string path)
 {
-    private const string KnownLegacyKeys = "version, protected, stop, gates, units, review";
-    private const string KnownKeys = "version, requiresEngine, protected, stop, gates, routing, approvals, autonomy, units, shell, review";
+    private const string KnownLegacyKeys = "version, protected, stop, gates, units, review, ci";
+    private const string KnownKeys = "version, requiresEngine, protected, stop, gates, routing, approvals, autonomy, units, shell, review, ci";
 
     /// <summary>The version a local build reports (<c>0.0.0-local</c>), which is not held to <c>requiresEngine</c>.</summary>
     private const string LocalBuildVersion = "0.0.0-local";
@@ -76,6 +76,7 @@ internal sealed class ManifestParser(string root, string path)
         bool specFirstFromWritten = false;
         AutonomySettings? autonomy = null;
         ShellSettings? shell = null;
+        CiSettings ci = CiSettings.Default;
         List<Unit> units = [];
         YamlNode? unitsKey = null;
         YamlNode? shellKey = null;
@@ -104,6 +105,7 @@ internal sealed class ManifestParser(string root, string path)
                 "routing" => new RoutingSectionReader(errors).Read(valueNode, out routing),
                 "approvals" => new ApprovalsSectionReader(errors).Read(valueNode, ref approvals, out specFirstFromWritten),
                 "autonomy" => ReadAutonomy(valueNode, out autonomy),
+                "ci" => new CiSectionReader(errors).Read(valueNode, ref ci),
                 "shell" => new ShellSectionReader(errors).Read(valueNode, out shell),
                 _ => errors.At(keyNode.Start, $"unknown key '{key}' (known: {(current ? KnownKeys : KnownLegacyKeys)})"),
             };
@@ -137,6 +139,7 @@ internal sealed class ManifestParser(string root, string path)
             Approvals = approvals,
             Autonomy = autonomy,
             Shell = shell,
+            Ci = ci,
         });
     }
 
