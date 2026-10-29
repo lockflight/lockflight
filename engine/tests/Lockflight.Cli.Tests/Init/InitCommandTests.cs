@@ -264,7 +264,7 @@ public sealed class InitCommandTests : IDisposable
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", "bitbucket"], "", projectRoot.FullName);
 
         Assert.Equal(ExitCode.Pass, exitCode);
-        Assert.Contains(CiShellScripts.GateCommand, File.ReadAllText(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.Path)), StringComparison.Ordinal);
+        Assert.Contains("lockflight ci --platform bitbucket", File.ReadAllText(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.Path)), StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.FragmentPath)));
         Assert.Contains("Premium", output, StringComparison.Ordinal);
     }
@@ -279,8 +279,8 @@ public sealed class InitCommandTests : IDisposable
         (_, string again, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci-platform", "bitbucket"], "", projectRoot.FullName);
 
         Assert.Equal(teamPipeline, File.ReadAllText(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.Path)));
-        Assert.Contains(CiShellScripts.GateCommand, File.ReadAllText(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.FragmentPath)), StringComparison.Ordinal);
-        Assert.Contains($"merge the lockflight-gates step and its pipelines from {BitbucketPipelinesTemplate.FragmentPath}", output, StringComparison.Ordinal);
+        Assert.Contains("lockflight ci --platform bitbucket", File.ReadAllText(Path.Combine(projectRoot.FullName, BitbucketPipelinesTemplate.FragmentPath)), StringComparison.Ordinal);
+        Assert.Contains($"merge the Lockflight steps and their pipelines from {BitbucketPipelinesTemplate.FragmentPath}", output, StringComparison.Ordinal);
         Assert.DoesNotContain("created", again, StringComparison.Ordinal);
         Assert.DoesNotContain("CI:", again, StringComparison.Ordinal);
     }

@@ -3,14 +3,19 @@ using Lockflight.Cli.Workspace;
 namespace Lockflight.Cli.Init;
 
 /// <summary>
-/// The CI job of a unit repository of a workspace shell (<c>init --unit-of</c>): before the gates it clones the shell read-only with
-/// <c>lockflight workspace clone</c>, and the gates judge with the shell's policy for the unit (<c>gate run --shell</c>). The
-/// token reaches only the clone step where the platform runs steps apart (GitHub, Azure); in a single-script job (Bitbucket,
-/// GitLab) the script unsets it before any of the pull request's code runs.
+/// The CI job of a unit repository of a workspace shell (<c>init --unit-of</c>): before the gates (or the CI judge) it clones the
+/// shell read-only with <c>lockflight workspace clone</c>, and the gates judge with the shell's policy for the unit
+/// (<c>gate run --shell</c>, <c>ci --shell</c>). The token reaches only the clone step where the platform runs steps apart
+/// (GitHub, where the CI judge's action clones in a step of its own, and Azure); in a single-script job (Bitbucket, GitLab) the
+/// script unsets it before any of the pull request's code runs.
 /// </summary>
 internal static class CiShellPointer
 {
     private const string GateRun = CiShellScripts.GateCommand;
+
+    private const string JudgeRun = CiShellScripts.JudgeCommand;
+
+    private const string GitHubJudgeInput = "          mode: judge\n";
 
     private const string GitHubDirectory = "$RUNNER_TEMP/lockflight-shell";
 
@@ -24,16 +29,21 @@ internal static class CiShellPointer
 
     private const string ContainerGatesComment = "# Gates.";
 
-    /// <summary>The file with the clone step and the gates reading the clone; a file without the gate command (GitLab's root include) as it is.</summary>
+    /// <summary>
+    /// The file with the clone step and the gates (or the CI judge) reading the clone; a file without either (GitLab's root
+    /// include) as it is.
+    /// </summary>
     public static CiFile ForUnit(CiFile file, CiPlatform platform)
     {
-        if (!file.Content.Contains(GateRun, StringComparison.Ordinal))
+        bool judge = file.Content.Contains(JudgeRun, StringComparison.Ordinal) || file.Content.Contains(GitHubJudgeInput, StringComparison.Ordinal);
+        if (!judge && !file.Content.Contains(GateRun, StringComparison.Ordinal))
         {
             return file;
         }
 
         string content = platform switch
         {
+            CiPlatform.GitHub when judge => GitHubJudge(file.Content),
             CiPlatform.GitHub => GitHub(file.Content),
             CiPlatform.Azure => Azure(file.Content),
             _ => Container(file.Content),
@@ -53,6 +63,16 @@ internal static class CiShellPointer
 
             """)
             .Replace(GateRun, $"{GateRun} --shell \"{GitHubDirectory}\"", StringComparison.Ordinal);
+
+    private static string GitHubJudge(string workflow) =>
+        Insert(workflow, GitHubJudgeInput, before: false, $$$"""
+                      # This repository is a unit of a workspace shell (shell: in lockflight.yaml): the action clones the shell's
+                      # branch read-only and the judge uses the shell's policy too. A private shell needs a read-only token in the
+                      # LOCKFLIGHT_SHELL_TOKEN secret (or a deploy key for an SSH URL); only the action's clone step sees it.
+                      shell-clone: "true"
+                      shell-token: ${{ secrets.{{{ShellClone.TokenVariable}}} }}
+
+            """);
 
     private static string Azure(string pipeline) =>
         Insert(pipeline, AzureEngineStep, before: false, $$"""
@@ -74,7 +94,12 @@ internal static class CiShellPointer
         int comment = job.IndexOf(ContainerGatesComment, StringComparison.Ordinal);
         if (comment < 0)
         {
-            throw new InvalidOperationException($"the CI job has no '{ContainerGatesComment}' line to put the workspace shell clone before");
+            comment = job.IndexOf(CiShellScripts.JudgeComment, StringComparison.Ordinal);
+        }
+
+        if (comment < 0)
+        {
+            throw new InvalidOperationException($"the CI job has no '{ContainerGatesComment}' or '{CiShellScripts.JudgeComment}' line to put the workspace shell clone before");
         }
 
         int lineStart = job.LastIndexOf('\n', comment) + 1;
@@ -88,7 +113,9 @@ internal static class CiShellPointer
             $"unset {ShellClone.TokenVariable}",
         ];
         string clone = string.Concat(lines.Select(line => indent + line + "\n"));
-        return (job[..lineStart] + clone + job[lineStart..]).Replace(GateRun, $"{GateRun} --shell \"{ContainerDirectory}\"", StringComparison.Ordinal);
+        return (job[..lineStart] + clone + job[lineStart..])
+            .Replace(GateRun, $"{GateRun} --shell \"{ContainerDirectory}\"", StringComparison.Ordinal)
+            .Replace(JudgeRun, $"lockflight ci --shell \"{ContainerDirectory}\" --platform", StringComparison.Ordinal);
     }
 
     private static string Insert(string text, string anchor, bool before, string addition)

@@ -50,7 +50,7 @@ internal static class CiPipeline
         ],
         CiPlatform.Bitbucket when steps.Any(step => step.RelativePath == BitbucketPipelinesTemplate.FragmentPath) =>
         [
-            $"CI: {BitbucketPipelinesTemplate.Path} already exists and was left as it is. Bitbucket cannot include a file, so merge the lockflight-gates step and its pipelines from {BitbucketPipelinesTemplate.FragmentPath} into it, then make a successful build a merge check: {GuideUrl}#bitbucket-pipelines",
+            $"CI: {BitbucketPipelinesTemplate.Path} already exists and was left as it is. Bitbucket cannot include a file, so merge the Lockflight steps and their pipelines from {BitbucketPipelinesTemplate.FragmentPath} into it, then make a successful build a merge check: {GuideUrl}#bitbucket-pipelines",
         ],
         CiPlatform.Bitbucket => [$"CI: make a successful build of {BitbucketPipelinesTemplate.Path} a merge check (enforced on Bitbucket Premium only): {GuideUrl}#bitbucket-pipelines"],
         CiPlatform.GitLab when gitLabWithoutInclude =>
@@ -67,8 +67,12 @@ internal static class CiPipeline
     /// The Bitbucket pipeline file when it is missing or already runs the Lockflight step; otherwise the copy to merge by hand,
     /// so the team's file is never overwritten.
     /// </summary>
+    /// <summary>Whether a pipeline file already runs Lockflight: the CI judge, or the gates of an older template.</summary>
+    private static bool RunsLockflight(string text) =>
+        text.Contains("lockflight gate run", StringComparison.Ordinal) || text.Contains("lockflight ci ", StringComparison.Ordinal);
+
     private static string BitbucketPath(string root) =>
-        File.Exists(Path.Combine(root, BitbucketPipelinesTemplate.Path)) && !ReadOrEmpty(root, BitbucketPipelinesTemplate.Path).Contains("lockflight gate run", StringComparison.Ordinal)
+        File.Exists(Path.Combine(root, BitbucketPipelinesTemplate.Path)) && !RunsLockflight(ReadOrEmpty(root, BitbucketPipelinesTemplate.Path))
             ? BitbucketPipelinesTemplate.FragmentPath
             : BitbucketPipelinesTemplate.Path;
 

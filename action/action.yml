@@ -45,6 +45,14 @@ inputs:
     description: "Path to an engine binary to use instead of installing the base branch's pinned one (this repository's own CI)"
     required: false
     default: ""
+  shell-clone:
+    description: "judge: 'true' in a unit repository of a workspace shell (init --unit-of): clone the shell read-only and judge with its policy too"
+    required: false
+    default: "false"
+  shell-token:
+    description: "judge with shell-clone: a read-only token for a private shell; only the clone step sees it"
+    required: false
+    default: ""
   github-token:
     description: "report: the token that posts the comment (needs pull-requests: write)"
     required: false
@@ -132,11 +140,19 @@ runs:
           "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" ${GH_TOKEN:+--attestation}
         fi
 
+    - name: Clone the workspace shell (read-only)
+      if: inputs.mode == 'judge' && inputs.shell-clone == 'true'
+      shell: bash
+      env:
+        LOCKFLIGHT_SHELL_TOKEN: ${{ inputs.shell-token }}
+      run: '"$LF_LOCKFLIGHT" workspace clone --into "$RUNNER_TEMP/lockflight-shell"'
+
     - name: Judge the pull request
       if: inputs.mode == 'judge'
       id: judge
       shell: bash
       env:
+        LF_SHELL_CLONE: ${{ inputs.shell-clone }}
         LF_HEAD: ${{ inputs.head }}
         LF_BASE: ${{ inputs.base }}
         LF_BRANCH: ${{ inputs.branch }}
@@ -147,6 +163,7 @@ runs:
         if [ -n "$LF_BASE" ]; then args+=(--base "$LF_BASE"); fi
         if [ -n "$LF_BRANCH" ]; then args+=(--branch "$LF_BRANCH"); fi
         if [ "$LF_REVIEW" != "true" ]; then args+=(--no-review-expected); fi
+        if [ "$LF_SHELL_CLONE" = "true" ]; then args+=(--shell "$RUNNER_TEMP/lockflight-shell"); fi
         set +e
         # The output names pull request text (tests, build lines); it goes to the log only, and the report writes the summary.
         "$LF_LOCKFLIGHT" "${args[@]}"

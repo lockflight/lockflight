@@ -224,7 +224,8 @@ its CI job gets two additions:
 1. after the engine install, `lockflight workspace clone --into <temporary dir>` clones the shell: one commit of its branch,
    no checkout. It reads the URL from the unit's `lockflight.yaml`, which on pull requests is restored from the base branch,
    so a pull request cannot point its own CI at another shell;
-2. the gates run with `--shell <that dir>`: the unit's own manifest is made at least as strict as the shell's policy for the
+2. the gates run with `--shell <that dir>` (the CI judge with `lockflight ci --shell <that dir>`; on GitHub the judge's action
+   does both when the workflow passes it `shell-clone: "true"` and the token as `shell-token`): the unit's own manifest is made at least as strict as the shell's policy for the
    unit. The shell's protected paths that can match inside the unit are added (re-based as below), the build file and test
    framework of the shell's `units:` entry win over the unit's own (which apply only where the shell names none), and of the
    coverage threshold and the switchable steps (`quality.suppressions`, `docs.references`, `ef.pendingModelChanges`) the
