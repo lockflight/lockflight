@@ -1,7 +1,6 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Hosting;
-using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.Approvals;
 using Lockflight.Cli.Lifecycle.RedGreen;
 
@@ -23,13 +22,7 @@ internal static class SessionCommands
     public static SessionCommandSpec? MentionedIn(string text) => All.FirstOrDefault(spec => text.Contains(spec.Name, StringComparison.OrdinalIgnoreCase));
 
     public static Task<SessionCommandResult> DecideAsync(SessionCommandSpec spec, HookInput input, CliContext context, Manifest manifest, CancellationToken cancellationToken) =>
-        spec.Name switch
-        {
-            SessionBaseline.CommandName => new SessionBaseline(context, manifest).DecideAsync(input, cancellationToken),
-            SessionReset.CommandName => new SessionReset(context, manifest).DecideAsync(input, cancellationToken),
-            SessionAmend.CommandName => new SessionAmend(context, manifest).DecideAsync(input, cancellationToken),
-            _ => new SessionApproval(context, manifest).DecideAsync(input, cancellationToken),
-        };
+        spec.Create(context, manifest).DecideAsync(input, cancellationToken);
 
     /// <summary>
     /// For the status line: the line to type for a code that waits and is still valid (newest first), as
@@ -39,16 +32,7 @@ internal static class SessionCommands
     public static string? WaitingLine(Manifest manifest, TimeProvider time, RandomSource random)
     {
         SessionCodes codes = new(manifest.Root, time, random);
-        (string Slot, string What, Func<SessionCodeWaiting, string> Line)[] slots =
-        [
-            ("spec", "approval", _ => $"/{SessionApproval.CommandName} spec <code>"),
-            ("tasks", "approval", _ => $"/{SessionApproval.CommandName} tasks <code>"),
-            ("baseline-build", "baseline", _ => $"/{SessionBaseline.CommandName} build <code>"),
-            ("baseline-tests", "baseline", _ => $"/{SessionBaseline.CommandName} tests <code>"),
-            ("baseline-deps", "baseline", _ => $"/{SessionBaseline.CommandName} deps <code>"),
-            ("reset", "reset", _ => $"/{SessionReset.CommandName} <code>"),
-            ("amend", "amend", waiting => $"/{SessionAmend.CommandName} {(waiting.Payload.Count > 0 ? TraceMatrix.ShortName(waiting.Payload[0].Split(':')[^1]) : "<test>")} <code>"),
-        ];
+        IEnumerable<SessionCodeSlot> slots = All.SelectMany(spec => spec.Slots);
         return slots
             .Select(slot => (slot, waiting: codes.Waiting(slot.Slot, _ => true)))
             .Where(entry => entry.waiting is not null)
