@@ -8,7 +8,7 @@ namespace Lockflight.Cli.Hooks;
 /// Whether a command that may rewrite everything under a directory could touch a path a rule protects. One scan serves one guard
 /// decision. A directory is walked only for the rules that could match below it by pattern (<c>secrets/**</c> never sends a walk
 /// into <c>node_modules</c>; <c>**/Directory.Build.props</c> does), the walk keeps only files whose name fits one of those rules,
-/// and the result is reused for every directory below it, so a wildcard over thousands of siblings costs one walk.
+/// and the result is reused for every directory below it.
 /// </summary>
 internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules, DirectoryReads reads)
 {
@@ -60,39 +60,34 @@ internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules
     }
 
     /// <summary>
-    /// Walks a directory once for many sibling trees below it (<c>rm -rf node_modules/*</c>). Skipped when the siblings are a small
-    /// part of the directory (<c>node_modules/p1*</c>), where their own walks cost less.
+    /// The first glob that matches an existing file below the directory which the shell wildcard pattern names (or, for a tree,
+    /// that lies below a path the pattern names), skipping the files <paramref name="skip"/> accepts for a glob; null when none
+    /// does. Both paths are relative to the root. Only the globs that could match the pattern are looked for, and without a
+    /// <c>**</c> or a tree the walk goes no deeper than the pattern does.
     /// </summary>
-    public void Prime(string relativeParent, int siblingCount)
+    public string? FirstMatchOfPattern(string relativeDirectory, string relativePattern, IReadOnlyList<string> globs, bool asTree, Func<string, string, bool> skip)
     {
-        string directory = relativeParent.Length == 0 ? root : Path.Combine(root, relativeParent);
-        if (!Directory.Exists(directory))
-        {
-            return;
-        }
-
-        reads.StartListing();
-        int directoryCount = Directory.EnumerateDirectories(directory).Count();
-        reads.SeeEntries(directoryCount);
-        if (siblingCount * 2 >= directoryCount)
-        {
-            RuleFilesUnder(relativeParent);
-        }
-    }
-
-    /// <summary>The first glob that matches an existing file below the directory whose name matches <paramref name="namePattern"/>.</summary>
-    public string? FirstMatchNamed(string relativeTree, string namePattern, IReadOnlyList<string> globs)
-    {
-        string directory = relativeTree.Length == 0 ? root : Path.Combine(root, relativeTree);
-        if (!Directory.Exists(directory))
+        List<string> relevant = [.. globs.Where(glob => GlobOverlap.CouldMatch(glob, relativePattern, asTree))];
+        FileAttributes? attributes = relevant.Count == 0 ? null : AttributesOf(relativeDirectory);
+        if (attributes is null || !attributes.Value.HasFlag(FileAttributes.Directory))
         {
             return null;
         }
 
-        Regex name = GlobOverlap.SegmentRegex(namePattern);
-        return Walk(directory, [name])
-            .Select(file => globs.FirstOrDefault(glob => PathRules.Matches(glob, Relative(file))))
-            .FirstOrDefault(glob => glob is not null);
+        string[] patternSegments = relativePattern.Split('/');
+        int directoryDepth = relativeDirectory.Length == 0 ? 0 : relativeDirectory.Split('/').Length;
+        int? maxDepth = asTree || patternSegments.Contains(AnyDepth) ? null : patternSegments.Length - directoryDepth - 1;
+        string directory = relativeDirectory.Length == 0 ? root : Path.Combine(root, relativeDirectory);
+        foreach (string file in Walk(directory, NameFilters(relevant), maxDepth).Select(Relative))
+        {
+            if (GlobOverlap.CouldMatch(file, relativePattern, asTree)
+                && relevant.FirstOrDefault(glob => PathRules.Matches(glob, file) && !skip(file, glob)) is string glob)
+            {
+                return glob;
+            }
+        }
+
+        return null;
     }
 
     private bool ExistingMatchUnder(string relativeTree, string pattern, bool sourceOnly)
@@ -168,11 +163,16 @@ internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules
         [.. rules.Select(rule => rule.Replace('\\', '/').Split('/')[^1]).Distinct(StringComparer.Ordinal).Select(name => name == AnyDepth ? null : GlobOverlap.SegmentRegex(name))];
 
     /// <summary>Files below the directory whose name passes a filter, without links and <c>.git</c>, as absolute paths.</summary>
-    private FileSystemEnumerable<string> Walk(string directory, Regex?[] names)
+    private FileSystemEnumerable<string> Walk(string directory, Regex?[] names, int? maxDepth = null)
     {
         bool anyName = names.Any(name => name is null);
         reads.StartListing();
         EnumerationOptions options = new() { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint };
+        if (maxDepth is int depth)
+        {
+            options.MaxRecursionDepth = Math.Max(depth, 0);
+        }
+
         return new FileSystemEnumerable<string>(directory, (ref FileSystemEntry entry) => entry.ToFullPath(), options)
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) =>

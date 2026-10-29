@@ -5,38 +5,13 @@ using System.Text.RegularExpressions;
 namespace Lockflight.Cli.Paths;
 
 /// <summary>
-/// Whether a manifest glob could match a path that is only partly known: a path below a directory nobody can name (after a
-/// <c>cd "$X"</c>), possibly holding wildcards itself. Over-approximates: when unsure, it overlaps.
+/// Whether a manifest glob could match a path that holds shell wildcards itself. Over-approximates: when unsure, it overlaps.
 /// </summary>
 internal static class GlobOverlap
 {
     private const string AnyDepth = "**";
 
     private static readonly ConcurrentDictionary<string, Regex> SegmentRegexes = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// Whether <c>&lt;any directory&gt;/<paramref name="floatingPath"/></c> could match <paramref name="glob"/>; for a tree, also any
-    /// path below it. <paramref name="floatingPath"/> is '/'-separated and may hold wildcards and <c>**</c>; "" stands for the
-    /// unknown directory itself. With <paramref name="literalStart"/>, the path's first segment must meet a named segment of the
-    /// glob (<c>secrets</c> of <c>secrets/**</c>), not just a <c>**</c>: "could this be the protected file" rather than "could this be
-    /// anything below a protected directory".
-    /// </summary>
-    public static bool CouldMatchBelowAnyDirectory(string glob, string floatingPath, bool asTree, bool literalStart = false)
-    {
-        string[] globSegments = Segments(glob);
-        string[] pathSegments = Segments(floatingPath);
-        // The unknown directory can stand for any leading part of the glob, so every suffix of the glob is tried.
-        for (int start = 0; start <= globSegments.Length; start++)
-        {
-            bool startsOnName = start < globSegments.Length && globSegments[start] != AnyDepth && pathSegments.Length > 0;
-            if ((!literalStart || startsOnName) && Matches(globSegments, start, pathSegments, 0, asTree))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 
     /// <summary>
     /// Whether a '/'-separated path relative to the root, possibly holding wildcards and <c>**</c>, could match the glob; for a tree,

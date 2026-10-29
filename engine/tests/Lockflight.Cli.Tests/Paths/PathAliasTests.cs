@@ -98,7 +98,7 @@ public sealed class PathAliasTests : IDisposable
 
     [Fact]
     public void ADecomposedSpellingIsJudgedByTheRuleOverlapToo() =>
-        Assert.True(GlobOverlap.CouldMatchBelowAnyDirectory("docs/caf\u00e9.md", "cafe\u0301.md", asTree: false));
+        Assert.True(GlobOverlap.CouldMatch("docs/caf\u00e9.md", "docs/cafe\u0301.md", asTree: false));
 
     [Theory]
     [InlineData("C:/repo/secrets/key.txt:hidden", "C:/repo/secrets/key.txt")]

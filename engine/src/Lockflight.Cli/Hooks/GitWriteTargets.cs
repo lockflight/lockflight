@@ -2,11 +2,11 @@ namespace Lockflight.Cli.Hooks;
 
 /// <summary>
 /// git subcommands that overwrite or delete working-tree files the agent did not name as edits: <c>checkout -- &lt;paths&gt;</c>,
-/// <c>checkout -f</c>, <c>switch -f</c>, <c>restore</c>, <c>stash</c>, <c>reset --hard</c>, <c>clean -f</c>, <c>read-tree -u</c>,
-/// <c>apply</c>, <c>rm</c>, <c>mv</c>, <c>checkout-index</c> and <c>archive -o</c> (the paths an archive is made of are only read). Pathspecs may be
-/// files or directories, so each counts as both. Commands that only bring in committed states (<c>switch &lt;branch&gt;</c>,
-/// <c>merge</c>, <c>pull</c>, <c>rebase</c>, <c>cherry-pick</c>, <c>am</c>) are not treated as writes: their content is reviewed
-/// where it was committed.
+/// <c>checkout -f</c>, <c>switch -f</c>, <c>restore</c>, <c>stash</c>, <c>reset --hard</c>, <c>clean -f</c>, <c>apply</c>, <c>am</c>,
+/// <c>rm</c> and <c>mv</c>. Pathspecs may be files or directories, so each counts as both; a patch (<c>apply</c>, <c>am</c>) may
+/// touch anything, so it counts as the whole working tree. Commands that only bring in committed states
+/// (<c>switch &lt;branch&gt;</c>, <c>merge</c>, <c>pull</c>, <c>rebase</c>, <c>cherry-pick</c>) are not treated as writes: their
+/// content is reviewed where it was committed.
 /// </summary>
 internal static class GitWriteTargets
 {
@@ -38,7 +38,7 @@ internal static class GitWriteTargets
             return writes;
         }
 
-        return new CommandWrites(Under(gitDirectory, writes.Files), Under(gitDirectory, writes.Trees), [], writes.Hidden);
+        return new CommandWrites(Under(gitDirectory, writes.Files), Under(gitDirectory, writes.Trees), []);
     }
 
     private static CommandWrites Subcommand(string subcommand, List<string> arguments)
@@ -57,58 +57,20 @@ internal static class GitWriteTargets
             "stash" => StashPaths(beforeSeparator, afterSeparator, separator >= 0),
             "reset" when arguments.Contains("--hard") || arguments.Contains("--merge") || arguments.Contains("--keep") => [ShellArguments.CurrentDirectory],
             "clean" when forced => afterSeparator.Count > 0 ? afterSeparator : [ShellArguments.CurrentDirectory],
-            "read-tree" when arguments.Contains("-u") => [ShellArguments.CurrentDirectory],
             "apply" when Applies(arguments) => [ShellArguments.CurrentDirectory],
+            "am" when !arguments.Any(argument => argument is "--show-current-patch" or "--quit") => [ShellArguments.CurrentDirectory],
             "rm" when !arguments.Contains("--cached") => [.. afterSeparator, .. ShellArguments.Operands(beforeSeparator, [])],
             "mv" => [.. afterSeparator, .. ShellArguments.Operands(beforeSeparator, [])],
-            "worktree" => WorktreePath(arguments),
-            "archive" when ShellArguments.OptionValue(arguments, "-o", "--output") is string output => [output],
-            "checkout-index" when arguments.Contains("--stdin") => [],
-            "checkout-index" => CheckoutIndexPaths(beforeSeparator, afterSeparator),
             _ => [],
         };
-
-        if (subcommand == "checkout-index" && arguments.Contains("--stdin"))
-        {
-            return CommandWrites.Hiding("git checkout-index --stdin");
-        }
 
         if (subcommand == "mv" && paths.Count >= 2)
         {
             CommandWrites move = CopyCommandTargets.Of("mv", paths);
-            return new CommandWrites(move.Files, [.. move.Trees, .. paths], [], null);
+            return new CommandWrites(move.Files, [.. move.Trees, .. paths], []);
         }
 
         return CommandWrites.OfFilesAndTrees(paths);
-    }
-
-    /// <summary>
-    /// <c>git checkout-index [-a] [--prefix=P] [--] [&lt;file&gt;…]</c> writes the named files, or every indexed file with <c>-a</c>;
-    /// with a prefix they land under it instead (a tree: <c>out/</c>, or the directory a name prefix sits in).
-    /// </summary>
-    private static List<string> CheckoutIndexPaths(List<string> beforeSeparator, List<string> afterSeparator)
-    {
-        List<string> files = [.. ShellArguments.Operands(beforeSeparator, []), .. afterSeparator];
-        string? prefix = beforeSeparator.FirstOrDefault(argument => argument.StartsWith("--prefix=", StringComparison.Ordinal))?["--prefix=".Length..];
-        bool all = ShellArguments.HasFlag(beforeSeparator, "a", "--all");
-        if (prefix is { Length: > 0 })
-        {
-            return [prefix.EndsWith('/') ? prefix.TrimEnd('/') : ShellArguments.Parent(prefix)];
-        }
-
-        return all ? [ShellArguments.CurrentDirectory] : files;
-    }
-
-    /// <summary><c>git worktree add [options] &lt;path&gt; [&lt;commit-ish&gt;]</c> checks a whole tree out at the path.</summary>
-    private static List<string> WorktreePath(List<string> arguments)
-    {
-        if (arguments.Count == 0 || arguments[0] != "add")
-        {
-            return [];
-        }
-
-        List<string> operands = ShellArguments.Operands([.. arguments.Skip(1)], ["-b", "-B", "--reason"]);
-        return operands.Count > 0 ? [operands[0]] : [];
     }
 
     /// <summary><c>git apply</c> writes the working tree unless it only reports, or applies to the index alone.</summary>
@@ -156,5 +118,8 @@ internal static class GitWriteTargets
     }
 
     private static List<string> Under(string directory, IReadOnlyList<string> paths) =>
-        [.. paths.Select(path => path == ShellArguments.CurrentDirectory ? directory : ShellLocations.IsRooted(path) ? path : ShellArguments.Join(directory, path))];
+        [.. paths.Select(path => path == ShellArguments.CurrentDirectory ? directory : IsRooted(path) ? path : ShellArguments.Join(directory, path))];
+
+    private static bool IsRooted(string path) =>
+        path.StartsWith('/') || path.StartsWith('\\') || path.StartsWith('~') || path.StartsWith('$') || (path.Length >= 2 && char.IsAsciiLetter(path[0]) && path[1] == ':');
 }

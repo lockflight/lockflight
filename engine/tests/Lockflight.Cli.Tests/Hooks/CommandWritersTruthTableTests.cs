@@ -6,8 +6,8 @@ namespace Lockflight.Cli.Tests.Hooks;
 
 /// <summary>
 /// The routing of a simple command to the writer that reads its targets, pinned per dialect: every program a writer knows
-/// (PowerShell aliases included, which overlap the POSIX programs), a few that write nothing, behind <c>xargs</c> and fed by a
-/// pipeline.
+/// (PowerShell aliases included, which overlap the POSIX programs), programs the guard no longer parses, a few that write nothing,
+/// and behind <c>xargs</c> (only its visible arguments count).
 /// </summary>
 public sealed class CommandWritersTruthTableTests
 {
@@ -50,32 +50,24 @@ public sealed class CommandWritersTruthTableTests
             {
                 foreach (string[] arguments in Arguments)
                 {
-                    Render(rendered, dialect, [program, .. arguments], piped: false);
+                    Render(rendered, dialect, [program, .. arguments]);
                 }
 
-                Render(rendered, dialect, ["xargs", program], piped: false);
-                Render(rendered, dialect, [program], piped: true);
+                Render(rendered, dialect, ["xargs", program]);
             }
         }
 
         GoldenFiles.Verify("command-writers", rendered.ToString());
     }
 
-    private static void Render(StringBuilder rendered, ShellDialect dialect, string[] words, bool piped)
+    private static void Render(StringBuilder rendered, ShellDialect dialect, string[] words)
     {
-        ShellCommand parsed = ShellCommand.Parse(words) ?? throw new InvalidOperationException($"'{string.Join(' ', words)}' does not parse");
-        ShellCommand command = parsed with { PipedInput = piped };
+        ShellCommand command = ShellCommand.Parse(words) ?? throw new InvalidOperationException($"'{string.Join(' ', words)}' does not parse");
         CommandWrites writes = CommandWriters.Of(command, dialect);
-        rendered.Append($"{dialect} {(piped ? "| " : string.Empty)}{string.Join(' ', words)}: writer={CommandWriters.IsWriter(command, dialect)}");
+        rendered.Append($"{dialect} {string.Join(' ', words)}: writer={CommandWriters.IsWriter(command.Program, dialect)}");
         Append(rendered, "files", writes.Files);
         Append(rendered, "trees", writes.Trees);
         Append(rendered, "sources", writes.SourceTrees);
-        Append(rendered, "patterns", writes.PatternFiles);
-        if (writes.Hidden is string hidden)
-        {
-            rendered.Append($" hidden={hidden}");
-        }
-
         rendered.Append('\n');
     }
 

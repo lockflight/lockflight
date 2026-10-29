@@ -5,18 +5,15 @@ using Lockflight.Cli.Paths;
 namespace Lockflight.Cli.Hooks.Guard;
 
 /// <summary>
-/// Blocks file-editing tools, and shell commands that visibly write, when they target a protected path (built-in defaults plus the
-/// manifest's rules) or a test locked during a red cycle, except the test files a person's amend made writable (named one by one;
-/// a command that rewrites a whole directory stays blocked). One algorithm over shared facts (expanded wildcards, test locks, tree
-/// scans): hidden targets, editing tools, unknown variables, wildcard breadth, trees, files, computed targets, name patterns,
-/// floating targets, in that order. A guardrail, not a boundary.
+/// Blocks file-editing tools, and the common shell writes the guard parses (<see cref="ShellWriteTargets"/>), when they target a
+/// protected path (built-in defaults plus the manifest's rules) or a test locked during a red cycle, except the test files a
+/// person's amend made writable (named one by one; a command that rewrites a whole directory stays blocked). Trees and wildcards
+/// are judged by the protected files that exist below them; a target with a variable the guard cannot resolve is not judged, and
+/// a command whose writes the guard does not parse is allowed. A guardrail against accidents, not a boundary.
 /// </summary>
 internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReader environment, DirectoryReads reads) : IGuardRule
 {
     public const string RuleId = "protected-path";
-
-    private const int MaxWildcardMatches = 2000;
-    private const int MinSiblingsToPrime = 8;
 
     public string Id => RuleId;
 
@@ -32,99 +29,105 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
         IReadOnlyList<(string Glob, string Reason)> testLocks = facts.TestLocks;
         IReadOnlySet<string> amended = facts.AmendedFiles;
         ShellWrites writes = facts.Writes;
-
-        if (writes.Hidden is string hidden)
-        {
-            return HookDecision.Block(
-                "hidden-write-targets",
-                $"lockflight: '{hidden}' writes to paths the command line does not show, so they cannot be checked against protected paths. Name the files in the command instead.");
-        }
+        RootRelativePaths relatives = new(manifest.Root);
 
         if (facts.IsFileEditingTool)
         {
             // An editing tool's path is literal: no variables, no wildcards, no home.
-            return await FileDecisionAsync(new RootRelativePaths(manifest.Root), WindowsParentSegments.WithCollapsed(writes.Files, workingDirectory), manifest, globs, testLocks, amended, workingDirectory) ?? HookDecision.Allow;
+            return await FileDecisionAsync(relatives, WindowsParentSegments.WithCollapsed(writes.Files, workingDirectory), manifest, globs, testLocks, amended, workingDirectory) ?? HookDecision.Allow;
         }
 
-        IEnumerable<(string Path, bool AsTree)> allTargets = writes.Files.Select(path => (path, false))
-            .Concat(writes.Trees.Concat(writes.SourceTrees).Select(path => (path, true)));
-        if (PartialTargetDecisions.UnknownVariables(allTargets, workingDirectory, environment.HomeDirectory(), globs, testLocks) is HookDecision variable)
-        {
-            return variable;
-        }
-
-        IReadOnlyList<string>? expandedFiles = Expand(writes.Files, workingDirectory);
-        IReadOnlyList<string>? expandedTrees = Expand(writes.Trees, workingDirectory);
-        IReadOnlyList<string>? expandedSourceTrees = Expand(writes.SourceTrees, workingDirectory);
-        if (expandedFiles is null || expandedTrees is null || expandedSourceTrees is null)
-        {
-            return HookDecision.Block("wildcard-too-broad", $"lockflight: a wildcard in this command matches more than {MaxWildcardMatches} paths; name the files or a narrower pattern.");
-        }
-
-        IReadOnlyList<string> files = WindowsParentSegments.WithCollapsed(expandedFiles, workingDirectory);
-        IReadOnlyList<string> trees = WindowsParentSegments.WithCollapsed(expandedTrees, workingDirectory);
-        IReadOnlyList<string> sourceTrees = WindowsParentSegments.WithCollapsed(expandedSourceTrees, workingDirectory);
+        (List<string> files, List<string> filePatterns) = Resolved(writes.Files, workingDirectory);
+        (List<string> trees, List<string> treePatterns) = Resolved(writes.Trees, workingDirectory);
+        (List<string> sourceTrees, List<string> sourceTreePatterns) = Resolved(writes.SourceTrees, workingDirectory);
+        // A pattern written as a tree (rm -r) also names the files it matches: one walk judges both.
+        treePatterns.AddRange(sourceTreePatterns);
+        IReadOnlyList<string> collapsedTrees = WindowsParentSegments.WithCollapsed(trees, workingDirectory);
+        IReadOnlyList<string> collapsedSourceTrees = WindowsParentSegments.WithCollapsed(sourceTrees, workingDirectory);
 
         ProtectedTreeScan scan = new(manifest.Root, [.. globs, .. testLocks.Select(testLock => testLock.Glob)], reads);
-        RootRelativePaths relatives = new(manifest.Root);
-        return TreeDecision(scan, relatives, trees, sourceTrees, globs, testLocks, amended, workingDirectory)
-            ?? await FileDecisionAsync(relatives, [.. files, .. trees, .. sourceTrees], manifest, globs, testLocks, amended, workingDirectory)
-            ?? PartialTargetDecisions.Computed(writes.ComputedFiles, relatives, workingDirectory, globs, testLocks)
-            ?? PartialTargetDecisions.NamePatterns(writes.PatternFiles, scan, manifest.Root, workingDirectory, globs, testLocks)
-            ?? PartialTargetDecisions.Floating(writes, globs, testLocks)
+        return TreeDecision(scan, relatives, [.. collapsedTrees.Select(tree => (tree, false)), .. collapsedSourceTrees.Select(tree => (tree, true))], globs, testLocks, amended, workingDirectory)
+            ?? await FileDecisionAsync(relatives, WindowsParentSegments.WithCollapsed([.. files, .. trees, .. sourceTrees, .. filePatterns, .. treePatterns], workingDirectory), manifest, globs, testLocks, amended, workingDirectory)
+            ?? PatternDecision(scan, relatives, filePatterns.Except(treePatterns).Select(pattern => (pattern, false)).Concat(treePatterns.Select(pattern => (pattern, true))), globs, testLocks, amended, workingDirectory)
             ?? HookDecision.Allow;
     }
 
     /// <summary>
-    /// Wildcard targets are checked as the shell would expand them (existing entries) and as written (a pattern that matches
-    /// nothing is passed on literally); <c>~</c>, <c>$HOME</c> and <c>$PWD</c> are resolved, and targets with other variables were
-    /// judged by <see cref="PartialTargetDecisions.UnknownVariables"/>. Null when a pattern matches too many paths to check.
+    /// The targets with <c>~</c>, <c>$HOME</c> and <c>$PWD</c> resolved, split into literal paths and wildcard patterns. A target
+    /// with any other variable, or with the output of a command in it, is left out: the guard does not know what it names.
     /// </summary>
-    private List<string>? Expand(IReadOnlyList<string> paths, string workingDirectory)
+    private (List<string> Literal, List<string> Patterns) Resolved(IReadOnlyList<string> paths, string workingDirectory)
     {
-        List<string> expanded = [];
+        List<string> literal = [];
+        List<string> patterns = [];
         string? home = environment.HomeDirectory();
-        IEnumerable<string> resolved = paths.Select(path => ShellVariables.Resolve(ExpandHome(path), workingDirectory, home).Path).OfType<string>();
-        foreach (string path in resolved)
+        foreach (string path in paths)
         {
-            expanded.Add(path);
-            if (!PathWildcards.HasWildcard(path))
+            if (ShellVariables.Resolve(ExpandHome(path, home), workingDirectory, home).Path is string resolved)
+            {
+                (PathWildcards.HasWildcard(resolved) ? patterns : literal).Add(resolved);
+            }
+        }
+
+        return (literal, patterns);
+    }
+
+    private static string ExpandHome(string path, string? home) =>
+        (path == "~" || path.StartsWith("~/", StringComparison.Ordinal) || path.StartsWith("~\\", StringComparison.Ordinal)) && home is not null
+            ? home + path[1..]
+            : path;
+
+    /// <summary>
+    /// A wildcard target (<c>rm tests/*.cs</c>, <c>rm -r bin/*</c>) is blocked when a protected or locked file that exists below
+    /// the directory before its first wildcard matches it (or, for a tree, lies below a path it matches). The shell expands a
+    /// wildcard only to what exists; one that matches nothing is passed on as written, which the file check already judged.
+    /// </summary>
+    private static HookDecision? PatternDecision(
+        ProtectedTreeScan scan, RootRelativePaths relatives, IEnumerable<(string Pattern, bool AsTree)> patterns, IReadOnlyList<string> globs,
+        IReadOnlyList<(string Glob, string Reason)> testLocks, IReadOnlySet<string> amended, string workingDirectory)
+    {
+        foreach ((string pattern, bool asTree) in patterns)
+        {
+            string[] segments = pattern.Replace('\\', '/').Split('/');
+            int firstWildcard = Array.FindIndex(segments, GlobOverlap.HasWildcard);
+            string prefix = firstWildcard == 0 ? ShellArguments.CurrentDirectory : string.Join('/', segments[..firstWildcard]);
+            if (relatives.Relative(prefix.Length == 0 ? "/" : prefix, workingDirectory) is not string directory)
             {
                 continue;
             }
 
-            if (PathWildcards.Expand(path, workingDirectory, MaxWildcardMatches, reads) is not IReadOnlyList<string> matches)
+            string relativePattern = (directory.Length == 0 ? string.Empty : directory + "/") + string.Join('/', segments[firstWildcard..]);
+            List<string> lockGlobs = [.. testLocks.Select(testLock => testLock.Glob)];
+            string? matched = scan.FirstMatchOfPattern(directory, relativePattern, [.. lockGlobs, .. globs], asTree, (file, glob) => lockGlobs.Contains(glob) && !globs.Contains(glob) && IsAmended(amended, file));
+            if (matched is not null && testLocks.FirstOrDefault(testLock => testLock.Glob == matched) is { Glob: string lockedGlob, Reason: string reason })
             {
-                return null;
+                return HookDecision.Block(
+                    $"tests-locked:{lockedGlob}",
+                    $"lockflight: '{pattern}' matches test files locked during {reason}: make the tests pass by changing production code, then run '{EngineCommand.Linked} redgreen green'. If a test itself is wrong, ask the user.");
             }
 
-            expanded.AddRange(matches);
+            if (matched is not null)
+            {
+                return HookDecision.Block(
+                    $"protected-path:{matched}",
+                    $"lockflight: '{pattern}' matches files protected by rule '{matched}'. Name the files to change instead; protected files are changed by a human or a lockflight command.");
+            }
         }
 
-        return expanded;
+        return null;
     }
-
-    private string ExpandHome(string path) =>
-        (path == "~" || path.StartsWith("~/", StringComparison.Ordinal) || path.StartsWith("~\\", StringComparison.Ordinal)) && environment.HomeDirectory() is string home
-            ? home + path[1..]
-            : path;
 
     /// <summary>
     /// A command that may rewrite a whole directory (git restore ., rm -r, dotnet format) is blocked when a protected file or a
     /// locked test project could lie inside it. Conservative: a rule that might match under the directory counts.
     /// </summary>
     private static HookDecision? TreeDecision(
-        ProtectedTreeScan scan, RootRelativePaths relatives, IReadOnlyList<string> trees, IReadOnlyList<string> sourceTrees, IReadOnlyList<string> globs,
+        ProtectedTreeScan scan, RootRelativePaths relatives, IReadOnlyList<(string Tree, bool SourceOnly)> trees, IReadOnlyList<string> globs,
         IReadOnlyList<(string Glob, string Reason)> testLocks, IReadOnlySet<string> amended, string workingDirectory)
     {
         List<(string Tree, bool SourceOnly, string RelativeTree)> resolved = [];
-        foreach ((string tree, bool sourceOnly) in trees.Select(tree => (tree, false)).Concat(sourceTrees.Select(tree => (tree, true))))
+        foreach ((string tree, bool sourceOnly) in trees)
         {
-            if (PathWildcards.HasWildcard(tree))
-            {
-                continue;
-            }
-
             if (relatives.Relative(tree, workingDirectory) is string relativeTree)
             {
                 resolved.Add((tree, sourceOnly, relativeTree));
@@ -136,12 +139,6 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
                     "protected-path:project-root",
                     $"lockflight: this command may rewrite or delete '{tree}', the folder that contains this project and every protected path in it. Name the files to change instead.");
             }
-        }
-
-        // Many trees under one directory (a wildcard's expansion) are served by one walk of that directory.
-        if (resolved.Count > MinSiblingsToPrime && CommonDirectory(resolved.Select(entry => entry.RelativeTree)) is { Length: > 0 } common)
-        {
-            scan.Prime(common, resolved.Count);
         }
 
         foreach ((string tree, bool sourceOnly, string relativeTree) in resolved)
@@ -162,19 +159,6 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
         }
 
         return null;
-    }
-
-    /// <summary>The deepest directory that holds every one of the '/'-separated paths ("" when only the root does).</summary>
-    private static string CommonDirectory(IEnumerable<string> relativePaths)
-    {
-        string[]? common = null;
-        foreach (string[] segments in relativePaths.Select(path => path.Split('/')))
-        {
-            string[] directory = segments[..^1];
-            common = common is null ? directory : [.. common.Zip(directory).TakeWhile(pair => pair.First == pair.Second).Select(pair => pair.First)];
-        }
-
-        return common is null ? string.Empty : string.Join('/', common);
     }
 
     private async Task<HookDecision?> FileDecisionAsync(
