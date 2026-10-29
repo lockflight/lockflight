@@ -12,8 +12,8 @@ public sealed class CiPipelineTests
     public static TheoryData<string> OtherPlatforms() => ["azure", "bitbucket", "gitlab"];
 
     [Theory]
-    [MemberData(nameof(Platforms))]
-    public void EveryPlatformRestoresTheSamePolicyFromTheBaseAsTheGitHubWorkflow(string platform)
+    [MemberData(nameof(OtherPlatforms))]
+    public void EveryPlatformRestoresTheSamePolicyFromTheBase(string platform)
     {
         string pipeline = JobFile(platform, OneChannel, CiTrigger.PullRequest);
 
@@ -26,7 +26,7 @@ public sealed class CiPipelineTests
     }
 
     [Theory]
-    [MemberData(nameof(Platforms))]
+    [MemberData(nameof(OtherPlatforms))]
     public void EveryPlatformPinsGitleaksAndTheEngineAndRunsThePrGates(string platform)
     {
         string pipeline = JobFile(platform, OneChannel, CiTrigger.PullRequest);

@@ -13,8 +13,13 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
 
 ## What the generated workflow does
 
-- **Policy from the base branch.** On pull requests it restores exactly these from the base commit (a file the PR adds is
-  removed):
+- **Four jobs.** `judge` runs the [CI judge action](#the-ci-judge-action) on the pull request's head commit with no secret;
+  `review` runs the review of record only when the repository variable `LOCKFLIGHT_REVIEW` is `'true'` (and the secret
+  `ANTHROPIC_API_KEY` is set), for pull requests from the same repository, and not after a judge FAIL; `gates` and
+  `lockflight/judge` read the results as data and set one status context each. `gates` keeps the name and meaning of the
+  check rulesets already require. The judge job's `timeout-minutes` is `ci.timeoutMinutes` (45) plus 10: raise both together.
+- **Policy from the target branch.** The judge reads `lockflight.yaml` from the target branch's tip with `git show`, and lays
+  exactly these from that commit over every tree it builds (a file the PR adds is removed):
   - `dotnet-tools.json` and `.config/dotnet-tools.json` (the engine pin);
   - `lockflight.yaml`;
   - `.gitleaks.toml` and `.gitleaksignore`;
@@ -32,14 +37,14 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
   nested `NuGet.config` files, `global.json` and `Directory.Packages.props`. A PR can change these, and the gates then build with the
   changed version. For example, a PR could set `<TreatWarningsAsErrors>false</TreatWarningsAsErrors>` in
   `Directory.Build.props`. `policy.protected` lists these files for review. **CODEOWNERS is what protects them.**
-- **Pinned tools.** gitleaks is downloaded at a fixed version and verified against its SHA-256 before use. The engine is the
-  version in the base branch's tool pin, installed with `dotnet tool install --tool-path` outside the repository and run as
-  `lockflight`: a `global.json` that pins SDK 8 or 9 cannot restore the engine package, so the workflow does not use
-  `dotnet tool restore`.
+- **Pinned tools.** The action is referenced by commit SHA. gitleaks is downloaded at a fixed version and verified against its
+  SHA-256 before use. The engine is the version in the target branch's tool pin (read with `git show`), installed with
+  `dotnet tool install --tool-path` outside the repository: a `global.json` that pins SDK 8 or 9 cannot restore the engine
+  package, so the workflow does not use `dotnet tool restore`.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass
   `--ci pr`; see [CI with a development build](getting-started.md#ci-with-a-development-build).
-- **`gate run --profile pr --base <base sha>`**, in this order:
+- **`gate run --profile pr --base <merge base>`**, run by the judge at head in its worktree, in this order:
   1. `policy.protected` — lists protected files the PR changes (never fails; the list goes to the job summary);
   2. `format`, then `quality.suppressions` — suppressions the PR adds (`#pragma warning disable`, `[SuppressMessage]`,
      `<NoWarn>`, a lowered `.editorconfig` severity, `#nullable disable`, `[ExcludeFromCodeCoverage]` …), by file, line and
