@@ -15,4 +15,8 @@ internal sealed record InitOptions(
     InitQuality Quality,
     bool DryRun,
     ShellSettings? Shell,
-    string? SpecKitPreset);
+    string? SpecKitPreset)
+{
+    /// <summary><c>--preset relaxed|default|strict</c>: the routing preset a new manifest spells out (default <c>default</c>).</summary>
+    public RoutingPreset Preset { get; init; } = RoutingPreset.Default;
+}

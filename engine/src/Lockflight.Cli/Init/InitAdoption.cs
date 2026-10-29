@@ -21,11 +21,11 @@ internal static class InitAdoption
     /// The manifest init writes: the template for a new project (with the units it finds, unless it is a unit of a shell), else the
     /// project's own text; then the hooks' guarded paths, units no entry lists and the shell pointer, each only when missing.
     /// </summary>
-    public static ManifestPlan Manifest(string? existingText, Manifest? existing, InitProfile profile, AdoptionPlan plan, IReadOnlyList<UnitCandidate> discovered, ShellSettings? shell)
+    public static ManifestPlan Manifest(
+        string? existingText, Manifest? existing, InitProfile profile, RoutingPreset preset, AdoptionPlan plan, IReadOnlyList<UnitCandidate> discovered, ShellSettings? shell)
     {
         List<string> manual = [];
-        // A shell pointer needs a version 2 manifest; a new one is written as version 2.
-        string text = existingText ?? (shell is null ? Templates.Manifest(profile) : Templates.Manifest(profile).Replace("version: 1", "version: 2", StringComparison.Ordinal));
+        string text = existingText ?? Templates.Manifest(profile, preset);
         if (shell is null && existingText is null)
         {
             text = Extend(text, "units", [.. discovered.Select(unit => unit.ManifestEntry)], manual);

@@ -232,6 +232,11 @@ profile is capped; `baseline tests` and the `pr` profile use the full `gates.tim
 engine never turns a green repository red by itself. In a version 2 manifest they default to `fail`. A version 1 manifest that
 holds a version 2 section is an error naming the version it needs.
 
+`lockflight init` writes version 2. A version 1 manifest is named to the person at session start and by `doctor`
+(warn), and `lockflight update` migrates it (see [`update`](commands.md)); `update --project --dry-run` shows the change
+first. A Lockflight engine before version 2 refuses a version 2 manifest ("'version' must be 1"): update every clone's
+engine (`~/.lockflight/bin/lockflight update`) when the migration is merged.
+
 The published JSON Schema, [`lockflight.schema.json`](../../lockflight.schema.json) (a copy of
 [`schemas/lockflight.manifest.v2.json`](../../schemas/lockflight.manifest.v2.json)), gives an editor completion and checks.
 Add this first line for editors that use the YAML language server:

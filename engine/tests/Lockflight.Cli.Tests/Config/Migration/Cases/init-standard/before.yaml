@@ -1,0 +1,17 @@
+# Lockflight project manifest — https://github.com/lockflight/lockflight
+# Built-in protected paths always apply: this file, the tool pin, .lockflight/, Claude settings, .NET build-control files
+# (Directory.Build.*, Directory.Packages.props, global.json, NuGet.config), code-style and analyzer policy (.editorconfig,
+# .globalconfig, *.ruleset, stylecop.json, BannedSymbols.txt, CodeMetricsConfig.txt), .gitattributes, gitleaks policy and the
+# Lockflight CI files.
+# The full list: https://github.com/lockflight/lockflight/blob/main/docs/guides/configuration.md
+version: 1
+
+# Extra paths the agent must not change.
+protected: []
+
+# Stop gate: run build + tests when the agent ends a turn (at most 540 s, below the plugin's Stop hook timeout).
+# Off at first in the standard profile too: turn it on once you know how long your build and tests take and the
+# known-failing tests are accepted (a person runs '.lockflight/bin/lockflight baseline tests').
+stop:
+  gate: false
+  target: .

@@ -175,7 +175,8 @@ The lite profile gives you the guard and the gates, without the lifecycle.
 1. At your repository's root, in a terminal:
    ```sh
    cd /path/to/your/repo
-   ~/.lockflight/bin/lockflight init      # the user install: the project has no engine of its own yet
+   ~/.lockflight/bin/lockflight init      # the user install: the project has no engine of its own yet;
+                                          #   --preset relaxed|default|strict picks the routing thresholds it writes
    .lockflight/bin/lockflight doctor      # the linked engine, the way the agent runs every command from here on
    ```
    Or ask Claude Code, started at the root: *"Set up Lockflight"*. The `lockflight:init` skill runs the same steps and stops

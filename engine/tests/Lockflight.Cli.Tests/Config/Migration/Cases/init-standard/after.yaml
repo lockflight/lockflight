@@ -1,0 +1,47 @@
+# Lockflight project manifest — https://github.com/lockflight/lockflight
+# Built-in protected paths always apply: this file, the tool pin, .lockflight/, Claude settings, .NET build-control files
+# (Directory.Build.*, Directory.Packages.props, global.json, NuGet.config), code-style and analyzer policy (.editorconfig,
+# .globalconfig, *.ruleset, stylecop.json, BannedSymbols.txt, CodeMetricsConfig.txt), .gitattributes, gitleaks policy and the
+# Lockflight CI files.
+# The full list: https://github.com/lockflight/lockflight/blob/main/docs/guides/configuration.md
+version: 2
+
+# Extra paths the agent must not change.
+protected: []
+
+# Stop gate: run build + tests when the agent ends a turn (at most 540 s, below the plugin's Stop hook timeout).
+stop:
+  gate: false
+  target: .
+
+# Manifest version 2, written by `lockflight update`. The checks version 2 added only report here, so this upgrade changes
+# no verdict; set each to fail when the team is ready (configuration guide, "Manifest version 2").
+gates:
+  quality:
+    suppressions: report    # fail: new suppressions fail the pr profile
+  docs:
+    references: report    # fail: references the change breaks fail the pr profile
+  ef:
+    pendingModelChanges: auto    # auto: fails when the repository pins dotnet-ef; fail forces it
+
+approvals:                      # the approval of record is the platform's review of the pull request
+  check: report
+  default: same-pr
+  specFirstFrom: none
+  specFirstPaths: []
+  specPaths: ["specs/**"]
+
+routing:                        # how a pull request's change class is computed and what each class must prove
+  preset: default
+  floor: fix
+  fix: { maxLines: 20, maxFiles: 2 }
+  largeLines: 400
+  structural: critical
+  critical: []                  # globs of critical paths, such as "src/Payments/**"
+  coverage: { fix: 80, behaviour: 80, feature: 80, critical: 90 }
+  require:
+    specFrom: feature
+    reviewFrom: behaviour
+    reviewKeyFrom: critical
+    architectureFrom: feature
+    architectureDeclaredFrom: none
