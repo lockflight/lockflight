@@ -118,6 +118,13 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/spec-contract.sh "$RUNNER_TEMP/spec-contract"
+      - name: CI judge end to end (red at red commits, tests since red, green, trace, report)
+        shell: bash
+        run: |
+          git config --global user.email ci@example.com && git config --global user.name ci
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/e2e/ci-judge.sh "$RUNNER_TEMP/ci-judge"
       - name: Workspace gates end to end (units, VSTest and MTP, per-unit stop cache)
         shell: bash
         run: |
@@ -288,3 +295,65 @@ jobs:
           claude plugin validate --strict plugins/lockflight-crew
           claude plugin validate --strict .
           claude plugin validate --strict plugins
+
+  # The CI judge on this repository's own pull requests through the action in action/, with the engine built from
+  # source, reported as the status context lockflight/judge, which no ruleset requires. It needs a lockflight.yaml at the
+  # repository root that names the solution (gates.build), so it runs only when the repository variable
+  # LOCKFLIGHT_SELF_JUDGE is 'true'. The judge job holds no secret; the report job builds the engine from the base branch
+  # and runs nothing from the pull request.
+  judge:
+    if: github.event_name == 'pull_request' && vars.LOCKFLIGHT_SELF_JUDGE == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+          dotnet-version: 8.0.x
+      - name: The target branch's tip and the engine built from the pull request
+        id: base
+        env:
+          LF_TARGET: ${{ github.base_ref }}
+        run: |
+          echo "sha=$(git rev-parse "refs/remotes/origin/$LF_TARGET")" >> "$GITHUB_OUTPUT"
+          git config --global user.email ci@example.com && git config --global user.name ci
+          (cd engine && dotnet publish src/Lockflight.Cli -c Release -r linux-x64 -o "$RUNNER_TEMP/engine" -nologo)
+      - uses: ./action
+        with:
+          mode: judge
+          head: ${{ github.event.pull_request.head.sha }}
+          base: ${{ steps.base.outputs.sha }}
+          branch: ${{ github.head_ref }}
+          review-expected: "false"
+          engine: ${{ runner.temp }}/engine/lockflight
+
+  judge-report:
+    name: lockflight/judge
+    needs: judge
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && vars.LOCKFLIGHT_SELF_JUDGE == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+      - name: The engine built from the base branch
+        run: cd engine && dotnet publish src/Lockflight.Cli -c Release -r linux-x64 -o "$RUNNER_TEMP/engine" -nologo
+      - uses: ./action
+        with:
+          mode: report
+          head: ${{ github.event.pull_request.head.sha }}
+          context: lockflight/judge
+          comment: "true"
+          engine: ${{ runner.temp }}/engine/lockflight
