@@ -12,8 +12,13 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
 
 ## What the generated workflow does
 
-- **Policy from the base branch.** On pull requests it restores exactly these from the base commit (a file the PR adds is
-  removed):
+- **Four jobs.** `judge` runs the [CI judge action](#the-ci-judge-action) on the pull request's head commit with no secret;
+  `review` runs the review of record only when the repository variable `LOCKFLIGHT_REVIEW` is `'true'` (and the secret
+  `ANTHROPIC_API_KEY` is set), for pull requests from the same repository, and not after a judge FAIL; `gates` and
+  `lockflight/judge` read the results as data and set one status context each. `gates` keeps the name and meaning of the
+  check rulesets already require. The judge job's `timeout-minutes` is `ci.timeoutMinutes` (45) plus 10: raise both together.
+- **Policy from the target branch.** The judge reads `lockflight.yaml` from the target branch's tip with `git show`, and lays
+  exactly these from that commit over every tree it builds (a file the PR adds is removed):
   - `.lockflight/engine.lock` (the engine pin by hash) and `dotnet-tools.json` / `.config/dotnet-tools.json` (its version
     mirror, and the version pin of a project without a lock);
   - `lockflight.yaml`;
@@ -33,27 +38,21 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
   nested `NuGet.config` files, `global.json` and `Directory.Packages.props`. A PR can change these, and the gates then build with the
   changed version. For example, a PR could set `<TreatWarningsAsErrors>false</TreatWarningsAsErrors>` in
   `Directory.Build.props`. `policy.protected` lists these files for review. **CODEOWNERS is what protects them.**
-- **Pinned tools.** gitleaks is downloaded at a fixed version and verified against its SHA-256 before use. The engine is the
-  one the base branch pins, installed outside the repository (so a `global.json` that pins SDK 8 or 9 does not matter) and run
-  as `lockflight`:
-  - **With `.lockflight/engine.lock`:** the step checks the vendored `.lockflight/ci/install.sh` against the hash the lock
-    names, then runs it: it downloads this platform's package (nuget.org, `LOCKFLIGHT_NUGET_FEED`, or through `dotnet` with
-    the root `nuget.config` when that file exists and the variable is unset) and checks the executable against the lock before
-    anything runs it. The `dotnet-tools.json` mirror must name the lock's version. The script's hash comes from the lock, not
-    from the workflow file, so a pull request that upgrades the engine (script and lock together) is judged by the base's
-    script and the base's lock, which agree.
-  - **Without a lock** (a project pinned the way Lockflight 0.2 pins, as the base of the pull request that moves it to the
-    lock is): the version in the tool pin, with `dotnet tool install --tool-path`. That pull request is judged by the old engine
-    and the old policy, and lists the lock, the manifest and the CI files as protected changes for review.
-  - **A pull request that changes the lock** (once the base has one): the step runs `lockflight engine verify-lock` on the
-    proposed lock with the base's engine; it fails unless every hash is the one the release of that version published, and on
-    GitHub (the workflow's token) unless the release's attestation verifies. The CODEOWNERS reviewer reads "matches the
-    published hashes of release vX". **Provenance** on GitHub (attested); integrity against the feed elsewhere.
-  - The step sits between `# lockflight:install-engine:begin` and `:end`, which `lockflight update` replaces as a whole.
+- **Pinned tools.** The action is referenced by commit SHA. gitleaks is downloaded at a fixed version and verified against its
+  SHA-256 before use. The engine is the one the target branch pins, read from that commit with `git show` (never from the pull
+  request's tree) and installed outside the repository, so a `global.json` that pins SDK 8 or 9 does not matter:
+  - **With `.lockflight/engine.lock`:** the vendored `.lockflight/ci/install.sh` is checked against the hash the lock names,
+    then run: it downloads this platform's package (nuget.org, or through `dotnet` with the root `nuget.config` when that file
+    exists) and checks the executable against the lock before anything runs it.
+  - **Without a lock** (a project pinned the way Lockflight 0.2 pins): the version in the tool pin, with
+    `dotnet tool install --tool-path`.
+  - **A pull request that changes the lock:** the judge job runs `lockflight engine verify-lock` on the proposed lock with the
+    base's engine; it fails unless every hash is the one the release of that version published, and unless the release's
+    attestation verifies (the workflow's token).
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass
   `--ci pr`; see [CI with a development build](getting-started.md#ci-with-a-development-build).
-- **`gate run --profile pr --base <base sha>`**, in this order:
+- **`gate run --profile pr --base <merge base>`**, run by the judge at head in its worktree, in this order:
   1. `policy.protected` — lists protected files the PR changes (never fails; the list goes to the job summary);
   2. `format`, then `quality.suppressions` — suppressions the PR adds (`#pragma warning disable`, `[SuppressMessage]`,
      `<NoWarn>`, a lowered `.editorconfig` severity, `#nullable disable`, `[ExcludeFromCodeCoverage]` …), by file, line and

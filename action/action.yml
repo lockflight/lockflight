@@ -118,6 +118,20 @@ runs:
         fi
         echo "LF_LOCKFLIGHT=$RUNNER_TEMP/lockflight/lockflight" >> "$GITHUB_ENV"
 
+    - name: A pull request that changes the engine lock must name a published release
+      if: inputs.mode == 'judge'
+      shell: bash
+      env:
+        LF_BASE: ${{ inputs.base }}
+        LF_HEAD: ${{ inputs.head }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        if [ -n "$LF_BASE" ] && git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null \
+          && ! git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then
+          git show "$LF_HEAD:.lockflight/engine.lock" > "$RUNNER_TEMP/proposed-engine.lock"
+          "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" ${GH_TOKEN:+--attestation}
+        fi
+
     - name: Judge the pull request
       if: inputs.mode == 'judge'
       id: judge

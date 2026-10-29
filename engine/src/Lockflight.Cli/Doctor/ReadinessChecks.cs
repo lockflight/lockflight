@@ -75,6 +75,16 @@ internal static class ReadinessChecks
             checks.Add(sandbox);
         }
 
+        if (WorkflowTriggerCheck.Check(root) is DoctorCheck workflowTrigger)
+        {
+            checks.Add(workflowTrigger);
+        }
+
+        if (WorkflowJudgeCheck.Check(root) is DoctorCheck workflowJudge)
+        {
+            checks.Add(workflowJudge);
+        }
+
         checks.AddRange([await CheckClaudeVersionAsync(root, Claude, cancellationToken), CheckGitleaks(gitleaks)]);
         if (OperatingSystem.IsWindows())
         {
