@@ -9,7 +9,7 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
     {
         if (valueNode is not YamlMappingNode section)
         {
-            return errors.At(valueNode.Start, "'gates' must be a mapping (known keys: timeoutSeconds, build, test, coverage, quality)");
+            return errors.At(valueNode.Start, "'gates' must be a mapping (known keys: timeoutSeconds, build, test, coverage, quality, docs)");
         }
 
         foreach ((YamlNode keyNode, YamlNode value) in section.Children)
@@ -47,14 +47,23 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
 
                     break;
                 case "quality":
-                    if (ReadQuality(value, ref gates) is ManifestError qualityError)
+                    if (ReadMode(value, "quality", "suppressions", out GateMode? suppressions) is ManifestError qualityError)
                     {
                         return qualityError;
                     }
 
+                    gates = gates with { Suppressions = suppressions ?? gates.Suppressions };
+                    break;
+                case "docs":
+                    if (ReadMode(value, "docs", "references", out GateMode? references) is ManifestError docsError)
+                    {
+                        return docsError;
+                    }
+
+                    gates = gates with { DocsReferences = references ?? gates.DocsReferences };
                     break;
                 default:
-                    return errors.At(keyNode.Start, $"unknown key 'gates.{key}' (known: timeoutSeconds, build, test, coverage, quality)");
+                    return errors.At(keyNode.Start, $"unknown key 'gates.{key}' (known: timeoutSeconds, build, test, coverage, quality, docs)");
             }
         }
 
@@ -103,31 +112,33 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
         return null;
     }
 
-    private ManifestError? ReadQuality(YamlNode valueNode, ref GateSettings gates)
+    /// <summary>Reads a section of one switched step, <c>gates.&lt;section&gt;.&lt;step&gt;: fail|report|off</c>; null when the key is absent.</summary>
+    private ManifestError? ReadMode(YamlNode valueNode, string section, string step, out GateMode? mode)
     {
-        if (valueNode is not YamlMappingNode quality)
+        mode = null;
+        if (valueNode is not YamlMappingNode mapping)
         {
-            return errors.At(valueNode.Start, "'gates.quality' must be a mapping (known keys: suppressions)");
+            return errors.At(valueNode.Start, $"'gates.{section}' must be a mapping (known keys: {step})");
         }
 
-        foreach ((YamlNode keyNode, YamlNode value) in quality.Children)
+        foreach ((YamlNode keyNode, YamlNode value) in mapping.Children)
         {
             if (keyNode is not YamlScalarNode { Value: string key })
             {
                 return errors.NotAName(keyNode);
             }
 
-            if (key != "suppressions")
+            if (key != step)
             {
-                return errors.At(keyNode.Start, $"unknown key 'gates.quality.{key}' (known: suppressions)");
+                return errors.At(keyNode.Start, $"unknown key 'gates.{section}.{key}' (known: {step})");
             }
 
-            if (!GateModeNames.TryParse((value as YamlScalarNode)?.Value, out GateMode mode))
+            if (!GateModeNames.TryParse((value as YamlScalarNode)?.Value, out GateMode parsed))
             {
-                return errors.At(value.Start, $"'gates.quality.suppressions' must be {GateModeNames.Choices}");
+                return errors.At(value.Start, $"'gates.{section}.{step}' must be {GateModeNames.Choices}");
             }
 
-            gates = gates with { Suppressions = mode };
+            mode = parsed;
         }
 
         return null;
