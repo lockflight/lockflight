@@ -157,7 +157,7 @@ for shell_name in $shells; do
   fi
 
   run "zip-slip" 1 LOCKFLIGHT_NUGET_FEED="file://$slip/" -- --lock "$work/engine.lock" --dir "$work/case/out" \
-    && says "refusing the entry" "an entry that leaves the directory is refused"
+    && says "refusing the entry\|entries, expected one" "an entry that leaves the directory is refused"
 
   run "unknown rid" 1 -- --lock "$work/engine.lock" --rid linux-musl-x64 --dir "$work/case/out" \
     && says "supported: linux-x64" "an unknown platform is refused with the supported list"

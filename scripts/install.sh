@@ -178,24 +178,36 @@ feed_base() {
 }
 
 # entry_of <nupkg>: the one tools/<tfm>/<rid>/lockflight entry; never one with '..' or an absolute path.
-entries() {
-  if command -v unzip >/dev/null 2>&1; then unzip -Z1 "$1"
-  elif command -v bsdtar >/dev/null 2>&1; then bsdtar -tf "$1"
-  elif command -v python3 >/dev/null 2>&1; then python3 -I -c 'import sys, zipfile; print("\n".join(zipfile.ZipFile(sys.argv[1]).namelist()))' "$1"
-  elif perl -MIO::Uncompress::Unzip -e 1 >/dev/null 2>&1; then
-    perl -MIO::Uncompress::Unzip -e 'my $z = IO::Uncompress::Unzip->new($ARGV[0]) or exit 1;
-      for (my $s = 1; $s > 0; $s = $z->nextStream) { print $z->getHeaderInfo->{Name}, "\n" }' "$1"
+# A zip reader that can list and extract: Info-ZIP unzip (-Z1), bsdtar, python3, perl, or BusyBox's unzip (no -Z: its -l
+# table is read instead).
+zip_tool() {
+  if command -v unzip >/dev/null 2>&1 && unzip -Z1 "$1" >/dev/null 2>&1; then echo unzip
+  elif command -v unzip >/dev/null 2>&1 && unzip -l "$1" 2>/dev/null | grep -q '^---------'; then echo unzip-table
+  elif command -v bsdtar >/dev/null 2>&1; then echo bsdtar
+  elif command -v python3 >/dev/null 2>&1; then echo python3
+  elif perl -MIO::Uncompress::Unzip -e 1 >/dev/null 2>&1; then echo perl
   else fail "no unzip, bsdtar, python3 or perl to open the package; install one of them"
   fi
 }
+entries() {
+  case "$(zip_tool "$1")" in
+    unzip) unzip -Z1 "$1" ;;
+    unzip-table) unzip -l "$1" | awk '/^-+ /{rule++; next} rule == 1 { name = $0; sub(/^ *[0-9]+ +[^ ]+ +[^ ]+ +/, "", name); print name }' ;;
+    bsdtar) bsdtar -tf "$1" ;;
+    python3) python3 -I -c 'import sys, zipfile; print("\n".join(zipfile.ZipFile(sys.argv[1]).namelist()))' "$1" ;;
+    perl) perl -MIO::Uncompress::Unzip -e 'my $z = IO::Uncompress::Unzip->new($ARGV[0]) or exit 1;
+      for (my $s = 1; $s > 0; $s = $z->nextStream) { print $z->getHeaderInfo->{Name}, "\n" }' "$1" ;;
+    *) exit 1 ;;
+  esac
+}
 extract() {
-  if command -v unzip >/dev/null 2>&1; then unzip -p "$1" "$2" > "$3"
-  elif command -v bsdtar >/dev/null 2>&1; then bsdtar -xOf "$1" "$2" > "$3"
-  elif command -v python3 >/dev/null 2>&1; then
-    python3 -I -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))' "$1" "$2" > "$3"
-  else
-    perl -MIO::Uncompress::Unzip=unzip,\$UnzipError -e 'unzip($ARGV[0] => $ARGV[2], Name => $ARGV[1]) or die "$UnzipError\n"' "$1" "$2" "$3"
-  fi
+  case "$(zip_tool "$1")" in
+    unzip|unzip-table) unzip -p "$1" "$2" > "$3" ;;
+    bsdtar) bsdtar -xOf "$1" "$2" > "$3" ;;
+    python3) python3 -I -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))' "$1" "$2" > "$3" ;;
+    perl) perl -MIO::Uncompress::Unzip=unzip,\$UnzipError -e 'unzip($ARGV[0] => $ARGV[2], Name => $ARGV[1]) or die "$UnzipError\n"' "$1" "$2" "$3" ;;
+    *) exit 1 ;;
+  esac
 }
 entry_of() {
   entries "$1" > "$work/entries" || fail "$1 is not a package"
