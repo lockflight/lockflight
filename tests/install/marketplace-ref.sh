@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/marketplace-ref.sh against a local repository and a local package index: `set` pins the marketplace to a release tag
 # that is coherent, and `check` refuses a tag that does not exist, a sha that is not the tag's, a plugin version that is not
-# the tag's, a minimum engine above the release, an engine not yet published and a development marketplace that drifted.
+# the tag's, a minimum engine above the release, an engine not yet published, descriptions that are not the tag's and a
+# development marketplace that does not serve the checkout; and the descriptions on main may move ahead of the tag's.
 # Usage: bash tests/install/marketplace-ref.sh        (macOS, Linux; needs git, python3, curl)
 set -u
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
@@ -11,15 +12,27 @@ ok() { pass=$((pass+1)); echo "ok   $1"; }
 bad() { fail=$((fail+1)); echo "FAIL $1"; }
 git_quiet() { git -c user.email=ci@example.com -c user.name=ci -c commit.gpgsign=false -c tag.gpgsign=false "$@"; }
 
-# A stand-in for the repository: a release commit with both plugins at <version> and the minimum engine <minimum>.
+# A stand-in for the repository: a release commit with both plugins at <version>, the minimum engine <minimum> and a
+# development marketplace whose plugin descriptions name the tag ("<plugin> at <tag>").
 remote="$WORK/remote"
 git init -q "$remote"
+# describe <development marketplace> <text>: rewrites it in place with every plugin described as "<plugin> <text>".
+describe() {
+  python3 -I -c 'import json, sys
+m = json.load(open(sys.argv[1], encoding="utf-8"))
+for e in m["plugins"]:
+    e["description"] = e["name"] + " " + sys.argv[2]
+open(sys.argv[1], "w", encoding="utf-8").write(json.dumps(m, indent=2) + "\n")' "$1" "$2"
+}
 release() { # release <tag> <plugin version> <min-engine-version>
   for name in lockflight lockflight-crew; do
     mkdir -p "$remote/plugins/$name/.claude-plugin"
     printf '{ "name": "%s", "version": "%s" }\n' "$name" "$2" > "$remote/plugins/$name/.claude-plugin/plugin.json"
   done
   printf '%s\n' "$3" > "$remote/plugins/lockflight/min-engine-version"
+  mkdir -p "$remote/plugins/.claude-plugin"
+  cp "$REPO/plugins/.claude-plugin/marketplace.json" "$remote/plugins/.claude-plugin/marketplace.json"
+  describe "$remote/plugins/.claude-plugin/marketplace.json" "at $1"
   git_quiet -C "$remote" add -A && git_quiet -C "$remote" commit -q --allow-empty -m "$1" && git_quiet -C "$remote" tag -a "$1" -m "$1"
 }
 release v1.0.0 1.0.0 1.0.0
@@ -52,6 +65,16 @@ if [ "$(grep -c "\"ref\": \"v1.0.0\"" "$served")" = 2 ] && [ "$(grep -c "\"sha\"
 else
   bad "set wrote: $(cat "$served")"
 fi
+if [ "$(grep -c " at v1.0.0\"" "$served")" = 2 ]; then
+  ok "set copies the descriptions from the development marketplace at the tag"
+else
+  bad "set wrote: $(cat "$served")"
+fi
+describe "$checkout/plugins/.claude-plugin/marketplace.json" "on main, ahead of the release"
+expect_ok "check accepts development descriptions on main that moved ahead of the tag" check
+sed -i.bak 's/lockflight-crew at v1.0.0/lockflight-crew on main/' "$served"
+expect_fail "check refuses a description that is not the tag's" "at the tag it serves" check
+sed -i.bak 's/lockflight-crew on main/lockflight-crew at v1.0.0/' "$served"
 expect_ok "check accepts the pin" check
 expect_fail "set refuses a tag that does not exist yet" "not a tag on the repository yet" set v9.9.9
 sed -i.bak 's/"ref": "v1.0.0"/"ref": "v9.9.9"/' "$served"
@@ -67,7 +90,7 @@ expect_fail "check refuses a release nuget.org does not list" "nuget.org does no
 printf '{ "versions": ["1.0.0"] }\n' > "$WORK/index.json"
 expect_ok "the release is coherent again" set v1.0.0
 sed -i.bak 's#"./lockflight-crew"#"./crew"#' "$checkout/plugins/.claude-plugin/marketplace.json"
-expect_fail "check refuses a development marketplace that drifted" "must come from ./lockflight-crew" check
+expect_fail "check refuses a development marketplace that does not serve the checkout" "must come from ./lockflight-crew" check
 
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
