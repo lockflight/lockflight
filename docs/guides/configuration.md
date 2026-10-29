@@ -122,7 +122,8 @@ decides it: by the nearest `global.json`'s `test.runner`.
   leaves one test project with nothing to run, while others execute tests, is judged by the tests that ran; the detail names the
   project that ran none.
 
-Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform) and xUnit v2 on VSTest.
+Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform), xUnit v2 on VSTest, and NUnit on VSTest
+or Microsoft.Testing.Platform.
 
 - **xUnit v3 runs:** natively, through the in-process runner the test assembly references; its version picks the report switch
   (`-xml` up to 3.x, `-result-xml` from 4.0), so both lines work.
@@ -130,7 +131,19 @@ Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform
   listing has neither.
 - **xUnit v2 runs:** tests run with `dotnet test <dll> --filter`, and failures are read from the TRX. An assertion failure in a test
   that calls production code counts as RED_ASSERT, and a `NotImplementedException` thrown by production code as RED_STUB.
-- **Other frameworks** (NUnit, MSTest) get the gates only.
+- **NUnit listing:** tests (`[Test]`, `[TestCase]`, `[TestCaseSource]`, `[Theory]`), their `[Ignore]` and `[Explicit]` marks and
+  their `[Property("Requirement", "FR-001")]` values (on the method or its fixture) are read from the built assemblies'
+  metadata. A `[Category]` is not a requirement: it has no name to say what its value is. Generic fixtures are left out.
+- **NUnit runs:** a project that is a Microsoft.Testing.Platform application (`EnableNUnitRunner`) runs on it when it
+  references `Microsoft.Testing.Extensions.TrxReport`, else through VSTest when it references `Microsoft.NET.Test.Sdk`; with
+  neither, red/green says which to add. The tests are selected by an NUnit `Where` (class and method) in a run-settings file,
+  so a parameterized fixture's instances run too, and failures are read from the TRX. NUnit prints no exception type for an
+  assertion: its `Expected: … But was: …` lines (or `Multiple failures or warnings in test:`) count as an assertion, so a
+  failing `Assert.That` in a test that calls production code is RED_ASSERT; `Assert.Fail` is RED_IN_TEST, and `Assert.Ignore`,
+  `Assert.Inconclusive` or an ignored row is a test that did not run. Every `[TestCase]` row counts, the worst row deciding.
+- **Rows skipped at run time** (`Assert.Skip`, `Assert.Ignore`, an NUnit `[TestCase(…, Ignore = "…")]`) when `redgreen start`
+  ran the suite are recorded with the baseline; a green refuses only more of them.
+- **Other frameworks** (MSTest) get the gates only.
 
 **Units.** A workspace shell keeps `lockflight.yaml`, `.claude/`, Spec Kit and `specs/` at its root, and its service
 repositories (each with its own `.git`) beneath it. Each repository is listed as a unit. A monorepo lists its buildable
