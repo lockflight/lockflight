@@ -13,6 +13,8 @@ internal sealed class RootRelativePaths(string root)
     private readonly Dictionary<string, string> canonicalByAbsolute = new(StringComparer.Ordinal);
     private string? canonicalRoot;
 
+    public string Root => root;
+
     /// <summary>The '/'-separated path relative to the root ("" for the root itself); null when it lies outside the root.</summary>
     public string? Relative(string path, string workingDirectory)
     {

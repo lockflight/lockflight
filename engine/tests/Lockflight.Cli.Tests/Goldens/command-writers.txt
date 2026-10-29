@@ -8,8 +8,7 @@ Posix git . -name *.tmp -delete: writer=True
 Posix git . -exec rm {} ;: writer=True
 Posix git checkout -- f: writer=True files=[f] trees=[f]
 Posix git format --include f.cs: writer=True
-Posix xargs git: writer=True hidden=xargs git
-Posix | git: writer=True
+Posix xargs git: writer=True
 Posix dotnet a b: writer=True
 Posix dotnet -o out in: writer=True
 Posix dotnet -i x: writer=True
@@ -20,20 +19,18 @@ Posix dotnet . -name *.tmp -delete: writer=True
 Posix dotnet . -exec rm {} ;: writer=True
 Posix dotnet checkout -- f: writer=True
 Posix dotnet format --include f.cs: writer=True sources=[f.cs]
-Posix xargs dotnet: writer=True hidden=xargs dotnet
-Posix | dotnet: writer=True
+Posix xargs dotnet: writer=True
 Posix cp a b: writer=True files=[b, b/a]
 Posix cp -o out in: writer=True files=[in]
 Posix cp -i x: writer=True files=[x]
 Posix cp -r dir: writer=True files=[dir] trees=[.]
 Posix cp -Path p -Destination d: writer=True files=[d, d/p] trees=[d]
 Posix cp of=o if=i: writer=True files=[if=i, if=i/of=o]
-Posix cp . -name *.tmp -delete: writer=True files=[*.tmp, .] trees=[*.tmp, .]
-Posix cp . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}] trees=[;]
+Posix cp . -name *.tmp -delete: writer=True files=[*.tmp] trees=[*.tmp]
+Posix cp . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}]
 Posix cp checkout -- f: writer=True files=[f, f/checkout]
 Posix cp format --include f.cs: writer=True files=[f.cs, f.cs/format]
-Posix xargs cp: writer=True hidden=xargs cp
-Posix | cp: writer=True
+Posix xargs cp: writer=True
 Posix mv a b: writer=True files=[b, b/a, a] trees=[b, a]
 Posix mv -o out in: writer=True files=[in, in] trees=[., in]
 Posix mv -i x: writer=True files=[x, x] trees=[., x]
@@ -44,8 +41,7 @@ Posix mv . -name *.tmp -delete: writer=True files=[*.tmp, .] trees=[*.tmp, .]
 Posix mv . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}, ., rm, {}] trees=[;, ., rm, {}]
 Posix mv checkout -- f: writer=True files=[f, f/checkout, checkout] trees=[f, checkout]
 Posix mv format --include f.cs: writer=True files=[f.cs, f.cs/format, format] trees=[f.cs, format]
-Posix xargs mv: writer=True hidden=xargs mv
-Posix | mv: writer=True
+Posix xargs mv: writer=True
 Posix install a b: writer=True files=[b, b/a]
 Posix install -o out in: writer=True files=[in]
 Posix install -i x: writer=True files=[x]
@@ -53,35 +49,32 @@ Posix install -r dir: writer=True files=[dir]
 Posix install -Path p -Destination d: writer=True files=[d, d/p]
 Posix install of=o if=i: writer=True files=[if=i, if=i/of=o]
 Posix install . -name *.tmp -delete: writer=True files=[., *.tmp]
-Posix install . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}] trees=[;]
+Posix install . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}]
 Posix install checkout -- f: writer=True files=[f, f/checkout]
 Posix install format --include f.cs: writer=True files=[f.cs, f.cs/format]
-Posix xargs install: writer=True hidden=xargs install
-Posix | install: writer=True
-Posix ln a b: writer=True files=[b, b/a, a]
-Posix ln -o out in: writer=True files=[in, in]
-Posix ln -i x: writer=True files=[x, x]
-Posix ln -r dir: writer=True files=[dir, dir]
-Posix ln -Path p -Destination d: writer=True files=[d, d/p]
-Posix ln of=o if=i: writer=True files=[if=i, if=i/of=o, of=o]
-Posix ln . -name *.tmp -delete: writer=True files=[*.tmp, .] trees=[*.tmp]
-Posix ln . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}, ., rm, {}] trees=[;]
-Posix ln checkout -- f: writer=True files=[f, f/checkout, checkout]
-Posix ln format --include f.cs: writer=True files=[f.cs, f.cs/format, format]
-Posix xargs ln: writer=True hidden=xargs ln
-Posix | ln: writer=True
-Posix rsync a b: writer=True files=[b, b/a] trees=[b]
-Posix rsync -o out in: writer=True files=[in, in/out] trees=[in]
-Posix rsync -i x: writer=True
-Posix rsync -r dir: writer=True
-Posix rsync -Path p -Destination d: writer=True files=[d, d/p] trees=[d]
-Posix rsync of=o if=i: writer=True files=[if=i, if=i/of=o] trees=[if=i]
-Posix rsync . -name *.tmp -delete: writer=True files=[*.tmp] trees=[*.tmp]
-Posix rsync . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}] trees=[;]
-Posix rsync checkout -- f: writer=True files=[f, f/checkout] trees=[f]
-Posix rsync format --include f.cs: writer=True
-Posix xargs rsync: writer=True hidden=xargs rsync
-Posix | rsync: writer=True
+Posix xargs install: writer=True
+Posix ln a b: writer=False
+Posix ln -o out in: writer=False
+Posix ln -i x: writer=False
+Posix ln -r dir: writer=False
+Posix ln -Path p -Destination d: writer=False
+Posix ln of=o if=i: writer=False
+Posix ln . -name *.tmp -delete: writer=False
+Posix ln . -exec rm {} ;: writer=False
+Posix ln checkout -- f: writer=False
+Posix ln format --include f.cs: writer=False
+Posix xargs ln: writer=False
+Posix rsync a b: writer=False
+Posix rsync -o out in: writer=False
+Posix rsync -i x: writer=False
+Posix rsync -r dir: writer=False
+Posix rsync -Path p -Destination d: writer=False
+Posix rsync of=o if=i: writer=False
+Posix rsync . -name *.tmp -delete: writer=False
+Posix rsync . -exec rm {} ;: writer=False
+Posix rsync checkout -- f: writer=False
+Posix rsync format --include f.cs: writer=False
+Posix xargs rsync: writer=False
 Posix sed a b: writer=True
 Posix sed -o out in: writer=True
 Posix sed -i x: writer=True
@@ -92,8 +85,7 @@ Posix sed . -name *.tmp -delete: writer=True
 Posix sed . -exec rm {} ;: writer=True
 Posix sed checkout -- f: writer=True
 Posix sed format --include f.cs: writer=True
-Posix xargs sed: writer=True hidden=xargs sed
-Posix | sed: writer=True
+Posix xargs sed: writer=True
 Posix perl a b: writer=True
 Posix perl -o out in: writer=True
 Posix perl -i x: writer=True
@@ -104,10 +96,9 @@ Posix perl . -name *.tmp -delete: writer=True
 Posix perl . -exec rm {} ;: writer=True
 Posix perl checkout -- f: writer=True
 Posix perl format --include f.cs: writer=True
-Posix xargs perl: writer=True hidden=xargs perl
-Posix | perl: writer=True
+Posix xargs perl: writer=True
 Posix sort a b: writer=False
-Posix sort -o out in: writer=True files=[out]
+Posix sort -o out in: writer=False
 Posix sort -i x: writer=False
 Posix sort -r dir: writer=False
 Posix sort -Path p -Destination d: writer=False
@@ -117,19 +108,17 @@ Posix sort . -exec rm {} ;: writer=False
 Posix sort checkout -- f: writer=False
 Posix sort format --include f.cs: writer=False
 Posix xargs sort: writer=False
-Posix | sort: writer=False
-Posix uniq a b: writer=True files=[b]
-Posix uniq -o out in: writer=True files=[in]
+Posix uniq a b: writer=False
+Posix uniq -o out in: writer=False
 Posix uniq -i x: writer=False
 Posix uniq -r dir: writer=False
-Posix uniq -Path p -Destination d: writer=True files=[d]
-Posix uniq of=o if=i: writer=True files=[if=i]
-Posix uniq . -name *.tmp -delete: writer=True files=[*.tmp]
-Posix uniq . -exec rm {} ;: writer=True files=[rm]
-Posix uniq checkout -- f: writer=True files=[f]
-Posix uniq format --include f.cs: writer=True files=[f.cs]
+Posix uniq -Path p -Destination d: writer=False
+Posix uniq of=o if=i: writer=False
+Posix uniq . -name *.tmp -delete: writer=False
+Posix uniq . -exec rm {} ;: writer=False
+Posix uniq checkout -- f: writer=False
+Posix uniq format --include f.cs: writer=False
 Posix xargs uniq: writer=False
-Posix | uniq: writer=False
 Posix awk a b: writer=False
 Posix awk -o out in: writer=False
 Posix awk -i x: writer=False
@@ -141,7 +130,6 @@ Posix awk . -exec rm {} ;: writer=False
 Posix awk checkout -- f: writer=False
 Posix awk format --include f.cs: writer=False
 Posix xargs awk: writer=False
-Posix | awk: writer=False
 Posix gawk a b: writer=False
 Posix gawk -o out in: writer=False
 Posix gawk -i x: writer=False
@@ -153,91 +141,83 @@ Posix gawk . -exec rm {} ;: writer=False
 Posix gawk checkout -- f: writer=False
 Posix gawk format --include f.cs: writer=False
 Posix xargs gawk: writer=False
-Posix | gawk: writer=False
 Posix yq a b: writer=False
 Posix yq -o out in: writer=False
-Posix yq -i x: writer=True files=[x]
+Posix yq -i x: writer=False
 Posix yq -r dir: writer=False
-Posix yq -Path p -Destination d: writer=True files=[d]
+Posix yq -Path p -Destination d: writer=False
 Posix yq of=o if=i: writer=False
 Posix yq . -name *.tmp -delete: writer=False
 Posix yq . -exec rm {} ;: writer=False
 Posix yq checkout -- f: writer=False
 Posix yq format --include f.cs: writer=False
 Posix xargs yq: writer=False
-Posix | yq: writer=False
-Posix robocopy a b: writer=True files=[b] trees=[b]
-Posix robocopy -o out in: writer=True files=[out] trees=[out]
-Posix robocopy -i x: writer=True files=[x] trees=[x]
-Posix robocopy -r dir: writer=True files=[dir] trees=[dir]
-Posix robocopy -Path p -Destination d: writer=True files=[p] trees=[p]
-Posix robocopy of=o if=i: writer=True files=[if=i] trees=[if=i]
-Posix robocopy . -name *.tmp -delete: writer=True files=[-name] trees=[-name]
-Posix robocopy . -exec rm {} ;: writer=True files=[-exec] trees=[-exec]
-Posix robocopy checkout -- f: writer=True files=[--] trees=[--]
-Posix robocopy format --include f.cs: writer=True files=[--include] trees=[--include]
-Posix xargs robocopy: writer=True hidden=xargs robocopy
-Posix | robocopy: writer=True
-Posix xcopy a b: writer=True files=[b] trees=[b]
-Posix xcopy -o out in: writer=True files=[out] trees=[out]
-Posix xcopy -i x: writer=True files=[x] trees=[x]
-Posix xcopy -r dir: writer=True files=[dir] trees=[dir]
-Posix xcopy -Path p -Destination d: writer=True files=[p] trees=[p]
-Posix xcopy of=o if=i: writer=True files=[if=i] trees=[if=i]
-Posix xcopy . -name *.tmp -delete: writer=True files=[-name] trees=[-name]
-Posix xcopy . -exec rm {} ;: writer=True files=[-exec] trees=[-exec]
-Posix xcopy checkout -- f: writer=True files=[--] trees=[--]
-Posix xcopy format --include f.cs: writer=True files=[--include] trees=[--include]
-Posix xargs xcopy: writer=True hidden=xargs xcopy
-Posix | xcopy: writer=True
-Posix tar a b: writer=True
-Posix tar -o out in: writer=True
-Posix tar -i x: writer=True
-Posix tar -r dir: writer=True
-Posix tar -Path p -Destination d: writer=True
-Posix tar of=o if=i: writer=True
-Posix tar . -name *.tmp -delete: writer=True
-Posix tar . -exec rm {} ;: writer=True trees=[.]
-Posix tar checkout -- f: writer=True
-Posix tar format --include f.cs: writer=True
-Posix xargs tar: writer=True hidden=xargs tar
-Posix | tar: writer=True
-Posix bsdtar a b: writer=True
-Posix bsdtar -o out in: writer=True
-Posix bsdtar -i x: writer=True
-Posix bsdtar -r dir: writer=True
-Posix bsdtar -Path p -Destination d: writer=True
-Posix bsdtar of=o if=i: writer=True
-Posix bsdtar . -name *.tmp -delete: writer=True
-Posix bsdtar . -exec rm {} ;: writer=True trees=[.]
-Posix bsdtar checkout -- f: writer=True
-Posix bsdtar format --include f.cs: writer=True
-Posix xargs bsdtar: writer=True hidden=xargs bsdtar
-Posix | bsdtar: writer=True
-Posix unzip a b: writer=True trees=[.]
-Posix unzip -o out in: writer=True trees=[.]
-Posix unzip -i x: writer=True trees=[.]
-Posix unzip -r dir: writer=True trees=[.]
-Posix unzip -Path p -Destination d: writer=True trees=[.]
-Posix unzip of=o if=i: writer=True trees=[.]
-Posix unzip . -name *.tmp -delete: writer=True trees=[elete]
-Posix unzip . -exec rm {} ;: writer=True trees=[.]
-Posix unzip checkout -- f: writer=True trees=[.]
-Posix unzip format --include f.cs: writer=True trees=[.]
-Posix xargs unzip: writer=True hidden=xargs unzip
-Posix | unzip: writer=True trees=[.]
-Posix patch a b: writer=True trees=[.]
-Posix patch -o out in: writer=True files=[out]
-Posix patch -i x: writer=True trees=[.]
-Posix patch -r dir: writer=True trees=[.]
-Posix patch -Path p -Destination d: writer=True trees=[.]
-Posix patch of=o if=i: writer=True trees=[.]
-Posix patch . -name *.tmp -delete: writer=True trees=[elete]
-Posix patch . -exec rm {} ;: writer=True trees=[.]
-Posix patch checkout -- f: writer=True trees=[.]
-Posix patch format --include f.cs: writer=True trees=[.]
-Posix xargs patch: writer=True hidden=xargs patch
-Posix | patch: writer=True trees=[.]
+Posix robocopy a b: writer=False
+Posix robocopy -o out in: writer=False
+Posix robocopy -i x: writer=False
+Posix robocopy -r dir: writer=False
+Posix robocopy -Path p -Destination d: writer=False
+Posix robocopy of=o if=i: writer=False
+Posix robocopy . -name *.tmp -delete: writer=False
+Posix robocopy . -exec rm {} ;: writer=False
+Posix robocopy checkout -- f: writer=False
+Posix robocopy format --include f.cs: writer=False
+Posix xargs robocopy: writer=False
+Posix xcopy a b: writer=False
+Posix xcopy -o out in: writer=False
+Posix xcopy -i x: writer=False
+Posix xcopy -r dir: writer=False
+Posix xcopy -Path p -Destination d: writer=False
+Posix xcopy of=o if=i: writer=False
+Posix xcopy . -name *.tmp -delete: writer=False
+Posix xcopy . -exec rm {} ;: writer=False
+Posix xcopy checkout -- f: writer=False
+Posix xcopy format --include f.cs: writer=False
+Posix xargs xcopy: writer=False
+Posix tar a b: writer=False
+Posix tar -o out in: writer=False
+Posix tar -i x: writer=False
+Posix tar -r dir: writer=False
+Posix tar -Path p -Destination d: writer=False
+Posix tar of=o if=i: writer=False
+Posix tar . -name *.tmp -delete: writer=False
+Posix tar . -exec rm {} ;: writer=False
+Posix tar checkout -- f: writer=False
+Posix tar format --include f.cs: writer=False
+Posix xargs tar: writer=False
+Posix bsdtar a b: writer=False
+Posix bsdtar -o out in: writer=False
+Posix bsdtar -i x: writer=False
+Posix bsdtar -r dir: writer=False
+Posix bsdtar -Path p -Destination d: writer=False
+Posix bsdtar of=o if=i: writer=False
+Posix bsdtar . -name *.tmp -delete: writer=False
+Posix bsdtar . -exec rm {} ;: writer=False
+Posix bsdtar checkout -- f: writer=False
+Posix bsdtar format --include f.cs: writer=False
+Posix xargs bsdtar: writer=False
+Posix unzip a b: writer=False
+Posix unzip -o out in: writer=False
+Posix unzip -i x: writer=False
+Posix unzip -r dir: writer=False
+Posix unzip -Path p -Destination d: writer=False
+Posix unzip of=o if=i: writer=False
+Posix unzip . -name *.tmp -delete: writer=False
+Posix unzip . -exec rm {} ;: writer=False
+Posix unzip checkout -- f: writer=False
+Posix unzip format --include f.cs: writer=False
+Posix xargs unzip: writer=False
+Posix patch a b: writer=False
+Posix patch -o out in: writer=False
+Posix patch -i x: writer=False
+Posix patch -r dir: writer=False
+Posix patch -Path p -Destination d: writer=False
+Posix patch of=o if=i: writer=False
+Posix patch . -name *.tmp -delete: writer=False
+Posix patch . -exec rm {} ;: writer=False
+Posix patch checkout -- f: writer=False
+Posix patch format --include f.cs: writer=False
+Posix xargs patch: writer=False
 Posix rm a b: writer=True files=[a, b] trees=[a, b]
 Posix rm -o out in: writer=True files=[out, in] trees=[out, in]
 Posix rm -i x: writer=True files=[x] trees=[x]
@@ -248,8 +228,7 @@ Posix rm . -name *.tmp -delete: writer=True files=[., *.tmp] trees=[., *.tmp]
 Posix rm . -exec rm {} ;: writer=True files=[., rm, {}, ;] trees=[., rm, {}, ;]
 Posix rm checkout -- f: writer=True files=[checkout, f] trees=[checkout, f]
 Posix rm format --include f.cs: writer=True files=[format, f.cs] trees=[format, f.cs]
-Posix xargs rm: writer=True hidden=xargs rm
-Posix | rm: writer=True
+Posix xargs rm: writer=True
 Posix unlink a b: writer=True files=[a, b]
 Posix unlink -o out in: writer=True files=[out, in]
 Posix unlink -i x: writer=True files=[x]
@@ -260,20 +239,18 @@ Posix unlink . -name *.tmp -delete: writer=True files=[., *.tmp]
 Posix unlink . -exec rm {} ;: writer=True files=[., rm, {}, ;]
 Posix unlink checkout -- f: writer=True files=[checkout, f]
 Posix unlink format --include f.cs: writer=True files=[format, f.cs]
-Posix xargs unlink: writer=True hidden=xargs unlink
-Posix | unlink: writer=True
-Posix shred a b: writer=True files=[a, b]
-Posix shred -o out in: writer=True files=[out, in]
-Posix shred -i x: writer=True files=[x]
-Posix shred -r dir: writer=True
-Posix shred -Path p -Destination d: writer=True files=[p, d]
-Posix shred of=o if=i: writer=True files=[of=o, if=i]
-Posix shred . -name *.tmp -delete: writer=True files=[., *.tmp]
-Posix shred . -exec rm {} ;: writer=True files=[., rm, {}, ;]
-Posix shred checkout -- f: writer=True files=[checkout, f]
-Posix shred format --include f.cs: writer=True files=[format, f.cs]
-Posix xargs shred: writer=True hidden=xargs shred
-Posix | shred: writer=True
+Posix xargs unlink: writer=True
+Posix shred a b: writer=False
+Posix shred -o out in: writer=False
+Posix shred -i x: writer=False
+Posix shred -r dir: writer=False
+Posix shred -Path p -Destination d: writer=False
+Posix shred of=o if=i: writer=False
+Posix shred . -name *.tmp -delete: writer=False
+Posix shred . -exec rm {} ;: writer=False
+Posix shred checkout -- f: writer=False
+Posix shred format --include f.cs: writer=False
+Posix xargs shred: writer=False
 Posix truncate a b: writer=True files=[a, b]
 Posix truncate -o out in: writer=True files=[out, in]
 Posix truncate -i x: writer=True files=[x]
@@ -284,8 +261,7 @@ Posix truncate . -name *.tmp -delete: writer=True files=[., *.tmp]
 Posix truncate . -exec rm {} ;: writer=True files=[., rm, {}, ;]
 Posix truncate checkout -- f: writer=True files=[checkout, f]
 Posix truncate format --include f.cs: writer=True files=[format, f.cs]
-Posix xargs truncate: writer=True hidden=xargs truncate
-Posix | truncate: writer=True
+Posix xargs truncate: writer=True
 Posix touch a b: writer=True files=[a, b]
 Posix touch -o out in: writer=True files=[out, in]
 Posix touch -i x: writer=True files=[x]
@@ -296,44 +272,40 @@ Posix touch . -name *.tmp -delete: writer=True files=[., *.tmp]
 Posix touch . -exec rm {} ;: writer=True files=[., rm, {}, ;]
 Posix touch checkout -- f: writer=True files=[checkout, f]
 Posix touch format --include f.cs: writer=True files=[format, f.cs]
-Posix xargs touch: writer=True hidden=xargs touch
-Posix | touch: writer=True
-Posix chmod a b: writer=True files=[a, b]
-Posix chmod -o out in: writer=True files=[out, in]
-Posix chmod -i x: writer=True files=[x]
-Posix chmod -r dir: writer=True
-Posix chmod -Path p -Destination d: writer=True files=[p, d]
-Posix chmod of=o if=i: writer=True files=[of=o, if=i]
-Posix chmod . -name *.tmp -delete: writer=True files=[., *.tmp]
-Posix chmod . -exec rm {} ;: writer=True files=[., rm, {}, ;]
-Posix chmod checkout -- f: writer=True files=[checkout, f]
-Posix chmod format --include f.cs: writer=True files=[format, f.cs]
-Posix xargs chmod: writer=True hidden=xargs chmod
-Posix | chmod: writer=True
-Posix chown a b: writer=True files=[a, b]
-Posix chown -o out in: writer=True files=[out, in]
-Posix chown -i x: writer=True files=[x]
-Posix chown -r dir: writer=True
-Posix chown -Path p -Destination d: writer=True files=[p, d]
-Posix chown of=o if=i: writer=True files=[of=o, if=i]
-Posix chown . -name *.tmp -delete: writer=True files=[., *.tmp]
-Posix chown . -exec rm {} ;: writer=True files=[., rm, {}, ;]
-Posix chown checkout -- f: writer=True files=[checkout, f]
-Posix chown format --include f.cs: writer=True files=[format, f.cs]
-Posix xargs chown: writer=True hidden=xargs chown
-Posix | chown: writer=True
-Posix chgrp a b: writer=True files=[a, b]
-Posix chgrp -o out in: writer=True files=[out, in]
-Posix chgrp -i x: writer=True files=[x]
-Posix chgrp -r dir: writer=True
-Posix chgrp -Path p -Destination d: writer=True files=[p, d]
-Posix chgrp of=o if=i: writer=True files=[of=o, if=i]
-Posix chgrp . -name *.tmp -delete: writer=True files=[., *.tmp]
-Posix chgrp . -exec rm {} ;: writer=True files=[., rm, {}, ;]
-Posix chgrp checkout -- f: writer=True files=[checkout, f]
-Posix chgrp format --include f.cs: writer=True files=[format, f.cs]
-Posix xargs chgrp: writer=True hidden=xargs chgrp
-Posix | chgrp: writer=True
+Posix xargs touch: writer=True
+Posix chmod a b: writer=False
+Posix chmod -o out in: writer=False
+Posix chmod -i x: writer=False
+Posix chmod -r dir: writer=False
+Posix chmod -Path p -Destination d: writer=False
+Posix chmod of=o if=i: writer=False
+Posix chmod . -name *.tmp -delete: writer=False
+Posix chmod . -exec rm {} ;: writer=False
+Posix chmod checkout -- f: writer=False
+Posix chmod format --include f.cs: writer=False
+Posix xargs chmod: writer=False
+Posix chown a b: writer=False
+Posix chown -o out in: writer=False
+Posix chown -i x: writer=False
+Posix chown -r dir: writer=False
+Posix chown -Path p -Destination d: writer=False
+Posix chown of=o if=i: writer=False
+Posix chown . -name *.tmp -delete: writer=False
+Posix chown . -exec rm {} ;: writer=False
+Posix chown checkout -- f: writer=False
+Posix chown format --include f.cs: writer=False
+Posix xargs chown: writer=False
+Posix chgrp a b: writer=False
+Posix chgrp -o out in: writer=False
+Posix chgrp -i x: writer=False
+Posix chgrp -r dir: writer=False
+Posix chgrp -Path p -Destination d: writer=False
+Posix chgrp of=o if=i: writer=False
+Posix chgrp . -name *.tmp -delete: writer=False
+Posix chgrp . -exec rm {} ;: writer=False
+Posix chgrp checkout -- f: writer=False
+Posix chgrp format --include f.cs: writer=False
+Posix xargs chgrp: writer=False
 Posix tee a b: writer=True files=[a, b]
 Posix tee -o out in: writer=True files=[out, in]
 Posix tee -i x: writer=True files=[x]
@@ -344,56 +316,51 @@ Posix tee . -name *.tmp -delete: writer=True files=[., *.tmp]
 Posix tee . -exec rm {} ;: writer=True files=[., rm, {}, ;]
 Posix tee checkout -- f: writer=True files=[checkout, f]
 Posix tee format --include f.cs: writer=True files=[format, f.cs]
-Posix xargs tee: writer=True hidden=xargs tee
-Posix | tee: writer=True
-Posix dd a b: writer=True
-Posix dd -o out in: writer=True
-Posix dd -i x: writer=True
-Posix dd -r dir: writer=True
-Posix dd -Path p -Destination d: writer=True
-Posix dd of=o if=i: writer=True files=[o]
-Posix dd . -name *.tmp -delete: writer=True
-Posix dd . -exec rm {} ;: writer=True
-Posix dd checkout -- f: writer=True
-Posix dd format --include f.cs: writer=True
-Posix xargs dd: writer=True hidden=xargs dd
-Posix | dd: writer=True
+Posix xargs tee: writer=True
+Posix dd a b: writer=False
+Posix dd -o out in: writer=False
+Posix dd -i x: writer=False
+Posix dd -r dir: writer=False
+Posix dd -Path p -Destination d: writer=False
+Posix dd of=o if=i: writer=False
+Posix dd . -name *.tmp -delete: writer=False
+Posix dd . -exec rm {} ;: writer=False
+Posix dd checkout -- f: writer=False
+Posix dd format --include f.cs: writer=False
+Posix xargs dd: writer=False
 Posix find a b: writer=False
 Posix find -o out in: writer=False
 Posix find -i x: writer=False
 Posix find -r dir: writer=False
 Posix find -Path p -Destination d: writer=False
 Posix find of=o if=i: writer=False
-Posix find . -name *.tmp -delete: writer=False patterns=[**/*.tmp]
-Posix find . -exec rm {} ;: writer=False trees=[.]
+Posix find . -name *.tmp -delete: writer=False
+Posix find . -exec rm {} ;: writer=False
 Posix find checkout -- f: writer=False
 Posix find format --include f.cs: writer=False
 Posix xargs find: writer=False
-Posix | find: writer=False
-Posix curl a b: writer=True
-Posix curl -o out in: writer=True files=[out]
-Posix curl -i x: writer=True
-Posix curl -r dir: writer=True
-Posix curl -Path p -Destination d: writer=True
-Posix curl of=o if=i: writer=True
-Posix curl . -name *.tmp -delete: writer=True
-Posix curl . -exec rm {} ;: writer=True
-Posix curl checkout -- f: writer=True
-Posix curl format --include f.cs: writer=True
-Posix xargs curl: writer=True hidden=xargs curl
-Posix | curl: writer=True
-Posix wget a b: writer=True
-Posix wget -o out in: writer=True
-Posix wget -i x: writer=True
-Posix wget -r dir: writer=True
-Posix wget -Path p -Destination d: writer=True
-Posix wget of=o if=i: writer=True
-Posix wget . -name *.tmp -delete: writer=True
-Posix wget . -exec rm {} ;: writer=True
-Posix wget checkout -- f: writer=True
-Posix wget format --include f.cs: writer=True
-Posix xargs wget: writer=True hidden=xargs wget
-Posix | wget: writer=True
+Posix curl a b: writer=False
+Posix curl -o out in: writer=False
+Posix curl -i x: writer=False
+Posix curl -r dir: writer=False
+Posix curl -Path p -Destination d: writer=False
+Posix curl of=o if=i: writer=False
+Posix curl . -name *.tmp -delete: writer=False
+Posix curl . -exec rm {} ;: writer=False
+Posix curl checkout -- f: writer=False
+Posix curl format --include f.cs: writer=False
+Posix xargs curl: writer=False
+Posix wget a b: writer=False
+Posix wget -o out in: writer=False
+Posix wget -i x: writer=False
+Posix wget -r dir: writer=False
+Posix wget -Path p -Destination d: writer=False
+Posix wget of=o if=i: writer=False
+Posix wget . -name *.tmp -delete: writer=False
+Posix wget . -exec rm {} ;: writer=False
+Posix wget checkout -- f: writer=False
+Posix wget format --include f.cs: writer=False
+Posix xargs wget: writer=False
 Posix del a b: writer=False
 Posix del -o out in: writer=False
 Posix del -i x: writer=False
@@ -405,7 +372,6 @@ Posix del . -exec rm {} ;: writer=False
 Posix del checkout -- f: writer=False
 Posix del format --include f.cs: writer=False
 Posix xargs del: writer=False
-Posix | del: writer=False
 Posix erase a b: writer=False
 Posix erase -o out in: writer=False
 Posix erase -i x: writer=False
@@ -417,7 +383,6 @@ Posix erase . -exec rm {} ;: writer=False
 Posix erase checkout -- f: writer=False
 Posix erase format --include f.cs: writer=False
 Posix xargs erase: writer=False
-Posix | erase: writer=False
 Posix ri a b: writer=False
 Posix ri -o out in: writer=False
 Posix ri -i x: writer=False
@@ -429,7 +394,6 @@ Posix ri . -exec rm {} ;: writer=False
 Posix ri checkout -- f: writer=False
 Posix ri format --include f.cs: writer=False
 Posix xargs ri: writer=False
-Posix | ri: writer=False
 Posix rd a b: writer=False
 Posix rd -o out in: writer=False
 Posix rd -i x: writer=False
@@ -441,7 +405,6 @@ Posix rd . -exec rm {} ;: writer=False
 Posix rd checkout -- f: writer=False
 Posix rd format --include f.cs: writer=False
 Posix xargs rd: writer=False
-Posix | rd: writer=False
 Posix rmdir a b: writer=False
 Posix rmdir -o out in: writer=False
 Posix rmdir -i x: writer=False
@@ -453,7 +416,6 @@ Posix rmdir . -exec rm {} ;: writer=False
 Posix rmdir checkout -- f: writer=False
 Posix rmdir format --include f.cs: writer=False
 Posix xargs rmdir: writer=False
-Posix | rmdir: writer=False
 Posix copy a b: writer=False
 Posix copy -o out in: writer=False
 Posix copy -i x: writer=False
@@ -465,7 +427,6 @@ Posix copy . -exec rm {} ;: writer=False
 Posix copy checkout -- f: writer=False
 Posix copy format --include f.cs: writer=False
 Posix xargs copy: writer=False
-Posix | copy: writer=False
 Posix cpi a b: writer=False
 Posix cpi -o out in: writer=False
 Posix cpi -i x: writer=False
@@ -477,7 +438,6 @@ Posix cpi . -exec rm {} ;: writer=False
 Posix cpi checkout -- f: writer=False
 Posix cpi format --include f.cs: writer=False
 Posix xargs cpi: writer=False
-Posix | cpi: writer=False
 Posix move a b: writer=False
 Posix move -o out in: writer=False
 Posix move -i x: writer=False
@@ -489,7 +449,6 @@ Posix move . -exec rm {} ;: writer=False
 Posix move checkout -- f: writer=False
 Posix move format --include f.cs: writer=False
 Posix xargs move: writer=False
-Posix | move: writer=False
 Posix mi a b: writer=False
 Posix mi -o out in: writer=False
 Posix mi -i x: writer=False
@@ -501,7 +460,6 @@ Posix mi . -exec rm {} ;: writer=False
 Posix mi checkout -- f: writer=False
 Posix mi format --include f.cs: writer=False
 Posix xargs mi: writer=False
-Posix | mi: writer=False
 Posix ren a b: writer=False
 Posix ren -o out in: writer=False
 Posix ren -i x: writer=False
@@ -513,7 +471,6 @@ Posix ren . -exec rm {} ;: writer=False
 Posix ren checkout -- f: writer=False
 Posix ren format --include f.cs: writer=False
 Posix xargs ren: writer=False
-Posix | ren: writer=False
 Posix rni a b: writer=False
 Posix rni -o out in: writer=False
 Posix rni -i x: writer=False
@@ -525,7 +482,6 @@ Posix rni . -exec rm {} ;: writer=False
 Posix rni checkout -- f: writer=False
 Posix rni format --include f.cs: writer=False
 Posix xargs rni: writer=False
-Posix | rni: writer=False
 Posix sc a b: writer=False
 Posix sc -o out in: writer=False
 Posix sc -i x: writer=False
@@ -537,7 +493,6 @@ Posix sc . -exec rm {} ;: writer=False
 Posix sc checkout -- f: writer=False
 Posix sc format --include f.cs: writer=False
 Posix xargs sc: writer=False
-Posix | sc: writer=False
 Posix ac a b: writer=False
 Posix ac -o out in: writer=False
 Posix ac -i x: writer=False
@@ -549,7 +504,6 @@ Posix ac . -exec rm {} ;: writer=False
 Posix ac checkout -- f: writer=False
 Posix ac format --include f.cs: writer=False
 Posix xargs ac: writer=False
-Posix | ac: writer=False
 Posix clc a b: writer=False
 Posix clc -o out in: writer=False
 Posix clc -i x: writer=False
@@ -561,7 +515,6 @@ Posix clc . -exec rm {} ;: writer=False
 Posix clc checkout -- f: writer=False
 Posix clc format --include f.cs: writer=False
 Posix xargs clc: writer=False
-Posix | clc: writer=False
 Posix ni a b: writer=False
 Posix ni -o out in: writer=False
 Posix ni -i x: writer=False
@@ -573,7 +526,6 @@ Posix ni . -exec rm {} ;: writer=False
 Posix ni checkout -- f: writer=False
 Posix ni format --include f.cs: writer=False
 Posix xargs ni: writer=False
-Posix | ni: writer=False
 Posix si a b: writer=False
 Posix si -o out in: writer=False
 Posix si -i x: writer=False
@@ -585,7 +537,6 @@ Posix si . -exec rm {} ;: writer=False
 Posix si checkout -- f: writer=False
 Posix si format --include f.cs: writer=False
 Posix xargs si: writer=False
-Posix | si: writer=False
 Posix cli a b: writer=False
 Posix cli -o out in: writer=False
 Posix cli -i x: writer=False
@@ -597,7 +548,6 @@ Posix cli . -exec rm {} ;: writer=False
 Posix cli checkout -- f: writer=False
 Posix cli format --include f.cs: writer=False
 Posix xargs cli: writer=False
-Posix | cli: writer=False
 Posix epcsv a b: writer=False
 Posix epcsv -o out in: writer=False
 Posix epcsv -i x: writer=False
@@ -609,7 +559,6 @@ Posix epcsv . -exec rm {} ;: writer=False
 Posix epcsv checkout -- f: writer=False
 Posix epcsv format --include f.cs: writer=False
 Posix xargs epcsv: writer=False
-Posix | epcsv: writer=False
 Posix iwr a b: writer=False
 Posix iwr -o out in: writer=False
 Posix iwr -i x: writer=False
@@ -621,7 +570,6 @@ Posix iwr . -exec rm {} ;: writer=False
 Posix iwr checkout -- f: writer=False
 Posix iwr format --include f.cs: writer=False
 Posix xargs iwr: writer=False
-Posix | iwr: writer=False
 Posix irm a b: writer=False
 Posix irm -o out in: writer=False
 Posix irm -i x: writer=False
@@ -633,7 +581,6 @@ Posix irm . -exec rm {} ;: writer=False
 Posix irm checkout -- f: writer=False
 Posix irm format --include f.cs: writer=False
 Posix xargs irm: writer=False
-Posix | irm: writer=False
 Posix set-content a b: writer=True files=[a]
 Posix set-content -o out in: writer=True files=[in]
 Posix set-content -i x: writer=True
@@ -644,8 +591,7 @@ Posix set-content . -name *.tmp -delete: writer=True files=[.]
 Posix set-content . -exec rm {} ;: writer=True files=[.]
 Posix set-content checkout -- f: writer=True files=[checkout]
 Posix set-content format --include f.cs: writer=True files=[format]
-Posix xargs set-content: writer=True hidden=xargs set-content
-Posix | set-content: writer=True
+Posix xargs set-content: writer=True
 Posix add-content a b: writer=True files=[a]
 Posix add-content -o out in: writer=True files=[in]
 Posix add-content -i x: writer=True
@@ -656,8 +602,7 @@ Posix add-content . -name *.tmp -delete: writer=True files=[.]
 Posix add-content . -exec rm {} ;: writer=True files=[.]
 Posix add-content checkout -- f: writer=True files=[checkout]
 Posix add-content format --include f.cs: writer=True files=[format]
-Posix xargs add-content: writer=True hidden=xargs add-content
-Posix | add-content: writer=True
+Posix xargs add-content: writer=True
 Posix clear-content a b: writer=True files=[a]
 Posix clear-content -o out in: writer=True files=[in]
 Posix clear-content -i x: writer=True
@@ -668,8 +613,7 @@ Posix clear-content . -name *.tmp -delete: writer=True files=[.]
 Posix clear-content . -exec rm {} ;: writer=True files=[.]
 Posix clear-content checkout -- f: writer=True files=[checkout]
 Posix clear-content format --include f.cs: writer=True files=[format]
-Posix xargs clear-content: writer=True hidden=xargs clear-content
-Posix | clear-content: writer=True
+Posix xargs clear-content: writer=True
 Posix out-file a b: writer=True files=[a]
 Posix out-file -o out in: writer=True files=[in]
 Posix out-file -i x: writer=True
@@ -680,8 +624,7 @@ Posix out-file . -name *.tmp -delete: writer=True files=[.]
 Posix out-file . -exec rm {} ;: writer=True files=[.]
 Posix out-file checkout -- f: writer=True files=[checkout]
 Posix out-file format --include f.cs: writer=True files=[format]
-Posix xargs out-file: writer=True hidden=xargs out-file
-Posix | out-file: writer=True
+Posix xargs out-file: writer=True
 Posix tee-object a b: writer=True files=[a]
 Posix tee-object -o out in: writer=True files=[in]
 Posix tee-object -i x: writer=True
@@ -692,20 +635,18 @@ Posix tee-object . -name *.tmp -delete: writer=True files=[.]
 Posix tee-object . -exec rm {} ;: writer=True files=[.]
 Posix tee-object checkout -- f: writer=True files=[checkout]
 Posix tee-object format --include f.cs: writer=True files=[format]
-Posix xargs tee-object: writer=True hidden=xargs tee-object
-Posix | tee-object: writer=True
-Posix set-item a b: writer=True files=[a]
-Posix set-item -o out in: writer=True files=[in]
-Posix set-item -i x: writer=True
-Posix set-item -r dir: writer=True files=[dir]
-Posix set-item -Path p -Destination d: writer=True files=[p]
-Posix set-item of=o if=i: writer=True files=[of=o]
-Posix set-item . -name *.tmp -delete: writer=True files=[.]
-Posix set-item . -exec rm {} ;: writer=True files=[.]
-Posix set-item checkout -- f: writer=True files=[checkout]
-Posix set-item format --include f.cs: writer=True files=[format]
-Posix xargs set-item: writer=True hidden=xargs set-item
-Posix | set-item: writer=True
+Posix xargs tee-object: writer=True
+Posix set-item a b: writer=False
+Posix set-item -o out in: writer=False
+Posix set-item -i x: writer=False
+Posix set-item -r dir: writer=False
+Posix set-item -Path p -Destination d: writer=False
+Posix set-item of=o if=i: writer=False
+Posix set-item . -name *.tmp -delete: writer=False
+Posix set-item . -exec rm {} ;: writer=False
+Posix set-item checkout -- f: writer=False
+Posix set-item format --include f.cs: writer=False
+Posix xargs set-item: writer=False
 Posix new-item a b: writer=True files=[a]
 Posix new-item -o out in: writer=True files=[in]
 Posix new-item -i x: writer=True
@@ -716,44 +657,40 @@ Posix new-item . -name *.tmp -delete: writer=True files=[., *.tmp]
 Posix new-item . -exec rm {} ;: writer=True files=[.]
 Posix new-item checkout -- f: writer=True files=[checkout]
 Posix new-item format --include f.cs: writer=True files=[format]
-Posix xargs new-item: writer=True hidden=xargs new-item
-Posix | new-item: writer=True
-Posix clear-item a b: writer=True files=[a]
-Posix clear-item -o out in: writer=True files=[in]
-Posix clear-item -i x: writer=True
-Posix clear-item -r dir: writer=True files=[dir]
-Posix clear-item -Path p -Destination d: writer=True files=[p]
-Posix clear-item of=o if=i: writer=True files=[of=o]
-Posix clear-item . -name *.tmp -delete: writer=True files=[.]
-Posix clear-item . -exec rm {} ;: writer=True files=[.]
-Posix clear-item checkout -- f: writer=True files=[checkout]
-Posix clear-item format --include f.cs: writer=True files=[format]
-Posix xargs clear-item: writer=True hidden=xargs clear-item
-Posix | clear-item: writer=True
-Posix export-csv a b: writer=True files=[a]
-Posix export-csv -o out in: writer=True files=[in]
-Posix export-csv -i x: writer=True
-Posix export-csv -r dir: writer=True files=[dir]
-Posix export-csv -Path p -Destination d: writer=True files=[p]
-Posix export-csv of=o if=i: writer=True files=[of=o]
-Posix export-csv . -name *.tmp -delete: writer=True files=[.]
-Posix export-csv . -exec rm {} ;: writer=True files=[.]
-Posix export-csv checkout -- f: writer=True files=[checkout]
-Posix export-csv format --include f.cs: writer=True files=[format]
-Posix xargs export-csv: writer=True hidden=xargs export-csv
-Posix | export-csv: writer=True
-Posix export-clixml a b: writer=True files=[a]
-Posix export-clixml -o out in: writer=True files=[in]
-Posix export-clixml -i x: writer=True
-Posix export-clixml -r dir: writer=True files=[dir]
-Posix export-clixml -Path p -Destination d: writer=True files=[p]
-Posix export-clixml of=o if=i: writer=True files=[of=o]
-Posix export-clixml . -name *.tmp -delete: writer=True files=[.]
-Posix export-clixml . -exec rm {} ;: writer=True files=[.]
-Posix export-clixml checkout -- f: writer=True files=[checkout]
-Posix export-clixml format --include f.cs: writer=True files=[format]
-Posix xargs export-clixml: writer=True hidden=xargs export-clixml
-Posix | export-clixml: writer=True
+Posix xargs new-item: writer=True
+Posix clear-item a b: writer=False
+Posix clear-item -o out in: writer=False
+Posix clear-item -i x: writer=False
+Posix clear-item -r dir: writer=False
+Posix clear-item -Path p -Destination d: writer=False
+Posix clear-item of=o if=i: writer=False
+Posix clear-item . -name *.tmp -delete: writer=False
+Posix clear-item . -exec rm {} ;: writer=False
+Posix clear-item checkout -- f: writer=False
+Posix clear-item format --include f.cs: writer=False
+Posix xargs clear-item: writer=False
+Posix export-csv a b: writer=False
+Posix export-csv -o out in: writer=False
+Posix export-csv -i x: writer=False
+Posix export-csv -r dir: writer=False
+Posix export-csv -Path p -Destination d: writer=False
+Posix export-csv of=o if=i: writer=False
+Posix export-csv . -name *.tmp -delete: writer=False
+Posix export-csv . -exec rm {} ;: writer=False
+Posix export-csv checkout -- f: writer=False
+Posix export-csv format --include f.cs: writer=False
+Posix xargs export-csv: writer=False
+Posix export-clixml a b: writer=False
+Posix export-clixml -o out in: writer=False
+Posix export-clixml -i x: writer=False
+Posix export-clixml -r dir: writer=False
+Posix export-clixml -Path p -Destination d: writer=False
+Posix export-clixml of=o if=i: writer=False
+Posix export-clixml . -name *.tmp -delete: writer=False
+Posix export-clixml . -exec rm {} ;: writer=False
+Posix export-clixml checkout -- f: writer=False
+Posix export-clixml format --include f.cs: writer=False
+Posix xargs export-clixml: writer=False
 Posix remove-item a b: writer=True files=[a, b] trees=[a, b]
 Posix remove-item -o out in: writer=True files=[in] trees=[in]
 Posix remove-item -i x: writer=True
@@ -764,8 +701,7 @@ Posix remove-item . -name *.tmp -delete: writer=True files=[.] trees=[.]
 Posix remove-item . -exec rm {} ;: writer=True files=[., rm, {}, ;] trees=[., rm, {}, ;]
 Posix remove-item checkout -- f: writer=True files=[checkout, --, f] trees=[checkout, --, f]
 Posix remove-item format --include f.cs: writer=True files=[format, --include, f.cs] trees=[format, --include, f.cs]
-Posix xargs remove-item: writer=True hidden=xargs remove-item
-Posix | remove-item: writer=True
+Posix xargs remove-item: writer=True
 Posix copy-item a b: writer=True files=[b, b/a]
 Posix copy-item -o out in: writer=True
 Posix copy-item -i x: writer=True
@@ -773,11 +709,10 @@ Posix copy-item -r dir: writer=True
 Posix copy-item -Path p -Destination d: writer=True files=[d, d/p]
 Posix copy-item of=o if=i: writer=True files=[if=i, if=i/of=o]
 Posix copy-item . -name *.tmp -delete: writer=True
-Posix copy-item . -exec rm {} ;: writer=True files=[rm] trees=[rm]
+Posix copy-item . -exec rm {} ;: writer=True files=[rm]
 Posix copy-item checkout -- f: writer=True files=[--, --/checkout]
 Posix copy-item format --include f.cs: writer=True files=[--include, --include/format]
-Posix xargs copy-item: writer=True hidden=xargs copy-item
-Posix | copy-item: writer=True
+Posix xargs copy-item: writer=True
 Posix move-item a b: writer=True files=[b, b/a, a] trees=[b, a]
 Posix move-item -o out in: writer=True files=[in] trees=[in]
 Posix move-item -i x: writer=True
@@ -788,56 +723,51 @@ Posix move-item . -name *.tmp -delete: writer=True files=[.] trees=[.]
 Posix move-item . -exec rm {} ;: writer=True files=[rm, .] trees=[rm, .]
 Posix move-item checkout -- f: writer=True files=[--, --/checkout, checkout] trees=[--, checkout]
 Posix move-item format --include f.cs: writer=True files=[--include, --include/format, format] trees=[--include, format]
-Posix xargs move-item: writer=True hidden=xargs move-item
-Posix | move-item: writer=True
-Posix rename-item a b: writer=True files=[a, b] trees=[a, b]
-Posix rename-item -o out in: writer=True files=[in] trees=[in]
-Posix rename-item -i x: writer=True
-Posix rename-item -r dir: writer=True files=[dir] trees=[dir]
-Posix rename-item -Path p -Destination d: writer=True files=[p] trees=[p]
-Posix rename-item of=o if=i: writer=True files=[of=o, if=i] trees=[of=o, if=i]
-Posix rename-item . -name *.tmp -delete: writer=True files=[.] trees=[.]
-Posix rename-item . -exec rm {} ;: writer=True files=[., rm] trees=[., rm]
-Posix rename-item checkout -- f: writer=True files=[checkout, --] trees=[checkout, --]
-Posix rename-item format --include f.cs: writer=True files=[format, --include] trees=[format, --include]
-Posix xargs rename-item: writer=True hidden=xargs rename-item
-Posix | rename-item: writer=True
-Posix invoke-webrequest a b: writer=True
-Posix invoke-webrequest -o out in: writer=True files=[out]
-Posix invoke-webrequest -i x: writer=True
-Posix invoke-webrequest -r dir: writer=True
-Posix invoke-webrequest -Path p -Destination d: writer=True
-Posix invoke-webrequest of=o if=i: writer=True
-Posix invoke-webrequest . -name *.tmp -delete: writer=True
-Posix invoke-webrequest . -exec rm {} ;: writer=True
-Posix invoke-webrequest checkout -- f: writer=True
-Posix invoke-webrequest format --include f.cs: writer=True
-Posix xargs invoke-webrequest: writer=True hidden=xargs invoke-webrequest
-Posix | invoke-webrequest: writer=True
-Posix invoke-restmethod a b: writer=True
-Posix invoke-restmethod -o out in: writer=True files=[out]
-Posix invoke-restmethod -i x: writer=True
-Posix invoke-restmethod -r dir: writer=True
-Posix invoke-restmethod -Path p -Destination d: writer=True
-Posix invoke-restmethod of=o if=i: writer=True
-Posix invoke-restmethod . -name *.tmp -delete: writer=True
-Posix invoke-restmethod . -exec rm {} ;: writer=True
-Posix invoke-restmethod checkout -- f: writer=True
-Posix invoke-restmethod format --include f.cs: writer=True
-Posix xargs invoke-restmethod: writer=True hidden=xargs invoke-restmethod
-Posix | invoke-restmethod: writer=True
-Posix expand-archive a b: writer=True files=[b] trees=[b]
-Posix expand-archive -o out in: writer=True files=[.] trees=[.]
-Posix expand-archive -i x: writer=True files=[.] trees=[.]
-Posix expand-archive -r dir: writer=True files=[.] trees=[.]
-Posix expand-archive -Path p -Destination d: writer=True files=[d] trees=[d]
-Posix expand-archive of=o if=i: writer=True files=[if=i] trees=[if=i]
-Posix expand-archive . -name *.tmp -delete: writer=True files=[.] trees=[.]
-Posix expand-archive . -exec rm {} ;: writer=True files=[rm] trees=[rm]
-Posix expand-archive checkout -- f: writer=True files=[--] trees=[--]
-Posix expand-archive format --include f.cs: writer=True files=[--include] trees=[--include]
-Posix xargs expand-archive: writer=True hidden=xargs expand-archive
-Posix | expand-archive: writer=True files=[.] trees=[.]
+Posix xargs move-item: writer=True
+Posix rename-item a b: writer=False
+Posix rename-item -o out in: writer=False
+Posix rename-item -i x: writer=False
+Posix rename-item -r dir: writer=False
+Posix rename-item -Path p -Destination d: writer=False
+Posix rename-item of=o if=i: writer=False
+Posix rename-item . -name *.tmp -delete: writer=False
+Posix rename-item . -exec rm {} ;: writer=False
+Posix rename-item checkout -- f: writer=False
+Posix rename-item format --include f.cs: writer=False
+Posix xargs rename-item: writer=False
+Posix invoke-webrequest a b: writer=False
+Posix invoke-webrequest -o out in: writer=False
+Posix invoke-webrequest -i x: writer=False
+Posix invoke-webrequest -r dir: writer=False
+Posix invoke-webrequest -Path p -Destination d: writer=False
+Posix invoke-webrequest of=o if=i: writer=False
+Posix invoke-webrequest . -name *.tmp -delete: writer=False
+Posix invoke-webrequest . -exec rm {} ;: writer=False
+Posix invoke-webrequest checkout -- f: writer=False
+Posix invoke-webrequest format --include f.cs: writer=False
+Posix xargs invoke-webrequest: writer=False
+Posix invoke-restmethod a b: writer=False
+Posix invoke-restmethod -o out in: writer=False
+Posix invoke-restmethod -i x: writer=False
+Posix invoke-restmethod -r dir: writer=False
+Posix invoke-restmethod -Path p -Destination d: writer=False
+Posix invoke-restmethod of=o if=i: writer=False
+Posix invoke-restmethod . -name *.tmp -delete: writer=False
+Posix invoke-restmethod . -exec rm {} ;: writer=False
+Posix invoke-restmethod checkout -- f: writer=False
+Posix invoke-restmethod format --include f.cs: writer=False
+Posix xargs invoke-restmethod: writer=False
+Posix expand-archive a b: writer=False
+Posix expand-archive -o out in: writer=False
+Posix expand-archive -i x: writer=False
+Posix expand-archive -r dir: writer=False
+Posix expand-archive -Path p -Destination d: writer=False
+Posix expand-archive of=o if=i: writer=False
+Posix expand-archive . -name *.tmp -delete: writer=False
+Posix expand-archive . -exec rm {} ;: writer=False
+Posix expand-archive checkout -- f: writer=False
+Posix expand-archive format --include f.cs: writer=False
+Posix xargs expand-archive: writer=False
 Posix cat a b: writer=False
 Posix cat -o out in: writer=False
 Posix cat -i x: writer=False
@@ -849,7 +779,6 @@ Posix cat . -exec rm {} ;: writer=False
 Posix cat checkout -- f: writer=False
 Posix cat format --include f.cs: writer=False
 Posix xargs cat: writer=False
-Posix | cat: writer=False
 Posix echo a b: writer=False
 Posix echo -o out in: writer=False
 Posix echo -i x: writer=False
@@ -861,7 +790,6 @@ Posix echo . -exec rm {} ;: writer=False
 Posix echo checkout -- f: writer=False
 Posix echo format --include f.cs: writer=False
 Posix xargs echo: writer=False
-Posix | echo: writer=False
 Posix ls a b: writer=False
 Posix ls -o out in: writer=False
 Posix ls -i x: writer=False
@@ -873,7 +801,6 @@ Posix ls . -exec rm {} ;: writer=False
 Posix ls checkout -- f: writer=False
 Posix ls format --include f.cs: writer=False
 Posix xargs ls: writer=False
-Posix | ls: writer=False
 Posix grep a b: writer=False
 Posix grep -o out in: writer=False
 Posix grep -i x: writer=False
@@ -885,7 +812,6 @@ Posix grep . -exec rm {} ;: writer=False
 Posix grep checkout -- f: writer=False
 Posix grep format --include f.cs: writer=False
 Posix xargs grep: writer=False
-Posix | grep: writer=False
 Posix make a b: writer=False
 Posix make -o out in: writer=False
 Posix make -i x: writer=False
@@ -897,7 +823,6 @@ Posix make . -exec rm {} ;: writer=False
 Posix make checkout -- f: writer=False
 Posix make format --include f.cs: writer=False
 Posix xargs make: writer=False
-Posix | make: writer=False
 PowerShell git a b: writer=True
 PowerShell git -o out in: writer=True
 PowerShell git -i x: writer=True
@@ -908,8 +833,7 @@ PowerShell git . -name *.tmp -delete: writer=True
 PowerShell git . -exec rm {} ;: writer=True
 PowerShell git checkout -- f: writer=True files=[f] trees=[f]
 PowerShell git format --include f.cs: writer=True
-PowerShell xargs git: writer=True hidden=xargs git
-PowerShell | git: writer=True
+PowerShell xargs git: writer=True
 PowerShell dotnet a b: writer=True
 PowerShell dotnet -o out in: writer=True
 PowerShell dotnet -i x: writer=True
@@ -920,8 +844,7 @@ PowerShell dotnet . -name *.tmp -delete: writer=True
 PowerShell dotnet . -exec rm {} ;: writer=True
 PowerShell dotnet checkout -- f: writer=True
 PowerShell dotnet format --include f.cs: writer=True sources=[f.cs]
-PowerShell xargs dotnet: writer=True hidden=xargs dotnet
-PowerShell | dotnet: writer=True
+PowerShell xargs dotnet: writer=True
 PowerShell cp a b: writer=True files=[b, b/a]
 PowerShell cp -o out in: writer=True
 PowerShell cp -i x: writer=True
@@ -929,11 +852,10 @@ PowerShell cp -r dir: writer=True
 PowerShell cp -Path p -Destination d: writer=True files=[d, d/p]
 PowerShell cp of=o if=i: writer=True files=[if=i, if=i/of=o]
 PowerShell cp . -name *.tmp -delete: writer=True
-PowerShell cp . -exec rm {} ;: writer=True files=[rm] trees=[rm]
+PowerShell cp . -exec rm {} ;: writer=True files=[rm]
 PowerShell cp checkout -- f: writer=True files=[--, --/checkout]
 PowerShell cp format --include f.cs: writer=True files=[--include, --include/format]
-PowerShell xargs cp: writer=True hidden=xargs cp
-PowerShell | cp: writer=True hidden=… | copy-item (paths from the pipeline)
+PowerShell xargs cp: writer=True
 PowerShell mv a b: writer=True files=[b, b/a, a] trees=[b, a]
 PowerShell mv -o out in: writer=True files=[in] trees=[in]
 PowerShell mv -i x: writer=True
@@ -944,8 +866,7 @@ PowerShell mv . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell mv . -exec rm {} ;: writer=True files=[rm, .] trees=[rm, .]
 PowerShell mv checkout -- f: writer=True files=[--, --/checkout, checkout] trees=[--, checkout]
 PowerShell mv format --include f.cs: writer=True files=[--include, --include/format, format] trees=[--include, format]
-PowerShell xargs mv: writer=True hidden=xargs mv
-PowerShell | mv: writer=True hidden=… | move-item (paths from the pipeline)
+PowerShell xargs mv: writer=True
 PowerShell install a b: writer=True files=[b, b/a]
 PowerShell install -o out in: writer=True files=[in]
 PowerShell install -i x: writer=True files=[x]
@@ -953,35 +874,32 @@ PowerShell install -r dir: writer=True files=[dir]
 PowerShell install -Path p -Destination d: writer=True files=[d, d/p]
 PowerShell install of=o if=i: writer=True files=[if=i, if=i/of=o]
 PowerShell install . -name *.tmp -delete: writer=True files=[., *.tmp]
-PowerShell install . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}] trees=[;]
+PowerShell install . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}]
 PowerShell install checkout -- f: writer=True files=[f, f/checkout]
 PowerShell install format --include f.cs: writer=True files=[f.cs, f.cs/format]
-PowerShell xargs install: writer=True hidden=xargs install
-PowerShell | install: writer=True
-PowerShell ln a b: writer=True files=[b, b/a, a]
-PowerShell ln -o out in: writer=True files=[in, in]
-PowerShell ln -i x: writer=True files=[x, x]
-PowerShell ln -r dir: writer=True files=[dir, dir]
-PowerShell ln -Path p -Destination d: writer=True files=[d, d/p]
-PowerShell ln of=o if=i: writer=True files=[if=i, if=i/of=o, of=o]
-PowerShell ln . -name *.tmp -delete: writer=True files=[*.tmp, .] trees=[*.tmp]
-PowerShell ln . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}, ., rm, {}] trees=[;]
-PowerShell ln checkout -- f: writer=True files=[f, f/checkout, checkout]
-PowerShell ln format --include f.cs: writer=True files=[f.cs, f.cs/format, format]
-PowerShell xargs ln: writer=True hidden=xargs ln
-PowerShell | ln: writer=True
-PowerShell rsync a b: writer=True files=[b, b/a] trees=[b]
-PowerShell rsync -o out in: writer=True files=[in, in/out] trees=[in]
-PowerShell rsync -i x: writer=True
-PowerShell rsync -r dir: writer=True
-PowerShell rsync -Path p -Destination d: writer=True files=[d, d/p] trees=[d]
-PowerShell rsync of=o if=i: writer=True files=[if=i, if=i/of=o] trees=[if=i]
-PowerShell rsync . -name *.tmp -delete: writer=True files=[*.tmp] trees=[*.tmp]
-PowerShell rsync . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}] trees=[;]
-PowerShell rsync checkout -- f: writer=True files=[f, f/checkout] trees=[f]
-PowerShell rsync format --include f.cs: writer=True
-PowerShell xargs rsync: writer=True hidden=xargs rsync
-PowerShell | rsync: writer=True
+PowerShell xargs install: writer=True
+PowerShell ln a b: writer=False
+PowerShell ln -o out in: writer=False
+PowerShell ln -i x: writer=False
+PowerShell ln -r dir: writer=False
+PowerShell ln -Path p -Destination d: writer=False
+PowerShell ln of=o if=i: writer=False
+PowerShell ln . -name *.tmp -delete: writer=False
+PowerShell ln . -exec rm {} ;: writer=False
+PowerShell ln checkout -- f: writer=False
+PowerShell ln format --include f.cs: writer=False
+PowerShell xargs ln: writer=False
+PowerShell rsync a b: writer=False
+PowerShell rsync -o out in: writer=False
+PowerShell rsync -i x: writer=False
+PowerShell rsync -r dir: writer=False
+PowerShell rsync -Path p -Destination d: writer=False
+PowerShell rsync of=o if=i: writer=False
+PowerShell rsync . -name *.tmp -delete: writer=False
+PowerShell rsync . -exec rm {} ;: writer=False
+PowerShell rsync checkout -- f: writer=False
+PowerShell rsync format --include f.cs: writer=False
+PowerShell xargs rsync: writer=False
 PowerShell sed a b: writer=True
 PowerShell sed -o out in: writer=True
 PowerShell sed -i x: writer=True
@@ -992,8 +910,7 @@ PowerShell sed . -name *.tmp -delete: writer=True
 PowerShell sed . -exec rm {} ;: writer=True
 PowerShell sed checkout -- f: writer=True
 PowerShell sed format --include f.cs: writer=True
-PowerShell xargs sed: writer=True hidden=xargs sed
-PowerShell | sed: writer=True
+PowerShell xargs sed: writer=True
 PowerShell perl a b: writer=True
 PowerShell perl -o out in: writer=True
 PowerShell perl -i x: writer=True
@@ -1004,10 +921,9 @@ PowerShell perl . -name *.tmp -delete: writer=True
 PowerShell perl . -exec rm {} ;: writer=True
 PowerShell perl checkout -- f: writer=True
 PowerShell perl format --include f.cs: writer=True
-PowerShell xargs perl: writer=True hidden=xargs perl
-PowerShell | perl: writer=True
+PowerShell xargs perl: writer=True
 PowerShell sort a b: writer=False
-PowerShell sort -o out in: writer=True files=[out]
+PowerShell sort -o out in: writer=False
 PowerShell sort -i x: writer=False
 PowerShell sort -r dir: writer=False
 PowerShell sort -Path p -Destination d: writer=False
@@ -1017,19 +933,17 @@ PowerShell sort . -exec rm {} ;: writer=False
 PowerShell sort checkout -- f: writer=False
 PowerShell sort format --include f.cs: writer=False
 PowerShell xargs sort: writer=False
-PowerShell | sort: writer=False
-PowerShell uniq a b: writer=True files=[b]
-PowerShell uniq -o out in: writer=True files=[in]
+PowerShell uniq a b: writer=False
+PowerShell uniq -o out in: writer=False
 PowerShell uniq -i x: writer=False
 PowerShell uniq -r dir: writer=False
-PowerShell uniq -Path p -Destination d: writer=True files=[d]
-PowerShell uniq of=o if=i: writer=True files=[if=i]
-PowerShell uniq . -name *.tmp -delete: writer=True files=[*.tmp]
-PowerShell uniq . -exec rm {} ;: writer=True files=[rm]
-PowerShell uniq checkout -- f: writer=True files=[f]
-PowerShell uniq format --include f.cs: writer=True files=[f.cs]
+PowerShell uniq -Path p -Destination d: writer=False
+PowerShell uniq of=o if=i: writer=False
+PowerShell uniq . -name *.tmp -delete: writer=False
+PowerShell uniq . -exec rm {} ;: writer=False
+PowerShell uniq checkout -- f: writer=False
+PowerShell uniq format --include f.cs: writer=False
 PowerShell xargs uniq: writer=False
-PowerShell | uniq: writer=False
 PowerShell awk a b: writer=False
 PowerShell awk -o out in: writer=False
 PowerShell awk -i x: writer=False
@@ -1041,7 +955,6 @@ PowerShell awk . -exec rm {} ;: writer=False
 PowerShell awk checkout -- f: writer=False
 PowerShell awk format --include f.cs: writer=False
 PowerShell xargs awk: writer=False
-PowerShell | awk: writer=False
 PowerShell gawk a b: writer=False
 PowerShell gawk -o out in: writer=False
 PowerShell gawk -i x: writer=False
@@ -1053,91 +966,83 @@ PowerShell gawk . -exec rm {} ;: writer=False
 PowerShell gawk checkout -- f: writer=False
 PowerShell gawk format --include f.cs: writer=False
 PowerShell xargs gawk: writer=False
-PowerShell | gawk: writer=False
 PowerShell yq a b: writer=False
 PowerShell yq -o out in: writer=False
-PowerShell yq -i x: writer=True files=[x]
+PowerShell yq -i x: writer=False
 PowerShell yq -r dir: writer=False
-PowerShell yq -Path p -Destination d: writer=True files=[d]
+PowerShell yq -Path p -Destination d: writer=False
 PowerShell yq of=o if=i: writer=False
 PowerShell yq . -name *.tmp -delete: writer=False
 PowerShell yq . -exec rm {} ;: writer=False
 PowerShell yq checkout -- f: writer=False
 PowerShell yq format --include f.cs: writer=False
 PowerShell xargs yq: writer=False
-PowerShell | yq: writer=False
-PowerShell robocopy a b: writer=True files=[b] trees=[b]
-PowerShell robocopy -o out in: writer=True files=[out] trees=[out]
-PowerShell robocopy -i x: writer=True files=[x] trees=[x]
-PowerShell robocopy -r dir: writer=True files=[dir] trees=[dir]
-PowerShell robocopy -Path p -Destination d: writer=True files=[p] trees=[p]
-PowerShell robocopy of=o if=i: writer=True files=[if=i] trees=[if=i]
-PowerShell robocopy . -name *.tmp -delete: writer=True files=[-name] trees=[-name]
-PowerShell robocopy . -exec rm {} ;: writer=True files=[-exec] trees=[-exec]
-PowerShell robocopy checkout -- f: writer=True files=[--] trees=[--]
-PowerShell robocopy format --include f.cs: writer=True files=[--include] trees=[--include]
-PowerShell xargs robocopy: writer=True hidden=xargs robocopy
-PowerShell | robocopy: writer=True
-PowerShell xcopy a b: writer=True files=[b] trees=[b]
-PowerShell xcopy -o out in: writer=True files=[out] trees=[out]
-PowerShell xcopy -i x: writer=True files=[x] trees=[x]
-PowerShell xcopy -r dir: writer=True files=[dir] trees=[dir]
-PowerShell xcopy -Path p -Destination d: writer=True files=[p] trees=[p]
-PowerShell xcopy of=o if=i: writer=True files=[if=i] trees=[if=i]
-PowerShell xcopy . -name *.tmp -delete: writer=True files=[-name] trees=[-name]
-PowerShell xcopy . -exec rm {} ;: writer=True files=[-exec] trees=[-exec]
-PowerShell xcopy checkout -- f: writer=True files=[--] trees=[--]
-PowerShell xcopy format --include f.cs: writer=True files=[--include] trees=[--include]
-PowerShell xargs xcopy: writer=True hidden=xargs xcopy
-PowerShell | xcopy: writer=True
-PowerShell tar a b: writer=True
-PowerShell tar -o out in: writer=True
-PowerShell tar -i x: writer=True
-PowerShell tar -r dir: writer=True
-PowerShell tar -Path p -Destination d: writer=True
-PowerShell tar of=o if=i: writer=True
-PowerShell tar . -name *.tmp -delete: writer=True
-PowerShell tar . -exec rm {} ;: writer=True trees=[.]
-PowerShell tar checkout -- f: writer=True
-PowerShell tar format --include f.cs: writer=True
-PowerShell xargs tar: writer=True hidden=xargs tar
-PowerShell | tar: writer=True
-PowerShell bsdtar a b: writer=True
-PowerShell bsdtar -o out in: writer=True
-PowerShell bsdtar -i x: writer=True
-PowerShell bsdtar -r dir: writer=True
-PowerShell bsdtar -Path p -Destination d: writer=True
-PowerShell bsdtar of=o if=i: writer=True
-PowerShell bsdtar . -name *.tmp -delete: writer=True
-PowerShell bsdtar . -exec rm {} ;: writer=True trees=[.]
-PowerShell bsdtar checkout -- f: writer=True
-PowerShell bsdtar format --include f.cs: writer=True
-PowerShell xargs bsdtar: writer=True hidden=xargs bsdtar
-PowerShell | bsdtar: writer=True
-PowerShell unzip a b: writer=True trees=[.]
-PowerShell unzip -o out in: writer=True trees=[.]
-PowerShell unzip -i x: writer=True trees=[.]
-PowerShell unzip -r dir: writer=True trees=[.]
-PowerShell unzip -Path p -Destination d: writer=True trees=[.]
-PowerShell unzip of=o if=i: writer=True trees=[.]
-PowerShell unzip . -name *.tmp -delete: writer=True trees=[elete]
-PowerShell unzip . -exec rm {} ;: writer=True trees=[.]
-PowerShell unzip checkout -- f: writer=True trees=[.]
-PowerShell unzip format --include f.cs: writer=True trees=[.]
-PowerShell xargs unzip: writer=True hidden=xargs unzip
-PowerShell | unzip: writer=True trees=[.]
-PowerShell patch a b: writer=True trees=[.]
-PowerShell patch -o out in: writer=True files=[out]
-PowerShell patch -i x: writer=True trees=[.]
-PowerShell patch -r dir: writer=True trees=[.]
-PowerShell patch -Path p -Destination d: writer=True trees=[.]
-PowerShell patch of=o if=i: writer=True trees=[.]
-PowerShell patch . -name *.tmp -delete: writer=True trees=[elete]
-PowerShell patch . -exec rm {} ;: writer=True trees=[.]
-PowerShell patch checkout -- f: writer=True trees=[.]
-PowerShell patch format --include f.cs: writer=True trees=[.]
-PowerShell xargs patch: writer=True hidden=xargs patch
-PowerShell | patch: writer=True trees=[.]
+PowerShell robocopy a b: writer=False
+PowerShell robocopy -o out in: writer=False
+PowerShell robocopy -i x: writer=False
+PowerShell robocopy -r dir: writer=False
+PowerShell robocopy -Path p -Destination d: writer=False
+PowerShell robocopy of=o if=i: writer=False
+PowerShell robocopy . -name *.tmp -delete: writer=False
+PowerShell robocopy . -exec rm {} ;: writer=False
+PowerShell robocopy checkout -- f: writer=False
+PowerShell robocopy format --include f.cs: writer=False
+PowerShell xargs robocopy: writer=False
+PowerShell xcopy a b: writer=False
+PowerShell xcopy -o out in: writer=False
+PowerShell xcopy -i x: writer=False
+PowerShell xcopy -r dir: writer=False
+PowerShell xcopy -Path p -Destination d: writer=False
+PowerShell xcopy of=o if=i: writer=False
+PowerShell xcopy . -name *.tmp -delete: writer=False
+PowerShell xcopy . -exec rm {} ;: writer=False
+PowerShell xcopy checkout -- f: writer=False
+PowerShell xcopy format --include f.cs: writer=False
+PowerShell xargs xcopy: writer=False
+PowerShell tar a b: writer=False
+PowerShell tar -o out in: writer=False
+PowerShell tar -i x: writer=False
+PowerShell tar -r dir: writer=False
+PowerShell tar -Path p -Destination d: writer=False
+PowerShell tar of=o if=i: writer=False
+PowerShell tar . -name *.tmp -delete: writer=False
+PowerShell tar . -exec rm {} ;: writer=False
+PowerShell tar checkout -- f: writer=False
+PowerShell tar format --include f.cs: writer=False
+PowerShell xargs tar: writer=False
+PowerShell bsdtar a b: writer=False
+PowerShell bsdtar -o out in: writer=False
+PowerShell bsdtar -i x: writer=False
+PowerShell bsdtar -r dir: writer=False
+PowerShell bsdtar -Path p -Destination d: writer=False
+PowerShell bsdtar of=o if=i: writer=False
+PowerShell bsdtar . -name *.tmp -delete: writer=False
+PowerShell bsdtar . -exec rm {} ;: writer=False
+PowerShell bsdtar checkout -- f: writer=False
+PowerShell bsdtar format --include f.cs: writer=False
+PowerShell xargs bsdtar: writer=False
+PowerShell unzip a b: writer=False
+PowerShell unzip -o out in: writer=False
+PowerShell unzip -i x: writer=False
+PowerShell unzip -r dir: writer=False
+PowerShell unzip -Path p -Destination d: writer=False
+PowerShell unzip of=o if=i: writer=False
+PowerShell unzip . -name *.tmp -delete: writer=False
+PowerShell unzip . -exec rm {} ;: writer=False
+PowerShell unzip checkout -- f: writer=False
+PowerShell unzip format --include f.cs: writer=False
+PowerShell xargs unzip: writer=False
+PowerShell patch a b: writer=False
+PowerShell patch -o out in: writer=False
+PowerShell patch -i x: writer=False
+PowerShell patch -r dir: writer=False
+PowerShell patch -Path p -Destination d: writer=False
+PowerShell patch of=o if=i: writer=False
+PowerShell patch . -name *.tmp -delete: writer=False
+PowerShell patch . -exec rm {} ;: writer=False
+PowerShell patch checkout -- f: writer=False
+PowerShell patch format --include f.cs: writer=False
+PowerShell xargs patch: writer=False
 PowerShell rm a b: writer=True files=[a, b] trees=[a, b]
 PowerShell rm -o out in: writer=True files=[in] trees=[in]
 PowerShell rm -i x: writer=True
@@ -1148,8 +1053,7 @@ PowerShell rm . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell rm . -exec rm {} ;: writer=True files=[., rm, {}, ;] trees=[., rm, {}, ;]
 PowerShell rm checkout -- f: writer=True files=[checkout, --, f] trees=[checkout, --, f]
 PowerShell rm format --include f.cs: writer=True files=[format, --include, f.cs] trees=[format, --include, f.cs]
-PowerShell xargs rm: writer=True hidden=xargs rm
-PowerShell | rm: writer=True hidden=… | remove-item (paths from the pipeline)
+PowerShell xargs rm: writer=True
 PowerShell unlink a b: writer=True files=[a, b]
 PowerShell unlink -o out in: writer=True files=[out, in]
 PowerShell unlink -i x: writer=True files=[x]
@@ -1160,20 +1064,18 @@ PowerShell unlink . -name *.tmp -delete: writer=True files=[., *.tmp]
 PowerShell unlink . -exec rm {} ;: writer=True files=[., rm, {}, ;]
 PowerShell unlink checkout -- f: writer=True files=[checkout, f]
 PowerShell unlink format --include f.cs: writer=True files=[format, f.cs]
-PowerShell xargs unlink: writer=True hidden=xargs unlink
-PowerShell | unlink: writer=True
-PowerShell shred a b: writer=True files=[a, b]
-PowerShell shred -o out in: writer=True files=[out, in]
-PowerShell shred -i x: writer=True files=[x]
-PowerShell shred -r dir: writer=True
-PowerShell shred -Path p -Destination d: writer=True files=[p, d]
-PowerShell shred of=o if=i: writer=True files=[of=o, if=i]
-PowerShell shred . -name *.tmp -delete: writer=True files=[., *.tmp]
-PowerShell shred . -exec rm {} ;: writer=True files=[., rm, {}, ;]
-PowerShell shred checkout -- f: writer=True files=[checkout, f]
-PowerShell shred format --include f.cs: writer=True files=[format, f.cs]
-PowerShell xargs shred: writer=True hidden=xargs shred
-PowerShell | shred: writer=True
+PowerShell xargs unlink: writer=True
+PowerShell shred a b: writer=False
+PowerShell shred -o out in: writer=False
+PowerShell shred -i x: writer=False
+PowerShell shred -r dir: writer=False
+PowerShell shred -Path p -Destination d: writer=False
+PowerShell shred of=o if=i: writer=False
+PowerShell shred . -name *.tmp -delete: writer=False
+PowerShell shred . -exec rm {} ;: writer=False
+PowerShell shred checkout -- f: writer=False
+PowerShell shred format --include f.cs: writer=False
+PowerShell xargs shred: writer=False
 PowerShell truncate a b: writer=True files=[a, b]
 PowerShell truncate -o out in: writer=True files=[out, in]
 PowerShell truncate -i x: writer=True files=[x]
@@ -1184,8 +1086,7 @@ PowerShell truncate . -name *.tmp -delete: writer=True files=[., *.tmp]
 PowerShell truncate . -exec rm {} ;: writer=True files=[., rm, {}, ;]
 PowerShell truncate checkout -- f: writer=True files=[checkout, f]
 PowerShell truncate format --include f.cs: writer=True files=[format, f.cs]
-PowerShell xargs truncate: writer=True hidden=xargs truncate
-PowerShell | truncate: writer=True
+PowerShell xargs truncate: writer=True
 PowerShell touch a b: writer=True files=[a, b]
 PowerShell touch -o out in: writer=True files=[out, in]
 PowerShell touch -i x: writer=True files=[x]
@@ -1196,44 +1097,40 @@ PowerShell touch . -name *.tmp -delete: writer=True files=[., *.tmp]
 PowerShell touch . -exec rm {} ;: writer=True files=[., rm, {}, ;]
 PowerShell touch checkout -- f: writer=True files=[checkout, f]
 PowerShell touch format --include f.cs: writer=True files=[format, f.cs]
-PowerShell xargs touch: writer=True hidden=xargs touch
-PowerShell | touch: writer=True
-PowerShell chmod a b: writer=True files=[a, b]
-PowerShell chmod -o out in: writer=True files=[out, in]
-PowerShell chmod -i x: writer=True files=[x]
-PowerShell chmod -r dir: writer=True
-PowerShell chmod -Path p -Destination d: writer=True files=[p, d]
-PowerShell chmod of=o if=i: writer=True files=[of=o, if=i]
-PowerShell chmod . -name *.tmp -delete: writer=True files=[., *.tmp]
-PowerShell chmod . -exec rm {} ;: writer=True files=[., rm, {}, ;]
-PowerShell chmod checkout -- f: writer=True files=[checkout, f]
-PowerShell chmod format --include f.cs: writer=True files=[format, f.cs]
-PowerShell xargs chmod: writer=True hidden=xargs chmod
-PowerShell | chmod: writer=True
-PowerShell chown a b: writer=True files=[a, b]
-PowerShell chown -o out in: writer=True files=[out, in]
-PowerShell chown -i x: writer=True files=[x]
-PowerShell chown -r dir: writer=True
-PowerShell chown -Path p -Destination d: writer=True files=[p, d]
-PowerShell chown of=o if=i: writer=True files=[of=o, if=i]
-PowerShell chown . -name *.tmp -delete: writer=True files=[., *.tmp]
-PowerShell chown . -exec rm {} ;: writer=True files=[., rm, {}, ;]
-PowerShell chown checkout -- f: writer=True files=[checkout, f]
-PowerShell chown format --include f.cs: writer=True files=[format, f.cs]
-PowerShell xargs chown: writer=True hidden=xargs chown
-PowerShell | chown: writer=True
-PowerShell chgrp a b: writer=True files=[a, b]
-PowerShell chgrp -o out in: writer=True files=[out, in]
-PowerShell chgrp -i x: writer=True files=[x]
-PowerShell chgrp -r dir: writer=True
-PowerShell chgrp -Path p -Destination d: writer=True files=[p, d]
-PowerShell chgrp of=o if=i: writer=True files=[of=o, if=i]
-PowerShell chgrp . -name *.tmp -delete: writer=True files=[., *.tmp]
-PowerShell chgrp . -exec rm {} ;: writer=True files=[., rm, {}, ;]
-PowerShell chgrp checkout -- f: writer=True files=[checkout, f]
-PowerShell chgrp format --include f.cs: writer=True files=[format, f.cs]
-PowerShell xargs chgrp: writer=True hidden=xargs chgrp
-PowerShell | chgrp: writer=True
+PowerShell xargs touch: writer=True
+PowerShell chmod a b: writer=False
+PowerShell chmod -o out in: writer=False
+PowerShell chmod -i x: writer=False
+PowerShell chmod -r dir: writer=False
+PowerShell chmod -Path p -Destination d: writer=False
+PowerShell chmod of=o if=i: writer=False
+PowerShell chmod . -name *.tmp -delete: writer=False
+PowerShell chmod . -exec rm {} ;: writer=False
+PowerShell chmod checkout -- f: writer=False
+PowerShell chmod format --include f.cs: writer=False
+PowerShell xargs chmod: writer=False
+PowerShell chown a b: writer=False
+PowerShell chown -o out in: writer=False
+PowerShell chown -i x: writer=False
+PowerShell chown -r dir: writer=False
+PowerShell chown -Path p -Destination d: writer=False
+PowerShell chown of=o if=i: writer=False
+PowerShell chown . -name *.tmp -delete: writer=False
+PowerShell chown . -exec rm {} ;: writer=False
+PowerShell chown checkout -- f: writer=False
+PowerShell chown format --include f.cs: writer=False
+PowerShell xargs chown: writer=False
+PowerShell chgrp a b: writer=False
+PowerShell chgrp -o out in: writer=False
+PowerShell chgrp -i x: writer=False
+PowerShell chgrp -r dir: writer=False
+PowerShell chgrp -Path p -Destination d: writer=False
+PowerShell chgrp of=o if=i: writer=False
+PowerShell chgrp . -name *.tmp -delete: writer=False
+PowerShell chgrp . -exec rm {} ;: writer=False
+PowerShell chgrp checkout -- f: writer=False
+PowerShell chgrp format --include f.cs: writer=False
+PowerShell xargs chgrp: writer=False
 PowerShell tee a b: writer=True files=[a]
 PowerShell tee -o out in: writer=True files=[in]
 PowerShell tee -i x: writer=True
@@ -1244,56 +1141,51 @@ PowerShell tee . -name *.tmp -delete: writer=True files=[.]
 PowerShell tee . -exec rm {} ;: writer=True files=[.]
 PowerShell tee checkout -- f: writer=True files=[checkout]
 PowerShell tee format --include f.cs: writer=True files=[format]
-PowerShell xargs tee: writer=True hidden=xargs tee
-PowerShell | tee: writer=True hidden=… | tee-object (paths from the pipeline)
-PowerShell dd a b: writer=True
-PowerShell dd -o out in: writer=True
-PowerShell dd -i x: writer=True
-PowerShell dd -r dir: writer=True
-PowerShell dd -Path p -Destination d: writer=True
-PowerShell dd of=o if=i: writer=True files=[o]
-PowerShell dd . -name *.tmp -delete: writer=True
-PowerShell dd . -exec rm {} ;: writer=True
-PowerShell dd checkout -- f: writer=True
-PowerShell dd format --include f.cs: writer=True
-PowerShell xargs dd: writer=True hidden=xargs dd
-PowerShell | dd: writer=True
+PowerShell xargs tee: writer=True
+PowerShell dd a b: writer=False
+PowerShell dd -o out in: writer=False
+PowerShell dd -i x: writer=False
+PowerShell dd -r dir: writer=False
+PowerShell dd -Path p -Destination d: writer=False
+PowerShell dd of=o if=i: writer=False
+PowerShell dd . -name *.tmp -delete: writer=False
+PowerShell dd . -exec rm {} ;: writer=False
+PowerShell dd checkout -- f: writer=False
+PowerShell dd format --include f.cs: writer=False
+PowerShell xargs dd: writer=False
 PowerShell find a b: writer=False
 PowerShell find -o out in: writer=False
 PowerShell find -i x: writer=False
 PowerShell find -r dir: writer=False
 PowerShell find -Path p -Destination d: writer=False
 PowerShell find of=o if=i: writer=False
-PowerShell find . -name *.tmp -delete: writer=False patterns=[**/*.tmp]
-PowerShell find . -exec rm {} ;: writer=False trees=[.]
+PowerShell find . -name *.tmp -delete: writer=False
+PowerShell find . -exec rm {} ;: writer=False
 PowerShell find checkout -- f: writer=False
 PowerShell find format --include f.cs: writer=False
 PowerShell xargs find: writer=False
-PowerShell | find: writer=False
-PowerShell curl a b: writer=True
-PowerShell curl -o out in: writer=True files=[out]
-PowerShell curl -i x: writer=True
-PowerShell curl -r dir: writer=True
-PowerShell curl -Path p -Destination d: writer=True
-PowerShell curl of=o if=i: writer=True
-PowerShell curl . -name *.tmp -delete: writer=True
-PowerShell curl . -exec rm {} ;: writer=True
-PowerShell curl checkout -- f: writer=True
-PowerShell curl format --include f.cs: writer=True
-PowerShell xargs curl: writer=True hidden=xargs curl
-PowerShell | curl: writer=True
-PowerShell wget a b: writer=True
-PowerShell wget -o out in: writer=True
-PowerShell wget -i x: writer=True
-PowerShell wget -r dir: writer=True
-PowerShell wget -Path p -Destination d: writer=True
-PowerShell wget of=o if=i: writer=True
-PowerShell wget . -name *.tmp -delete: writer=True
-PowerShell wget . -exec rm {} ;: writer=True
-PowerShell wget checkout -- f: writer=True
-PowerShell wget format --include f.cs: writer=True
-PowerShell xargs wget: writer=True hidden=xargs wget
-PowerShell | wget: writer=True
+PowerShell curl a b: writer=False
+PowerShell curl -o out in: writer=False
+PowerShell curl -i x: writer=False
+PowerShell curl -r dir: writer=False
+PowerShell curl -Path p -Destination d: writer=False
+PowerShell curl of=o if=i: writer=False
+PowerShell curl . -name *.tmp -delete: writer=False
+PowerShell curl . -exec rm {} ;: writer=False
+PowerShell curl checkout -- f: writer=False
+PowerShell curl format --include f.cs: writer=False
+PowerShell xargs curl: writer=False
+PowerShell wget a b: writer=False
+PowerShell wget -o out in: writer=False
+PowerShell wget -i x: writer=False
+PowerShell wget -r dir: writer=False
+PowerShell wget -Path p -Destination d: writer=False
+PowerShell wget of=o if=i: writer=False
+PowerShell wget . -name *.tmp -delete: writer=False
+PowerShell wget . -exec rm {} ;: writer=False
+PowerShell wget checkout -- f: writer=False
+PowerShell wget format --include f.cs: writer=False
+PowerShell xargs wget: writer=False
 PowerShell del a b: writer=True files=[a, b] trees=[a, b]
 PowerShell del -o out in: writer=True files=[in] trees=[in]
 PowerShell del -i x: writer=True
@@ -1304,8 +1196,7 @@ PowerShell del . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell del . -exec rm {} ;: writer=True files=[., rm, {}, ;] trees=[., rm, {}, ;]
 PowerShell del checkout -- f: writer=True files=[checkout, --, f] trees=[checkout, --, f]
 PowerShell del format --include f.cs: writer=True files=[format, --include, f.cs] trees=[format, --include, f.cs]
-PowerShell xargs del: writer=True hidden=xargs del
-PowerShell | del: writer=True hidden=… | remove-item (paths from the pipeline)
+PowerShell xargs del: writer=True
 PowerShell erase a b: writer=True files=[a, b] trees=[a, b]
 PowerShell erase -o out in: writer=True files=[in] trees=[in]
 PowerShell erase -i x: writer=True
@@ -1316,8 +1207,7 @@ PowerShell erase . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell erase . -exec rm {} ;: writer=True files=[., rm, {}, ;] trees=[., rm, {}, ;]
 PowerShell erase checkout -- f: writer=True files=[checkout, --, f] trees=[checkout, --, f]
 PowerShell erase format --include f.cs: writer=True files=[format, --include, f.cs] trees=[format, --include, f.cs]
-PowerShell xargs erase: writer=True hidden=xargs erase
-PowerShell | erase: writer=True hidden=… | remove-item (paths from the pipeline)
+PowerShell xargs erase: writer=True
 PowerShell ri a b: writer=True files=[a, b] trees=[a, b]
 PowerShell ri -o out in: writer=True files=[in] trees=[in]
 PowerShell ri -i x: writer=True
@@ -1328,8 +1218,7 @@ PowerShell ri . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell ri . -exec rm {} ;: writer=True files=[., rm, {}, ;] trees=[., rm, {}, ;]
 PowerShell ri checkout -- f: writer=True files=[checkout, --, f] trees=[checkout, --, f]
 PowerShell ri format --include f.cs: writer=True files=[format, --include, f.cs] trees=[format, --include, f.cs]
-PowerShell xargs ri: writer=True hidden=xargs ri
-PowerShell | ri: writer=True hidden=… | remove-item (paths from the pipeline)
+PowerShell xargs ri: writer=True
 PowerShell rd a b: writer=True files=[a, b] trees=[a, b]
 PowerShell rd -o out in: writer=True files=[in] trees=[in]
 PowerShell rd -i x: writer=True
@@ -1340,8 +1229,7 @@ PowerShell rd . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell rd . -exec rm {} ;: writer=True files=[., rm, {}, ;] trees=[., rm, {}, ;]
 PowerShell rd checkout -- f: writer=True files=[checkout, --, f] trees=[checkout, --, f]
 PowerShell rd format --include f.cs: writer=True files=[format, --include, f.cs] trees=[format, --include, f.cs]
-PowerShell xargs rd: writer=True hidden=xargs rd
-PowerShell | rd: writer=True hidden=… | remove-item (paths from the pipeline)
+PowerShell xargs rd: writer=True
 PowerShell rmdir a b: writer=True files=[a, b] trees=[a, b]
 PowerShell rmdir -o out in: writer=True files=[in] trees=[in]
 PowerShell rmdir -i x: writer=True
@@ -1352,8 +1240,7 @@ PowerShell rmdir . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell rmdir . -exec rm {} ;: writer=True files=[., rm, {}, ;] trees=[., rm, {}, ;]
 PowerShell rmdir checkout -- f: writer=True files=[checkout, --, f] trees=[checkout, --, f]
 PowerShell rmdir format --include f.cs: writer=True files=[format, --include, f.cs] trees=[format, --include, f.cs]
-PowerShell xargs rmdir: writer=True hidden=xargs rmdir
-PowerShell | rmdir: writer=True hidden=… | remove-item (paths from the pipeline)
+PowerShell xargs rmdir: writer=True
 PowerShell copy a b: writer=True files=[b, b/a]
 PowerShell copy -o out in: writer=True
 PowerShell copy -i x: writer=True
@@ -1361,11 +1248,10 @@ PowerShell copy -r dir: writer=True
 PowerShell copy -Path p -Destination d: writer=True files=[d, d/p]
 PowerShell copy of=o if=i: writer=True files=[if=i, if=i/of=o]
 PowerShell copy . -name *.tmp -delete: writer=True
-PowerShell copy . -exec rm {} ;: writer=True files=[rm] trees=[rm]
+PowerShell copy . -exec rm {} ;: writer=True files=[rm]
 PowerShell copy checkout -- f: writer=True files=[--, --/checkout]
 PowerShell copy format --include f.cs: writer=True files=[--include, --include/format]
-PowerShell xargs copy: writer=True hidden=xargs copy
-PowerShell | copy: writer=True hidden=… | copy-item (paths from the pipeline)
+PowerShell xargs copy: writer=True
 PowerShell cpi a b: writer=True files=[b, b/a]
 PowerShell cpi -o out in: writer=True
 PowerShell cpi -i x: writer=True
@@ -1373,11 +1259,10 @@ PowerShell cpi -r dir: writer=True
 PowerShell cpi -Path p -Destination d: writer=True files=[d, d/p]
 PowerShell cpi of=o if=i: writer=True files=[if=i, if=i/of=o]
 PowerShell cpi . -name *.tmp -delete: writer=True
-PowerShell cpi . -exec rm {} ;: writer=True files=[rm] trees=[rm]
+PowerShell cpi . -exec rm {} ;: writer=True files=[rm]
 PowerShell cpi checkout -- f: writer=True files=[--, --/checkout]
 PowerShell cpi format --include f.cs: writer=True files=[--include, --include/format]
-PowerShell xargs cpi: writer=True hidden=xargs cpi
-PowerShell | cpi: writer=True hidden=… | copy-item (paths from the pipeline)
+PowerShell xargs cpi: writer=True
 PowerShell move a b: writer=True files=[b, b/a, a] trees=[b, a]
 PowerShell move -o out in: writer=True files=[in] trees=[in]
 PowerShell move -i x: writer=True
@@ -1388,8 +1273,7 @@ PowerShell move . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell move . -exec rm {} ;: writer=True files=[rm, .] trees=[rm, .]
 PowerShell move checkout -- f: writer=True files=[--, --/checkout, checkout] trees=[--, checkout]
 PowerShell move format --include f.cs: writer=True files=[--include, --include/format, format] trees=[--include, format]
-PowerShell xargs move: writer=True hidden=xargs move
-PowerShell | move: writer=True hidden=… | move-item (paths from the pipeline)
+PowerShell xargs move: writer=True
 PowerShell mi a b: writer=True files=[b, b/a, a] trees=[b, a]
 PowerShell mi -o out in: writer=True files=[in] trees=[in]
 PowerShell mi -i x: writer=True
@@ -1400,32 +1284,29 @@ PowerShell mi . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell mi . -exec rm {} ;: writer=True files=[rm, .] trees=[rm, .]
 PowerShell mi checkout -- f: writer=True files=[--, --/checkout, checkout] trees=[--, checkout]
 PowerShell mi format --include f.cs: writer=True files=[--include, --include/format, format] trees=[--include, format]
-PowerShell xargs mi: writer=True hidden=xargs mi
-PowerShell | mi: writer=True hidden=… | move-item (paths from the pipeline)
-PowerShell ren a b: writer=True files=[a, b] trees=[a, b]
-PowerShell ren -o out in: writer=True files=[in] trees=[in]
-PowerShell ren -i x: writer=True
-PowerShell ren -r dir: writer=True files=[dir] trees=[dir]
-PowerShell ren -Path p -Destination d: writer=True files=[p] trees=[p]
-PowerShell ren of=o if=i: writer=True files=[of=o, if=i] trees=[of=o, if=i]
-PowerShell ren . -name *.tmp -delete: writer=True files=[.] trees=[.]
-PowerShell ren . -exec rm {} ;: writer=True files=[., rm] trees=[., rm]
-PowerShell ren checkout -- f: writer=True files=[checkout, --] trees=[checkout, --]
-PowerShell ren format --include f.cs: writer=True files=[format, --include] trees=[format, --include]
-PowerShell xargs ren: writer=True hidden=xargs ren
-PowerShell | ren: writer=True hidden=… | rename-item (paths from the pipeline)
-PowerShell rni a b: writer=True files=[a, b] trees=[a, b]
-PowerShell rni -o out in: writer=True files=[in] trees=[in]
-PowerShell rni -i x: writer=True
-PowerShell rni -r dir: writer=True files=[dir] trees=[dir]
-PowerShell rni -Path p -Destination d: writer=True files=[p] trees=[p]
-PowerShell rni of=o if=i: writer=True files=[of=o, if=i] trees=[of=o, if=i]
-PowerShell rni . -name *.tmp -delete: writer=True files=[.] trees=[.]
-PowerShell rni . -exec rm {} ;: writer=True files=[., rm] trees=[., rm]
-PowerShell rni checkout -- f: writer=True files=[checkout, --] trees=[checkout, --]
-PowerShell rni format --include f.cs: writer=True files=[format, --include] trees=[format, --include]
-PowerShell xargs rni: writer=True hidden=xargs rni
-PowerShell | rni: writer=True hidden=… | rename-item (paths from the pipeline)
+PowerShell xargs mi: writer=True
+PowerShell ren a b: writer=False
+PowerShell ren -o out in: writer=False
+PowerShell ren -i x: writer=False
+PowerShell ren -r dir: writer=False
+PowerShell ren -Path p -Destination d: writer=False
+PowerShell ren of=o if=i: writer=False
+PowerShell ren . -name *.tmp -delete: writer=False
+PowerShell ren . -exec rm {} ;: writer=False
+PowerShell ren checkout -- f: writer=False
+PowerShell ren format --include f.cs: writer=False
+PowerShell xargs ren: writer=False
+PowerShell rni a b: writer=False
+PowerShell rni -o out in: writer=False
+PowerShell rni -i x: writer=False
+PowerShell rni -r dir: writer=False
+PowerShell rni -Path p -Destination d: writer=False
+PowerShell rni of=o if=i: writer=False
+PowerShell rni . -name *.tmp -delete: writer=False
+PowerShell rni . -exec rm {} ;: writer=False
+PowerShell rni checkout -- f: writer=False
+PowerShell rni format --include f.cs: writer=False
+PowerShell xargs rni: writer=False
 PowerShell sc a b: writer=True files=[a]
 PowerShell sc -o out in: writer=True files=[in]
 PowerShell sc -i x: writer=True
@@ -1436,8 +1317,7 @@ PowerShell sc . -name *.tmp -delete: writer=True files=[.]
 PowerShell sc . -exec rm {} ;: writer=True files=[.]
 PowerShell sc checkout -- f: writer=True files=[checkout]
 PowerShell sc format --include f.cs: writer=True files=[format]
-PowerShell xargs sc: writer=True hidden=xargs sc
-PowerShell | sc: writer=True hidden=… | set-content (paths from the pipeline)
+PowerShell xargs sc: writer=True
 PowerShell ac a b: writer=True files=[a]
 PowerShell ac -o out in: writer=True files=[in]
 PowerShell ac -i x: writer=True
@@ -1448,8 +1328,7 @@ PowerShell ac . -name *.tmp -delete: writer=True files=[.]
 PowerShell ac . -exec rm {} ;: writer=True files=[.]
 PowerShell ac checkout -- f: writer=True files=[checkout]
 PowerShell ac format --include f.cs: writer=True files=[format]
-PowerShell xargs ac: writer=True hidden=xargs ac
-PowerShell | ac: writer=True hidden=… | add-content (paths from the pipeline)
+PowerShell xargs ac: writer=True
 PowerShell clc a b: writer=True files=[a]
 PowerShell clc -o out in: writer=True files=[in]
 PowerShell clc -i x: writer=True
@@ -1460,8 +1339,7 @@ PowerShell clc . -name *.tmp -delete: writer=True files=[.]
 PowerShell clc . -exec rm {} ;: writer=True files=[.]
 PowerShell clc checkout -- f: writer=True files=[checkout]
 PowerShell clc format --include f.cs: writer=True files=[format]
-PowerShell xargs clc: writer=True hidden=xargs clc
-PowerShell | clc: writer=True hidden=… | clear-content (paths from the pipeline)
+PowerShell xargs clc: writer=True
 PowerShell ni a b: writer=True files=[a]
 PowerShell ni -o out in: writer=True files=[in]
 PowerShell ni -i x: writer=True
@@ -1472,68 +1350,62 @@ PowerShell ni . -name *.tmp -delete: writer=True files=[., *.tmp]
 PowerShell ni . -exec rm {} ;: writer=True files=[.]
 PowerShell ni checkout -- f: writer=True files=[checkout]
 PowerShell ni format --include f.cs: writer=True files=[format]
-PowerShell xargs ni: writer=True hidden=xargs ni
-PowerShell | ni: writer=True hidden=… | new-item (paths from the pipeline)
-PowerShell si a b: writer=True files=[a]
-PowerShell si -o out in: writer=True files=[in]
-PowerShell si -i x: writer=True
-PowerShell si -r dir: writer=True files=[dir]
-PowerShell si -Path p -Destination d: writer=True files=[p]
-PowerShell si of=o if=i: writer=True files=[of=o]
-PowerShell si . -name *.tmp -delete: writer=True files=[.]
-PowerShell si . -exec rm {} ;: writer=True files=[.]
-PowerShell si checkout -- f: writer=True files=[checkout]
-PowerShell si format --include f.cs: writer=True files=[format]
-PowerShell xargs si: writer=True hidden=xargs si
-PowerShell | si: writer=True hidden=… | set-item (paths from the pipeline)
-PowerShell cli a b: writer=True files=[a]
-PowerShell cli -o out in: writer=True files=[in]
-PowerShell cli -i x: writer=True
-PowerShell cli -r dir: writer=True files=[dir]
-PowerShell cli -Path p -Destination d: writer=True files=[p]
-PowerShell cli of=o if=i: writer=True files=[of=o]
-PowerShell cli . -name *.tmp -delete: writer=True files=[.]
-PowerShell cli . -exec rm {} ;: writer=True files=[.]
-PowerShell cli checkout -- f: writer=True files=[checkout]
-PowerShell cli format --include f.cs: writer=True files=[format]
-PowerShell xargs cli: writer=True hidden=xargs cli
-PowerShell | cli: writer=True hidden=… | clear-item (paths from the pipeline)
-PowerShell epcsv a b: writer=True files=[a]
-PowerShell epcsv -o out in: writer=True files=[in]
-PowerShell epcsv -i x: writer=True
-PowerShell epcsv -r dir: writer=True files=[dir]
-PowerShell epcsv -Path p -Destination d: writer=True files=[p]
-PowerShell epcsv of=o if=i: writer=True files=[of=o]
-PowerShell epcsv . -name *.tmp -delete: writer=True files=[.]
-PowerShell epcsv . -exec rm {} ;: writer=True files=[.]
-PowerShell epcsv checkout -- f: writer=True files=[checkout]
-PowerShell epcsv format --include f.cs: writer=True files=[format]
-PowerShell xargs epcsv: writer=True hidden=xargs epcsv
-PowerShell | epcsv: writer=True hidden=… | export-csv (paths from the pipeline)
-PowerShell iwr a b: writer=True
-PowerShell iwr -o out in: writer=True files=[out]
-PowerShell iwr -i x: writer=True
-PowerShell iwr -r dir: writer=True
-PowerShell iwr -Path p -Destination d: writer=True
-PowerShell iwr of=o if=i: writer=True
-PowerShell iwr . -name *.tmp -delete: writer=True
-PowerShell iwr . -exec rm {} ;: writer=True
-PowerShell iwr checkout -- f: writer=True
-PowerShell iwr format --include f.cs: writer=True
-PowerShell xargs iwr: writer=True hidden=xargs iwr
-PowerShell | iwr: writer=True
-PowerShell irm a b: writer=True
-PowerShell irm -o out in: writer=True files=[out]
-PowerShell irm -i x: writer=True
-PowerShell irm -r dir: writer=True
-PowerShell irm -Path p -Destination d: writer=True
-PowerShell irm of=o if=i: writer=True
-PowerShell irm . -name *.tmp -delete: writer=True
-PowerShell irm . -exec rm {} ;: writer=True
-PowerShell irm checkout -- f: writer=True
-PowerShell irm format --include f.cs: writer=True
-PowerShell xargs irm: writer=True hidden=xargs irm
-PowerShell | irm: writer=True
+PowerShell xargs ni: writer=True
+PowerShell si a b: writer=False
+PowerShell si -o out in: writer=False
+PowerShell si -i x: writer=False
+PowerShell si -r dir: writer=False
+PowerShell si -Path p -Destination d: writer=False
+PowerShell si of=o if=i: writer=False
+PowerShell si . -name *.tmp -delete: writer=False
+PowerShell si . -exec rm {} ;: writer=False
+PowerShell si checkout -- f: writer=False
+PowerShell si format --include f.cs: writer=False
+PowerShell xargs si: writer=False
+PowerShell cli a b: writer=False
+PowerShell cli -o out in: writer=False
+PowerShell cli -i x: writer=False
+PowerShell cli -r dir: writer=False
+PowerShell cli -Path p -Destination d: writer=False
+PowerShell cli of=o if=i: writer=False
+PowerShell cli . -name *.tmp -delete: writer=False
+PowerShell cli . -exec rm {} ;: writer=False
+PowerShell cli checkout -- f: writer=False
+PowerShell cli format --include f.cs: writer=False
+PowerShell xargs cli: writer=False
+PowerShell epcsv a b: writer=False
+PowerShell epcsv -o out in: writer=False
+PowerShell epcsv -i x: writer=False
+PowerShell epcsv -r dir: writer=False
+PowerShell epcsv -Path p -Destination d: writer=False
+PowerShell epcsv of=o if=i: writer=False
+PowerShell epcsv . -name *.tmp -delete: writer=False
+PowerShell epcsv . -exec rm {} ;: writer=False
+PowerShell epcsv checkout -- f: writer=False
+PowerShell epcsv format --include f.cs: writer=False
+PowerShell xargs epcsv: writer=False
+PowerShell iwr a b: writer=False
+PowerShell iwr -o out in: writer=False
+PowerShell iwr -i x: writer=False
+PowerShell iwr -r dir: writer=False
+PowerShell iwr -Path p -Destination d: writer=False
+PowerShell iwr of=o if=i: writer=False
+PowerShell iwr . -name *.tmp -delete: writer=False
+PowerShell iwr . -exec rm {} ;: writer=False
+PowerShell iwr checkout -- f: writer=False
+PowerShell iwr format --include f.cs: writer=False
+PowerShell xargs iwr: writer=False
+PowerShell irm a b: writer=False
+PowerShell irm -o out in: writer=False
+PowerShell irm -i x: writer=False
+PowerShell irm -r dir: writer=False
+PowerShell irm -Path p -Destination d: writer=False
+PowerShell irm of=o if=i: writer=False
+PowerShell irm . -name *.tmp -delete: writer=False
+PowerShell irm . -exec rm {} ;: writer=False
+PowerShell irm checkout -- f: writer=False
+PowerShell irm format --include f.cs: writer=False
+PowerShell xargs irm: writer=False
 PowerShell set-content a b: writer=True files=[a]
 PowerShell set-content -o out in: writer=True files=[in]
 PowerShell set-content -i x: writer=True
@@ -1544,8 +1416,7 @@ PowerShell set-content . -name *.tmp -delete: writer=True files=[.]
 PowerShell set-content . -exec rm {} ;: writer=True files=[.]
 PowerShell set-content checkout -- f: writer=True files=[checkout]
 PowerShell set-content format --include f.cs: writer=True files=[format]
-PowerShell xargs set-content: writer=True hidden=xargs set-content
-PowerShell | set-content: writer=True hidden=… | set-content (paths from the pipeline)
+PowerShell xargs set-content: writer=True
 PowerShell add-content a b: writer=True files=[a]
 PowerShell add-content -o out in: writer=True files=[in]
 PowerShell add-content -i x: writer=True
@@ -1556,8 +1427,7 @@ PowerShell add-content . -name *.tmp -delete: writer=True files=[.]
 PowerShell add-content . -exec rm {} ;: writer=True files=[.]
 PowerShell add-content checkout -- f: writer=True files=[checkout]
 PowerShell add-content format --include f.cs: writer=True files=[format]
-PowerShell xargs add-content: writer=True hidden=xargs add-content
-PowerShell | add-content: writer=True hidden=… | add-content (paths from the pipeline)
+PowerShell xargs add-content: writer=True
 PowerShell clear-content a b: writer=True files=[a]
 PowerShell clear-content -o out in: writer=True files=[in]
 PowerShell clear-content -i x: writer=True
@@ -1568,8 +1438,7 @@ PowerShell clear-content . -name *.tmp -delete: writer=True files=[.]
 PowerShell clear-content . -exec rm {} ;: writer=True files=[.]
 PowerShell clear-content checkout -- f: writer=True files=[checkout]
 PowerShell clear-content format --include f.cs: writer=True files=[format]
-PowerShell xargs clear-content: writer=True hidden=xargs clear-content
-PowerShell | clear-content: writer=True hidden=… | clear-content (paths from the pipeline)
+PowerShell xargs clear-content: writer=True
 PowerShell out-file a b: writer=True files=[a]
 PowerShell out-file -o out in: writer=True files=[in]
 PowerShell out-file -i x: writer=True
@@ -1580,8 +1449,7 @@ PowerShell out-file . -name *.tmp -delete: writer=True files=[.]
 PowerShell out-file . -exec rm {} ;: writer=True files=[.]
 PowerShell out-file checkout -- f: writer=True files=[checkout]
 PowerShell out-file format --include f.cs: writer=True files=[format]
-PowerShell xargs out-file: writer=True hidden=xargs out-file
-PowerShell | out-file: writer=True hidden=… | out-file (paths from the pipeline)
+PowerShell xargs out-file: writer=True
 PowerShell tee-object a b: writer=True files=[a]
 PowerShell tee-object -o out in: writer=True files=[in]
 PowerShell tee-object -i x: writer=True
@@ -1592,20 +1460,18 @@ PowerShell tee-object . -name *.tmp -delete: writer=True files=[.]
 PowerShell tee-object . -exec rm {} ;: writer=True files=[.]
 PowerShell tee-object checkout -- f: writer=True files=[checkout]
 PowerShell tee-object format --include f.cs: writer=True files=[format]
-PowerShell xargs tee-object: writer=True hidden=xargs tee-object
-PowerShell | tee-object: writer=True hidden=… | tee-object (paths from the pipeline)
-PowerShell set-item a b: writer=True files=[a]
-PowerShell set-item -o out in: writer=True files=[in]
-PowerShell set-item -i x: writer=True
-PowerShell set-item -r dir: writer=True files=[dir]
-PowerShell set-item -Path p -Destination d: writer=True files=[p]
-PowerShell set-item of=o if=i: writer=True files=[of=o]
-PowerShell set-item . -name *.tmp -delete: writer=True files=[.]
-PowerShell set-item . -exec rm {} ;: writer=True files=[.]
-PowerShell set-item checkout -- f: writer=True files=[checkout]
-PowerShell set-item format --include f.cs: writer=True files=[format]
-PowerShell xargs set-item: writer=True hidden=xargs set-item
-PowerShell | set-item: writer=True hidden=… | set-item (paths from the pipeline)
+PowerShell xargs tee-object: writer=True
+PowerShell set-item a b: writer=False
+PowerShell set-item -o out in: writer=False
+PowerShell set-item -i x: writer=False
+PowerShell set-item -r dir: writer=False
+PowerShell set-item -Path p -Destination d: writer=False
+PowerShell set-item of=o if=i: writer=False
+PowerShell set-item . -name *.tmp -delete: writer=False
+PowerShell set-item . -exec rm {} ;: writer=False
+PowerShell set-item checkout -- f: writer=False
+PowerShell set-item format --include f.cs: writer=False
+PowerShell xargs set-item: writer=False
 PowerShell new-item a b: writer=True files=[a]
 PowerShell new-item -o out in: writer=True files=[in]
 PowerShell new-item -i x: writer=True
@@ -1616,44 +1482,40 @@ PowerShell new-item . -name *.tmp -delete: writer=True files=[., *.tmp]
 PowerShell new-item . -exec rm {} ;: writer=True files=[.]
 PowerShell new-item checkout -- f: writer=True files=[checkout]
 PowerShell new-item format --include f.cs: writer=True files=[format]
-PowerShell xargs new-item: writer=True hidden=xargs new-item
-PowerShell | new-item: writer=True hidden=… | new-item (paths from the pipeline)
-PowerShell clear-item a b: writer=True files=[a]
-PowerShell clear-item -o out in: writer=True files=[in]
-PowerShell clear-item -i x: writer=True
-PowerShell clear-item -r dir: writer=True files=[dir]
-PowerShell clear-item -Path p -Destination d: writer=True files=[p]
-PowerShell clear-item of=o if=i: writer=True files=[of=o]
-PowerShell clear-item . -name *.tmp -delete: writer=True files=[.]
-PowerShell clear-item . -exec rm {} ;: writer=True files=[.]
-PowerShell clear-item checkout -- f: writer=True files=[checkout]
-PowerShell clear-item format --include f.cs: writer=True files=[format]
-PowerShell xargs clear-item: writer=True hidden=xargs clear-item
-PowerShell | clear-item: writer=True hidden=… | clear-item (paths from the pipeline)
-PowerShell export-csv a b: writer=True files=[a]
-PowerShell export-csv -o out in: writer=True files=[in]
-PowerShell export-csv -i x: writer=True
-PowerShell export-csv -r dir: writer=True files=[dir]
-PowerShell export-csv -Path p -Destination d: writer=True files=[p]
-PowerShell export-csv of=o if=i: writer=True files=[of=o]
-PowerShell export-csv . -name *.tmp -delete: writer=True files=[.]
-PowerShell export-csv . -exec rm {} ;: writer=True files=[.]
-PowerShell export-csv checkout -- f: writer=True files=[checkout]
-PowerShell export-csv format --include f.cs: writer=True files=[format]
-PowerShell xargs export-csv: writer=True hidden=xargs export-csv
-PowerShell | export-csv: writer=True hidden=… | export-csv (paths from the pipeline)
-PowerShell export-clixml a b: writer=True files=[a]
-PowerShell export-clixml -o out in: writer=True files=[in]
-PowerShell export-clixml -i x: writer=True
-PowerShell export-clixml -r dir: writer=True files=[dir]
-PowerShell export-clixml -Path p -Destination d: writer=True files=[p]
-PowerShell export-clixml of=o if=i: writer=True files=[of=o]
-PowerShell export-clixml . -name *.tmp -delete: writer=True files=[.]
-PowerShell export-clixml . -exec rm {} ;: writer=True files=[.]
-PowerShell export-clixml checkout -- f: writer=True files=[checkout]
-PowerShell export-clixml format --include f.cs: writer=True files=[format]
-PowerShell xargs export-clixml: writer=True hidden=xargs export-clixml
-PowerShell | export-clixml: writer=True hidden=… | export-clixml (paths from the pipeline)
+PowerShell xargs new-item: writer=True
+PowerShell clear-item a b: writer=False
+PowerShell clear-item -o out in: writer=False
+PowerShell clear-item -i x: writer=False
+PowerShell clear-item -r dir: writer=False
+PowerShell clear-item -Path p -Destination d: writer=False
+PowerShell clear-item of=o if=i: writer=False
+PowerShell clear-item . -name *.tmp -delete: writer=False
+PowerShell clear-item . -exec rm {} ;: writer=False
+PowerShell clear-item checkout -- f: writer=False
+PowerShell clear-item format --include f.cs: writer=False
+PowerShell xargs clear-item: writer=False
+PowerShell export-csv a b: writer=False
+PowerShell export-csv -o out in: writer=False
+PowerShell export-csv -i x: writer=False
+PowerShell export-csv -r dir: writer=False
+PowerShell export-csv -Path p -Destination d: writer=False
+PowerShell export-csv of=o if=i: writer=False
+PowerShell export-csv . -name *.tmp -delete: writer=False
+PowerShell export-csv . -exec rm {} ;: writer=False
+PowerShell export-csv checkout -- f: writer=False
+PowerShell export-csv format --include f.cs: writer=False
+PowerShell xargs export-csv: writer=False
+PowerShell export-clixml a b: writer=False
+PowerShell export-clixml -o out in: writer=False
+PowerShell export-clixml -i x: writer=False
+PowerShell export-clixml -r dir: writer=False
+PowerShell export-clixml -Path p -Destination d: writer=False
+PowerShell export-clixml of=o if=i: writer=False
+PowerShell export-clixml . -name *.tmp -delete: writer=False
+PowerShell export-clixml . -exec rm {} ;: writer=False
+PowerShell export-clixml checkout -- f: writer=False
+PowerShell export-clixml format --include f.cs: writer=False
+PowerShell xargs export-clixml: writer=False
 PowerShell remove-item a b: writer=True files=[a, b] trees=[a, b]
 PowerShell remove-item -o out in: writer=True files=[in] trees=[in]
 PowerShell remove-item -i x: writer=True
@@ -1664,8 +1526,7 @@ PowerShell remove-item . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell remove-item . -exec rm {} ;: writer=True files=[., rm, {}, ;] trees=[., rm, {}, ;]
 PowerShell remove-item checkout -- f: writer=True files=[checkout, --, f] trees=[checkout, --, f]
 PowerShell remove-item format --include f.cs: writer=True files=[format, --include, f.cs] trees=[format, --include, f.cs]
-PowerShell xargs remove-item: writer=True hidden=xargs remove-item
-PowerShell | remove-item: writer=True hidden=… | remove-item (paths from the pipeline)
+PowerShell xargs remove-item: writer=True
 PowerShell copy-item a b: writer=True files=[b, b/a]
 PowerShell copy-item -o out in: writer=True
 PowerShell copy-item -i x: writer=True
@@ -1673,11 +1534,10 @@ PowerShell copy-item -r dir: writer=True
 PowerShell copy-item -Path p -Destination d: writer=True files=[d, d/p]
 PowerShell copy-item of=o if=i: writer=True files=[if=i, if=i/of=o]
 PowerShell copy-item . -name *.tmp -delete: writer=True
-PowerShell copy-item . -exec rm {} ;: writer=True files=[rm] trees=[rm]
+PowerShell copy-item . -exec rm {} ;: writer=True files=[rm]
 PowerShell copy-item checkout -- f: writer=True files=[--, --/checkout]
 PowerShell copy-item format --include f.cs: writer=True files=[--include, --include/format]
-PowerShell xargs copy-item: writer=True hidden=xargs copy-item
-PowerShell | copy-item: writer=True hidden=… | copy-item (paths from the pipeline)
+PowerShell xargs copy-item: writer=True
 PowerShell move-item a b: writer=True files=[b, b/a, a] trees=[b, a]
 PowerShell move-item -o out in: writer=True files=[in] trees=[in]
 PowerShell move-item -i x: writer=True
@@ -1688,56 +1548,51 @@ PowerShell move-item . -name *.tmp -delete: writer=True files=[.] trees=[.]
 PowerShell move-item . -exec rm {} ;: writer=True files=[rm, .] trees=[rm, .]
 PowerShell move-item checkout -- f: writer=True files=[--, --/checkout, checkout] trees=[--, checkout]
 PowerShell move-item format --include f.cs: writer=True files=[--include, --include/format, format] trees=[--include, format]
-PowerShell xargs move-item: writer=True hidden=xargs move-item
-PowerShell | move-item: writer=True hidden=… | move-item (paths from the pipeline)
-PowerShell rename-item a b: writer=True files=[a, b] trees=[a, b]
-PowerShell rename-item -o out in: writer=True files=[in] trees=[in]
-PowerShell rename-item -i x: writer=True
-PowerShell rename-item -r dir: writer=True files=[dir] trees=[dir]
-PowerShell rename-item -Path p -Destination d: writer=True files=[p] trees=[p]
-PowerShell rename-item of=o if=i: writer=True files=[of=o, if=i] trees=[of=o, if=i]
-PowerShell rename-item . -name *.tmp -delete: writer=True files=[.] trees=[.]
-PowerShell rename-item . -exec rm {} ;: writer=True files=[., rm] trees=[., rm]
-PowerShell rename-item checkout -- f: writer=True files=[checkout, --] trees=[checkout, --]
-PowerShell rename-item format --include f.cs: writer=True files=[format, --include] trees=[format, --include]
-PowerShell xargs rename-item: writer=True hidden=xargs rename-item
-PowerShell | rename-item: writer=True hidden=… | rename-item (paths from the pipeline)
-PowerShell invoke-webrequest a b: writer=True
-PowerShell invoke-webrequest -o out in: writer=True files=[out]
-PowerShell invoke-webrequest -i x: writer=True
-PowerShell invoke-webrequest -r dir: writer=True
-PowerShell invoke-webrequest -Path p -Destination d: writer=True
-PowerShell invoke-webrequest of=o if=i: writer=True
-PowerShell invoke-webrequest . -name *.tmp -delete: writer=True
-PowerShell invoke-webrequest . -exec rm {} ;: writer=True
-PowerShell invoke-webrequest checkout -- f: writer=True
-PowerShell invoke-webrequest format --include f.cs: writer=True
-PowerShell xargs invoke-webrequest: writer=True hidden=xargs invoke-webrequest
-PowerShell | invoke-webrequest: writer=True
-PowerShell invoke-restmethod a b: writer=True
-PowerShell invoke-restmethod -o out in: writer=True files=[out]
-PowerShell invoke-restmethod -i x: writer=True
-PowerShell invoke-restmethod -r dir: writer=True
-PowerShell invoke-restmethod -Path p -Destination d: writer=True
-PowerShell invoke-restmethod of=o if=i: writer=True
-PowerShell invoke-restmethod . -name *.tmp -delete: writer=True
-PowerShell invoke-restmethod . -exec rm {} ;: writer=True
-PowerShell invoke-restmethod checkout -- f: writer=True
-PowerShell invoke-restmethod format --include f.cs: writer=True
-PowerShell xargs invoke-restmethod: writer=True hidden=xargs invoke-restmethod
-PowerShell | invoke-restmethod: writer=True
-PowerShell expand-archive a b: writer=True files=[b] trees=[b]
-PowerShell expand-archive -o out in: writer=True files=[.] trees=[.]
-PowerShell expand-archive -i x: writer=True files=[.] trees=[.]
-PowerShell expand-archive -r dir: writer=True files=[.] trees=[.]
-PowerShell expand-archive -Path p -Destination d: writer=True files=[d] trees=[d]
-PowerShell expand-archive of=o if=i: writer=True files=[if=i] trees=[if=i]
-PowerShell expand-archive . -name *.tmp -delete: writer=True files=[.] trees=[.]
-PowerShell expand-archive . -exec rm {} ;: writer=True files=[rm] trees=[rm]
-PowerShell expand-archive checkout -- f: writer=True files=[--] trees=[--]
-PowerShell expand-archive format --include f.cs: writer=True files=[--include] trees=[--include]
-PowerShell xargs expand-archive: writer=True hidden=xargs expand-archive
-PowerShell | expand-archive: writer=True files=[.] trees=[.]
+PowerShell xargs move-item: writer=True
+PowerShell rename-item a b: writer=False
+PowerShell rename-item -o out in: writer=False
+PowerShell rename-item -i x: writer=False
+PowerShell rename-item -r dir: writer=False
+PowerShell rename-item -Path p -Destination d: writer=False
+PowerShell rename-item of=o if=i: writer=False
+PowerShell rename-item . -name *.tmp -delete: writer=False
+PowerShell rename-item . -exec rm {} ;: writer=False
+PowerShell rename-item checkout -- f: writer=False
+PowerShell rename-item format --include f.cs: writer=False
+PowerShell xargs rename-item: writer=False
+PowerShell invoke-webrequest a b: writer=False
+PowerShell invoke-webrequest -o out in: writer=False
+PowerShell invoke-webrequest -i x: writer=False
+PowerShell invoke-webrequest -r dir: writer=False
+PowerShell invoke-webrequest -Path p -Destination d: writer=False
+PowerShell invoke-webrequest of=o if=i: writer=False
+PowerShell invoke-webrequest . -name *.tmp -delete: writer=False
+PowerShell invoke-webrequest . -exec rm {} ;: writer=False
+PowerShell invoke-webrequest checkout -- f: writer=False
+PowerShell invoke-webrequest format --include f.cs: writer=False
+PowerShell xargs invoke-webrequest: writer=False
+PowerShell invoke-restmethod a b: writer=False
+PowerShell invoke-restmethod -o out in: writer=False
+PowerShell invoke-restmethod -i x: writer=False
+PowerShell invoke-restmethod -r dir: writer=False
+PowerShell invoke-restmethod -Path p -Destination d: writer=False
+PowerShell invoke-restmethod of=o if=i: writer=False
+PowerShell invoke-restmethod . -name *.tmp -delete: writer=False
+PowerShell invoke-restmethod . -exec rm {} ;: writer=False
+PowerShell invoke-restmethod checkout -- f: writer=False
+PowerShell invoke-restmethod format --include f.cs: writer=False
+PowerShell xargs invoke-restmethod: writer=False
+PowerShell expand-archive a b: writer=False
+PowerShell expand-archive -o out in: writer=False
+PowerShell expand-archive -i x: writer=False
+PowerShell expand-archive -r dir: writer=False
+PowerShell expand-archive -Path p -Destination d: writer=False
+PowerShell expand-archive of=o if=i: writer=False
+PowerShell expand-archive . -name *.tmp -delete: writer=False
+PowerShell expand-archive . -exec rm {} ;: writer=False
+PowerShell expand-archive checkout -- f: writer=False
+PowerShell expand-archive format --include f.cs: writer=False
+PowerShell xargs expand-archive: writer=False
 PowerShell cat a b: writer=False
 PowerShell cat -o out in: writer=False
 PowerShell cat -i x: writer=False
@@ -1749,7 +1604,6 @@ PowerShell cat . -exec rm {} ;: writer=False
 PowerShell cat checkout -- f: writer=False
 PowerShell cat format --include f.cs: writer=False
 PowerShell xargs cat: writer=False
-PowerShell | cat: writer=False
 PowerShell echo a b: writer=False
 PowerShell echo -o out in: writer=False
 PowerShell echo -i x: writer=False
@@ -1761,7 +1615,6 @@ PowerShell echo . -exec rm {} ;: writer=False
 PowerShell echo checkout -- f: writer=False
 PowerShell echo format --include f.cs: writer=False
 PowerShell xargs echo: writer=False
-PowerShell | echo: writer=False
 PowerShell ls a b: writer=False
 PowerShell ls -o out in: writer=False
 PowerShell ls -i x: writer=False
@@ -1773,7 +1626,6 @@ PowerShell ls . -exec rm {} ;: writer=False
 PowerShell ls checkout -- f: writer=False
 PowerShell ls format --include f.cs: writer=False
 PowerShell xargs ls: writer=False
-PowerShell | ls: writer=False
 PowerShell grep a b: writer=False
 PowerShell grep -o out in: writer=False
 PowerShell grep -i x: writer=False
@@ -1785,7 +1637,6 @@ PowerShell grep . -exec rm {} ;: writer=False
 PowerShell grep checkout -- f: writer=False
 PowerShell grep format --include f.cs: writer=False
 PowerShell xargs grep: writer=False
-PowerShell | grep: writer=False
 PowerShell make a b: writer=False
 PowerShell make -o out in: writer=False
 PowerShell make -i x: writer=False
@@ -1797,4 +1648,3 @@ PowerShell make . -exec rm {} ;: writer=False
 PowerShell make checkout -- f: writer=False
 PowerShell make format --include f.cs: writer=False
 PowerShell xargs make: writer=False
-PowerShell | make: writer=False
