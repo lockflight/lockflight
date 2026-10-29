@@ -1,0 +1,3 @@
+class: behaviour
+computed: behaviour
+signal: structure.referenceAdded -> behaviour (heuristic) src/Shop.Infrastructure/Shop.Infrastructure.csproj:6: references src/Shop.Domain/Shop.Domain.csproj

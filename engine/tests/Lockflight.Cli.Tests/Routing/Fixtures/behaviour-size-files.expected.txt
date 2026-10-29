@@ -1,0 +1,3 @@
+class: behaviour
+computed: behaviour
+signal: size.files -> behaviour (heuristic) -: 3 production, configuration or other files, above routing.fix.maxFiles 2

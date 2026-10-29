@@ -7,7 +7,8 @@ namespace Lockflight.Cli.Routing;
 /// Gives a path its <see cref="FileRole"/> on one side of a change, first match wins, every name test ignoring case. A file's
 /// project is the nearest one on that side; the caller reads the role at base for a file that exists there, so editing a project
 /// file in the pull request cannot turn its existing files into tests. When unsure, the role is the one that counts: a
-/// <c>.cs</c> file under no project is production, a project that is not clearly a test project is production, and a file the
+/// <c>.cs</c> file under no project is production, a project that is not clearly a test project is production, a file of a test
+/// project nested inside a production project's directory is production (that project compiles it too), and a file the
 /// generated list names only counts as generated when its text has the generated shape.
 /// </summary>
 internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> excludedGlobs)
@@ -15,7 +16,7 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
     private const string FeatureRecords = ".lockflight/features/";
     private const string DocsDirectory = "docs/";
 
-    private static readonly string[] SolutionSuffixes = [".sln", ".slnx"];
+    private static readonly string[] SolutionSuffixes = [".sln", ".slnx", ".slnf"];
     private static readonly string[] BuildWideNames =
     [
         "Directory.Build.props", "Directory.Build.targets", "Directory.Build.rsp", "Directory.Packages.props", "global.json",
@@ -40,7 +41,9 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
     {
         IReadOnlyList<string> owners = projects.OwningProjects(path);
         string? project = owners.Count == 0 ? null : owners[0];
-        bool inTestProject = owners.Count > 0 && owners.All(IsTestProject);
+        // A production project's default globs compile every file below it, a nested test project's files included.
+        bool inTestProject = owners.Count > 0 && owners.All(IsTestProject)
+            && projects.AncestorProjects(path).Where(ancestor => !ProjectIndex.IsProjectFile(path) || ancestor != path).All(IsTestProject);
         if (!inTestProject && owners.Count > 1)
         {
             project = owners.First(owner => !IsTestProject(owner));

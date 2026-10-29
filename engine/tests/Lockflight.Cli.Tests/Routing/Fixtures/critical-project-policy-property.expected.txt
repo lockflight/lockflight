@@ -1,0 +1,3 @@
+class: critical
+computed: critical
+signal: project.policyProperty -> critical (heuristic) src/Shop/Shop.csproj:4: sets <TreatWarningsAsErrors>false</TreatWarningsAsErrors>

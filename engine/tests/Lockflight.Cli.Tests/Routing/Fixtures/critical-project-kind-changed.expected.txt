@@ -1,0 +1,4 @@
+class: critical
+computed: critical
+signal: structure.projectKindChanged -> critical (heuristic) src/Shop/Shop.csproj: production project becomes a test project
+signal: deps.changed -> behaviour (heuristic) src/Shop/Shop.csproj:6: package reference or version changed

@@ -1,0 +1,4 @@
+class: critical
+computed: critical
+signal: structure.projectAdded -> critical (heuristic) src/Billing/Billing.csproj: new production project
+signal: file.added -> behaviour (heuristic) src/Billing/Invoice.cs: new production file

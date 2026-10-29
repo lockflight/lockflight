@@ -1,0 +1,3 @@
+class: behaviour
+computed: behaviour
+signal: size.lines -> behaviour (heuristic) -: 21 counted lines, above routing.fix.maxLines 20

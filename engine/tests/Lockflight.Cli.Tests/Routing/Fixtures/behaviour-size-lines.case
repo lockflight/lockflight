@@ -1,0 +1,71 @@
+More than routing.fix.maxLines (20) counted lines is behaviour.
+=== base src/Shop/Shop.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop/Cart.cs
+namespace Shop;
+
+public sealed class Cart
+{
+    public int Total(int price, int count)
+    {
+        return price * count;
+    }
+
+    public int Discount(int total) => total / 10;
+}
+=== base tests/Shop.Tests/Shop.Tests.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.0.0" />
+    <ProjectReference Include="../../src/Shop/Shop.csproj" />
+  </ItemGroup>
+</Project>
+=== base tests/Shop.Tests/CartTests.cs
+namespace Shop.Tests;
+
+public sealed class CartTests
+{
+    [Fact]
+    public void TotalMultiplies() => Assert.Equal(6, new Cart().Total(2, 3));
+
+    [Fact]
+    public void DiscountIsATenth() => Assert.Equal(1, new Cart().Discount(10));
+}
+=== head src/Shop/Cart.cs
+namespace Shop;
+
+public sealed class Cart
+{
+    public int Total(int price, int count)
+    {
+        return price * count;
+    }
+
+    public int Field0 => 0;
+    public int Field1 => 1;
+    public int Field2 => 2;
+    public int Field3 => 3;
+    public int Field4 => 4;
+    public int Field5 => 5;
+    public int Field6 => 6;
+    public int Field7 => 7;
+    public int Field8 => 8;
+    public int Field9 => 9;
+    public int Field10 => 10;
+    public int Field11 => 11;
+    public int Field12 => 12;
+    public int Field13 => 13;
+    public int Field14 => 14;
+    public int Field15 => 15;
+    public int Field16 => 16;
+    public int Field17 => 17;
+    public int Field18 => 18;
+    public int Field19 => 19;
+    public int Field20 => 20;
+
+    public int Discount(int total) => total / 10;
+}

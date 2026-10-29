@@ -1,0 +1,4 @@
+class: behaviour
+computed: behaviour
+signal: project.changed -> behaviour (heuristic) src/Shop/Shop.csproj:4: adds </PropertyGroups>
+signal: project.unreadable -> behaviour (heuristic) src/Shop/Shop.csproj: not well-formed XML at head

@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: ci.workflowChanged -> feature (heuristic) .github/workflows/build.yml: CI definition changed
+signal: config.changed -> behaviour (heuristic) .github/workflows/build.yml: non-project file changed

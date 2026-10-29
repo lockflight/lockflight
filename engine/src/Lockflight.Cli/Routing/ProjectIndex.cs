@@ -51,6 +51,21 @@ internal sealed class ProjectIndex
         return [];
     }
 
+    /// <summary>Every project file in any ancestor directory of <paramref name="path"/>, nearest first.</summary>
+    public IReadOnlyList<string> AncestorProjects(string path)
+    {
+        List<string> ancestors = [];
+        for (string? directory = DirectoryOf(path); directory is not null; directory = ParentOf(directory))
+        {
+            if (projectsByDirectory.TryGetValue(directory, out List<string>? projects))
+            {
+                ancestors.AddRange(projects);
+            }
+        }
+
+        return ancestors;
+    }
+
     /// <summary>The <c>Directory.Build.props</c> files from <paramref name="projectFile"/>'s directory up to the root, nearest first.</summary>
     public IReadOnlyList<string> PropsChain(string projectFile)
     {
