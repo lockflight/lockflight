@@ -132,7 +132,8 @@ or add `~/.lockflight/bin` to `PATH` yourself.
 
 - **Without the .NET SDK:** [`scripts/install.sh`](../../scripts/install.sh) (macOS and glibc Linux) and
   [`scripts/install.ps1`](../../scripts/install.ps1) (Windows, x64) install the engine from nuget.org with no `dotnet`,
-  for a release that publishes its executable hashes (`engine-hashes.json` in the pointer package):
+  for a release that publishes its executable hashes (`engine-hashes.json` in the pointer package). Such a release also
+  attaches both scripts to its GitHub Release, with their SHA-256 in `SHA256SUMS`:
 
   ```sh
   sh scripts/install.sh --version <version>          # into ~/.lockflight/tools/<version>; prints the path last
