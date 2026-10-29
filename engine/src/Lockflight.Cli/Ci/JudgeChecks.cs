@@ -24,6 +24,8 @@ internal static class JudgeChecks
                 $"{plan.Reds.Cycles.Count} red commits, more than ci.maxRedCommits ({plan.Policy.Ci.MaxRedCommits}); split the pull request"),
             CheckId.Red when plan.Reds.Cycles.Count == 0 => new CheckResult(check, level, CheckVerdict.NotEarned, NoRedWhy(plan)),
             CheckId.Red when findings.Cycles is IReadOnlyList<CycleJudgement> cycles => Red(level, cycles),
+            CheckId.TestsSinceRed when plan.Reds.OverCap || plan.Reds.Cycles.Count == 0 => new CheckResult(check, level, CheckVerdict.NotEarned, "no red commit to compare with"),
+            CheckId.TestsSinceRed when findings.SinceRed is IReadOnlyList<SinceRedTest> sinceRed => SinceRedCheck(level, sinceRed),
             CheckId.Green when findings.Green is GreenJudgement green => new CheckResult(check, level, green.Verdict, green.Why),
             CheckId.Review => new CheckResult(check, level, CheckVerdict.Skipped, plan.Inputs.ReviewExpected ? "the report joins the review job's result" : "no review job runs for this pull request"),
             _ => new CheckResult(check, level, CheckVerdict.NotEarned, NotJudgedYet),
@@ -39,6 +41,26 @@ internal static class JudgeChecks
         return worst is null
             ? new CheckResult(CheckId.Red, level, CheckVerdict.Pass, $"{cycles.Count} cycles, {cycles.Sum(cycle => cycle.Tests.Count)} tests, each red in production code")
             : new CheckResult(CheckId.Red, level, worst.Verdict, $"cycle {worst.Red.Label} ({CommitIds.Short(worst.Red.Commit)}): {worst.Why}");
+    }
+
+    /// <summary>Any amend rejected or test missing fails; any amend that cannot be re-checked is NOT-EARNED; else PASS.</summary>
+    private static CheckResult SinceRedCheck(CheckLevel level, IReadOnlyList<SinceRedTest> tests)
+    {
+        if (tests.Count == 0)
+        {
+            return new CheckResult(CheckId.TestsSinceRed, level, CheckVerdict.NotEarned, "no accepted cycle to compare with");
+        }
+
+        SinceRedTest? failed = tests.FirstOrDefault(test => test.State is SinceRed.AmendRejected or SinceRed.MissingAtHead);
+        SinceRedTest? uncheckable = tests.FirstOrDefault(test => test.State == SinceRed.AmendUncheckable);
+        if ((failed ?? uncheckable) is SinceRedTest worst)
+        {
+            return new CheckResult(CheckId.TestsSinceRed, level, failed is null ? CheckVerdict.NotEarned : CheckVerdict.Fail, $"cycle {worst.Cycle}, {worst.Key}: {worst.Why}");
+        }
+
+        int unchanged = tests.Count(test => test.State == SinceRed.Unchanged);
+        int amended = tests.Count - unchanged;
+        return new CheckResult(CheckId.TestsSinceRed, level, CheckVerdict.Pass, $"{unchanged} unchanged, {amended} amend{(amended == 1 ? string.Empty : "s")} accepted");
     }
 
     private static string NoRedWhy(JudgePlan plan)
