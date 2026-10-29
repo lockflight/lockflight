@@ -1,9 +1,9 @@
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
-using Lockflight.Cli.Processes;
 
-namespace Lockflight.Cli.Canaries;
+namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// A task marked completed while the stop gate has not passed for the tree must be refused, through
@@ -18,10 +18,6 @@ internal static class TaskCompletedCanaries
 
     private const string ManifestText = "version: 1\nstop:\n  gate: true\nunits:\n  - path: web\n    kind: none\n";
     private const string PageFile = "web/index.html";
-    private const string GitName = "Lockflight canary";
-    private const string GitEmail = "canary@example.com";
-
-    private static readonly TimeSpan GitTimeLimit = TimeSpan.FromSeconds(60);
 
     public static async Task<CanaryReport> RunAsync(TimeProvider time, CancellationToken cancellationToken)
     {
@@ -53,22 +49,7 @@ internal static class TaskCompletedCanaries
         await File.WriteAllTextAsync(scratch.PathOf(PageFile), "<p>hi</p>\n", cancellationToken);
         await File.WriteAllTextAsync(scratch.PathOf(Manifest.FileName), ManifestText, cancellationToken);
         await File.WriteAllTextAsync(scratch.PathOf(".gitignore"), ".lockflight/\n", cancellationToken);
-        string[][] steps =
-        [
-            ["init", "-q"],
-            ["add", "-A"],
-            ["-c", $"user.name={GitName}", "-c", $"user.email={GitEmail}", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "canary project"],
-        ];
-        foreach (string[] step in steps)
-        {
-            ProcessResult git = await ProcessRunner.RunAsync("git", step, scratch.Project, GitTimeLimit, cancellationToken);
-            if (git.ExitCode != 0)
-            {
-                return $"git {step[0]} failed (exit {git.ExitCode}): {git.Combined.Trim()}";
-            }
-        }
-
-        return null;
+        return await CanaryGit.CommitAllAsync(scratch.Project, "canary project", initialize: true, cancellationToken);
     }
 
     private static Task<CanaryRun> CompleteAsync(CanaryScratch scratch, CancellationToken cancellationToken)

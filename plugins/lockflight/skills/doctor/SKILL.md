@@ -28,7 +28,7 @@ description: Diagnose a Lockflight setup — manifest, engine pin, linked engine
    scratch directory, run `.lockflight/bin/lockflight propose lockflight.yaml --from <file>` and give the user the `git apply`
    command it prints.
 4. When the user asks whether the safeguards actually work (after an upgrade, on a new machine), run
-   `.lockflight/bin/lockflight doctor --canaries`. It plants violations in a temporary scratch project, never in this one, and
-   prints each as `caught`, `MISSED` or `BROKEN`. Report every line that is not `caught` as it is: a MISSED control is not
-   working in this engine build, and BROKEN means the canary could not judge. `--canaries=full` also builds a small generated
-   project (tens of seconds).
+   `.lockflight/bin/lockflight doctor --self-test`. It plants a few violations in a temporary scratch project, never in this
+   one, and prints each as `caught`, `MISSED` or `BROKEN`. Report every line that is not `caught` as it is: a MISSED control is
+   not working in this engine build, and BROKEN means the canary could not judge. An older engine answers
+   `unknown option '--self-test'`: run `doctor --canaries` there.

@@ -1,14 +1,15 @@
+using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Processes;
 
-namespace Lockflight.Cli.Canaries;
+namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// Test runs the test gate must not PASS — a failing test, every test skipped, no test at all — judged as the gate judges a real
-/// run, on both test platforms. The harmless twin, a run whose tests pass, must PASS. The full mode builds and runs real ones
-/// (<see cref="CanaryProject"/>).
+/// run, on both test platforms. The harmless twin, a run whose tests pass, must PASS. <see cref="FullCanaries"/> builds and runs
+/// real ones.
 /// </summary>
 internal static class TestGateCanaries
 {
@@ -43,17 +44,12 @@ internal static class TestGateCanaries
             string[] runners = ["Testing Platform", "VSTest"];
             for (int index = 0; index < steps.Length; index++)
             {
-                reports.Add(Report($"test gate ({runners[index]}): {planted.Case} is not a PASS", steps[index]));
+                reports.Add(CanaryReport.NotAPass($"test gate ({runners[index]}): {planted.Case} is not a PASS", steps[index]));
             }
         }
 
         return reports;
     }
-
-    /// <summary>A gate step that is anything but PASS is caught: FAIL, NOT-EARNED and ERROR all stop the agent's turn.</summary>
-    public static CanaryReport Report(string name, GateStep step) => step.Verdict == Verdict.Pass
-        ? new CanaryReport(name, CanaryResult.Missed, $"PASS ({step.Detail})")
-        : new CanaryReport(name, CanaryResult.Caught, $"{VerdictNames.ToContractName(step.Verdict)}: {step.Detail}");
 
     /// <summary>The planted run judged on Microsoft.Testing.Platform, then on VSTest from its TRX report.</summary>
     private static GateStep[] Judge(PlantedTestRun planted, CanaryScratch scratch)

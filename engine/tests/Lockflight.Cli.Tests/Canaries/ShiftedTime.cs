@@ -1,4 +1,4 @@
-namespace Lockflight.Cli.Canaries;
+namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>A clock a fixed span ahead of another: how a canary lets a one-time code expire without waiting for it.</summary>
 internal sealed class ShiftedTime(TimeProvider clock, TimeSpan offset) : TimeProvider

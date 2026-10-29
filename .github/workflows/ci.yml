@@ -1,6 +1,6 @@
-# Lockflight CI: engine tests, Native AOT build and the LLM-free hook compatibility suite on Linux, Windows (Git Bash) and
-# macOS, the canary self-test of the published engine on each, the Windows install and update from a checkout, plus plugin
-# and marketplace validation and the public-tree check.
+# Lockflight CI: engine tests, Native AOT build, the published engine's self-test and the LLM-free hook compatibility suite on
+# Linux, Windows (Git Bash) and macOS, the engine's canary suite on each, the Windows install and update from a checkout, plus
+# plugin and marketplace validation and the public-tree check.
 name: ci
 
 on:
@@ -66,12 +66,18 @@ jobs:
           esac
           "$RUNNER_TEMP/$binary" version
           echo "LOCKFLIGHT_GITLEAKS=$RUNNER_TEMP/$binary" >> "$GITHUB_ENV"
+      # The canary suite (trait Category=Canary) runs in the canaries jobs.
       - name: Unit tests
         working-directory: engine
-        run: dotnet test
+        run: dotnet test --filter-not-trait "Category=Canary"
       - name: Native AOT publish
         working-directory: engine
         run: dotnet publish src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o ../out -nologo
+      - name: Self-test of the published engine (doctor --self-test)
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          cd "$RUNNER_TEMP" && "$engine" doctor --self-test
       - name: Hook compatibility suite
         run: |
           engine="$PWD/out/lockflight"
@@ -193,12 +199,11 @@ jobs:
           if ((& $env:LOCKFLIGHT_ENGINE version) -ne $version) { throw "the installed engine is not $version" }
           if ((& .lockflight\bin\lockflight.exe version) -ne $version) { throw "the project's engine is not $version" }
 
-  # The published engine plants a violation in front of every control (guard, human-only commands, the relay guard on every
-  # in-session command, the in-session code and attendance checks, test gate, red, the TaskCompleted hook, the amend re-check on
-  # the red-time snapshot, test file hashes at green) and fails when one is not caught; full mode also builds and runs a
-  # generated project.
+  # The engine's canary suite (engine/tests/Lockflight.Cli.Tests/Canaries, trait Category=Canary): a violation planted in front
+  # of every guard rule, relay guard case, human-only command, in-session command check, gate step, the test gate's judgement and
+  # the TaskCompleted hook, and on a generated .NET project the real test gate, red, amend, green and trace. It fails when one is
+  # not caught, or when a registered guard rule, gate step or human-only command has no canary (CONTRIBUTING.md, Canaries).
   canaries:
-    needs: engine
     strategy:
       fail-fast: false
       matrix:
@@ -212,16 +217,11 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: engine/global.json
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: lockflight-${{ matrix.rid }}
-          path: engine-bin
-      - name: Canary self-test (doctor --canaries=full)
+      - name: Canary suite (dotnet test --filter-trait Category=Canary)
+        working-directory: engine
         run: |
-          engine="$PWD/engine-bin/lockflight"
-          [ -f "$engine.exe" ] && engine="$engine.exe"
-          chmod +x "$engine"
-          cd "$RUNNER_TEMP" && "$engine" doctor --canaries=full
+          git config --global user.email ci@example.com && git config --global user.name ci
+          dotnet test --filter-trait "Category=Canary"
 
   plugin:
     runs-on: ubuntu-latest
