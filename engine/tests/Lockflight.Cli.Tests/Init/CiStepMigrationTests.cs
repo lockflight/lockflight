@@ -9,7 +9,8 @@ namespace Lockflight.Cli.Tests.Init;
 /// </summary>
 public sealed class CiStepMigrationTests
 {
-    public static TheoryData<string> Platforms() => ["github", "azure", "bitbucket", "gitlab"];
+    /// <summary>The platforms whose current template still installs the engine in a step (GitHub's uses the CI judge's action).</summary>
+    public static TheoryData<string> Platforms() => ["azure", "bitbucket", "gitlab"];
 
     [Theory]
     [MemberData(nameof(Platforms))]
@@ -25,6 +26,25 @@ public sealed class CiStepMigrationTests
     }
 
     [Fact]
+    public void ALockflight02GitHubWorkflowKeepsItsGatesJobAndMovesToTheEngineLock()
+    {
+        string? migrated = CiStepMigration.Migrate(File.ReadAllText(Path.Combine(CasesDirectory(), "github.yml")));
+
+        Assert.NotNull(migrated);
+        Assert.Contains(CiShellScripts.InstallBeginMarker, migrated, StringComparison.Ordinal);
+        Assert.Contains($"for file in {CiShellScripts.PolicyFiles}; do", migrated, StringComparison.Ordinal);
+        Assert.Equal(migrated, CiStepMigration.Migrate(migrated));
+    }
+
+    [Fact]
+    public void TheCiJudgesWorkflowIsCurrentAlready()
+    {
+        string judge = CiPipeline.Files(CiPlatform.GitHub, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+
+        Assert.Equal(judge, CiStepMigration.Migrate(judge));
+    }
+
+    [Fact]
     public void AHandEditedInstallStepIsLeftAlone()
     {
         string edited = File.ReadAllText(Path.Combine(CasesDirectory(), "github.yml")).Replace("--tool-path \"$RUNNER_TEMP/lockflight\"", "--tool-path /opt/lockflight", StringComparison.Ordinal);
@@ -35,7 +55,7 @@ public sealed class CiStepMigrationTests
     [Fact]
     public void AStepWithOnlyOneMarkerIsLeftAlone()
     {
-        string current = CiPipeline.Files(CiPlatform.GitHub, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+        string current = CiPipeline.Files(CiPlatform.GitLab, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
 
         Assert.Null(CiStepMigration.Migrate(current.Replace(CiShellScripts.InstallEndMarker, "# removed", StringComparison.Ordinal)));
     }
