@@ -21,6 +21,7 @@ internal static class WorkspaceGateRunner
     public static async Task<GateResult> RunAsync(
         Manifest manifest, GateRunContext root, IReadOnlyCollection<string> onlyUnits, bool useCache, TextWriter progress, CancellationToken cancellationToken)
     {
+        GateProfileDefinition definition = GateProfiles.For(root.Profile);
         List<GateStep> steps = [];
         Progress report = new(progress);
         IReadOnlyList<(Unit Unit, UnitState State)> selected = await ReadStatesAsync(manifest, onlyUnits, cancellationToken);
@@ -47,26 +48,30 @@ internal static class WorkspaceGateRunner
             {
                 await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "unchanged since its last PASS"));
             }
-            else if (root.Profile != GateProfile.Edit)
+            else if (definition.PerUnit.Count > 0)
             {
                 // Uncommitted changes, a commit since the last PASS, a shared build input, or never judged: the unit is judged.
                 toRun.Add((unit, state));
             }
         }
 
-        if (root.Profile == GateProfile.PullRequest && !await report.AddAsync(steps, await ProtectedChangesStep.RunAsync(root, cancellationToken)))
-        {
-            return Result(root, steps, testsTotal: null);
-        }
-
-        // Format judges uncommitted changed lines, so it runs only when a unit or the shell has some; the edit profile ends there.
+        // Format judges uncommitted changed lines, so it runs only when a unit or the shell has some.
         bool anyChange = !judgesChangesOnly || selected.Any(entry => entry.State.Dirty);
-        if ((anyChange && !await report.AddAsync(steps, await FormatStep.RunAsync(root, cancellationToken))) || root.Profile == GateProfile.Edit)
+        foreach (IGateStep step in definition.RootFirst.Where(step => anyChange || step.Name != FormatStep.StepName))
+        {
+            if (!await report.AddAsync(steps, (await step.RunAsync(root, GateRunFacts.None, cancellationToken)).Step))
+            {
+                return Result(root, steps, testsTotal: null);
+            }
+        }
+
+        // A profile without unit steps (edit) ends at the root.
+        if (definition.PerUnit.Count == 0)
         {
             return Result(root, steps, testsTotal: null);
         }
 
-        UnitOutcome[] outcomes = await RunUnitsAsync(manifest, root, toRun, cancellationToken);
+        UnitOutcome[] outcomes = await RunUnitsAsync(manifest, root, definition.PerUnit, toRun, cancellationToken);
         foreach (UnitOutcome outcome in outcomes)
         {
             foreach (GateStep step in outcome.Steps)
@@ -81,9 +86,16 @@ internal static class WorkspaceGateRunner
         }
 
         int? testsTotal = outcomes.Any(outcome => outcome.TestsTotal is not null) ? outcomes.Sum(outcome => outcome.TestsTotal ?? 0) : null;
-        if (root.Profile == GateProfile.PullRequest && steps.All(step => VerdictNames.AllowsNextStep(step.Verdict)))
+        // The steps after the units (pr: secrets) run only when every earlier step passed or did not apply.
+        if (steps.All(step => VerdictNames.AllowsNextStep(step.Verdict)))
         {
-            await report.AddAsync(steps, await SecretsStep.RunAsync(root, cancellationToken));
+            foreach (IGateStep step in definition.RootLast)
+            {
+                if (!await report.AddAsync(steps, (await step.RunAsync(root, GateRunFacts.None, cancellationToken)).Step))
+                {
+                    break;
+                }
+            }
         }
 
         return Result(root, steps, testsTotal);
@@ -102,7 +114,7 @@ internal static class WorkspaceGateRunner
         List<(Unit Unit, UnitState State)> states = [];
         foreach (Unit unit in manifest.Units.Where(unit => onlyUnits.Count == 0 || onlyUnits.Contains(unit.Path, StringComparer.OrdinalIgnoreCase)))
         {
-            UnitState state = await UnitState.ReadAsync(manifest, unit, key, cancellationToken);
+            UnitState state = await UnitState.ReadAsync(manifest, unit, $"{key}|{InputsHash.UnitStepsKey(unit)}", cancellationToken);
             states.Add((unit, shared is null ? state : state with { Dirty = true }));
         }
 
@@ -123,7 +135,8 @@ internal static class WorkspaceGateRunner
         };
     }
 
-    private static async Task<UnitOutcome[]> RunUnitsAsync(Manifest manifest, GateRunContext root, List<(Unit Unit, UnitState State)> units, CancellationToken cancellationToken)
+    private static async Task<UnitOutcome[]> RunUnitsAsync(
+        Manifest manifest, GateRunContext root, IReadOnlyList<IGateStep> unitSteps, List<(Unit Unit, UnitState State)> units, CancellationToken cancellationToken)
     {
         // Units of one repository may share projects and obj/ folders, so they build one at a time; separate repositories in parallel.
         bool allSeparate = units.All(entry => Adoption.UnitDiscovery.IsRepository(Path.Combine(manifest.Root, entry.Unit.Path.Replace('/', Path.DirectorySeparatorChar))));
@@ -133,7 +146,7 @@ internal static class WorkspaceGateRunner
             await slots.WaitAsync(cancellationToken);
             try
             {
-                return await RunUnitAsync(manifest, root, entry.Unit, entry.State, cancellationToken);
+                return await RunUnitAsync(manifest, root, unitSteps, entry.Unit, entry.State, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -147,38 +160,28 @@ internal static class WorkspaceGateRunner
         }));
     }
 
-    /// <summary>Build, test and — in pr — coverage and dependencies of one unit, stopping at its first step that does not pass.</summary>
-    private static async Task<UnitOutcome> RunUnitAsync(Manifest manifest, GateRunContext root, Unit unit, UnitState state, CancellationToken cancellationToken)
+    /// <summary>The profile's unit steps (build, test and — in pr — coverage and dependencies) in one unit, stopping at its first step that does not pass.</summary>
+    private static async Task<UnitOutcome> RunUnitAsync(
+        Manifest manifest, GateRunContext root, IReadOnlyList<IGateStep> unitSteps, Unit unit, UnitState state, CancellationToken cancellationToken)
     {
         // The unit shares the run's deadline: its own context would start a fresh budget.
         string directory = Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar));
         GateRunContext run = (root with { Target = directory }).ForUnit(unit, directory);
 
         List<GateStep> steps = [];
-        GateStep build = await BuildStep.RunAsync(run, cancellationToken);
-        steps.Add(Named(unit, build));
-        if (!VerdictNames.AllowsNextStep(build.Verdict))
+        GateRunFacts facts = GateRunFacts.None;
+        foreach (IGateStep step in unitSteps)
         {
-            return new UnitOutcome(unit, state, steps, TestsTotal: null);
+            GateStepResult result = await step.RunAsync(run, facts, cancellationToken);
+            facts = result.Facts;
+            steps.Add(Named(unit, result.Step));
+            if (!VerdictNames.AllowsNextStep(result.Step.Verdict))
+            {
+                break;
+            }
         }
 
-        DateTimeOffset testsStarted = run.Time.GetUtcNow();
-        TestStepOutcome tests = await TestStep.RunAsync(run, cancellationToken);
-        steps.Add(Named(unit, tests.Step));
-        if (!VerdictNames.AllowsNextStep(tests.Step.Verdict) || run.Profile != GateProfile.PullRequest)
-        {
-            return new UnitOutcome(unit, state, steps, tests.TestsTotal);
-        }
-
-        GateStep coverage = await CoverageStep.RunAsync(run, testsStarted, tests.ResultsDirectory, cancellationToken);
-        steps.Add(Named(unit, coverage));
-        if (VerdictNames.AllowsNextStep(coverage.Verdict))
-        {
-            (GateStep dependencies, _) = await DependencyStep.RunAsync(run, cancellationToken);
-            steps.Add(Named(unit, dependencies));
-        }
-
-        return new UnitOutcome(unit, state, steps, tests.TestsTotal);
+        return new UnitOutcome(unit, state, steps, facts.TestsTotal);
     }
 
     private static GateStep Named(Unit unit, GateStep step) => step with { Name = $"{unit.Path}: {step.Name}" };

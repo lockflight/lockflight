@@ -26,7 +26,7 @@ public sealed class GateRunContextTests
     {
         ProcessResult timedOut = new(ProcessRunner.TimedOutExitCode, string.Empty, string.Empty, 540_000, TimedOut: true);
 
-        GateStep? step = StepHealth.Unhealthy(TestStep.Name, timedOut, Run(GateProfile.Stop, 3600, underStopHook: true));
+        GateStep? step = StepHealth.Unhealthy(TestStep.StepName, timedOut, Run(GateProfile.Stop, 3600, underStopHook: true));
 
         Assert.Equal(Verdict.Error, step?.Verdict);
         Assert.Contains("540 s cap, below the plugin's 600 s Stop hook timeout", step?.Detail, StringComparison.Ordinal);

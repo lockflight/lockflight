@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Gates;
 
@@ -25,6 +26,9 @@ internal sealed record GateRunContext(
 
     /// <summary>The unit's <c>test.stopFilter</c>: tests the stop profile leaves to the pr profile; null for none.</summary>
     public string? StopFilter { get; init; }
+
+    /// <summary>Runs the tools the steps judge (the .NET SDK, gitleaks); real processes unless a test supplies its own.</summary>
+    public RunTimedProcess Processes { get; init; } = ProcessRunner.RunAsync;
 
     /// <summary>
     /// The run for one directory of a project: in a unit of a workspace, that unit's <c>build:</c> file (resolved from the target),

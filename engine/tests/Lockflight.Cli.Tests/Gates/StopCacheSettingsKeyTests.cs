@@ -1,3 +1,4 @@
+using System.Reflection;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
 
@@ -65,6 +66,14 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
 
     [Fact]
     public void AnUnchangedManifestKeepsTheKey() => Assert.Equal(KeyFor(Base), KeyFor(Base));
+
+    /// <summary>A field added to one of these records must join the key, and a case above, before this list is updated.</summary>
+    [Theory]
+    [InlineData(typeof(GateSettings), "BuildFile,Coverage,TestFramework,TimeoutSeconds")]
+    [InlineData(typeof(CoverageSettings), "Collector,MinChangedLines,PatchThreshold")]
+    [InlineData(typeof(Unit), "Build,Kind,Path,StopFilter,TestFramework")]
+    public void EverySettingsFieldIsKnownToTheKey(Type settings, string fields) =>
+        Assert.Equal(fields, string.Join(',', settings.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(property => property.Name).Order(StringComparer.Ordinal)));
 
     public void Dispose() => TempDirectories.DeleteRecursively(root);
 

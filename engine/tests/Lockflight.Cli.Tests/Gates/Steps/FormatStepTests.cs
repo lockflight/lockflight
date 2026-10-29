@@ -109,7 +109,7 @@ public sealed class FormatStepTests : IDisposable
     private async Task<GateStep> RunStepAsync()
     {
         GateRunContext run = new(repository.FullName, repository.FullName, GateProfile.Edit, GateSettings.Default, BaseRef: null, TimeProvider.System);
-        return await FormatStep.RunAsync(run, TestContext.Current.CancellationToken);
+        return (await new FormatStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
     }
 
     private async Task InitRepositoryAsync()

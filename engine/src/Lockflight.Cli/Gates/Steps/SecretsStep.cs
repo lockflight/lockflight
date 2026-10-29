@@ -13,9 +13,9 @@ namespace Lockflight.Cli.Gates.Steps;
 /// added inline <c>gitleaks:allow</c> comment — which would silence gitleaks — fails the step (in an untracked file it is also ignored
 /// by the scan). Without gitleaks the step cannot vouch for anything, so it is NOT-EARNED rather than PASS.
 /// </summary>
-internal static class SecretsStep
+internal sealed class SecretsStep : IGateStep
 {
-    public const string Name = "security.secrets";
+    public const string StepName = "security.secrets";
 
     /// <summary>Exit code requested from gitleaks for findings, distinct from its own error exit (1).</summary>
     private const int LeaksFoundExitCode = 99;
@@ -32,30 +32,39 @@ internal static class SecretsStep
     /// </summary>
     private const long MaxAllowanceSearchBytes = 10 * 1024 * 1024;
 
-    public static async Task<GateStep> RunAsync(GateRunContext run, CancellationToken cancellationToken)
+    public string Name => StepName;
+
+    public StepScope Scope => StepScope.Root;
+
+    public string CacheKey => StepName;
+
+    public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken) =>
+        new(await CheckAsync(run, cancellationToken), facts);
+
+    private static async Task<GateStep> CheckAsync(GateRunContext run, CancellationToken cancellationToken)
     {
         string? gitleaks = Executables.Find("gitleaks", Environment.GetEnvironmentVariable(EnvironmentVariables.Gitleaks));
         if (gitleaks is null)
         {
-            return new GateStep(Name, 0, Verdict.NotEarned, 0, $"gitleaks not found; install it on PATH or set {EnvironmentVariables.Gitleaks}");
+            return new GateStep(StepName, 0, Verdict.NotEarned, 0, $"gitleaks not found; install it on PATH or set {EnvironmentVariables.Gitleaks}");
         }
 
         if (await WorkspaceGit.UntrackedFilesAsync(run.ProjectRoot, [], run.TimeLeft(), cancellationToken) is not IReadOnlyList<string> listed)
         {
-            return new GateStep(Name, 0, Verdict.Error, 0, "git could not list the untracked files; secret scanning needs a git repository");
+            return new GateStep(StepName, 0, Verdict.Error, 0, "git could not list the untracked files; secret scanning needs a git repository");
         }
 
         string[] untracked = [.. listed.Where(path => IsRegularFile(Path.Combine(run.ProjectRoot, path)))];
         InlineAllowances allowances = await InlineAllowancesAsync(run, untracked, cancellationToken);
         if (allowances.DiffFailedFor is string range)
         {
-            return new GateStep(Name, 0, Verdict.Error, 0,
+            return new GateStep(StepName, 0, Verdict.Error, 0,
                 $"git diff {range} failed, so added '{InlineAllowMarker}' comments cannot be checked; with --base, is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
         }
 
         if (allowances.Files.Count > 0)
         {
-            return new GateStep(Name, 0, Verdict.Fail, 0,
+            return new GateStep(StepName, 0, Verdict.Fail, 0,
                 $"added lines silence gitleaks with an inline '{InlineAllowMarker}': {string.Join(", ", allowances.Files.Take(MaxLeaksListed))}; accept false positives in .gitleaksignore (human review) instead");
         }
 
@@ -110,8 +119,8 @@ internal static class SecretsStep
         SecretLeak[] distinct = [.. scan.Leaks.Distinct()];
         string scanned = $"uncommitted changes and {untrackedCount} untracked files scanned (pass --base to scan the branch's commits)";
         return distinct.Length == 0
-            ? new GateStep(Name, 0, Verdict.Pass, scan.DurationMs, run.BaseRef is null ? scanned : string.Empty)
-            : new GateStep(Name, LeaksFoundExitCode, Verdict.Fail, scan.DurationMs,
+            ? new GateStep(StepName, 0, Verdict.Pass, scan.DurationMs, run.BaseRef is null ? scanned : string.Empty)
+            : new GateStep(StepName, LeaksFoundExitCode, Verdict.Fail, scan.DurationMs,
                 $"{distinct.Length} possible secrets: {string.Join("; ", distinct.Take(MaxLeaksListed).Select(leak => leak.Describe()))}; rotate them, or accept a false positive in .gitleaksignore (human review)");
     }
 
@@ -226,16 +235,16 @@ internal static class SecretsStep
         /// </summary>
         public async Task<GateStep?> RunAsync(string[] arguments, string workingDirectory, string label, string pathPrefix, CancellationToken cancellationToken)
         {
-            ProcessResult scan = await ProcessRunner.RunAsync(gitleaks, arguments, workingDirectory, run.TimeLeft(), cancellationToken);
+            ProcessResult scan = await run.Processes(gitleaks, arguments, workingDirectory, run.TimeLeft(), cancellationToken);
             DurationMs += scan.DurationMs;
-            if (StepHealth.Unhealthy(Name, scan, run) is GateStep unhealthy)
+            if (StepHealth.Unhealthy(StepName, scan, run) is GateStep unhealthy)
             {
                 return unhealthy;
             }
 
             if (scan.ExitCode is not 0 and not LeaksFoundExitCode)
             {
-                return new GateStep(Name, scan.ExitCode, Verdict.Error, DurationMs, $"gitleaks ({label}) exited {scan.ExitCode}: {LastLine(scan.Combined)}");
+                return new GateStep(StepName, scan.ExitCode, Verdict.Error, DurationMs, $"gitleaks ({label}) exited {scan.ExitCode}: {LastLine(scan.Combined)}");
             }
 
             Leaks.AddRange(SecretLeaks.Parse(File.Exists(reportPath) ? await File.ReadAllTextAsync(reportPath, cancellationToken) : string.Empty)
