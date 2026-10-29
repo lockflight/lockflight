@@ -66,6 +66,7 @@ public sealed class RedAtRedCommitsTests : IAsyncLifetime
         JsonNode first = cycles[0]!["tests"]![0]!;
         Assert.NotNull(first["fingerprintAtRed"]);
         Assert.Equal(first["fingerprintAtRed"]!.GetValue<string>(), first["fingerprintAtHead"]!.GetValue<string>());
+        Assert.Equal("2 unchanged, 0 amends accepted", Check(document, "tests.sinceRed")["why"]!.GetValue<string>());
     }
 
     [Fact]
