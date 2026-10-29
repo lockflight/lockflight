@@ -26,6 +26,16 @@ public sealed class GuardPerformanceTests(GuardPerformanceTree tree) : IClassFix
         Assert.InRange(wildcard.Listings, 0, oneWalk.Listings);
     }
 
+    [Theory]
+    [InlineData("rm -f *.log")]
+    [InlineData("rm -rf build/*")]
+    public async Task AWildcardBesideALargeTreeDoesNotEnterIt(string command)
+    {
+        DirectoryReads reads = await DecideAsync(command);
+
+        Assert.InRange(reads.Entries, 0, GuardPerformanceTree.PackageCount / 10);
+    }
+
     private async Task<DirectoryReads> DecideAsync(string command)
     {
         string payload = JsonSerializer.Serialize(new Dictionary<string, object>

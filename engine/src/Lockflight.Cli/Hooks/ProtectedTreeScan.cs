@@ -78,7 +78,9 @@ internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules
         int directoryDepth = relativeDirectory.Length == 0 ? 0 : relativeDirectory.Split('/').Length;
         int? maxDepth = asTree || patternSegments.Contains(AnyDepth) ? null : patternSegments.Length - directoryDepth - 1;
         string directory = relativeDirectory.Length == 0 ? root : Path.Combine(root, relativeDirectory);
-        foreach (string file in Walk(directory, NameFilters(relevant), maxDepth).Select(Relative))
+        // A directory is entered only while a path the pattern names could lie at or above it.
+        bool Enter(string relativePath) => GlobOverlap.CouldMatch(relativePattern, relativePath, asTree: true) || GlobOverlap.CouldMatch(relativePath, relativePattern, asTree: true);
+        foreach (string file in Walk(directory, NameFilters(relevant), maxDepth, Enter).Select(Relative))
         {
             if (GlobOverlap.CouldMatch(file, relativePattern, asTree)
                 && relevant.FirstOrDefault(glob => PathRules.Matches(glob, file) && !skip(file, glob)) is string glob)
@@ -163,7 +165,7 @@ internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules
         [.. rules.Select(rule => rule.Replace('\\', '/').Split('/')[^1]).Distinct(StringComparer.Ordinal).Select(name => name == AnyDepth ? null : GlobOverlap.SegmentRegex(name))];
 
     /// <summary>Files below the directory whose name passes a filter, without links and <c>.git</c>, as absolute paths.</summary>
-    private FileSystemEnumerable<string> Walk(string directory, Regex?[] names, int? maxDepth = null)
+    private FileSystemEnumerable<string> Walk(string directory, Regex?[] names, int? maxDepth = null, Func<string, bool>? enter = null)
     {
         bool anyName = names.Any(name => name is null);
         reads.StartListing();
@@ -180,7 +182,7 @@ internal sealed class ProtectedTreeScan(string root, IReadOnlyList<string> rules
                 reads.SeeEntry();
                 return !entry.IsDirectory && (anyName || MatchesAny(names, entry.FileName));
             },
-            ShouldRecursePredicate = (ref FileSystemEntry entry) => !entry.FileName.SequenceEqual(GitDirectory),
+            ShouldRecursePredicate = (ref FileSystemEntry entry) => !entry.FileName.SequenceEqual(GitDirectory) && (enter is null || enter(Relative(entry.ToFullPath()))),
         };
     }
 

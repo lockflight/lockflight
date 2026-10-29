@@ -93,6 +93,16 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
             string prefix = firstWildcard == 0 ? ShellArguments.CurrentDirectory : string.Join('/', segments[..firstWildcard]);
             if (relatives.Relative(prefix.Length == 0 ? "/" : prefix, workingDirectory) is not string directory)
             {
+                // A wildcard below a folder above the project (rm -rf ../*) may name the project itself.
+                if (asTree && relatives.ContainsRoot(prefix.Length == 0 ? "/" : prefix, workingDirectory)
+                    && PathRules.ToRelative(PathRules.Canonicalize(prefix.Length == 0 ? "/" : prefix, workingDirectory), PathRules.Canonicalize(relatives.Root, baseDirectory: null)) is string rootBelow
+                    && GlobOverlap.CouldMatch(rootBelow, string.Join('/', segments[firstWildcard..]), asTree: true))
+                {
+                    return HookDecision.Block(
+                        "protected-path:project-root",
+                        $"lockflight: this command may rewrite or delete '{pattern}', which can name the folder that contains this project and every protected path in it. Name the files to change instead.");
+                }
+
                 continue;
             }
 

@@ -110,6 +110,8 @@ public sealed class OpaqueTargetScenarioTests : IDisposable
     [InlineData("PowerShell", "Set-Content src\\v.txt (Get-Date)")]
     [InlineData("PowerShell", "Add-Content log.txt \"$(Get-Date)\"")]
     [InlineData("Bash", "find . -type f -name '*.tmp' -delete")]
+    [InlineData("Bash", "rm -f docs/x[z-a]*")]
+    [InlineData("Bash", "rm -f *.log")]
     [InlineData("Bash", "echo x > \"$PWD/notes.txt\"")]
     [InlineData("PowerShell", "Get-ChildItem | Select-Object Name")]
     [InlineData("PowerShell", "[IO.File]::ReadAllText('secrets/key.txt')")]
@@ -129,6 +131,9 @@ public sealed class OpaqueTargetScenarioTests : IDisposable
     [InlineData("Bash", "cd src && rm -rf ../..")]
     [InlineData("Bash", "mv .. /tmp/elsewhere")]
     [InlineData("PowerShell", "Remove-Item -Recurse ..")]
+    [InlineData("Bash", "rm -rf ../*")]
+    [InlineData("Bash", "cd src && rm -rf ../../*")]
+    [InlineData("Bash", "rm -rf ~/*")]
     public async Task ATreeThatContainsTheProjectIsBlocked(string toolName, string command)
     {
         Dictionary<string, string> environment = new() { [EnvironmentVariables.Home] = Path.GetDirectoryName(projectRoot.FullName)! };

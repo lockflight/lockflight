@@ -53,7 +53,15 @@ internal static class GlobOverlap
             }
         }
 
-        return new Regex(regex.Append('$').ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        try
+        {
+            return new Regex(regex.Append('$').ToString(), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+        catch (ArgumentException)
+        {
+            // A class the regex engine refuses ([z-a]) is taken to match any name: when unsure, it overlaps.
+            return new Regex("^[^/]*$", RegexOptions.CultureInvariant);
+        }
     }
 
     private static bool Matches(string[] glob, int globIndex, string[] path, int pathIndex, bool asTree)
