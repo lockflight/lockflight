@@ -93,6 +93,26 @@ Only the PR's own commits are scanned for secrets, so existing history in a brow
 .NET channel they need (for example `8.0.x` and `10.0.x`); a workflow that already existed is left alone, and `init` says what
 it should install.
 
+## The CI judge action
+
+`action/` in this repository is a composite action with three modes, one per job, referenced by commit SHA
+(`uses: lockflight/lockflight/action@<40-hex> # vX.Y.Z`), never by a branch or tag that can move:
+
+- **`judge`** (no secret, `contents: read`): installs the engine the target branch pins and the pinned gitleaks, runs
+  [`lockflight ci`](commands.md#ci) on the pull request's head commit against the target branch's tip, and uploads
+  `lockflight-evidence` (and the gates' `result.json` as `lockflight-result`, under its old name for one release). Every
+  platform value reaches its scripts through `env:`, never interpolated into a script, so a branch name is a string.
+- **`review`** (the only job with an API key, for pull requests from the same repository): runs `lockflight ci review` and
+  uploads `lockflight-review`. The reviewer's reproductions run the pull request's code in this job, so the key can be
+  reached by that code: use a spend-limited key scoped to CI.
+- **`report`** (checks out the target branch only, `pull-requests: write`): downloads both artifacts as data, runs
+  `lockflight ci report` for one status context (`gates` or `lockflight/judge`), writes the job summary, and in one of the
+  two report jobs replaces the workflow's own sticky comment (a marker comment anyone else posted is ignored). A failed post
+  is a warning, never the verdict.
+
+`gates` keeps its meaning (the `pr` gates and green at head), so a ruleset that requires it keeps working; make
+`lockflight/judge` required when the team produces red commits.
+
 ## What you add: CODEOWNERS for the protected paths
 
 `policy.protected` makes policy changes visible; CODEOWNERS makes them need a named reviewer. Add to `.github/CODEOWNERS`
