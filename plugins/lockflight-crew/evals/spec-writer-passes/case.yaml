@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: spec-writer-passes
+description: "The spec writer turns a request into specs/<id>/spec.md in the spec contract and runs phase check specify as its verdict."
+tags: [boundary]
+context:
+  scaffold_script: scaffold.sh

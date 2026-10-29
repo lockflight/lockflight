@@ -85,8 +85,9 @@ decisions and messages for what the case exercises.
 claude plugin eval plugins/lockflight --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
 ```
 
-The crew plugin's evals (`plugins/lockflight-crew/evals/`) load the crew alone and dispatch the test author on a small
-fixture with no engine:
+The crew plugin's evals (`plugins/lockflight-crew/evals/`) load the crew alone and dispatch one agent on a small fixture:
+the test author with no engine, the spec writer and the planner with an engine stand-in
+(`evals/_fixtures/lockflight-standin.sh`) whose `phase check` applies the main rules of the real checks:
 
 ```sh
 claude plugin eval plugins/lockflight-crew --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish

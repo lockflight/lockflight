@@ -41,7 +41,8 @@ see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
 |---|---|---|
 | **Engine** | A C# Native AOT command-line tool, `lockflight`. All decisions are made here. | [`engine/`](../engine/) |
 | **Plugin** | Claude Code skills (`/lockflight:*`) and hooks that call the engine. It holds no policy of its own. | [`plugins/lockflight/`](../plugins/lockflight/) |
-| **Spec Kit preset** | Templates and commands layered over [Spec Kit](https://github.com/github/spec-kit): requirement IDs, test-first tasks, phase checks. A preset, not a fork. | [`plugins/lockflight/speckit-preset/`](../plugins/lockflight/speckit-preset/) |
+| **Crew (optional)** | A second plugin with agents briefed for the lifecycle: a spec writer, a planner and a test author. Each runs an engine check as its verdict; none is a judge. | [`plugins/lockflight-crew/`](../plugins/lockflight-crew/) |
+| **Spec Kit preset (optional)** | Templates and commands layered over [Spec Kit](https://github.com/github/spec-kit) so that its output follows the [spec contract](guides/spec-contract.md): requirement IDs, test-first tasks. A preset, not a fork. | [`plugins/lockflight/speckit-preset/`](../plugins/lockflight/speckit-preset/) |
 | **Project files** | `lockflight.yaml` (the policy), the tool pin, `.lockflight/` (approvals, evidence, baselines, ledger), the CI workflow. | your repository |
 
 ## The engine on every hook call
@@ -127,7 +128,8 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
 
 - **Phase checks** (`phase check specify|tasks`) verify structure deterministically: unique requirement IDs, no open
   clarifications, every requirement covered by a task, tests before implementation. An approval runs the matching check first
-  and records nothing while it fails.
+  and records nothing while it fails. The format they read is a public contract ([the spec contract](guides/spec-contract.md)):
+  the crew's spec writer and planner, Spec Kit with the preset, or a person can write it.
 - **Approvals** bind the SHA-256 of the approved files to a person. Any later edit makes the approval stale, and the steps that
   depend on it refuse to run. They can be SSH-signed and verified in CI against signers read from the base branch.
 - **Red/green.** The plan declares new signatures; stubs throw `NotImplementedException`. `redgreen red` accepts a cycle only

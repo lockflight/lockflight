@@ -60,7 +60,7 @@ hold the keys to the two that need a person.
 | | |
 |---|---|
 | **Deterministic gates**<br>Format, build with no new warnings, tests, patch coverage, vulnerable packages, secrets. `PASS`, `FAIL` or `NOT-EARNED`, never "probably". | **Protected paths**<br>The files that define the rules can't be changed by the agent, through edits or the shell ([full list](docs/guides/configuration.md#built-in-protected-paths)). |
-| **Spec-driven, on [Spec Kit](https://github.com/github/spec-kit)**<br>A preset, not a fork: requirement IDs, approvals you sign, checks between phases. | **Red/green evidence**<br>New tests must fail before the code exists and pass after, locked while red. xUnit v3 and v2. |
+| **Spec-driven, [Spec Kit](https://github.com/github/spec-kit) optional**<br>A [documented spec format](docs/guides/spec-contract.md): requirement IDs, approvals you sign, checks between phases. Written by the crew, by hand, or by Spec Kit with a preset. | **Red/green evidence**<br>New tests must fail before the code exists and pass after, locked while red. xUnit v3 and v2. |
 | **Requirement trace**<br>A matrix of every requirement and the tests that went red, then green, for it. | **Evidence-bound review**<br>An independent reviewer whose blocking findings count only with a failing reproduction test. |
 | **Adopts your setup**<br>Keeps your hooks, skills, agents and Spec Kit, protects them and flags conflicts. `adopt undo` reverts it. | **One repo or twenty**<br>Workspace shells with service repositories beneath: only changed services are built, and each keeps its own CI policy. |
 
@@ -93,7 +93,7 @@ when the guard says no. Only you see him: he stays out of anything the agent rea
 - **[gitleaks](https://github.com/gitleaks/gitleaks)** on `PATH` for the secrets step of the `pr` profile.
 - For CI: GitHub Actions; templates for Azure Pipelines, Bitbucket Pipelines and GitLab CI/CD are generated too but not yet
   verified on those services ([CI on other platforms](docs/guides/ci-other-platforms.md)).
-- For the standard profile: `uv` and Python 3 with PyYAML (Spec Kit).
+- For the standard profile with Spec Kit (optional): `uv` and Python 3 with PyYAML.
 
 **1. Install the engine and the plugin**
 

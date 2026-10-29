@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Take a feature through Lockflight's gated lifecycle — Spec Kit specify/clarify, plan, tasks, then test-first implementation in red/green cycles, trace and gates. Use when the user asks to build, implement or add a feature or user story in a Lockflight project with the standard profile.
+description: Take a feature through Lockflight's gated lifecycle — spec, plan and tasks in the spec contract (written by the crew's spec writer and planner, by Spec Kit, or by hand), then test-first implementation in red/green cycles, trace and gates. Use when the user asks to build, implement or add a feature or user story in a Lockflight project with the standard profile.
 ---
 
 # Lockflight feature lifecycle
@@ -12,9 +12,21 @@ Run the engine as `.lockflight/bin/lockflight <command>` from the project root (
 is the engine the hooks run, and it works whatever way Lockflight was installed.
 
 **First, check the profile.** This lifecycle needs the standard profile. If the project root has no `lockflight.yaml`, or
-no `.specify/` (a lite project), stop before writing anything: tell the user the project is not set up for the lifecycle,
-offer the standard setup (`/lockflight:init`), or build the change without it and rely on the gates
-(`/lockflight:gate`).
+it is a lite project (its `.gitattributes` has no `.lockflight/features/** -text` line and it has no `.specify/`), stop
+before writing anything: tell the user the project is not set up for the lifecycle, offer the standard setup
+(`/lockflight:init`), or build the change without it and rely on the gates (`/lockflight:gate`).
+
+**Then pick who writes the spec, plan and tasks.** The engine checks the files under `specs/<id>/`, not the tool that wrote
+them; their format is the spec contract (`docs/guides/spec-contract.md` in the Lockflight repository). Use the first that
+applies, for this whole feature:
+
+- **Crew:** the agent types `lockflight-crew:spec-writer` and `lockflight-crew:planner` are available (the
+  `lockflight-crew` plugin is installed). Steps 1 and 3 delegate to them.
+- **Spec Kit:** the project has `.specify/`. Steps 1 and 3 run its commands (`/speckit-specify`, `/speckit-clarify`,
+  `/speckit-plan`, `/speckit-tasks`).
+- **By hand:** neither. Tell the user once that the files follow the spec contract and that the `lockflight-crew` plugin
+  (`/plugin install lockflight-crew@lockflight`) or Spec Kit can write them; then, with their agreement, write them yourself
+  in this session to the rules in steps 1 and 3, or let them write the files and run the checks for them.
 
 **Approvals.** Whenever a step below asks for an approval, the user gives it in one of two ways: they type
 `/lockflight:approve spec` (or `tasks`) in this session, or they open a separate terminal window (not with `!` in Claude
@@ -22,20 +34,43 @@ Code: that runs inside the session and is refused) and run `.lockflight/bin/lock
 project root.
 Never approve for them.
 
-1. **Specify.** Run `/speckit-specify` with the user's request (Spec Kit 1.1.3 creates `specs/<NNN-slug>/spec.md`, numbered
-   `001`, `002`, …). Requirements are lines `- **FR-001**: …`; each user story has `**Given** … **When** … **Then** …`
-   scenarios. Resolve open points with `/speckit-clarify`. Replace every template placeholder (`[FEATURE NAME]`,
-   `[Brief Title]`, "System MUST [specific capability …]") and delete unused example lines. Then run
-   `.lockflight/bin/lockflight phase check specify` until it passes.
+1. **Specify.** The feature lives in `specs/<NNN-slug>/` (the next free three-digit number, `001`, `002`, …, and a short
+   slug). `spec.md` has `### User Story N - Title` sections, each with numbered `**Given** … **When** … **Then** …`
+   scenario lines (all three words bold, on one line), and requirements as lines `- **FR-001**: System MUST …` under
+   `## Requirements`. No `[NEEDS CLARIFICATION]` left, and no template placeholder (`[FEATURE NAME]`, `[Brief Title]`, any
+   ALL-CAPS word in brackets such as `[US1]`, "System MUST [specific capability …]"). The verdict is
+   `.lockflight/bin/lockflight phase check specify --feature <id>`; run it until it passes.
+   - **Crew:** call the Agent tool with `subagent_type: "lockflight-crew:spec-writer"` and a prompt holding the user's
+     request word for word and the feature ID. Your very next action when it returns MUST be
+     `.lockflight/bin/lockflight phase check specify --feature <id>` as a Bash call of its own, whatever it reported: its
+     report is its own word, the check is the evidence. If the check fails, or its report has a `Blocked:` line, that is a
+     failed round: start one fresh round with the check's output and the report in the prompt, at most two rounds in all.
+     After that, or at once when the `Blocked:` line's `needs` asks the user something (open questions, a contradiction),
+     show the user its `reason` and `needs` and wait for their answer; then start a new round with the answer.
+   - **Spec Kit:** run `/speckit-specify` with the user's request, and resolve open points with `/speckit-clarify`. Replace
+     every template placeholder and delete unused example lines.
+   - **By hand:** ask the user what is open, write `spec.md` to the rules above, and run the check.
+   In every case, copy a `Security note:` line from an agent's report verbatim into your reply, in every round.
 2. **Human gate — spec.** Ask the user to review `spec.md` and approve it (`/lockflight:approve spec`, see Approvals). Wait.
-3. **Plan and tasks.** Run `/speckit-plan`, then `/speckit-tasks`. Every story task cites its requirements `(FR-001)`; within a
-   story the stub declaration comes first, then the test tasks, then the implementation. Tests are mandatory here, whatever
-   the stock `/speckit-tasks` text says (the Lockflight preset appends these rules to it). Run
-   `.lockflight/bin/lockflight phase check tasks` until it passes; a failure names each misplaced task, its line and why it
-   counted as implementation. A task counts as a **test** when it sits under a `### Tests` heading, starts with test wording
-   ("Write tests …", "Contract tests …", "Cover … with tests") or names a test file (`…Tests.cs`, `….Tests/`) without starting
-   with "Implement" or "Make"; as a **stub** when it says stub, skeleton, `NotImplementedException` or "declare … signatures";
-   anything else is **implementation**.
+3. **Plan and tasks.** `plan.md` (optional, but write it) holds the approach, the files and the declared signatures of the
+   members the stubs declare. `tasks.md` has task lines `- [ ] T010 [US1] (FR-001) …`: every story task cites its
+   requirements `(FR-001)`, every requirement is cited, and within a story the stub declaration comes first, then the test
+   tasks (under `### Tests for User Story N`), then the implementation. Tests are mandatory here. In a project with `units:`
+   in `lockflight.yaml`, tag tasks with their unit, `[unit:services/orders]`. The verdict is
+   `.lockflight/bin/lockflight phase check tasks --feature <id>`; run it until it passes; a failure names each misplaced
+   task, its line and why it counted as implementation. A task counts as a **test** when it sits under a `### Tests`
+   heading, starts with test wording ("Write tests …", "Contract tests …", "Cover … with tests") or names a test file
+   (`…Tests.cs`, `….Tests/`) without starting with "Implement" or "Make"; as a **stub** when it says stub, skeleton,
+   `NotImplementedException` or "declare … signatures"; anything else is **implementation**.
+   - **Crew:** call the Agent tool with `subagent_type: "lockflight-crew:planner"` and a prompt naming the feature
+     directory (`specs/<id>`). Your very next action when it returns MUST be
+     `.lockflight/bin/lockflight phase check tasks --feature <id>` as a Bash call of its own, whatever it reported. Rounds,
+     `Blocked:` and `Security note:` lines as in step 1, at most two rounds. A planner that reports the spec needs a change
+     is never a reason to edit `spec.md` yourself: show the user the lines it quotes; a changed spec needs their approval
+     again (step 2).
+   - **Spec Kit:** run `/speckit-plan`, then `/speckit-tasks`. Tests are mandatory whatever the stock `/speckit-tasks`
+     text says (the Lockflight preset appends these rules to it).
+   - **By hand:** write both files to the rules above, and run the check.
 4. **Human gate — tasks.** Ask the user to approve the tasks (`/lockflight:approve tasks`, see Approvals). Wait.
 5. **Start.** `.lockflight/bin/lockflight redgreen start` records the test inventory (once per feature) and runs the suite once.
    If it warns that tests already fail, tell the user: they decide whether to accept them, by typing
@@ -103,7 +138,7 @@ Never approve for them.
 8. **Commit.** The review of record judges committed work only, so commit the feature on its branch now, the way the user
    commits (their branch and message conventions; commit locally, never push here). The commit holds:
    - the production code and the tests;
-   - the feature's Spec Kit files under `specs/<id>/` (`spec.md`, `plan.md`, `tasks.md` and the rest);
+   - the feature's files under `specs/<id>/` (`spec.md`, `plan.md`, `tasks.md` and the rest);
    - the engine's evidence under `.lockflight/features/<id>/`: `approvals/*.json` (and any `.sig` next to them),
      `redgreen.json` and `reviews/`. CI's `approve verify` and the pull request read them there; never leave them untracked.
    Git ignores the engine's local state (`.lockflight/bin/`, `ledger/`, `local/`, `backup/`, `adopt/`); never force-add it.
