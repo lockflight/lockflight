@@ -1,0 +1,2 @@
+Invalid
+/repo/lockflight.yaml:3:3: unknown key 'gates.nonsense' (known: timeoutSeconds, build, test, coverage, quality, docs, ef) — this engine is 0.0.0-local; a newer engine may know it; fix it first, nothing was changed

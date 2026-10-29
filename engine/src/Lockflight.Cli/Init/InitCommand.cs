@@ -22,10 +22,10 @@ internal sealed class InitCommand(CliContext context) : ICommand
 {
     private const string Commit = "Review init's changes and commit them as one commit; to undo init, `git revert` that commit.";
 
-    private const string Choices = "--profile lite|standard, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --dry-run, --unit-of <shell url> --unit-path <path>, --speckit-preset <dir>, --no-link or --no-sandbox";
+    private const string Choices = "--profile lite|standard, --preset relaxed|default|strict, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --dry-run, --unit-of <shell url> --unit-path <path>, --speckit-preset <dir>, --no-link or --no-sandbox";
 
     /// <summary>
-    /// <c>[--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests]
+    /// <c>[--profile lite|standard] [--preset relaxed|default|strict] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests]
     /// [--dry-run] [--unit-of url --unit-path path] [--speckit-preset dir] [--no-link] [--no-sandbox]</c> in any order.
     /// </summary>
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
@@ -64,6 +64,15 @@ internal sealed class InitCommand(CliContext context) : ICommand
 
                     init = init with { Profile = profile };
                     break;
+                case "--preset" when hasValue:
+                    string presetName = options[++index];
+                    if (!RoutingPresetNames.TryParse(presetName, out RoutingPreset preset))
+                    {
+                        return await RefuseAsync($"unknown preset '{presetName}'; use {RoutingPresetNames.Choices}");
+                    }
+
+                    init = init with { Preset = preset };
+                    break;
                 case "--ci" when hasValue:
                     string trigger = options[++index];
                     if (!CiTriggerNames.TryParse(trigger, out CiTrigger parsedCi))
@@ -98,6 +107,8 @@ internal sealed class InitCommand(CliContext context) : ICommand
                     break;
                 case "--profile":
                     return await RefuseAsync("--profile needs a value: lite or standard");
+                case "--preset":
+                    return await RefuseAsync($"--preset needs a value: {RoutingPresetNames.Choices}");
                 case "--ci":
                     return await RefuseAsync("--ci needs a value: pr, manual or none");
                 case "--ci-platform":
@@ -169,7 +180,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
         // A workspace shell: the child directories that look like units go into a new manifest, and the child
         // repositories into the shell's .gitignore so the shell's git never tracks their files.
         IReadOnlyList<UnitCandidate> units = init.Shell is null ? UnitDiscovery.Find(root) : [];
-        ManifestPlan manifest = InitAdoption.Manifest(existingManifestText, existingManifest, init.Profile, plan, units, init.Shell);
+        ManifestPlan manifest = InitAdoption.Manifest(existingManifestText, existingManifest, init.Profile, init.Preset, plan, units, init.Shell);
         ManifestLoadResult plannedLoad = new ManifestParser(root, manifestPath).Parse(manifest.Content);
         if (plannedLoad.Manifest is not Manifest planned)
         {
