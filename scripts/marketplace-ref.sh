@@ -8,8 +8,11 @@
 #   - the ref is a release tag that exists on that repository and points at the sha (so a ref is never served before its tag);
 #   - at that commit each plugin's plugin.json has the tag's version, and plugins/lockflight/min-engine-version is at most it;
 #   - nuget.org lists the tag's engine and the minimum engine (so a plugin is never served before the engine it asks for);
-#   - the development marketplace (plugins/.claude-plugin/marketplace.json, which scripts/dev-install.sh adds) lists the same
-#     plugins from the checkout.
+#   - the marketplace's name, description and owner and each plugin's name and description are those of the development
+#     marketplace (plugins/.claude-plugin/marketplace.json) at the tag, not on main: users get the tag's plugins, so they
+#     read the tag's descriptions;
+#   - the development marketplace in the checkout (which scripts/dev-install.sh adds) serves each plugin from the checkout.
+# `set` also copies the tag's descriptions into the published marketplace.
 # Needs git, python3 and curl, and network access to the repository and nuget.org.
 # For tests: LOCKFLIGHT_MARKETPLACE_REMOTE replaces the repository URL for git, LOCKFLIGHT_NUGET_INDEX the nuget.org index URL.
 set -euo pipefail
@@ -21,6 +24,21 @@ repository_url=https://github.com/lockflight/lockflight.git
 nuget_index=${LOCKFLIGHT_NUGET_INDEX:-https://api.nuget.org/v3-flatcontainer/lockflight.cli/index.json}
 
 fail() { echo "marketplace-ref: $*" >&2; exit 1; }
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# fetch_tag <remote> <tag>: fetches the tag's commit into $work/repo (a fresh repository each time), as FETCH_HEAD.
+fetch_tag() {
+  rm -rf "$work/repo"
+  git init -q "$work/repo"
+  git -C "$work/repo" fetch -q --depth 1 "$1" "refs/tags/$2" || fail "cannot fetch $2 from $1"
+}
+
+# dev_at_tag <tag>: writes the development marketplace at the fetched tag to $work/dev-at-tag.json.
+dev_at_tag() {
+  git -C "$work/repo" show "FETCH_HEAD:$dev" > "$work/dev-at-tag.json" 2> /dev/null || fail "$1 has no $dev"
+}
 
 # remote_commit <remote> <tag>: the commit the tag points at on the remote, or nothing when the tag does not exist there.
 remote_commit() {
@@ -70,15 +88,38 @@ if mode == "pin":
         pins.add((ref, sha))
     if len(pins) != 1:
         die(f"{served}: every plugin must name the same release tag and commit")
-    same = lambda m: (m["name"], m.get("description"), m.get("owner"))
-    listed = lambda m: [(e["name"], e.get("description")) for e in m["plugins"]]
-    if same(market) != same(development) or listed(market) != listed(development):
-        die(f"{dev}: must list the same marketplace and plugins (names and descriptions) as {served}")
     for entry in development["plugins"]:
         if entry.get("source") != "./" + entry["name"]:
             die(f"{dev}: {entry['name']} must come from ./{entry['name']}, the checkout")
     ref, sha = pins.pop()
     print(ref, sha, " ".join(e["name"] for e in market["plugins"]))
+elif mode == "described":
+    # described <served> <development marketplace at the tag>: the served marketplace says what the tag's plugins say.
+    served, tagged = sys.argv[2], sys.argv[3]
+    market = json.load(open(served, encoding="utf-8"))
+    development = json.load(open(tagged, encoding="utf-8"))
+    same = lambda m: (m["name"], m.get("description"), m.get("owner"))
+    listed = lambda m: [(e["name"], e.get("description")) for e in m["plugins"]]
+    if same(market) != same(development) or listed(market) != listed(development):
+        die(f"{served}: must list the same marketplace and plugins (names and descriptions) as "
+            "plugins/.claude-plugin/marketplace.json at the tag it serves; `set` copies them")
+elif mode == "rewrite":
+    # rewrite <served> <development marketplace at the tag> <tag> <sha>: points every entry at the tag and its commit and
+    # copies the tag's descriptions. The file keeps its layout (two-space JSON).
+    served, tagged, ref, sha = sys.argv[2:6]
+    market = json.load(open(served, encoding="utf-8"))
+    development = json.load(open(tagged, encoding="utf-8"))
+    for field in ("description", "owner"):
+        if field in development:
+            market[field] = development[field]
+    descriptions = {e["name"]: e.get("description") for e in development["plugins"]}
+    for entry in market["plugins"]:
+        if isinstance(entry.get("source"), dict):
+            entry["source"]["ref"], entry["source"]["sha"] = ref, sha
+        if descriptions.get(entry["name"]) is not None:
+            entry["description"] = descriptions[entry["name"]]
+    with open(served, "w", encoding="utf-8") as out:
+        out.write(json.dumps(market, indent=2, ensure_ascii=False) + "\n")
 elif mode == "versions":
     # versions <tag version> <min-engine-version> <plugin.json>…
     version, minimum = sys.argv[2], sys.argv[3]
@@ -108,10 +149,9 @@ check() {
   [ -n "$commit" ] || fail "$served names $ref, but $remote has no such tag: tag the release before the marketplace names it"
   [ "$commit" = "$sha" ] || fail "$served names $ref at $sha, but the tag points at $commit"
 
-  work=$(mktemp -d)
-  trap 'rm -rf "$work"' EXIT
-  git init -q "$work/repo"
-  git -C "$work/repo" fetch -q --depth 1 "$remote" "refs/tags/$ref" || fail "cannot fetch $ref from $remote"
+  fetch_tag "$remote" "$ref"
+  dev_at_tag "$ref"
+  python_check described "$served" "$work/dev-at-tag.json" || fail "the descriptions are not the tag's"
   version=${ref#v}
   local manifests=()
   for name in $names; do
@@ -133,11 +173,12 @@ case "${1:-check}" in
   set)
     tag=${2:-}
     [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || fail "usage: scripts/marketplace-ref.sh set vX.Y.Z[-pre]"
-    commit=$(remote_commit "${LOCKFLIGHT_MARKETPLACE_REMOTE:-$repository_url}" "$tag")
+    remote=${LOCKFLIGHT_MARKETPLACE_REMOTE:-$repository_url}
+    commit=$(remote_commit "$remote" "$tag")
     [ -n "$commit" ] || fail "$tag is not a tag on the repository yet: push the tag first"
-    # Rewrites only the two values, so the file keeps its layout.
-    sed -E -e "s/(\"ref\": *\")[^\"]*\"/\1$tag\"/" -e "s/(\"sha\": *\")[^\"]*\"/\1$commit\"/" "$served" > "$served.tmp"
-    mv "$served.tmp" "$served"
+    fetch_tag "$remote" "$tag"
+    dev_at_tag "$tag"
+    python_check rewrite "$served" "$work/dev-at-tag.json" "$tag" "$commit" || fail "cannot rewrite $served"
     check ;;
   *) fail "usage: scripts/marketplace-ref.sh [check | set vX.Y.Z[-pre]]" ;;
 esac
