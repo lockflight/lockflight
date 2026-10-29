@@ -25,9 +25,11 @@ review status: [--feature]
 review dismiss: [--reason --feature] arguments
 propose: [--from --delete] arguments
 trace: [--feature]
+blocked validate: [] arguments
 approve spec: [--feature]
 approve tasks: [--feature]
 approve verify: [--feature --base --require]
+ci: [--head --base --branch --platform --event --evidence --shell --no-review-expected --plan]
 workspace sync: [--check]
 adopt plan: []
 adopt apply: [--speckit-preset --skip-speckit --no-sandbox]

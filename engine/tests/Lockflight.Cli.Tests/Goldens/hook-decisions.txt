@@ -131,7 +131,7 @@ stderr: lockflight: hook input is not valid JSON
 ## an invalid manifest, then a write (pre-tool-use)
 exit: 2 HookBlock
 stdout: 
-stderr: lockflight: <root>/lockflight.yaml:1:1: unknown key 'nonsense' (known: version, protected, stop, gates, units, review) — this engine is <version>; a newer engine may know it. Only reading is allowed until a human fixes lockflight.yaml.
+stderr: lockflight: <root>/lockflight.yaml:1:1: unknown key 'nonsense' (known: version, protected, stop, gates, units, review, ci) — this engine is <version>; a newer engine may know it. Only reading is allowed until a human fixes lockflight.yaml.
 ledger: type=hook.blocked signature=pre-tool-use:invalid-manifest summary=invalid-manifest tool=Edit agent=main
 
 ## an invalid manifest, then a read (pre-tool-use)

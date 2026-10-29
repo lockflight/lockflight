@@ -1,0 +1,8 @@
+version: 2
+ci:
+  maxRedCommits: 4
+  timeoutMinutes: 90
+  flakyRetries: 0
+  lowRiskPaths: ["docs/**", "site/**"]
+  testInputs: ["testdata/**"]
+  redCommits: false

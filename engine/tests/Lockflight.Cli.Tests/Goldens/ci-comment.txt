@@ -1,0 +1,29 @@
+<!-- lockflight:ci:v1 head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->
+**Lockflight: PASS** · `001-shipping` · class **behaviour** (interim) · head `aaaaaaa` · base `bbbbbbb`
+
+Status: `gates` PASS · `lockflight/judge` PASS
+
+| Check | Verdict | | Detail |
+|---|---|---|---|
+| Red at red commits | PASS | required | 1 cycles, 1 tests, each red in production code |
+| Green at head | PASS | required | 2 tests, 2 test cases run, 0 failed |
+| Gates (pr) | PASS | required | format PASS · build PASS · test PASS |
+| Review | SKIPPED | advisory | no review ran (no API key configured, a fork, or the review job was skipped) |
+| Approvals | — | off | off for this change class |
+
+<details><summary>Red/green cycles</summary>
+
+| Cycle | Red commit | Test | Red | Since red | At head |
+|---|---|---|---|---|---|
+| 1 | `ddddddd` | `Shop.Tests:@org/team <img src=x> 'tick' \| pipe` | RED_STUB | unchanged | pass |
+
+</details>
+<details><summary>Trace</summary>
+
+| Requirement | Tests (red → green) | Status |
+|---|---|---|
+| FR-001 | `PriceTests.Shipping` | covered |
+
+</details>
+
+<sub>Evidence: the `lockflight-verdict` artifact · engine `0.3.0` · policy from `bbbbbbb` · this comment says what the CI re-ran; it does not show the tests were written first.</sub>

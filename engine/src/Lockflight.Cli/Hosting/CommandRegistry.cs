@@ -1,6 +1,8 @@
 using Lockflight.Cli.Adoption;
+using Lockflight.Cli.Ci;
 using Lockflight.Cli.Docs;
 using Lockflight.Cli.Doctor;
+using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Facts;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Baselines;
@@ -56,6 +58,7 @@ internal static class CommandRegistry
         new(["review", "dismiss"], CommandAudience.Human, ["--reason", "--feature"], [], CommandOperands.Any, OptionParsing.Shared, context => new ReviewDismissCommand(context)),
         new(["propose"], CommandAudience.Anyone, ["--from"], ["--delete"], CommandOperands.Any, OptionParsing.Own, context => new ProposeCommand(context)),
         new(["trace"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new TraceCommand(context)),
+        new(["blocked", "validate"], CommandAudience.Anyone, [], [], CommandOperands.ExactlyOne, OptionParsing.Own, context => new BlockedValidateCommand(context)),
         new(["approve", "spec"], CommandAudience.Human, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
         new(["approve", "tasks"], CommandAudience.Human, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
         new(["approve", "verify"], CommandAudience.Anyone, ["--feature", "--base", "--require"], [], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
@@ -63,6 +66,7 @@ internal static class CommandRegistry
         {
             Listing = CommandListing.Unlisted,
         },
+        new(["ci"], CommandAudience.Anyone, [JudgeInputsReader.HeadOption, JudgeInputsReader.BaseOption, JudgeInputsReader.BranchOption, JudgeInputsReader.PlatformOption, JudgeInputsReader.EventOption, JudgeInputsReader.EvidenceOption, JudgeInputsReader.ShellOption], [JudgeInputsReader.NoReviewFlag, CiCommand.PlanFlag], CommandOperands.Options, OptionParsing.Shared, context => new CiCommand(context)),
         new(["workspace", "sync"], CommandAudience.Anyone, [], ["--check"], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceSyncCommand(context)),
         new(["adopt", "plan"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
         new(["adopt", "apply"], CommandAudience.Human, ["--speckit-preset"], ["--skip-speckit", "--no-sandbox"], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),

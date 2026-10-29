@@ -32,6 +32,10 @@ public sealed class CanaryTests
     }
 
     [Fact]
+    public async Task TheCiJudgeCatchesEveryPlantedViolation() =>
+        CanarySuite.AssertAllCaught(await CiJudgeCanaries.RunAsync(TestContext.Current.CancellationToken));
+
+    [Fact]
     public async Task ATaskCompletedWithoutAStopGatePassForTheTreeIsRefused() =>
         CanarySuite.AssertAllCaught([await TaskCompletedCanaries.RunAsync(TimeProvider.System, TestContext.Current.CancellationToken)]);
 
