@@ -87,6 +87,7 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
               + string.Join("; ", rejected.Select(test => test.RedClass).Distinct().Select(redClass => $"{RedClassNames.ToName(redClass)} ({RedClassFixes.For(redClass)})"));
         return new CycleJudgement(red, tree.Outcome, evaluation.Classified, evaluation.Verdicts, rejected.Length == 0 ? CheckVerdict.Pass : CheckVerdict.Fail, why)
         {
+            Tampering = tree.Tampering,
             FingerprintsAtRed = fresh.Where(test => tree.Fingerprints.ContainsKey(test.Key)).ToDictionary(test => test.Key, test => tree.Fingerprints[test.Key], StringComparer.Ordinal),
         };
     }

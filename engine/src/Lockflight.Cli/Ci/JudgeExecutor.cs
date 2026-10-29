@@ -46,8 +46,12 @@ internal static class JudgeExecutor
             IReadOnlyList<ExistingChangedTest>? existingChanged = baseListing is not null && plan.Levels[CheckId.TestsExistingChanged] != CheckLevel.Off
                 ? await new ExistingChangedJudge(trees, time).JudgeAsync(plan, head.Listing, baseListing, cancellationToken)
                 : null;
+            TamperingJudgement? tampering = plan.Levels[CheckId.TestsHostTampering] != CheckLevel.Off
+                ? await HostTamperingJudge.DecideAsync(plan, head.Listing, baseListing, cycles ?? [], cancellationToken)
+                : null;
             return new JudgeFindings(greenAtHead, cycles, trees.Builds)
             {
+                Tampering = tampering,
                 HeadFingerprints = head.Listing.Fingerprints,
                 SinceRed = sinceRed,
                 ExistingChanged = existingChanged,

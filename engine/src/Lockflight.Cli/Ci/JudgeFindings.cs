@@ -18,5 +18,8 @@ internal sealed record JudgeFindings(GreenJudgement? Green, IReadOnlyList<CycleJ
     /// <summary>The existing tests the pull request changed, re-checked on the base; null when the check did not run.</summary>
     public IReadOnlyList<ExistingChangedTest>? ExistingChanged { get; init; }
 
+    /// <summary>The host-tampering check; null when it did not run.</summary>
+    public TamperingJudgement? Tampering { get; init; }
+
     public static JudgeFindings None { get; } = new(null, null, []);
 }
