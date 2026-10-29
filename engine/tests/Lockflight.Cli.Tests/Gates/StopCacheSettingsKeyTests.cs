@@ -28,6 +28,8 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
             suppressions: fail
           docs:
             references: fail
+          ef:
+            pendingModelChanges: auto
         units:
           - path: services/orders
             build: Orders.sln
@@ -51,6 +53,7 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
         { "gates.coverage.minChangedLines", "    minChangedLines: 5", "    minChangedLines: 6" },
         { "gates.quality.suppressions", "    suppressions: fail", "    suppressions: report" },
         { "gates.docs.references", "    references: fail", "    references: off" },
+        { "gates.ef.pendingModelChanges", "    pendingModelChanges: auto", "    pendingModelChanges: fail" },
         { "units[].path", "  - path: services/orders", "  - path: services/billing" },
         { "units[].build", "    build: Orders.sln", "    build: Orders.slnx" },
         { "units[].kind", "    kind: dotnet", "    kind: none" },
@@ -75,7 +78,7 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
 
     /// <summary>A field added to one of these records must join the key, and a case above, before this list is updated.</summary>
     [Theory]
-    [InlineData(typeof(GateSettings), "BuildFile,Coverage,DocsReferences,Suppressions,TestFramework,TimeoutSeconds")]
+    [InlineData(typeof(GateSettings), "BuildFile,Coverage,DocsReferences,EfPendingModelChanges,Suppressions,TestFramework,TimeoutSeconds")]
     [InlineData(typeof(CoverageSettings), "Collector,MinChangedLines,PatchThreshold")]
     [InlineData(typeof(Unit), "Build,Kind,Path,StopFilter,TestFramework")]
     public void EverySettingsFieldIsKnownToTheKey(Type settings, string fields) =>

@@ -47,6 +47,9 @@ gates:
   docs:
     references: report          # fail | report | off (default report): whether references this change breaks in the
                                 #   instruction files fail the pr profile, are only listed, or are not checked
+  ef:
+    pendingModelChanges: auto   # auto | fail | report | off (default auto): auto runs the check, and can fail, only
+                                #   when a tool manifest pins dotnet-ef; fail runs it with any dotnet ef on the machine
 
 units:                          # workspace shell or monorepo; omit for a single repository
   - path: services/orders       # relative to this file, no '..'; units cannot be nested
@@ -223,7 +226,7 @@ operating system enforces them for shell commands while the sandbox is on: see
 |---|---|---|
 | `edit` | format (changed lines) | quick feedback |
 | `stop` | format → build (no new warnings vs baseline) → test | end of an agent turn |
-| `pr` | policy.protected → format → quality.suppressions → docs.references → build → test (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
+| `pr` | policy.protected → format → quality.suppressions → docs.references → build → ef.pendingModelChanges → test (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
 
 Verdicts and exit codes:
 
@@ -299,6 +302,22 @@ broken references new. `docs check` itself stays advisory and also reads `docs/`
 `gates.quality.suppressions` does; an `ERROR` (an unknown base, a shallow checkout) stays an `ERROR`. Locally the step is a guardrail; in CI it is a
 boundary only with `fail`, a required check and the manifest taken from the base branch. What it checks is what `docs check`
 checks: a path the repository never had is not reported, and a code-span path counts only with evidence from history.
+
+### EF Core model changes need a migration
+
+`ef.pendingModelChanges` runs per unit, after the build, for each DbContext with migrations: a `*ModelSnapshot.cs` in a
+`Migrations` folder names the context, and the nearest project file above it is its project. It checks a context only when
+the change touches its project or a project it references (since the merge base with `--base`, plus uncommitted and untracked
+files), and then runs `dotnet ef migrations has-pending-model-changes --project … --context …` (EF Core 8 or later), with the
+project itself as the startup project when it references `Microsoft.EntityFrameworkCore.Design`, else the first project of
+the unit that references both that package and this project. A model that changed without a migration fails, naming the
+project and context; `dotnet ef` failing for any other reason is an `ERROR`; the runs share the gate's time budget.
+
+With `auto` (the default) it runs only when a tool manifest (`dotnet-tools.json` or `.config/dotnet-tools.json`, in the
+unit or above it up to the project root) pins `dotnet-ef`, after `dotnet tool restore`; otherwise it is `N/A` and says so. A
+global `dotnet ef` is not the repository's choice, so it runs only with `fail`. `report` lists a pending change on a `PASS`,
+`off` skips the step. The project files are read as text, not evaluated by MSBuild: a reference added through an imported
+file is not seen.
 
 ## Baselines (brownfield adoption; human-only)
 
