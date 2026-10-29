@@ -16,7 +16,6 @@ public sealed class ManifestRequirementTests : IDisposable
     [InlineData("redgreen", "status")]
     [InlineData("trace")]
     [InlineData("review")]
-    [InlineData("ledger", "retro")]
     [InlineData("approve", "verify", "--base", "main")]
     public async Task ALifecycleCommandWithoutAManifestSaysToRunInit(params string[] args)
     {
@@ -31,7 +30,6 @@ public sealed class ManifestRequirementTests : IDisposable
     [InlineData("redgreen", "status")]
     [InlineData("trace")]
     [InlineData("review")]
-    [InlineData("ledger", "retro")]
     [InlineData("approve", "verify", "--base", "main")]
     [InlineData("link")]
     public async Task ALifecycleCommandWithAnInvalidManifestShowsTheParseErrorInsteadOfAskingForInit(params string[] args)

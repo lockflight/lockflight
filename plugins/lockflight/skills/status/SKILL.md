@@ -11,4 +11,4 @@ description: Summarize Lockflight's state for this repository — readiness, loc
    repeats, and list the most recent `hook.blocked` reasons and `gate.completed` verdicts. A `gate.completed` line's
    `trigger` says who ran it (`command` for `gate run`, `stop-hook` for the Stop gate); `cache: hit` means the Stop gate did
    not run because nothing changed since its last PASS. Repeated signatures are worth pointing out — they are candidates for
-   a fix in the next retro.
+   a fix; the optional crew plugin's `retro` skill (`/lockflight-crew:retro`) clusters them with a suggested remedy.

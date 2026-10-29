@@ -1,50 +1,49 @@
-version: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-link: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-init: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-doctor: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-statusline: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-update: reserved=True words=update shell=update powershell=update rule=Checked
-docs check: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-rules audit: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-hook: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-baseline build: reserved=True words=baseline build shell=baseline build powershell=baseline build rule=Checked
-baseline tests: reserved=True words=baseline tests shell=baseline tests powershell=baseline tests rule=Checked
-baseline deps: reserved=True words=baseline deps shell=baseline deps powershell=baseline deps rule=Checked
-baseline suppressions: reserved=True words=baseline suppressions shell=baseline suppressions powershell=baseline suppressions rule=Checked
-gate run: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-phase check: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-redgreen start: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-redgreen red: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-redgreen green: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-redgreen status: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-redgreen reset: reserved=True words=redgreen reset shell=redgreen reset powershell=redgreen reset rule=Checked
-redgreen amend: reserved=True words=redgreen amend shell=redgreen amend powershell=redgreen amend rule=Checked
-review: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-review status: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-review dismiss: reserved=True words=review dismiss shell=review dismiss powershell=review dismiss rule=Checked
-ledger retro: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-propose: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-trace: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-approve spec: reserved=True words=approve spec shell=approve spec powershell=approve spec rule=Checked
-approve tasks: reserved=True words=approve tasks shell=approve tasks powershell=approve tasks rule=Checked
-approve verify: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-workspace sync: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-adopt plan: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-adopt apply: reserved=True words=adopt apply shell=adopt apply powershell=adopt apply rule=Checked
-adopt undo: reserved=True words=adopt undo shell=adopt undo powershell=adopt undo rule=Checked
-(nothing): reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-approve: reserved=True words=approve shell=approve powershell=approve rule=Checked
-approve xyz: reserved=True words=approve xyz shell=approve xyz powershell=approve xyz rule=Checked
-approve verify --base main: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-approve --feature verify: reserved=True words=- shell=- powershell=- rule=Checked
-baseline: reserved=True words=baseline shell=baseline powershell=baseline rule=Checked
-baseline xyz: reserved=True words=baseline xyz shell=baseline xyz powershell=baseline xyz rule=Checked
-update --source feed: reserved=True words=update feed shell=update feed powershell=update feed rule=Checked
-redgreen: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-redgreen xyz: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-redgreen --feature x reset: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-review xyz: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-adopt: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-adopt xyz: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-Approve spec: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
-gate run approve: reserved=False words=- shell=- powershell=- rule=GuidanceOnly
+version: reserved=False words=- shell=- powershell=-
+link: reserved=False words=- shell=- powershell=-
+init: reserved=False words=- shell=- powershell=-
+doctor: reserved=False words=- shell=- powershell=-
+statusline: reserved=False words=- shell=- powershell=-
+update: reserved=True words=update shell=update powershell=update
+docs check: reserved=False words=- shell=- powershell=-
+facts: reserved=False words=- shell=- powershell=-
+hook: reserved=False words=- shell=- powershell=-
+baseline build: reserved=True words=baseline build shell=baseline build powershell=baseline build
+baseline tests: reserved=True words=baseline tests shell=baseline tests powershell=baseline tests
+baseline deps: reserved=True words=baseline deps shell=baseline deps powershell=baseline deps
+baseline suppressions: reserved=True words=baseline suppressions shell=baseline suppressions powershell=baseline suppressions
+gate run: reserved=False words=- shell=- powershell=-
+phase check: reserved=False words=- shell=- powershell=-
+redgreen start: reserved=False words=- shell=- powershell=-
+redgreen red: reserved=False words=- shell=- powershell=-
+redgreen green: reserved=False words=- shell=- powershell=-
+redgreen status: reserved=False words=- shell=- powershell=-
+redgreen reset: reserved=True words=redgreen reset shell=redgreen reset powershell=redgreen reset
+redgreen amend: reserved=True words=redgreen amend shell=redgreen amend powershell=redgreen amend
+review: reserved=False words=- shell=- powershell=-
+review status: reserved=False words=- shell=- powershell=-
+review dismiss: reserved=True words=review dismiss shell=review dismiss powershell=review dismiss
+propose: reserved=False words=- shell=- powershell=-
+trace: reserved=False words=- shell=- powershell=-
+approve spec: reserved=True words=approve spec shell=approve spec powershell=approve spec
+approve tasks: reserved=True words=approve tasks shell=approve tasks powershell=approve tasks
+approve verify: reserved=False words=- shell=- powershell=-
+workspace sync: reserved=False words=- shell=- powershell=-
+adopt plan: reserved=False words=- shell=- powershell=-
+adopt apply: reserved=True words=adopt apply shell=adopt apply powershell=adopt apply
+adopt undo: reserved=True words=adopt undo shell=adopt undo powershell=adopt undo
+(nothing): reserved=False words=- shell=- powershell=-
+approve: reserved=True words=approve shell=approve powershell=approve
+approve xyz: reserved=True words=approve xyz shell=approve xyz powershell=approve xyz
+approve verify --base main: reserved=False words=- shell=- powershell=-
+approve --feature verify: reserved=True words=- shell=- powershell=-
+baseline: reserved=True words=baseline shell=baseline powershell=baseline
+baseline xyz: reserved=True words=baseline xyz shell=baseline xyz powershell=baseline xyz
+update --source feed: reserved=True words=update feed shell=update feed powershell=update feed
+redgreen: reserved=False words=- shell=- powershell=-
+redgreen xyz: reserved=False words=- shell=- powershell=-
+redgreen --feature x reset: reserved=False words=- shell=- powershell=-
+review xyz: reserved=False words=- shell=- powershell=-
+adopt: reserved=False words=- shell=- powershell=-
+adopt xyz: reserved=False words=- shell=- powershell=-
+Approve spec: reserved=False words=- shell=- powershell=-
+gate run approve: reserved=False words=- shell=- powershell=-

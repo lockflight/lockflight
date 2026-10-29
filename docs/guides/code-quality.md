@@ -95,13 +95,14 @@ The test is a starting point: edit the layers to match the solution, or add rule
 
 ## Rules audit
 
-`lockflight rules audit` recognises the pack as backing for written rules, by exact matches only:
+The crew plugin's `rules-audit` skill ("which of my rules are checked by anything?") reads `lockflight facts --json` and your
+instruction files, and labels each written rule by what backs it, by exact matches only. Its answer is advice, not a verdict:
 
 - A rule that names an analyzer id (`CA1502`, `IDE0005`), or the metric a code metrics rule measures ("cyclomatic complexity",
-  "maintainability index", "class coupling"), is **related** when a tracked `.editorconfig` or `.globalconfig` sets that id to
-  `warning` or `error`. Otherwise the audit suggests the `dotnet_diagnostic` line.
+  "maintainability index", "class coupling"), is **related** when the facts show a tracked `.editorconfig` or `.globalconfig`
+  setting that id to `warning` or `error`. Otherwise the skill suggests the `dotnet_diagnostic` line.
 - A rule that bans a dependency between two named layers (Domain, Application, Infrastructure, Api) is **related** when a test
-  file uses ArchUnitNET or NetArchTest. Otherwise the audit suggests `init --architecture-tests`.
+  file uses ArchUnitNET or NetArchTest. Otherwise the skill suggests `init --architecture-tests`.
 
 Related, never checked: a build warning fails only as a new warning against the baseline, and a test checks its own rules,
 not the sentence in your instructions.

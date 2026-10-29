@@ -6,7 +6,7 @@ doctor: [--self-test --canaries --canaries=full]
 statusline: []
 update: [--source --project]
 docs check: []
-rules audit: []
+facts: [--json]
 hook: [] arguments
 baseline build: [--path]
 baseline tests: [--path]
@@ -23,7 +23,6 @@ redgreen amend: [--feature --reason] arguments
 review: [--feature --base --model --budget]
 review status: [--feature]
 review dismiss: [--reason --feature] arguments
-ledger retro: [--days --min]
 propose: [--from --delete] arguments
 trace: [--feature]
 approve spec: [--feature]

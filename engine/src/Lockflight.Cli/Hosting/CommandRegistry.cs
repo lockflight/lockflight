@@ -1,11 +1,11 @@
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Docs;
 using Lockflight.Cli.Doctor;
+using Lockflight.Cli.Facts;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Init;
-using Lockflight.Cli.Learning;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.Approvals;
 using Lockflight.Cli.Lifecycle.RedGreen;
@@ -13,7 +13,6 @@ using Lockflight.Cli.Linking;
 using Lockflight.Cli.Mascot;
 using Lockflight.Cli.Proposals;
 using Lockflight.Cli.Review;
-using Lockflight.Cli.Rules;
 using Lockflight.Cli.Updating;
 using Lockflight.Cli.Workspace;
 
@@ -34,7 +33,7 @@ internal static class CommandRegistry
         new(["statusline"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new StatusLineCommand(context)),
         new(["update"], CommandAudience.Human, ["--source"], ["--project"], CommandOperands.Options, OptionParsing.Own, context => new UpdateCommand(context)),
         new(["docs", "check"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new DocsCheckCommand(context)),
-        new(["rules", "audit"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new RulesAuditCommand(context)),
+        new(["facts"], CommandAudience.Anyone, [], [FactsCommand.JsonFlag], CommandOperands.Options, OptionParsing.Shared, context => new FactsCommand(context)),
         new(["hook"], CommandAudience.Anyone, [], [], CommandOperands.ExactlyOne, OptionParsing.Own, context => new HookCommand(context)),
         new(["baseline", "build"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
         new(["baseline", "tests"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
@@ -55,7 +54,6 @@ internal static class CommandRegistry
         new(["review"], CommandAudience.Anyone, ["--feature", "--base", "--model", "--budget"], [], CommandOperands.Options, OptionParsing.Shared, context => new ReviewCommand(context)),
         new(["review", "status"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new ReviewStatusCommand(context)),
         new(["review", "dismiss"], CommandAudience.Human, ["--reason", "--feature"], [], CommandOperands.Any, OptionParsing.Shared, context => new ReviewDismissCommand(context)),
-        new(["ledger", "retro"], CommandAudience.Anyone, ["--days", "--min"], [], CommandOperands.Options, OptionParsing.Shared, context => new RetroCommand(context)),
         new(["propose"], CommandAudience.Anyone, ["--from"], ["--delete"], CommandOperands.Any, OptionParsing.Own, context => new ProposeCommand(context)),
         new(["trace"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new TraceCommand(context)),
         new(["approve", "spec"], CommandAudience.Human, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
