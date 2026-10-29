@@ -1,8 +1,9 @@
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.Approvals;
 
-namespace Lockflight.Cli.Canaries;
+namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// <c>/lockflight:approve</c> typed in a session, sent through <c>lockflight hook user-prompt-expansion</c> as Claude Code sends it.

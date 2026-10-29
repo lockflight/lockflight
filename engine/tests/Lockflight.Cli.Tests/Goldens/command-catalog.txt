@@ -2,7 +2,7 @@ global: --help -h --version
 version: []
 link: []
 init: [--profile --ci --ci-platform --quality --architecture-tests --no-link --no-sandbox]
-doctor: [--canaries --canaries=full]
+doctor: [--self-test --canaries --canaries=full]
 statusline: []
 update: [--source --project]
 docs check: []

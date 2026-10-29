@@ -11,7 +11,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | Every tool call or every write is blocked | [engine not installed](#every-tool-call-is-blocked-engine-not-installed-in-this-project) · [engine not run](#every-tool-call-is-blocked-the-engine-was-not-run) · [lockdown](#every-write-is-blocked-the-project-is-in-lockdown) · [after editing `lockflight.yaml`](#writes-are-blocked-after-editing-lockflightyaml) · [engine and pin differ](#running-engine-x-but-the-project-pins-y) · [internal error](#lockflight-internal-error-or-the-engine-failed-exit-n) |
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a shell command after `cd`](#a-shell-command-is-blocked-after-a-cd) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
-| A gate result | [`doctor --canaries` reports MISSED or BROKEN](#doctor---canaries-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [review: changes not committed](#review-says-the-working-tree-has-changes-that-are-not-committed) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
+| A gate result | [`doctor --self-test` reports MISSED or BROKEN](#doctor---self-test-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [review: changes not committed](#review-says-the-working-tree-has-changes-that-are-not-committed) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
 | Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) |
 
 ## Every tool call is blocked: "engine not installed in this project"
@@ -184,15 +184,17 @@ A project set up from a source install pins a development build that only your m
 that pin: **pin restorable** FAIL when this machine cannot restore it ([fix](#dotnet-lockflight-fails-the-pinned-version-is-not-found)),
 or a **development pin** warning once a release is installed ([fix](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine)).
 
-## `doctor --canaries` reports MISSED or BROKEN
+## `doctor --self-test` reports MISSED or BROKEN
 
 - **MISSED**: a control let a planted violation through. The line names the control and what it answered. This engine build
   cannot be trusted with that control: do not rely on it, run the same command with the released engine
-  (`~/.lockflight/bin/lockflight doctor --canaries`), and [report it](../../SECURITY.md) privately if the release misses it too.
-- **BROKEN**: the canary could not judge. Either the harmless twin was refused as well (for example the scratch project ended up
-  in lockdown, or the guard blocks every write), the TaskCompleted canary found no `git` to make its scratch repository, or,
-  with `--canaries=full`, the generated project did not build: the line says which. `--canaries=full` needs the .NET SDK 10 and the xUnit packages from NuGet (or the local cache); without network, run
-  `doctor --canaries` without `=full`.
+  (`~/.lockflight/bin/lockflight doctor --self-test`), and [report it](../../SECURITY.md) privately if the release misses it too.
+- **BROKEN**: the canary could not judge, because its harmless twin was refused as well (for example the scratch project ended
+  up in lockdown, or the guard blocks every write): the line says which. The self-test builds nothing and needs no network or
+  git.
+
+`doctor --canaries` and `--canaries=full` are deprecated names for `--self-test`. The full canary suite, which builds a generated
+project, runs in the engine's own tests (`dotnet test --filter-trait Category=Canary` in `engine/`), not in the installed engine.
 
 ## A gate says NOT-EARNED
 

@@ -30,7 +30,7 @@ internal static class CommandRegistry
         new(["version"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new VersionCommand(context)),
         new(["link"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new LinkCommand(context)),
         new(["init"], CommandAudience.Anyone, ["--profile", "--ci", "--ci-platform"], ["--quality", "--architecture-tests", "--no-link", "--no-sandbox"], CommandOperands.Options, OptionParsing.Own, context => new InitCommand(context)),
-        new(["doctor"], CommandAudience.Anyone, [], [DoctorCommand.CanariesFlag, DoctorCommand.FullCanariesFlag], CommandOperands.Options, OptionParsing.Shared, context => new DoctorCommand(context)),
+        new(["doctor"], CommandAudience.Anyone, [], [DoctorCommand.SelfTestFlag, DoctorCommand.CanariesFlag, DoctorCommand.FullCanariesFlag], CommandOperands.Options, OptionParsing.Shared, context => new DoctorCommand(context)),
         new(["statusline"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new StatusLineCommand(context)),
         new(["update"], CommandAudience.Human, ["--source"], ["--project"], CommandOperands.Options, OptionParsing.Own, context => new UpdateCommand(context)),
         new(["docs", "check"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new DocsCheckCommand(context)),

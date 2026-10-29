@@ -58,7 +58,8 @@ toolchain is also needed.
 ```sh
 cd engine
 dotnet build
-dotnet test                      # unit tests (do not pass --nologo: it is forwarded to the test host)
+dotnet test                      # unit tests and the canary suite (do not pass --nologo: it is forwarded to the test host)
+dotnet test --filter-trait Category=Canary       # the canary suite alone (CI's canaries jobs)
 dotnet publish src/Lockflight.Cli -c Release -o ../artifacts/engine
 cd ..
 ENGINE=$PWD/artifacts/engine/lockflight sh tests/compat/probe-suite.sh          # hook compatibility
@@ -69,6 +70,22 @@ claude plugin validate --strict . && claude plugin validate --strict plugins    
 scripts/marketplace-ref.sh                                                      # the marketplace serves a published release
 shellcheck -S warning plugins/lockflight/bin/lockflight-hook tests/*/*.sh       # shell scripts (CI runs this too)
 ```
+
+### Canaries
+
+Every control is seen saying no at least once: the canary suite in
+[`engine/tests/Lockflight.Cli.Tests/Canaries/`](engine/tests/Lockflight.Cli.Tests/Canaries/) plants a violation in front of it,
+with a harmless twin that must pass ([every safeguard red at least once](docs/guides/guardrails-and-boundaries.md#every-safeguard-red-at-least-once)).
+**A pull request that registers a guard rule (`IGuardRule` in `GuardRules`), a gate step (`IGateStep` in `GateProfiles`) or a
+command for a person (`CommandAudience.Human` in `CommandRegistry`) adds its canary in the same pull request**: a case in
+`GuardCanaries.cs` reported with the rule's id as `Control`, a planted violation in `GateStepCanaries.cs` for the step's name, or
+safe arguments in `HumanOnlyCanaries.cs`. `CanaryCoverageTests` fails on `main` otherwise and names the file to add it to. A
+step whose violation needs a fact the planted tools do not give (a file, a setting) plants it in the same case; a step that only
+reports, as the protected-changes report does, is caught when its report names the planted change.
+
+The canary tests carry the trait `Category=Canary`: CI's `canaries` jobs run them on Linux, Windows and macOS, and the `engine`
+jobs leave them out. `lockflight doctor --self-test` is the product's own, much smaller set (five canaries, no build) for a
+person's machine; it is not where a new control's canary goes.
 
 ### Skill evals
 

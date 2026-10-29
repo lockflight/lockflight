@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 
@@ -48,6 +49,16 @@ internal sealed class CanaryScratch : IDisposable
     /// </summary>
     public Task<CanaryRun> RunInSessionAsync(string[] args, string input, IReadOnlyDictionary<string, string> session, TimeProvider clock, CancellationToken cancellationToken) =>
         RunAsync(args, input, session, clock, cancellationToken);
+
+    /// <summary>A PreToolUse hook payload for <paramref name="tool"/> in the scratch project, as Claude Code sends it.</summary>
+    public string ToolCall(string tool, JsonObject toolInput) => new JsonObject
+    {
+        ["session_id"] = "lockflight-canary",
+        ["cwd"] = Project,
+        ["hook_event_name"] = "PreToolUse",
+        ["tool_name"] = tool,
+        ["tool_input"] = toolInput,
+    }.ToJsonString(JsonFiles.Indented);
 
     public string PathOf(string relativePath) => Path.Combine(Project, relativePath.Replace('/', Path.DirectorySeparatorChar));
 

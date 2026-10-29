@@ -1,6 +1,6 @@
 using Lockflight.Cli.Gates;
 
-namespace Lockflight.Cli.Canaries;
+namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// What a gate run on the canary project reported: its test step (null when the run stopped before it), its last step, and why there

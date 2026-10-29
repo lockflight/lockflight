@@ -1,8 +1,9 @@
 using System.Text.Json;
+using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
 
-namespace Lockflight.Cli.Canaries;
+namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// The canaries that build and run a generated project (<see cref="CanaryProject"/>): the real test gate on a failing test, on every
@@ -51,7 +52,7 @@ internal static class FullCanaries
         if (twin.Test is not { Verdict: Verdict.Pass })
         {
             return [new CanaryReport("full: a passing test passes the real test gate", CanaryResult.Broken,
-                $"{twin.Describe()}; the .NET SDK and the xUnit packages (NuGet) are needed for --canaries=full")];
+                $"{twin.Describe()}; the .NET SDK and the xUnit packages (NuGet) are needed for these canaries")];
         }
 
         List<CanaryReport> reports = [];
@@ -61,7 +62,7 @@ internal static class FullCanaries
             GateReading reading = await TestStepAsync(scratch, cancellationToken);
             string canary = $"full: the real test gate does not PASS {name}";
             reports.Add(reading.Test is GateStep test
-                ? TestGateCanaries.Report(canary, test)
+                ? CanaryReport.NotAPass(canary, test)
                 : new CanaryReport(canary, CanaryResult.Broken, $"the gate stopped before the test step: {reading.Describe()}"));
         }
 
