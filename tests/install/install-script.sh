@@ -103,7 +103,7 @@ run() {
   shift
   rm -rf "$work/case" "$work/engine-ran" && mkdir -p "$work/case"
   local status=0
-  (cd "$work/case" && env HOME="$work/case/home" LOCKFLIGHT_NUGET_FEED="file://$feed/" ${assignments[@]+"${assignments[@]}"} $shell "$script" "$@") \
+  (cd "$work/case" && env HOME="$work/case/user" LOCKFLIGHT_NUGET_FEED="file://$feed/" ${assignments[@]+"${assignments[@]}"} $shell "$script" "$@") \
     > "$work/stdout" 2> "$work/stderr" || status=$?
   if [ "$status" != "$expected" ]; then
     bad "$name: exit $status, expected $expected; stderr: $(tr '\n' ' ' < "$work/stderr")"
@@ -137,7 +137,7 @@ for shell_name in $shells; do
     && says "give --lock" "neither a lock nor a version is a usage error"
 
   if run "version" 0 -- --version "$version"; then
-    [ "$(tail -n 1 "$work/stdout")" = "$work/case/home/.lockflight/tools/$version/lockflight" ] \
+    [ "$(tail -n 1 "$work/stdout")" = "$work/case/user/.lockflight/tools/$version/lockflight" ] \
       && ok "a first install by version takes the hash from engine-hashes.json and goes to ~/.lockflight/tools/<version>" \
       || bad "version install printed $(tail -n 1 "$work/stdout")"
   fi
