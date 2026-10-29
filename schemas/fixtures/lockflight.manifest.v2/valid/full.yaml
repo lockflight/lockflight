@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=../../../../lockflight.schema.json
+version: 2
+requiresEngine: "0.3.0"
+protected:
+  - "secrets/**"
+stop:
+  gate: true
+  target: .
+gates:
+  build: Shop.sln
+  timeoutSeconds: 600
+  test:
+    framework: net10.0
+  coverage:
+    collector: microsoft
+    patchThreshold: 80
+    minChangedLines: 10
+  quality:
+    suppressions: fail
+routing:
+  preset: default
+  floor: fix
+  fix:
+    maxLines: 20
+    maxFiles: 2
+  largeLines: 400
+  structural: critical
+  critical:
+    - "src/Payments/**"
+    - "src/*/Auth/**"
+  dbPaths: []
+  generatedPaths: []
+  nonProduction: ["samples/**"]
+  requiredWorkflows: []
+  apiProjects: ["src/Shop.Api"]
+  layers:
+    - { name: domain, paths: ["src/*.Domain/**"] }
+    - { name: application, paths: ["src/*.Application/**"] }
+    - { name: infrastructure, paths: ["src/*.Infrastructure/**", "src/*.Api/**"] }
+  coverage: { fix: 80, behaviour: 80, feature: 80, critical: 90 }
+  require:
+    specFrom: feature
+    reviewFrom: behaviour
+    reviewKeyFrom: critical
+    architectureFrom: feature
+    architectureDeclaredFrom: none
+approvals:
+  check: fail
+  default: same-pr
+  specFirstFrom: none
+  specFirstPaths:
+    - "src/Payments/**"
+  specPaths:
+    - "specs/**"
+autonomy:
+  maxClass: fix
+  budgetUsd: 5.00
+  timeMinutes: 60
+units:
+  - path: services/orders
+    build: Orders.sln
+    kind: auto
+    test:
+      framework: net8.0
+      stopFilter: "Category!=Integration"
+review:
+  model: sonnet
+  maxUsd: 3.00
+  target: origin/main
+  maxDiffCharacters: 120000

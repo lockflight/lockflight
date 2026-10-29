@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lockflight/lockflight/main/schemas/lockflight.manifest.v2.json",
+  "title": "lockflight.yaml (version 2)",
+  "description": "The Lockflight manifest. The engine's reader is the authority; this schema mirrors it for editors. Rules a JSON Schema cannot express are checked by the engine only and named in the descriptions: globs relative to the project root without '..', no glob listed twice, routing.largeLines above routing.fix.maxLines, routing.coverage never decreasing from fix to critical, routing.require.reviewKeyFrom not below reviewFrom, routing.require.architectureDeclaredFrom not below architectureFrom, unique and non-overlapping routing.layers, unit paths that do not nest, shell URLs without credentials, and requiresEngine compared with the running engine.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": { "const": 2, "description": "The manifest version. A file without it is version 1, read with migration defaults." },
+    "requiresEngine": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$",
+      "description": "The lowest engine version this manifest needs; an older engine says so before any other error."
+    },
+    "protected": { "$ref": "#/$defs/globs", "description": "Extra globs the agent must not change; the built-in list always applies." },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gate": { "type": "boolean", "default": false },
+        "target": { "$ref": "#/$defs/nonEmpty", "default": "." }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build": { "$ref": "#/$defs/nonEmpty" },
+        "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 7200, "default": 600 },
+        "test": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "framework": { "type": "string", "pattern": "^net" } }
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "collector": { "enum": ["none", "microsoft", "coverlet"], "default": "none" },
+            "patchThreshold": { "type": "integer", "minimum": 0, "maximum": 100, "default": 80 },
+            "minChangedLines": { "type": "integer", "minimum": 0, "default": 10 }
+          }
+        },
+        "quality": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "suppressions": { "$ref": "#/$defs/gateMode" } }
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preset"],
+      "description": "How a pull request's change class is computed and what each class must prove. Keys left out take the preset's values.",
+      "properties": {
+        "preset": { "enum": ["relaxed", "default", "strict"] },
+        "floor": { "$ref": "#/$defs/changeClass" },
+        "fix": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxLines": { "type": "integer", "minimum": 1, "maximum": 10000 },
+            "maxFiles": { "type": "integer", "minimum": 1, "maximum": 1000 }
+          }
+        },
+        "largeLines": { "type": "integer", "minimum": 2, "description": "Must be above fix.maxLines (checked by the engine)." },
+        "structural": { "enum": ["feature", "critical"] },
+        "critical": { "$ref": "#/$defs/globs" },
+        "dbPaths": { "$ref": "#/$defs/globs" },
+        "generatedPaths": { "$ref": "#/$defs/globs" },
+        "nonProduction": { "$ref": "#/$defs/globs" },
+        "requiredWorkflows": { "$ref": "#/$defs/globs" },
+        "apiProjects": { "$ref": "#/$defs/globs" },
+        "layers": {
+          "type": "array",
+          "minItems": 2,
+          "description": "Inner layer first. Names unique and globs of different layers not overlapping (checked by the engine).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "paths"],
+            "properties": {
+              "name": { "$ref": "#/$defs/nonEmpty" },
+              "paths": { "allOf": [{ "$ref": "#/$defs/globs" }, { "minItems": 1 }] }
+            }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Patch coverage per class; never decreasing from fix to critical (checked by the engine).",
+          "properties": {
+            "fix": { "$ref": "#/$defs/percent" },
+            "behaviour": { "$ref": "#/$defs/percent" },
+            "feature": { "$ref": "#/$defs/percent" },
+            "critical": { "$ref": "#/$defs/percent" }
+          }
+        },
+        "require": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "specFrom": { "enum": ["behaviour", "feature", "critical"] },
+            "reviewFrom": { "$ref": "#/$defs/changeClass" },
+            "reviewKeyFrom": { "enum": ["behaviour", "feature", "critical", "none"], "description": "Not below reviewFrom (checked by the engine)." },
+            "architectureFrom": { "enum": ["behaviour", "feature", "critical"] },
+            "architectureDeclaredFrom": { "enum": ["critical", "none"], "description": "Not below architectureFrom (checked by the engine)." }
+          }
+        }
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The approval of record is the platform's review; Lockflight checks CODEOWNERS coverage of specPaths on the base branch and, for spec-first, that the spec is on the base unchanged.",
+      "properties": {
+        "check": { "enum": ["fail", "report"], "default": "fail" },
+        "default": { "enum": ["same-pr", "spec-first"], "default": "same-pr" },
+        "specFirstFrom": { "enum": ["none", "feature", "critical"] },
+        "specFirstPaths": { "$ref": "#/$defs/globs" },
+        "specPaths": { "allOf": [{ "$ref": "#/$defs/globs" }, { "minItems": 1 }], "default": ["specs/**"] }
+      }
+    },
+    "autonomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Reserved: validated, no effect in this engine version.",
+      "properties": {
+        "maxClass": { "$ref": "#/$defs/changeClass" },
+        "budgetUsd": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "timeMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 }
+      }
+    },
+    "units": {
+      "type": "array",
+      "description": "Units of a workspace shell or monorepo; paths do not nest (checked by the engine). Not together with shell.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path"],
+        "properties": {
+          "path": { "$ref": "#/$defs/relativePath" },
+          "build": { "$ref": "#/$defs/nonEmpty" },
+          "kind": { "enum": ["auto", "dotnet", "none"], "default": "auto" },
+          "test": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "framework": { "type": "string", "pattern": "^net" },
+              "stopFilter": { "$ref": "#/$defs/nonEmpty" }
+            }
+          }
+        }
+      }
+    },
+    "shell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "unit"],
+      "description": "This repository is a unit of a workspace shell. Not together with units. The URL never carries credentials (checked by the engine).",
+      "properties": {
+        "url": { "type": "string", "pattern": "^(https://|ssh://|[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:)" },
+        "ref": { "type": "string", "pattern": "^[A-Za-z0-9_][A-Za-z0-9._/-]*$" },
+        "unit": { "$ref": "#/$defs/relativePath" }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\[\\]-]*$", "default": "sonnet" },
+        "maxUsd": { "type": "number", "exclusiveMinimum": 0, "maximum": 100, "default": 3.0 },
+        "target": { "type": "string", "pattern": "^[A-Za-z0-9_][A-Za-z0-9._/-]*$" },
+        "maxDiffCharacters": { "type": "integer", "minimum": 10000, "maximum": 400000, "default": 120000 }
+      }
+    }
+  },
+  "not": { "required": ["units", "shell"] },
+  "$defs": {
+    "nonEmpty": { "type": "string", "minLength": 1 },
+    "glob": { "type": "string", "minLength": 1, "description": "Relative to the project root, forward slashes, no '..' (checked by the engine)." },
+    "globs": { "type": "array", "items": { "$ref": "#/$defs/glob" }, "uniqueItems": true },
+    "relativePath": { "type": "string", "minLength": 1, "pattern": "^(?![/\\\\])(?![A-Za-z]:)" },
+    "percent": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "changeClass": { "enum": ["fix", "behaviour", "feature", "critical"] },
+    "gateMode": { "enum": ["fail", "report", "off"], "default": "fail" }
+  }
+}

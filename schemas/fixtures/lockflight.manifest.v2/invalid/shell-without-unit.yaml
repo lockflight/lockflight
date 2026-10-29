@@ -1,0 +1,3 @@
+version: 2
+shell:
+  url: https://example.com/shell.git

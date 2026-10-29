@@ -1,0 +1,5 @@
+version: 2
+routing:
+  preset: default
+  layers:
+    - { name: domain, paths: ["src/**"] }
