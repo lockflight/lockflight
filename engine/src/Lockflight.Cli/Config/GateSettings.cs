@@ -24,6 +24,12 @@ internal sealed record GateSettings(string? TestFramework, int TimeoutSeconds, C
     /// </summary>
     public GateMode EfPendingModelChanges { get; init; } = GateMode.Auto;
 
+    /// <summary>
+    /// <c>gates.test.stopFilter</c>: tests the stop profile and red/green's whole-suite regression passes leave out (the pr profile
+    /// and CI run them); a unit's own <c>test.stopFilter</c> replaces it. Null for none.
+    /// </summary>
+    public string? StopFilter { get; init; }
+
     public const int DefaultTimeoutSeconds = 600;
     public const int MaxTimeoutSeconds = 7200;
 

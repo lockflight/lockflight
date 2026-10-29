@@ -16,12 +16,14 @@ public sealed class GreenStepTests : IDisposable
         TestProjects = ["tests"],
     };
 
+    private static readonly IReadOnlySet<string> NoneExcluded = new HashSet<string>(StringComparer.Ordinal);
+
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-green-");
 
     [Fact]
     public void AKnownTestMissingFromTheReportMeansTheRunIsIncomplete()
     {
-        string problem = Assert.Single(GreenStep.IncompleteRun(Record, [Test("Old"), Test("Manual", isExplicit: true)], [], abnormalExit: null));
+        string problem = Assert.Single(GreenStep.IncompleteRun(Record, [Test("Old"), Test("Manual", isExplicit: true)], [], abnormalExit: null, NoneExcluded));
 
         Assert.Contains("known tests missing from the run's report", problem, StringComparison.Ordinal);
         Assert.Contains("T:A.Old", problem, StringComparison.Ordinal);
@@ -31,14 +33,18 @@ public sealed class GreenStepTests : IDisposable
     [Fact]
     public void ARunnerThatDidNotFinishNormallyIsNotAGreen()
     {
-        string problem = Assert.Single(GreenStep.IncompleteRun(Record, [Test("Old")], [Passed("Old")], "tests/T.dll (runner exit code 3)"));
+        string problem = Assert.Single(GreenStep.IncompleteRun(Record, [Test("Old")], [Passed("Old")], "tests/T.dll (runner exit code 3)", NoneExcluded));
 
         Assert.Contains("did not finish normally: tests/T.dll (runner exit code 3)", problem, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ACompleteNormalRunHasNoProblem() =>
-        Assert.Empty(GreenStep.IncompleteRun(Record, [Test("Old")], [Passed("Old")], abnormalExit: null));
+        Assert.Empty(GreenStep.IncompleteRun(Record, [Test("Old")], [Passed("Old")], abnormalExit: null, NoneExcluded));
+
+    [Fact]
+    public void AKnownTestTheStopFilterLeftOutIsNotMissing() =>
+        Assert.Empty(GreenStep.IncompleteRun(Record, [Test("Old")], [], abnormalExit: null, new HashSet<string>(StringComparer.Ordinal) { "T:A.Old" }));
 
     [Fact]
     public async Task ResettingAFeatureWithoutEvidenceSaysSo()

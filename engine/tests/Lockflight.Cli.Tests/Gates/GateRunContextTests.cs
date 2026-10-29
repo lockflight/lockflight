@@ -68,6 +68,17 @@ public sealed class GateRunContextTests
         Assert.Equal((null, "Shell.slnx", "net10.0", "origin/main"), (run.UnitPath, run.BuildFile, run.Settings.TestFramework, run.BaseRef));
     }
 
+    [Fact]
+    public void TheRootsStopFilterAppliesOutsideEveryUnitAndToAUnitWithoutItsOwn()
+    {
+        string root = Path.GetFullPath("workspace");
+        Manifest manifest = Workspace(root) with { Gates = GateSettings.Default with { StopFilter = "Category!=Slow" } };
+
+        Assert.Equal("Category!=Slow", GateRunContext.ForTarget(manifest, root, GateProfile.Stop, baseRef: null, TimeProvider.System).StopFilter);
+        Assert.Equal("Category!=Slow", GateRunContext.ForTarget(manifest, Path.Combine(root, "services", "billing"), GateProfile.Stop, baseRef: null, TimeProvider.System).StopFilter);
+        Assert.Equal("Category!=Integration", GateRunContext.ForTarget(manifest, Path.Combine(root, "services", "orders"), GateProfile.Stop, baseRef: null, TimeProvider.System).StopFilter);
+    }
+
     private static Manifest Workspace(string root) =>
         new(root, [], StopGate: true, StopTarget: null, GateSettings.Default with { TestFramework = "net10.0", BuildFile = "Shell.slnx" })
         {

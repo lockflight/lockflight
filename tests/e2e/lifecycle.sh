@@ -3,15 +3,15 @@
 # negative controls (agent approval refused, cheating red rejected, test edits blocked during red, a person's amend unlocking one
 # test file until its red is re-checked, an amend after the implementation re-checked on the red-time snapshot, a test file
 # edited behind the guard refused at green, stubbed green rejected, a test switched off with Explicit refused, a test renamed
-# after green dropped from the trace).
+# after green dropped from the trace, a test.stopFilter keeping a Docker test out of the regression passes).
 # Plays the agent (CLAUDECODE=1) and the human (CLAUDECODE unset). Usage: ENGINE=<lockflight binary> lifecycle.sh <workdir>
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 E="${ENGINE:?path to the lockflight binary}"
 W="$1"; rm -rf "${W:?}"; mkdir -p "$W"
 cp -R "$ROOT/samples/dotnet-single/." "$W/"; rm -rf "$W"/*/*/bin "$W"/*/*/obj
-# The container smoke test needs Docker, which macOS and Windows runners lack; it is not what this script checks.
-rm -f "$W/tests/Shop.Tests/ContainerSmokeTests.cs"
+# The container smoke test needs Docker, which macOS and Windows runners lack: test.stopFilter leaves it out of red/green's
+# regression passes (and of the Stop gate); the pr gate and CI would run it.
 export CLAUDECODE=1
 failures=0
 expect() { # expect <exit code> <description> [<text the output must contain>] -- command…
@@ -26,7 +26,8 @@ expect() { # expect <exit code> <description> [<text the output must contain>] -
   fi
 }
 cd "$W" || exit 1; export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
-git init -q; git config user.email dev@example.com; printf 'version: 1\n' > lockflight.yaml
+git init -q; git config user.email dev@example.com
+printf 'version: 1\ngates:\n  test:\n    stopFilter: "Category!=Integration"\n' > lockflight.yaml
 printf 'bin/\nobj/\n.lockflight/ledger/\n' > .gitignore; git add -A; git commit -qm base
 human() { env -u CLAUDECODE "$E" "$@"; }
 # Hook payloads carry native paths; on Windows (Git Bash) use the mixed form D:/a/... so the JSON needs no escaping.
@@ -87,7 +88,8 @@ MD
 expect 0 "tasks phase passes" -- "$E" phase check tasks
 expect 1 "red/green needs the tasks approval" -- "$E" redgreen start
 expect 0 "a person approves the tasks" -- human approve tasks
-expect 0 "baseline taken" -- "$E" redgreen start
+expect 0 "baseline taken; its regression pass leaves out the Docker test by test.stopFilter" "test.stopFilter 'Category!=Integration' left out 1 test" -- "$E" redgreen start
+expect 0 "status shows the baseline's regression filter" "baseline regression pass: test.stopFilter 'Category!=Integration' left out 1 test" -- "$E" redgreen status
 expect 1 "baseline is write-once" -- "$E" redgreen start
 calc=src/Shop.Api/PriceCalculator.cs
 # Declare the stub: replace the class's closing brace.
@@ -199,7 +201,8 @@ expect 2 "the amended file is locked again after its red" "red cycle 1" -- hook 
 expect 0 "status shows the amend" "amended: ShippingTests.EveryStartedKilogramCostsTwoFifty in cycle 1" -- "$E" redgreen status
 expect 1 "green is refused while stubbed, before the full suite" "the rest of the suite was not run" -- "$E" redgreen green
 perl -pi -e 's/=> throw new NotImplementedException\(\);/=> weightKg <= 1m ? 5m : 5m + Math.Ceiling(weightKg - 1m) * 2.5m;/' "$calc"
-expect 0 "green closes cycle 1" -- "$E" redgreen green
+expect 0 "green closes cycle 1; its regression pass leaves out the Docker test" "Regression pass: test.stopFilter 'Category!=Integration' left out 1 test" -- "$E" redgreen green
+expect 0 "status records the green's regression filter" "regression pass: test.stopFilter 'Category!=Integration' left out 1 test (the pr gate and CI run them)" -- "$E" redgreen status
 # Approvals bind the artifacts: a red against tasks nobody approved is refused until the user approves again.
 approved_tasks="$(cat $F/tasks.md)"
 printf '\n- [ ] T030 [US2] (FR-003) Added after the approval\n' >> $F/tasks.md

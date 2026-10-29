@@ -59,6 +59,20 @@ internal static class SuiteChecks
         return problems;
     }
 
+    /// <summary>
+    /// Known tests a green's regression pass left out although no earlier pass left them out (the baseline's, or an earlier green's):
+    /// a trait or a stop filter added since must not take a test that ran out of the green, as <c>Explicit</c> must not.
+    /// </summary>
+    public static string[] NewlyLeftOut(RedGreenRecord record, IReadOnlySet<string> excludedNow)
+    {
+        HashSet<string> leftOutBefore = [.. new[] { record.BaselineRegressionFilter }.Concat(record.Cycles.Select(cycle => cycle.RegressionFilter))
+            .SelectMany(filter => filter?.ExcludedTests ?? [])];
+        // The open cycle's own tests are judged by the green's fail-fast run, filter or not.
+        HashSet<string> open = [.. record.OpenCycle?.Tests.Select(test => test.Key) ?? []];
+        IReadOnlySet<string> known = record.KnownTests;
+        return [.. excludedNow.Where(key => known.Contains(key) && !open.Contains(key) && !leftOutBefore.Contains(key)).Order(StringComparer.Ordinal)];
+    }
+
     /// <summary>How many rows of each test a run skipped (<c>Assert.Skip</c>, <c>Assert.Ignore</c>, an ignored row); tests without any are left out.</summary>
     public static IReadOnlyDictionary<string, int> SkippedRows(IReadOnlyList<ExecutedTest> results) =>
         results.Where(result => result.Outcome == TestOutcome.Skip).GroupBy(result => result.Key, StringComparer.Ordinal)

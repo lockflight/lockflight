@@ -8,6 +8,8 @@ namespace Lockflight.Cli.Testing;
 /// </summary>
 internal static class TestInventory
 {
+    private const string RequirementTrait = "Requirement";
+
     /// <summary>
     /// Reads MTP's text listing: <c>- Display name: "…"</c>, then indented <c>Test method:  Class.Method</c>, optional
     /// <c>Skip reason:  "…"</c>, <c>Explicit:     true</c> and a <c>Traits:</c> block of <c>"Name": ["v1", "v2"]</c> lines. Theory rows repeat a method.
@@ -19,6 +21,7 @@ internal static class TestInventory
         string? skip = null;
         bool isExplicit = false;
         List<string> requirements = [];
+        List<KeyValuePair<string, string>> traits = [];
         bool inTraits = false;
 
         void Flush()
@@ -26,11 +29,12 @@ internal static class TestInventory
             int dot = method?.LastIndexOf('.') ?? -1;
             if (method is not null && dot > 0)
             {
-                tests.Add(new TestCase(assembly, method[..dot], method[(dot + 1)..], [.. requirements], skip, isExplicit));
+                tests.Add(new TestCase(assembly, method[..dot], method[(dot + 1)..], [.. requirements], skip, isExplicit) { Traits = [.. traits] });
             }
 
             (method, skip, isExplicit, inTraits) = (null, null, false, false);
             requirements.Clear();
+            traits.Clear();
         }
 
         foreach (string raw in output.ReplaceLineEndings("\n").Split('\n'))
@@ -59,11 +63,13 @@ internal static class TestInventory
             {
                 inTraits = true;
             }
-            else if (inTraits && line.StartsWith("\"Requirement\":", StringComparison.Ordinal))
+            else if (inTraits && TraitLine(line) is (string name, string[] values))
             {
-                requirements.AddRange(line["\"Requirement\":".Length..].Trim().Trim('[', ']')
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Select(value => value.Trim('"')));
+                traits.AddRange(values.Select(value => KeyValuePair.Create(name, value)));
+                if (name == RequirementTrait)
+                {
+                    requirements.AddRange(values);
+                }
             }
         }
 
@@ -87,8 +93,33 @@ internal static class TestInventory
                 test.GetProperty("Method").GetString() ?? string.Empty,
                 Requirements(test),
                 test.TryGetProperty("Skip", out JsonElement skip) ? skip.GetString() : null,
-                test.TryGetProperty("Explicit", out JsonElement isExplicit) && isExplicit.ValueKind == JsonValueKind.True))
+                test.TryGetProperty("Explicit", out JsonElement isExplicit) && isExplicit.ValueKind == JsonValueKind.True)
+            {
+                Traits = Traits(test),
+            })
             .DistinctBy(test => test.Key)];
+    }
+
+    private static KeyValuePair<string, string>[] Traits(JsonElement test) =>
+        test.TryGetProperty("Traits", out JsonElement traits) && traits.ValueKind == JsonValueKind.Object
+            ? [.. traits.EnumerateObject()
+                .Where(trait => trait.Value.ValueKind == JsonValueKind.Array)
+                .SelectMany(trait => trait.Value.EnumerateArray().Select(value => KeyValuePair.Create(trait.Name, value.GetString() ?? string.Empty)))]
+            : [];
+
+    /// <summary><c>"Name": ["v1", "v2"]</c> from MTP's text listing → the name and its values; null for any other line.</summary>
+    private static (string Name, string[] Values)? TraitLine(string line)
+    {
+        int colon = line.IndexOf("\":", StringComparison.Ordinal);
+        if (!line.StartsWith('"') || colon < 1)
+        {
+            return null;
+        }
+
+        string[] values = [.. line[(colon + 2)..].Trim().Trim('[', ']')
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => value.Trim('"'))];
+        return (line[1..colon], values);
     }
 
     private static string[] Requirements(JsonElement test) =>

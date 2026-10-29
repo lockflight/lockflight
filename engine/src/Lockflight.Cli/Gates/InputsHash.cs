@@ -80,6 +80,7 @@ internal static class InputsHash
             .Add("gates.timeoutSeconds", gates.TimeoutSeconds)
             .Add("gates.build", gates.BuildFile)
             .Add("gates.test.framework", gates.TestFramework)
+            .Add("gates.test.stopFilter", gates.StopFilter)
             .Add("gates.coverage.collector", (int)gates.Coverage.Collector)
             .Add("gates.coverage.patchThreshold", gates.Coverage.PatchThreshold)
             .Add("gates.coverage.minChangedLines", gates.Coverage.MinChangedLines)

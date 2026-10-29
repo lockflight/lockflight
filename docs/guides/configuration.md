@@ -34,6 +34,8 @@ gates:
                                 #   ends a redgreen red's FLAKY re-runs (counted from the red's start)
   test:
     framework: net10.0          # run tests for one target framework of multi-targeted projects
+    stopFilter: "Category!=Integration"   # tests the stop gate and red/green's regression passes leave out (the pr
+                                #   profile and CI run them); a unit's own test.stopFilter replaces it
   coverage:
     collector: none             # none | microsoft | coverlet  (patch coverage in the pr profile); every test project
                                 #   must reference the collector package (doctor checks): on Microsoft.Testing.Platform
@@ -57,7 +59,7 @@ units:                          # workspace shell or monorepo; omit for a single
     kind: auto                  # auto | dotnet | none  (none: guarded, not built — e.g. a TypeScript or gitops repository)
     test:
       framework: net8.0         # this unit's test target framework
-      stopFilter: "Category!=Integration"   # tests the stop gate skips (they still run in the pr profile)
+      stopFilter: "Category!=Integration"   # tests the stop gate and regression passes skip (pr still runs them)
   - path: web/admin
     kind: none
 
@@ -152,6 +154,20 @@ on VSTest or Microsoft.Testing.Platform.
   wording (`Assert.AreEqual failed.` in MSTest 3, `Assertion failed. Expected …` in MSTest 4, `CollectionAssert`/`StringAssert`)
   counts as an assertion (RED_ASSERT when the test calls production code); `Assert.Fail` is RED_IN_TEST and
   `Assert.Inconclusive` a test that did not run.
+- <a id="red-green-regression-passes"></a>**Regression passes.** `redgreen start` and `redgreen green` run the whole suite to
+  see that nothing else broke; those runs leave out the tests `test.stopFilter` excludes (a unit's, else
+  `gates.test.stopFilter`), so slow integration tests need not run at every green. The filter is applied only to those whole-suite
+  runs: never to listing, to `redgreen red`, to the cycle's own tests (a green always runs them) or to an amend's re-check.
+  - **Form:** one trait condition, `Name=Value` or `Name!=Value` (`Category!=Integration`; MSTest's categories are
+    `TestCategory`, NUnit's `Category` or `TestCategory`), so the engine can tell from the listing which tests it leaves out:
+    those count as neither missing nor skipped. Any other filter is not applied to red/green, which runs every test and warns.
+    A known test that an earlier pass ran and this one leaves out (a category or filter added since) refuses the green.
+    Categories the metadata does not show (inherited from a base fixture, set on the assembly or by a custom attribute) make
+    the runner leave out a test the engine expects, and the green is refused as "missing from the run's report".
+  - **Evidence:** `redgreen.json` records each pass's filter and the tests it left out (`baseline.regressionFilter`,
+    `cycles[].regressionFilter`), and `redgreen status` shows the filter and the count.
+  - **What still runs everything:** the `pr` gate profile and the CI check ignore `test.stopFilter`; the left-out tests are
+    judged there before a merge.
 - **Rows skipped at run time** (`Assert.Skip`, `Assert.Ignore`, an NUnit `[TestCase(…, Ignore = "…")]`) when `redgreen start`
   ran the suite are recorded with the baseline; a green refuses only more of them.
 - **Other frameworks** (TUnit, for one) get the gates only.
@@ -185,9 +201,9 @@ directories the same way.
   - The test lock covers the cycle's test projects in any unit, and known-failing tests are read from every unit's baseline.
 - **Stop time:** the Stop gate records each unit's time in the local ledger. `doctor` names the units whose 95th percentile over
   14 days exceeds 2 minutes.
-- **`test.stopFilter`** keeps slow tests out of the Stop gate and leaves them to `pr`. On VSTest it is passed to `--filter`
-  as is. On Microsoft.Testing.Platform only one trait condition is supported (`Category!=Integration` becomes
-  `--filter-not-trait Category=Integration`).
+- **`test.stopFilter`** (a unit's, else the root's `gates.test.stopFilter`) keeps slow tests out of the Stop gate and of
+  red/green's regression passes, and leaves them to `pr`. On VSTest it is passed to `--filter` as is. On Microsoft.Testing.Platform
+  only one trait condition is supported (`Category!=Integration` becomes `--filter-not-trait Category=Integration`).
 - **Start directory:** start Claude Code at the shell root. Claude Code reads project settings only from the directory a
   session starts in, so a session started inside a unit loads neither the shell's settings nor its hooks.
   - With the plugin installed at user scope, Lockflight's guard still runs there, and the session banner says that the

@@ -17,13 +17,17 @@ internal static partial class TestWorkspaces
         TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
         if (manifest.Units.Count == 0)
         {
-            return new TestWorkspace(manifest.Root, [new BuildTarget(manifest.Root, BuildFile: null, manifest.Gates.TestFramework)], timeLimit, time);
+            return new TestWorkspace(manifest.Root, [new BuildTarget(manifest.Root, BuildFile: null, manifest.Gates.TestFramework, manifest.Gates.StopFilter)], timeLimit, time);
         }
 
         IReadOnlySet<string> named = feature is null ? new HashSet<string>() : UnitsNamedIn(feature);
         BuildTarget[] targets = [.. manifest.Units
             .Where(unit => WorkspaceGateRunner.BuildsWithDotnet(manifest, unit) && (named.Count == 0 || named.Contains(unit.Path)))
-            .Select(unit => new BuildTarget(Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar)), unit.Build, unit.TestFramework ?? manifest.Gates.TestFramework))];
+            .Select(unit => new BuildTarget(
+                Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar)),
+                unit.Build,
+                unit.TestFramework ?? manifest.Gates.TestFramework,
+                unit.StopFilter ?? manifest.Gates.StopFilter))];
         return new TestWorkspace(manifest.Root, targets, timeLimit, time);
     }
 

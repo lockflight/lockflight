@@ -6,6 +6,7 @@ using NUnitTest = NUnit.Framework.TestAttribute;
 using NUnitTestCase = NUnit.Framework.TestCaseAttribute;
 using NUnitTestCaseSource = NUnit.Framework.TestCaseSourceAttribute;
 using NUnitTheory = NUnit.Framework.TheoryAttribute;
+using MSTestCategory = Microsoft.VisualStudio.TestTools.UnitTesting.TestCategoryAttribute;
 using MSTestClass = Microsoft.VisualStudio.TestTools.UnitTesting.TestClassAttribute;
 using MSTestDataRow = Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute;
 using MSTestDataTestMethod = Microsoft.VisualStudio.TestTools.UnitTesting.DataTestMethodAttribute;
@@ -77,6 +78,7 @@ public class NUnitFixture
 [NUnitIgnore("whole class")]
 [NUnitExplicit]
 [NUnitProperty("Requirement", "FR-003")]
+[NUnitCategory("Integration")]
 internal sealed class NUnitInternalFixture
 {
     [NUnitTest]
@@ -117,6 +119,7 @@ public class MSTestFixture
 {
     [MSTestMethod]
     [MSTestProperty("Requirement", "FR-001")]
+    [MSTestCategory("Integration")]
     public void Plain()
     {
     }

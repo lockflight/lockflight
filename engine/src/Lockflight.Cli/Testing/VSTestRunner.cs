@@ -32,14 +32,21 @@ internal sealed partial class VSTestRunner(TimeProvider time) : ITestRunner
     }
 
     public async Task<TestRunOutcome> RunAsync(
-        TestApp app, IReadOnlyList<string>? methodFilters, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
+        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
         TestRunOutcome.Of(await TrxTestRun.RunAsync(
-            app, TestRunnerKind.VSTest, FilterBatches(methodFilters), TrxFailureMessages.XunitV2, workingDirectory, timeLimit, time, cancellationToken));
+            app, TestRunnerKind.VSTest, FilterBatches(methodFilters, suiteFilter), TrxFailureMessages.XunitV2, workingDirectory, timeLimit, time, cancellationToken));
 
-    /// <summary>One <c>--filter</c> per batch of methods; no arguments (the whole suite) when <paramref name="methodFilters"/> is null.</summary>
-    public static IEnumerable<IReadOnlyList<string>> FilterBatches(IReadOnlyList<string>? methodFilters) => methodFilters is null
-        ? [[]]
+    /// <summary>
+    /// One <c>--filter</c> per batch of methods; for the whole suite (<paramref name="methodFilters"/> null) one run, filtered by
+    /// <paramref name="suiteFilter"/> when there is one.
+    /// </summary>
+    public static IEnumerable<IReadOnlyList<string>> FilterBatches(IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter) => methodFilters is null
+        ? [SuiteArguments(suiteFilter)]
         : methodFilters.Chunk(MethodsPerBatch).Select(batch => (IReadOnlyList<string>)["--filter", string.Join('|', batch.Select(method => $"FullyQualifiedName={Escape(method)}"))]);
+
+    /// <summary>A whole-suite run's <c>--filter</c>: the trait condition, its value escaped; none without one.</summary>
+    public static IReadOnlyList<string> SuiteArguments(TraitCondition? suiteFilter) =>
+        suiteFilter is null ? [] : ["--filter", $"{suiteFilter.Name}{(suiteFilter.Negated ? "!=" : "=")}{Escape(suiteFilter.Value)}"];
 
     /// <summary>Escapes the characters VSTest's filter syntax reserves: <c>\ ( ) &amp; | ! = ~ ,</c>.</summary>
     public static string Escape(string value) => FilterSpecial().Replace(value, match => "\\" + match.Value);

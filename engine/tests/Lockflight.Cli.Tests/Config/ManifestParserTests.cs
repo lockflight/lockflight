@@ -131,10 +131,11 @@ public sealed class ManifestParserTests
     [Fact]
     public void TheGatesSectionSetsTheTestFrameworkAndTimeout()
     {
-        ManifestLoadResult result = Parse("gates:\n  timeoutSeconds: 300\n  test:\n    framework: net10.0\n");
+        ManifestLoadResult result = Parse("gates:\n  timeoutSeconds: 300\n  test:\n    framework: net10.0\n    stopFilter: Category!=Integration\n");
 
         Assert.Equal(ManifestLoadStatus.Loaded, result.Status);
         Assert.Equal("net10.0", result.Manifest!.Gates.TestFramework);
+        Assert.Equal("Category!=Integration", result.Manifest.Gates.StopFilter);
         Assert.Equal(300, result.Manifest.Gates.TimeoutSeconds);
     }
 
@@ -152,6 +153,8 @@ public sealed class ManifestParserTests
     [Theory]
     [InlineData("gates:\n  timeoutSeconds: 0\n", "gates.timeoutSeconds")]
     [InlineData("gates:\n  test:\n    framework: 10.0\n", "gates.test.framework")]
+    [InlineData("gates:\n  test:\n    stopFilter: \"\"\n", "'gates.test.stopFilter' must be a non-empty test filter")]
+    [InlineData("gates:\n  test:\n    runner: vstest\n", "unknown key 'gates.test.runner' (known: framework, stopFilter)")]
     [InlineData("gates:\n  coverage: 80\n", "'gates.coverage' must be a mapping")]
     [InlineData("gates:\n  coverage:\n    collector: dotcover\n", "gates.coverage.collector")]
     [InlineData("gates:\n  coverage:\n    patchThreshold: 101\n", "gates.coverage.patchThreshold")]

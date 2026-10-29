@@ -16,6 +16,6 @@ internal sealed class XunitConsoleRunner(TimeProvider time) : ITestRunner
     }
 
     public async Task<TestRunOutcome> RunAsync(
-        TestApp app, IReadOnlyList<string>? methodFilters, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
-        TestRunOutcome.Of(await NativeTestRunner.RunAsync(app, RunnerMode.Native, methodFilters, workingDirectory, timeLimit, time, cancellationToken));
+        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
+        TestRunOutcome.Of(await NativeTestRunner.RunAsync(app, RunnerMode.Native, methodFilters, suiteFilter, workingDirectory, timeLimit, time, cancellationToken));
 }
