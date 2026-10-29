@@ -1,0 +1,30 @@
+A FluentMigrator migration is db.model.
+=== base src/Shop.Data/Shop.Data.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Data/ShopContext.cs
+using Microsoft.EntityFrameworkCore;
+
+namespace Shop.Data;
+
+public sealed class ShopContext(DbContextOptions<ShopContext> options) : DbContext(options)
+{
+    public DbSet<Order> Orders => Set<Order>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Order>().ToTable("orders");
+    }
+}
+=== head src/Shop.Data/Schema/AddRefunds.cs
+using FluentMigrator;
+
+[Migration(20261029)]
+public sealed class AddRefunds : Migration
+{
+    public override void Up() => Create.Table("refunds");
+    public override void Down() => Delete.Table("refunds");
+}

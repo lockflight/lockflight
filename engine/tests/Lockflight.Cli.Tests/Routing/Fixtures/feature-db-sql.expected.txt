@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: db.sql -> feature (heuristic) db/schema.sql: SQL file changed
+signal: config.changed -> behaviour (heuristic) db/schema.sql: non-project file changed

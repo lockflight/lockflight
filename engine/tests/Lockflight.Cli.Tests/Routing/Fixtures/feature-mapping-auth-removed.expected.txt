@@ -1,0 +1,3 @@
+class: feature
+computed: feature
+signal: api.minimalEndpoint -> feature (heuristic) src/Shop.Api/Admin.cs:5: an endpoint mapping added, removed or changed

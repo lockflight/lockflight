@@ -1,0 +1,46 @@
+A new controller file is api.controllerAdded.
+=== base src/Shop.Api/Shop.Api.csproj
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Api/CartsController.cs
+using Microsoft.AspNetCore.Mvc;
+
+namespace Shop.Api;
+
+[ApiController]
+[Route("api/carts")]
+public sealed class CartsController(ICarts carts) : ControllerBase
+{
+    [HttpGet("{id}")]
+    public IActionResult Get(int id)
+    {
+        Cart? cart = carts.Find(id);
+        return cart is null ? NotFound() : Ok(cart);
+    }
+}
+=== base src/Shop.Api/Program.cs
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapGet("/health", () => "ok");
+app.MapControllers();
+
+app.Run();
+=== base src/Shop.Api/Pricing.cs
+namespace Shop;
+
+public sealed class Pricing
+{
+    public int Total(int price, int count) => price * count;
+}
+=== head src/Shop.Api/OrdersController.cs
+using Microsoft.AspNetCore.Mvc;
+
+namespace Shop.Api;
+
+public sealed class OrdersController : ControllerBase
+{
+}

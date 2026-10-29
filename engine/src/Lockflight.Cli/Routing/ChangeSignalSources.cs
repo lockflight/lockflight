@@ -8,6 +8,8 @@ internal static class ChangeSignalSources
         new SizeSignals(),
         new ProjectSignals(),
         new TestSignals(),
+        new ApiSignals(),
+        new DatabaseSignals(),
         new CriticalSignals(),
         new StructureSignals(),
     ];

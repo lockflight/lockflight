@@ -1,0 +1,29 @@
+A changed value of a public constant in an API project is api.publicMember.
+=== base src/Shop.Client/Shop.Client.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Client/CartClient.cs
+namespace Shop.Client;
+
+public sealed class CartClient
+{
+    public int Count() => 0;
+}
+=== base src/Shop.Client/Routes.cs
+namespace Shop.Client;
+
+public static class Routes
+{
+    public const string Orders = "api/orders";
+}
+=== head src/Shop.Client/Routes.cs
+namespace Shop.Client;
+
+public static class Routes
+{
+    public const string Orders = "api/v2/orders";
+}
