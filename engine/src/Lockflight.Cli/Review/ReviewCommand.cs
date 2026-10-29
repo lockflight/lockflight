@@ -320,6 +320,7 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
             ChangeTests.Files(diff, manifest.Root, workspace.Apps),
             manifest.Root,
             TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds),
+            context.Time,
             repairer,
             repairable,
             cancellationToken);
@@ -345,7 +346,7 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
             return (unjudged, null, null);
         }
 
-        TestWorkspace workspace = TestWorkspaces.For(manifest, feature);
+        TestWorkspace workspace = TestWorkspaces.For(manifest, feature, context.Time);
         if (await workspace.BuildAsync(cancellationToken) is not null)
         {
             return (unjudged, null, null);
@@ -364,7 +365,7 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
 
         TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
         IReadOnlyList<ReviewFinding> judged = FindingLifecycle.CombineReproductions(
-            findings, await Reproductions.ConfirmAsync(checks, workspace.Apps, manifest.Root, timeLimit, repairer, repairable, cancellationToken));
+            findings, await Reproductions.ConfirmAsync(checks, workspace.Apps, manifest.Root, timeLimit, context.Time, repairer, repairable, cancellationToken));
         return (judged, workspace, listed);
     }
 

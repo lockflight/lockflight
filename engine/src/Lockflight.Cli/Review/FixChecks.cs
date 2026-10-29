@@ -28,6 +28,7 @@ internal static class FixChecks
         IReadOnlyList<string> ownTestFiles,
         string root,
         TimeSpan timeLimit,
+        TimeProvider time,
         ReproductionRepairer? repairer,
         IReadOnlySet<string> checkable,
         CancellationToken cancellationToken)
@@ -48,7 +49,7 @@ internal static class FixChecks
             TestApp app = NearestTestProject.Choose(apps, root, finding.File);
             string[] own = [.. ownTests.Where(test => test.Assembly == app.AssemblyName).Select(test => test.MethodFilter)];
             ReproductionCandidate candidate = new(index, Reproductions.MethodName(finding.Reproduction!)!, finding.Reproduction!);
-            FixCheckVerdict verdict = await CheckOnceAsync(app, candidate, finding.Fix!, own, ownTestFiles, root, folder.FixName, timeLimit, cancellationToken);
+            FixCheckVerdict verdict = await CheckOnceAsync(app, candidate, finding.Fix!, own, ownTestFiles, root, folder.FixName, timeLimit, time, cancellationToken);
             int attempts = 1;
             if (verdict.Result is FixCheckResult.DidNotApply or FixCheckResult.DidNotBuild or FixCheckResult.BreaksOwnTestBuild && repairer is not null)
             {
@@ -61,7 +62,7 @@ internal static class FixChecks
                 if (repair.Fix is string repaired)
                 {
                     finding = finding with { Fix = repaired };
-                    verdict = await CheckOnceAsync(app, candidate, repaired, own, ownTestFiles, root, folder.FixName, timeLimit, cancellationToken);
+                    verdict = await CheckOnceAsync(app, candidate, repaired, own, ownTestFiles, root, folder.FixName, timeLimit, time, cancellationToken);
                 }
             }
 
@@ -125,7 +126,7 @@ internal static class FixChecks
     };
 
     private static async Task<FixCheckVerdict> CheckOnceAsync(
-        TestApp app, ReproductionCandidate candidate, string fix, string[] own, IReadOnlyList<string> ownTestFiles, string root, string outputFolder, TimeSpan timeLimit, CancellationToken cancellationToken)
+        TestApp app, ReproductionCandidate candidate, string fix, string[] own, IReadOnlyList<string> ownTestFiles, string root, string outputFolder, TimeSpan timeLimit, TimeProvider time, CancellationToken cancellationToken)
     {
         FixPatchResult patch = FixPatch.Prepare(fix, root);
         if (patch.Error is string error)
@@ -136,7 +137,7 @@ internal static class FixChecks
         List<string> usings = [.. TestProjectProfiles.Usings(app.ProjectDirectory)];
         for (int usingRepairs = 0; ; usingRepairs++)
         {
-            ReproductionBuildResult build = await ReproductionBuild.RunAsync(app, [candidate], usings, patch.Files, own, root, outputFolder, timeLimit, cancellationToken);
+            ReproductionBuildResult build = await ReproductionBuild.RunAsync(app, [candidate], usings, patch.Files, own, root, outputFolder, timeLimit, time, cancellationToken);
             switch (build.Status)
             {
                 case ReproductionBuildStatus.Ran:

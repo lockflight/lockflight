@@ -12,19 +12,19 @@ namespace Lockflight.Cli.Testing;
 /// </summary>
 internal static partial class TestWorkspaces
 {
-    public static TestWorkspace For(Manifest manifest, Feature? feature)
+    public static TestWorkspace For(Manifest manifest, Feature? feature, TimeProvider time)
     {
         TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
         if (manifest.Units.Count == 0)
         {
-            return new TestWorkspace(manifest.Root, [new BuildTarget(manifest.Root, BuildFile: null, manifest.Gates.TestFramework)], timeLimit);
+            return new TestWorkspace(manifest.Root, [new BuildTarget(manifest.Root, BuildFile: null, manifest.Gates.TestFramework)], timeLimit, time);
         }
 
         IReadOnlySet<string> named = feature is null ? new HashSet<string>() : UnitsNamedIn(feature);
         BuildTarget[] targets = [.. manifest.Units
             .Where(unit => WorkspaceGateRunner.BuildsWithDotnet(manifest, unit) && (named.Count == 0 || named.Contains(unit.Path)))
             .Select(unit => new BuildTarget(Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar)), unit.Build, unit.TestFramework ?? manifest.Gates.TestFramework))];
-        return new TestWorkspace(manifest.Root, targets, timeLimit);
+        return new TestWorkspace(manifest.Root, targets, timeLimit, time);
     }
 
     /// <summary>The units a feature's <c>tasks.md</c> names with <c>[unit:path]</c>.</summary>

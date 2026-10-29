@@ -21,11 +21,11 @@ internal static class TestApps
     /// unevaluated, never taken for a project without tests; one that evaluates and is no xUnit test application is left out.
     /// </summary>
     /// <param name="preferredFramework">For multi-targeted test projects: the framework to run (<c>gates.test.framework</c>); else the newest one.</param>
-    public static async Task<TestAppDiscovery> FindAsync(string root, string? preferredFramework, TimeSpan timeLimit, CancellationToken cancellationToken)
+    public static async Task<TestAppDiscovery> FindAsync(string root, string? preferredFramework, TimeSpan timeLimit, TimeProvider time, CancellationToken cancellationToken)
     {
         string[] projects = [.. Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Where(path => !IsBuildOutput(root, path)).Order(StringComparer.Ordinal)];
         ProjectEvaluation[] evaluations = new ProjectEvaluation[projects.Length];
-        TimeBudget budget = new(timeLimit, TimeProvider.System);
+        TimeBudget budget = new(timeLimit, time);
         ParallelOptions options = new() { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken };
         await Parallel.ForEachAsync(
             Enumerable.Range(0, projects.Length),
