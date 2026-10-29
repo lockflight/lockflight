@@ -6,8 +6,14 @@ using NUnitTest = NUnit.Framework.TestAttribute;
 using NUnitTestCase = NUnit.Framework.TestCaseAttribute;
 using NUnitTestCaseSource = NUnit.Framework.TestCaseSourceAttribute;
 using NUnitTheory = NUnit.Framework.TheoryAttribute;
+using MSTestClass = Microsoft.VisualStudio.TestTools.UnitTesting.TestClassAttribute;
+using MSTestDataRow = Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute;
+using MSTestDataTestMethod = Microsoft.VisualStudio.TestTools.UnitTesting.DataTestMethodAttribute;
+using MSTestIgnore = Microsoft.VisualStudio.TestTools.UnitTesting.IgnoreAttribute;
+using MSTestMethod = Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute;
+using MSTestProperty = Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute;
 
-// Test classes as NUnit would see them, read from this assembly's metadata. Several types in one file on purpose
+// Test classes as NUnit and MSTest would see them, read from this assembly's metadata. Several types in one file on purpose
 // (code style rule 1): they are one fixture. Test methods are instance methods, as the frameworks expect.
 #pragma warning disable CA1822
 
@@ -105,3 +111,69 @@ public class NUnitGenericBase<T>
 }
 
 public sealed class NUnitClosedGeneric : NUnitGenericBase<int>;
+
+[MSTestClass]
+public class MSTestFixture
+{
+    [MSTestMethod]
+    [MSTestProperty("Requirement", "FR-001")]
+    public void Plain()
+    {
+    }
+
+    [MSTestDataTestMethod]
+    [MSTestDataRow(1)]
+    [MSTestDataRow(2)]
+    public void Rows(int value) => _ = value;
+
+    [MSTestMethod]
+    [MSTestIgnore]
+    public void IgnoredWithoutReason()
+    {
+    }
+
+    [MSTestMethod]
+    [MSTestIgnore("later")]
+    public void Ignored()
+    {
+    }
+
+    [MSTestDataRow(1)]
+    public void RowsWithoutTestMethod(int value) => _ = value;
+
+    [MSTestClass]
+    public class Nested
+    {
+        [MSTestMethod]
+        public void Inner()
+        {
+        }
+    }
+}
+
+public class MSTestWithoutTestClass
+{
+    [MSTestMethod]
+    public void NotRun()
+    {
+    }
+}
+
+[MSTestClass]
+internal sealed class MSTestInternalClass
+{
+    [MSTestMethod]
+    public void NotRunWithoutDiscoverInternals()
+    {
+    }
+}
+
+[MSTestClass]
+[MSTestIgnore("whole class")]
+public sealed class MSTestIgnoredClass
+{
+    [MSTestMethod]
+    public void InIgnoredClass()
+    {
+    }
+}

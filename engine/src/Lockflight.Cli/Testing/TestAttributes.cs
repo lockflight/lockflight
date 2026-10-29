@@ -5,8 +5,9 @@ namespace Lockflight.Cli.Testing;
 
 /// <summary>
 /// Reads the test attributes of one framework from metadata, without loading the assembly (AOT-safe). xUnit v2 attributes match
-/// by name in any namespace (<c>SkippableFactAttribute</c> derives from <c>FactAttribute</c>); NUnit's only in its own namespace.
-/// A requirement is a <c>Requirement</c> trait or property with a string value; an NUnit <c>[Category]</c> is not one, as
+/// by name in any namespace (<c>SkippableFactAttribute</c> derives from <c>FactAttribute</c>), as do MSTest's <c>…TestMethodAttribute</c>
+/// and <c>…TestClassAttribute</c> (custom test attributes derive from them); NUnit's and MSTest's other attributes only in their own
+/// namespace. A requirement is a <c>Requirement</c> trait or property with a string value; an NUnit <c>[Category]</c> is not one, as
 /// it has no name to say what the value is.
 /// </summary>
 internal static class TestAttributes
@@ -14,6 +15,8 @@ internal static class TestAttributes
     private const string RequirementName = "Requirement";
 
     private const string NUnitNamespace = "NUnit.Framework";
+
+    private const string MSTestNamespace = "Microsoft.VisualStudio.TestTools.UnitTesting";
 
     private static readonly HashSet<string> NUnitTestAttributes = new(["TestAttribute", "TestCaseAttribute", "TestCaseSourceAttribute", "TheoryAttribute"], StringComparer.Ordinal);
 
@@ -23,6 +26,10 @@ internal static class TestAttributes
     /// <summary>A class's skip, explicit mark and requirements, which apply to every test in it (xUnit v2's are not read).</summary>
     public static TestAttributeSet OfClass(MetadataReader reader, CustomAttributeHandleCollection attributes, TestFrameworkKind framework) =>
         framework == TestFrameworkKind.XunitV2 ? TestAttributeSet.None : Read(reader, attributes, framework) with { IsTest = false };
+
+    /// <summary>An MSTest <c>[TestClass]</c>: MSTest runs the test methods of such classes only.</summary>
+    public static bool IsMSTestClass(MetadataReader reader, CustomAttributeHandleCollection attributes) =>
+        attributes.Any(handle => TypeOf(reader, reader.GetCustomAttribute(handle)).Name.EndsWith("TestClassAttribute", StringComparison.Ordinal));
 
     private static TestAttributeSet Read(MetadataReader reader, CustomAttributeHandleCollection attributes, TestFrameworkKind framework)
     {
@@ -76,6 +83,9 @@ internal static class TestAttributes
         TestFrameworkKind.NUnit when name == "IgnoreAttribute" => TestAttributeMeaning.Skip,
         TestFrameworkKind.NUnit when name == "ExplicitAttribute" => TestAttributeMeaning.Explicit,
         TestFrameworkKind.NUnit when name == "PropertyAttribute" => TestAttributeMeaning.Requirement,
+        TestFrameworkKind.MSTest when name.EndsWith("TestMethodAttribute", StringComparison.Ordinal) => TestAttributeMeaning.Test,
+        TestFrameworkKind.MSTest when space == MSTestNamespace && name == "IgnoreAttribute" => TestAttributeMeaning.Skip,
+        TestFrameworkKind.MSTest when space == MSTestNamespace && name == "TestPropertyAttribute" => TestAttributeMeaning.Requirement,
         _ => TestAttributeMeaning.None,
     };
 

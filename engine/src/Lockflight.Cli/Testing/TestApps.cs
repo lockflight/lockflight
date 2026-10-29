@@ -6,12 +6,15 @@ namespace Lockflight.Cli.Testing;
 /// <summary>
 /// Finds the test applications red/green and trace can drive under a root after a build: xUnit v3 applications
 /// (<c>IsTestingPlatformApplication</c>, <c>xunit.v3.core.dll</c> in the output), xUnit v2 test projects on VSTest
-/// (<c>IsTestProject</c>, <c>xunit.core.dll</c> in the output), and NUnit test projects (<c>nunit.framework.dll</c> in the output),
+/// (<c>IsTestProject</c>, <c>xunit.core.dll</c> in the output), and NUnit (<c>nunit.framework.dll</c>) and MSTest
+/// (<c>MSTest.TestFramework.dll</c>, or <c>Microsoft.VisualStudio.TestPlatform.TestFramework.dll</c> before MSTest 4) test projects,
 /// on Microsoft.Testing.Platform when the project is a testing-platform application, else on VSTest.
 /// </summary>
 internal static class TestApps
 {
     private const int MaxDetailLength = 300;
+
+    private static readonly string[] MSTestFrameworkAssemblies = ["MSTest.TestFramework.dll", "Microsoft.VisualStudio.TestPlatform.TestFramework.dll"];
 
     private static readonly string[] Properties =
         ["-getProperty:IsTestingPlatformApplication", "-getProperty:IsTestProject", "-getProperty:TargetPath", "-getProperty:TargetFrameworks"];
@@ -80,8 +83,13 @@ internal static class TestApps
             return ProjectEvaluation.Of(new TestApp(directory, targetPath, RunnerMode.VSTest));
         }
 
-        return File.Exists(Path.Combine(output, "nunit.framework.dll"))
-            ? ProjectEvaluation.Of(new TestApp(directory, targetPath, onTestingPlatform ? RunnerMode.NUnitMtp : RunnerMode.NUnit))
+        if (File.Exists(Path.Combine(output, "nunit.framework.dll")))
+        {
+            return ProjectEvaluation.Of(new TestApp(directory, targetPath, onTestingPlatform ? RunnerMode.NUnitMtp : RunnerMode.NUnit));
+        }
+
+        return MSTestFrameworkAssemblies.Any(assembly => File.Exists(Path.Combine(output, assembly)))
+            ? ProjectEvaluation.Of(new TestApp(directory, targetPath, onTestingPlatform ? RunnerMode.MSTestMtp : RunnerMode.MSTest))
             : ProjectEvaluation.NotATestApp;
     }
 
