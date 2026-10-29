@@ -61,6 +61,16 @@ units:                          # workspace shell or monorepo; omit for a single
   - path: web/admin
     kind: none
 
+ci:                             # the CI judge (lockflight ci); read from the target branch only (all optional)
+  maxRedCommits: 10             # the most red commits (Lockflight-Red trailer) one pull request may have, 1–50;
+                                #   more is NOT-EARNED: split the pull request
+  timeoutMinutes: 45            # the judge job's whole budget, 1–360 minutes
+  flakyRetries: 2               # how often a test that fails at head is run again, 0–5
+  lowRiskPaths:                 # a pull request that changes only these needs no red/green cycle, trace or approval
+    - "docs/**"                 #   (default: docs/**, *.md at the root, .github/ISSUE_TEMPLATE/**)
+  testInputs: []                # test inputs outside the test projects (testdata/ folders), compared like test files
+  redCommits: true              # whether an accepted redgreen red commits the tree it judged
+
 review:                         # what the review of record runs with (all optional)
   model: sonnet                 # Claude Code model name (default sonnet; opus to review with Opus)
   maxUsd: 3.00                  # the reviewer's --max-budget-usd, above 0 and at most 100 (default 3.00); on a

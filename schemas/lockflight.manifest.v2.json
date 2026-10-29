@@ -182,6 +182,19 @@
         "unit": { "$ref": "#/$defs/relativePath" }
       }
     },
+    "ci": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The CI judge (lockflight ci), read from the target branch only.",
+      "properties": {
+        "maxRedCommits": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 },
+        "timeoutMinutes": { "type": "integer", "minimum": 1, "maximum": 360, "default": 45 },
+        "flakyRetries": { "type": "integer", "minimum": 0, "maximum": 5, "default": 2 },
+        "lowRiskPaths": { "$ref": "#/$defs/globs", "default": ["docs/**", "*.md", ".github/ISSUE_TEMPLATE/**"] },
+        "testInputs": { "$ref": "#/$defs/globs", "default": [] },
+        "redCommits": { "type": "boolean", "default": true }
+      }
+    },
     "review": {
       "type": "object",
       "additionalProperties": false,
