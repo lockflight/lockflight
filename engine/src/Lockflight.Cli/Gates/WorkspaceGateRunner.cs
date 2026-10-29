@@ -184,7 +184,7 @@ internal static class WorkspaceGateRunner
         return new UnitOutcome(unit, state, steps, facts.TestsTotal);
     }
 
-    private static GateStep Named(Unit unit, GateStep step) => step with { Name = $"{unit.Path}: {step.Name}" };
+    private static GateStep Named(Unit unit, GateStep step) => step with { Name = $"{unit.Path}: {step.Name}", Unit = unit.Path };
 
     /// <summary>The worst verdict of the steps that applied: ERROR, then FAIL, then NOT-EARNED, then PASS; N/A when none applied.</summary>
     private static GateResult Result(GateRunContext root, List<GateStep> steps, int? testsTotal)

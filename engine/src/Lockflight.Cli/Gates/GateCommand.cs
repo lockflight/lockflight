@@ -2,6 +2,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Mascot;
+using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Gates;
 
@@ -75,7 +76,10 @@ internal sealed class GateCommand(CliContext context) : ICommand
 
         if (options.Value("--result") is string resultPath)
         {
-            await GateResultWriter.WriteAsync(Path.GetFullPath(resultPath, context.WorkingDirectory), result, cancellationToken);
+            string? baseCommit = options.Value("--base") is string baseRef ? await Git.CommitOfAsync(target, baseRef, cancellationToken) : null;
+            await GateResultWriter.WriteAsync(
+                Path.GetFullPath(resultPath, context.WorkingDirectory), result, run.Settings, ToolPin.RunningVersion, baseCommit,
+                await Git.HeadAsync(target, cancellationToken), context.Time.GetUtcNow(), cancellationToken);
         }
 
         if (manifest is not null)

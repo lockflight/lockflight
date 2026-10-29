@@ -25,6 +25,7 @@ review status: [--feature]
 review dismiss: [--reason --feature] arguments
 propose: [--from --delete] arguments
 trace: [--feature]
+blocked validate: [] arguments
 approve spec: [--feature]
 approve tasks: [--feature]
 approve verify: [--feature --base --require]

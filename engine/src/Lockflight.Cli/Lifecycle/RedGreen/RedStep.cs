@@ -31,9 +31,9 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
             return await session.FailAsync($"cycle {open.Number} is still red; make it green ('{EngineCommand.Linked} redgreen green') before the next red", cancellationToken);
         }
 
-        if (session.UnapprovedArtifacts() is string unapproved)
+        if (session.NotApproved() is { Count: > 0 } notApproved)
         {
-            return await session.FailAsync(unapproved, cancellationToken);
+            return await session.RefuseUnapprovedAsync("redgreen-red", notApproved, cancellationToken);
         }
 
         // The FLAKY re-runs must end within gates.timeoutSeconds of the red's start (the build, listing and first run count against
