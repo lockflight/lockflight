@@ -1,5 +1,6 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Baselines;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.Approvals;
 using Lockflight.Cli.Lifecycle.RedGreen;
@@ -16,12 +17,12 @@ internal static class SessionCommands
     public static IReadOnlyList<SessionCommandSpec> All { get; } = [SessionApproval.Spec, SessionBaseline.Spec, SessionReset.Spec, SessionAmend.Spec];
 
     /// <summary>The command the payload expands (any letter case); null for every other slash command.</summary>
-    public static SessionCommandSpec? Of(HookInput input) => All.FirstOrDefault(spec => SessionCommandGate.Names(input, spec));
+    public static SessionCommandSpec? Of(HookRequest input) => All.FirstOrDefault(spec => SessionCommandGate.Names(input, spec));
 
     /// <summary>The first command whose name appears in the raw payload (any letter case); null when none does.</summary>
     public static SessionCommandSpec? MentionedIn(string text) => All.FirstOrDefault(spec => text.Contains(spec.Name, StringComparison.OrdinalIgnoreCase));
 
-    public static Task<SessionCommandResult> DecideAsync(SessionCommandSpec spec, HookInput input, CliContext context, Manifest manifest, CancellationToken cancellationToken) =>
+    public static Task<SessionCommandResult> DecideAsync(SessionCommandSpec spec, HookRequest input, CliContext context, Manifest manifest, CancellationToken cancellationToken) =>
         spec.Create(context, manifest).DecideAsync(input, cancellationToken);
 
     /// <summary>

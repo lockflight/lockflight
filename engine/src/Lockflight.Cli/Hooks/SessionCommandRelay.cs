@@ -1,3 +1,4 @@
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.Approvals;
 
@@ -14,14 +15,14 @@ namespace Lockflight.Cli.Hooks;
 /// </summary>
 internal static class SessionCommandRelay
 {
-    private static readonly HashSet<string> FileTools = ["Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Grep", "Glob", "LS"];
-    private static readonly HashSet<string> FileWritingTools = ["Write", "Edit", "MultiEdit", "NotebookEdit"];
+    /// <summary>The tools that only read or write files: what they write is checked, not what they say.</summary>
+    private static readonly HashSet<ToolKind> FileKinds = [ToolKind.Read, ToolKind.Search, ToolKind.Edit, ToolKind.Write, ToolKind.Notebook];
 
-    public static HookDecision? Decide(HookInput input)
+    public static HookDecision? Decide(HookRequest input)
     {
         // A call without a tool name is checked too: only a known file tool is exempt.
-        string toolName = input.ToolName ?? "(unnamed tool)";
-        if (QueueWrite(input, toolName) is string queue)
+        string toolName = input.Tool.Name ?? "(unnamed tool)";
+        if (QueueWrite(input) is string queue)
         {
             string commands = string.Join(", ", SessionCommands.All.Select(spec => $"/{spec.Name}"));
             return HookDecision.Block(
@@ -29,12 +30,12 @@ internal static class SessionCommandRelay
                 $"lockflight: {toolName} would write {queue}, a file Claude Code reads prompts from, where a queued in-session command ({commands}) would not be seen. Use the tool for the purpose (CronCreate, SendMessage), or ask the person to edit the file.");
         }
 
-        if (FileTools.Contains(toolName))
+        if (FileKinds.Contains(input.Tool.Kind))
         {
             return null;
         }
 
-        foreach (string value in input.ToolInputStrings)
+        foreach (string value in input.InputStrings)
         {
             if (SessionCommands.MentionedIn(value) is SessionCommandSpec spec)
             {
@@ -48,20 +49,14 @@ internal static class SessionCommandRelay
     }
 
     /// <summary>The prompt queue file the call writes, if any.</summary>
-    private static string? QueueWrite(HookInput input, string toolName)
+    private static string? QueueWrite(HookRequest input)
     {
-        if (FileWritingTools.Contains(toolName))
+        if (input.Tool.WritesFiles)
         {
-            return input.FilePath is string filePath && PromptQueueFiles.Contains(filePath) ? filePath : null;
+            return input.Paths.FirstOrDefault(PromptQueueFiles.Contains);
         }
 
-        ShellDialect? dialect = toolName switch
-        {
-            "Bash" => ShellDialect.Posix,
-            "PowerShell" => ShellDialect.PowerShell,
-            _ => null,
-        };
-        if (dialect is not ShellDialect shell || input.Command is not string command)
+        if (input.Tool is not { Kind: ToolKind.Shell, Shell: ShellDialect shell } || input.Command is not string command)
         {
             return null;
         }

@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Paths;
 
@@ -22,7 +23,7 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
     private async Task<HookDecision> DecideAsync(GuardFacts facts)
     {
         // The facts are read in this order on purpose: the same order the guard always computed them in.
-        HookInput input = facts.Input;
+        HookRequest input = facts.Input;
         Manifest manifest = facts.Manifest;
         IReadOnlyList<string> globs = facts.ProtectedGlobs;
         string workingDirectory = input.WorkingDirectory ?? manifest.Root;

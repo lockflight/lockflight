@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Hooks.Adapters;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Tests.Goldens;
@@ -92,18 +94,41 @@ public sealed partial class HookDecisionGoldenTests
     ];
 
     [Fact]
-    public async Task EveryHookDecisionIsTheSameAsBefore()
+    public async Task EveryHookDecisionIsTheSameAsBefore() =>
+        GoldenFiles.Verify("hook-decisions", await RenderAsync(Scenarios, neutral: false));
+
+    /// <summary>
+    /// Every decision of an event the neutral request carries, with the Claude Code payload translated by the adapter into a
+    /// <c>lockflight.hook-request/v1</c> document and read back with <c>LOCKFLIGHT_HOOK_ADAPTER=neutral</c>: the guard decides on
+    /// the request, so the outcome, the messages and the ledger lines are the same.
+    /// </summary>
+    [Fact]
+    public async Task EveryDecisionIsTheSameThroughTheNeutralAdapter()
+    {
+        Scenario[] translatable = [.. Scenarios.Where(scenario => HookEventNames.Parse(scenario.Event) != HookEvent.Unknown && scenario.Name != "input that is not JSON")];
+
+        Assert.Equal(await RenderAsync(translatable, neutral: false), await RenderAsync(translatable, neutral: true));
+    }
+
+    private static async Task<string> RenderAsync(IEnumerable<Scenario> scenarios, bool neutral)
     {
         StringBuilder rendered = new();
-        foreach (Scenario scenario in Scenarios)
+        foreach (Scenario scenario in scenarios)
         {
             DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-hook-golden-");
             try
             {
                 File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), ManifestText);
                 scenario.Setup?.Invoke(root.FullName);
-                (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(
-                    ["hook", scenario.Event], scenario.Payload(root.FullName), root.FullName, scenario.Environment ?? NoVariables);
+                Dictionary<string, string> environment = new(scenario.Environment ?? NoVariables);
+                string payload = scenario.Payload(root.FullName);
+                if (neutral)
+                {
+                    environment[EnvironmentVariables.HookAdapter] = NeutralAdapter.Name;
+                    payload = NeutralRequestJson.Write(ClaudeCodeAdapter.Parse(payload, projectDirectory: null)!, HookEventNames.Parse(scenario.Event));
+                }
+
+                (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(["hook", scenario.Event], payload, root.FullName, environment);
                 rendered.Append($"## {scenario.Name} ({scenario.Event})\n");
                 rendered.Append($"exit: {(int)exitCode} {exitCode}\n");
                 rendered.Append($"stdout: {Normalize(output, root.FullName)}\n");
@@ -121,7 +146,7 @@ public sealed partial class HookDecisionGoldenTests
             }
         }
 
-        GoldenFiles.Verify("hook-decisions", rendered.ToString());
+        return rendered.ToString();
     }
 
     [Fact]
