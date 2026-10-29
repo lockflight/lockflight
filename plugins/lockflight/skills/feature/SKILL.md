@@ -101,6 +101,13 @@ Never approve for them.
       Under each test, `redgreen red` says why it got its class; `redgreen red --verbose` adds the exception, the deciding
       stack frame with its line, and the production member the test reaches.
 
+      An accepted red is committed by the engine (`ci.redCommits`, on by default): the tree it judged, with the message
+      `test(<feature>): red for cycle <n>` and the trailer `Lockflight-Red: <n>`, so CI can re-run the red at that commit. Do
+      not commit the tests yourself before the red. The red refuses, before it builds, when HEAD is detached, a merge or
+      rebase is in progress, or untracked files outside the project directories exist (they would go into the commit): say
+      so to the user. If a pre-commit hook refuses the red commit, show the user the line the engine prints; never pass
+      `--no-verify` yourself.
+
       Assertions recognised: xUnit `Assert` (v2 and v3), NUnit `Assert.That` and classic asserts, MSTest `Assert`,
       Shouldly, FluentAssertions, AwesomeAssertions, NSubstitute `Received`, Moq `Verify`, Verify snapshots. Their other
       exceptions (misusing the library) are not assertions.
@@ -136,8 +143,12 @@ Never approve for them.
       production code just to satisfy a wrong test, and `baseline` does not excuse this cycle's tests.**
    5. If `red` or `green` refuses because an approval is stale (spec.md, plan.md or tasks.md changed after approval), show the
       user what changed and ask them to approve again (see Approvals). Wait.
+   6. After the green, commit the story's implementation the way the user commits (for example `feat(<feature>): <story>`),
+      so the next red starts from it.
 7. **Verify.** `.lockflight/bin/lockflight trace` (every requirement covered by a test that went red, then green) and
-   `.lockflight/bin/lockflight gate run --profile pr --base <base branch>`.
+   `.lockflight/bin/lockflight gate run --profile pr --base <base branch>`. Then, on a clean tree,
+   `.lockflight/bin/lockflight ci --no-review-expected`: the CI judge on your commits, as CI will run it (red at each red
+   commit, tests since red, green, trace); fix what it reports before you go on.
 8. **Commit.** The review of record judges committed work only, so commit the feature on its branch now, the way the user
    commits (their branch and message conventions; commit locally, never push here). The commit holds:
    - the production code and the tests;

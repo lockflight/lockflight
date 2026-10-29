@@ -41,6 +41,12 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         DateTimeOffset deadline = session.Context.Time.GetUtcNow().AddSeconds(session.Manifest.Gates.TimeoutSeconds);
         TestWorkspace workspace = session.Workspace;
 
+        bool redCommit = session.Manifest.Ci.RedCommits && record.OpenCycle is null;
+        if (redCommit && await RedCommitter.RefusalAsync(session.Manifest.Root, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), cancellationToken) is string notCommittable)
+        {
+            return await session.FailAsync($"{notCommittable} (ci.redCommits commits an accepted red)", cancellationToken);
+        }
+
         // Taken before the build, so the tree is the one this red judges, not one changed while it ran.
         RedSnapshot snapshot = record.OpenCycle is null
             ? await RedSnapshots.TakeAsync(session.Manifest.Root, workspace.Directories, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), cancellationToken)
@@ -179,6 +185,12 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         }
 
         await DescribeAsync(snapshot, number);
+        if (session.Manifest.Ci.RedCommits && snapshot.Commit is string judged)
+        {
+            RedCommitOutcome committed = await RedCommitter.CommitAsync(session.Manifest.Root, judged, session.Feature.Id, number, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), cancellationToken);
+            await session.Output.WriteLineAsync(committed.Message);
+        }
+
         return ExitCode.Pass;
     }
 
