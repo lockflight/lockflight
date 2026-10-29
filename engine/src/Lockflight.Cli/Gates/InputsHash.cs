@@ -83,7 +83,8 @@ internal static class InputsHash
             .Add("gates.coverage.collector", (int)gates.Coverage.Collector)
             .Add("gates.coverage.patchThreshold", gates.Coverage.PatchThreshold)
             .Add("gates.coverage.minChangedLines", gates.Coverage.MinChangedLines)
-            .Add("gates.quality.suppressions", (int)gates.Suppressions);
+            .Add("gates.quality.suppressions", (int)gates.Suppressions)
+            .Add("gates.docs.references", (int)gates.DocsReferences);
         foreach (Unit unit in manifest.Units)
         {
             key.Add("unit.path", unit.Path)

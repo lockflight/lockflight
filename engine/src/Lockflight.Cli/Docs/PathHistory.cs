@@ -3,7 +3,7 @@ using Lockflight.Cli.Processes;
 namespace Lockflight.Cli.Docs;
 
 /// <summary>
-/// The paths HEAD's first-parent history deleted or renamed, newest removal first, and the directories that went with them. Read
+/// The paths a revision's first-parent history (HEAD's, or a commit's) deleted or renamed, newest removal first, and the directories that went with them. Read
 /// once per scan with a cap on commits and time: a deep history makes the check find less, never more.
 /// </summary>
 internal sealed class PathHistory(IReadOnlyDictionary<string, PathRemoval> removals, IReadOnlyList<string> notes)
@@ -43,7 +43,7 @@ internal sealed class PathHistory(IReadOnlyDictionary<string, PathRemoval> remov
     public (string Path, PathRemoval Removal)? RemovedNamed(string fileName) =>
         removedByName.TryGetValue(fileName, out string? path) && Removal(path) is PathRemoval removal ? (path, removal) : null;
 
-    public static async Task<PathHistory> LoadAsync(string root, CancellationToken cancellationToken)
+    public static async Task<PathHistory> LoadAsync(string root, string revision, CancellationToken cancellationToken)
     {
         List<string> notes = [];
         ProcessResult shallow = await ProcessRunner.RunAsync("git", ["rev-parse", "--is-shallow-repository"], root, cancellationToken);
@@ -54,7 +54,7 @@ internal sealed class PathHistory(IReadOnlyDictionary<string, PathRemoval> remov
 
         ProcessResult log = await ProcessRunner.RunAsync(
             "git",
-            ["-c", "core.quotePath=false", "log", "--first-parent", "--diff-filter=DR", "-M", "--relative", "--name-status", $"--format={CommitMarker}%h", $"--max-count={MaxCommits}", "HEAD", "--"],
+            ["-c", "core.quotePath=false", "log", "--first-parent", "--diff-filter=DR", "-M", "--relative", "--name-status", $"--format={CommitMarker}%h", $"--max-count={MaxCommits}", "--end-of-options", revision, "--"],
             root, TimeLimit, cancellationToken);
         if (log.TimedOut)
         {

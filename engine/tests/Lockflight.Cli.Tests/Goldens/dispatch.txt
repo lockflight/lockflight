@@ -404,8 +404,8 @@ CI
                                                 check approval records and artifact hashes;
                                                 exactly one of --feature or --base (never the active feature)
   gate run --profile pr [--base <ref>] [--result <file>]
-                                                stop steps plus policy, suppressions, patch coverage,
-                                                dependencies, secrets
+                                                stop steps plus policy, suppressions, references,
+                                                patch coverage, dependencies, secrets
 
 Exit codes
   0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)
