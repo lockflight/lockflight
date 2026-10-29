@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Gates.Affected;
 using Lockflight.Cli.Gates.Steps;
 
 namespace Lockflight.Cli.Gates;
@@ -82,6 +83,11 @@ internal static class WorkspaceGateRunner
             if (root.Profile == GateProfile.Stop && outcome.Steps.All(step => VerdictNames.AllowsNextStep(step.Verdict)) && outcome.State.Fingerprint is string fingerprint)
             {
                 await new StopGateCache(manifest.Root, outcome.Unit.Path).RememberPassAsync(fingerprint, cancellationToken);
+            }
+
+            if (outcome.Steps.All(step => VerdictNames.AllowsNextStep(step.Verdict)) && outcome.Selection?.PassRecord is StopPassRecord passed)
+            {
+                await passed.RememberAsync(cancellationToken);
             }
         }
 
@@ -181,7 +187,7 @@ internal static class WorkspaceGateRunner
             }
         }
 
-        return new UnitOutcome(unit, state, steps, facts.TestsTotal);
+        return new UnitOutcome(unit, state, steps, facts.TestsTotal) { Selection = facts.Selection };
     }
 
     private static GateStep Named(Unit unit, GateStep step) => step with { Name = $"{unit.Path}: {step.Name}", Unit = unit.Path };
@@ -199,7 +205,11 @@ internal static class WorkspaceGateRunner
     }
 
     /// <summary>One unit's steps, its state when the run began (the cache key a PASS is remembered under) and its test count.</summary>
-    private sealed record UnitOutcome(Unit Unit, UnitState State, IReadOnlyList<GateStep> Steps, int? TestsTotal);
+    private sealed record UnitOutcome(Unit Unit, UnitState State, IReadOnlyList<GateStep> Steps, int? TestsTotal)
+    {
+        /// <summary>The unit's choice of projects (stop profile), whose record a PASS keeps for the next run.</summary>
+        public ProjectSelection? Selection { get; init; }
+    }
 
     /// <summary>Collects steps and prints each as it is added, in the format of <see cref="GateRunner"/>.</summary>
     private sealed class Progress(TextWriter writer)

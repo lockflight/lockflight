@@ -13,7 +13,14 @@ namespace Lockflight.Cli.Gates;
 /// </summary>
 internal static class SharedChanges
 {
-    private static readonly string[] BuildInputs = ["*.cs", "*.csproj", "*.fsproj", "*.props", "*.targets", "*.sln", "*.slnx", "*.rsp", "global.json", "nuget.config", "NuGet.config", "*.editorconfig", "*.globalconfig"];
+    /// <summary>Source and project files a unit's project can include from outside the unit; the stop profile's project choice uses the same list.</summary>
+    public static IReadOnlySet<string> SourceExtensions { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ".cs", ".fs", ".vb", ".csproj", ".fsproj", ".vbproj", ".projitems", ".resx",
+    };
+
+    private static readonly string[] BuildInputs =
+        [.. SourceExtensions.Order(StringComparer.Ordinal).Select(extension => $"*{extension}"), "*.props", "*.targets", "*.sln", "*.slnx", "*.rsp", "global.json", "nuget.config", "NuGet.config", "*.editorconfig", "*.globalconfig"];
 
     /// <summary>
     /// A fingerprint of the shared build inputs git tracks, by content (the blob ids its index lists), so a commit that changes one

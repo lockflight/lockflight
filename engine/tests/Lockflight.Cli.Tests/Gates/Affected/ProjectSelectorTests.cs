@@ -13,6 +13,14 @@ public sealed class ProjectSelectorTests : IDisposable
 {
     private const string Solution = "Graph.slnx";
 
+    private const string PassingTrx = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+          <Results><UnitTestResult testName="Api.Tests.Answers" outcome="Passed" /></Results>
+          <ResultSummary outcome="Completed"><Counters total="1" executed="1" passed="1" failed="0" /></ResultSummary>
+        </TestRun>
+        """;
+
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-affected-");
 
     [Fact]
@@ -134,7 +142,7 @@ public sealed class ProjectSelectorTests : IDisposable
         ProjectSelection selection = await SelectAsync();
 
         Assert.Equal(SelectionKind.Everything, selection.Kind);
-        Assert.Equal("no project holds the uncommitted changes", selection.Reason);
+        Assert.Equal("no project holds the changes since the last PASS", selection.Reason);
     }
 
     [Fact]
@@ -149,14 +157,14 @@ public sealed class ProjectSelectorTests : IDisposable
     }
 
     [Fact]
-    public async Task NoUncommittedChangeRunsEverything()
+    public async Task NothingChangedSinceTheLastPassRunsEverything()
     {
         await CreateGraphAsync();
 
         ProjectSelection selection = await SelectAsync();
 
         Assert.Equal(SelectionKind.Everything, selection.Kind);
-        Assert.Equal("no uncommitted changes to choose projects by", selection.Reason);
+        Assert.Equal("nothing changed since the last PASS", selection.Reason);
     }
 
     [Fact]
@@ -332,7 +340,7 @@ public sealed class ProjectSelectorTests : IDisposable
             facts = (await step.RunAsync(run, facts, TestContext.Current.CancellationToken)).Facts;
         }
 
-        string filter = SolutionFilter.PathFor(root.FullName, unitPath: null);
+        string filter = StopPassRecord.PathOf(root.FullName, root.FullName, ".slnf");
         Assert.Equal(filter, facts.Selection?.FilterFile);
         Assert.StartsWith($"build {filter} ", calls[0], StringComparison.Ordinal);
         Assert.StartsWith($"test {filter} --no-build", calls[1], StringComparison.Ordinal);
@@ -362,7 +370,160 @@ public sealed class ProjectSelectorTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task ACommitSinceTheLastPassStillChoosesTheProjectsItChanged()
+    {
+        await CreateGraphAsync();
+        Write("src/Domain/Domain.cs", "class Domain { int committedWithoutAPass; }\n");
+        await CommitWithoutPassAsync();
+        Write("src/Cli/Program.cs", "System.Console.WriteLine(2);\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.Contains("Domain.Tests.csproj (affected by src/Domain/Domain.cs via Domain.csproj)", Described(selection));
+        Assert.Contains("Cli.csproj (changed: src/Cli/Program.cs)", Described(selection));
+    }
+
+    [Fact]
+    public async Task AnEditUndoneSinceTheLastPassIsAChangeToo()
+    {
+        await CreateGraphAsync();
+        Write("src/Api/Api.cs", "class Api { int passedWithThis; }\n");
+        await PassAsync();
+        Write("src/Api/Api.cs", "class Api {}\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.Equal(["Api.csproj (changed: src/Api/Api.cs)", "Api.Tests.csproj (affected by src/Api/Api.cs via Api.csproj)"], Described(selection));
+    }
+
+    [Fact]
+    public async Task WithoutARecordedPassEverythingRuns()
+    {
+        await CreateGraphAsync();
+        File.Delete(StopPassRecord.PathOf(root.FullName, root.FullName, ".pass"));
+        Write("src/Api/Api.cs", "class Api { int changed; }\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.Equal(SelectionKind.Everything, selection.Kind);
+        Assert.StartsWith("no stop PASS of this target", selection.Reason, StringComparison.Ordinal);
+        Assert.NotNull(selection.PassRecord);
+    }
+
+    [Fact]
+    public async Task ProjectsThatShareADirectoryAreBothChanged()
+    {
+        await CreateGraphAsync();
+        Write("src/Api/Api2.csproj", Project("../Domain/Domain.csproj"));
+        Write(Solution, File.ReadAllText(PathOf(Solution)).Replace("</Solution>", "  <Project Path=\"src/Api/Api2.csproj\" />\n</Solution>", StringComparison.Ordinal));
+        await CommitAsync();
+        Write("src/Api/Api.cs", "class Api { int changed; }\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.Contains("Api2.csproj (changed: src/Api/Api.cs)", Described(selection));
+    }
+
+    [Fact]
+    public async Task AnOuterProjectOwnsTheFilesOfAProjectNestedInIt()
+    {
+        await CreateGraphAsync();
+        Write("src/Cli/Plugins/Plugin.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n");
+        Write(Solution, File.ReadAllText(PathOf(Solution)).Replace("</Solution>", "  <Project Path=\"src/Cli/Plugins/Plugin.csproj\" />\n</Solution>", StringComparison.Ordinal));
+        await CommitAsync();
+        Write("src/Cli/Plugins/Plugin.cs", "class Plugin {}\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.Contains("Cli.csproj (changed: src/Cli/Plugins/Plugin.cs)", Described(selection));
+        Assert.Contains("Plugin.csproj (changed: src/Cli/Plugins/Plugin.cs)", Described(selection));
+    }
+
+    [Fact]
+    public async Task ATestFrameworkInAnImportedFileDeclaresTests()
+    {
+        await CreateGraphAsync();
+        Write("build/tests.props", "<Project><ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" /></ItemGroup></Project>\n");
+        Write("tests/Api.Tests/Api.Tests.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <Import Project=\"../../build/tests.props\" />\n  <ItemGroup>\n    <ProjectReference Include=\"../../src/Api/Api.csproj\" />\n  </ItemGroup>\n</Project>\n");
+        await CommitAsync();
+        Write("src/Api/Api.cs", "class Api { int changed; }\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.True(selection.RunsTests);
+        Assert.True(selection.Projects.Single(project => project.Name == "Api.Tests.csproj").DeclaresTests);
+    }
+
+    [Fact]
+    public async Task AFileImportedByADirectoryBuildFileThatAddsReferencesRunsEverything()
+    {
+        await CreateGraphAsync();
+        Write("Directory.Build.props", "<Project><Import Project=\"build/analyzers.props\" /></Project>\n");
+        Write("build/analyzers.props", "<Project><ItemGroup><ProjectReference Include=\"$(MSBuildThisFileDirectory)../src/Core/Core.csproj\" OutputItemType=\"Analyzer\" /></ItemGroup></Project>\n");
+        await CommitAsync();
+        Write("src/Api/Api.cs", "class Api { int changed; }\n");
+
+        ProjectSelection selection = await SelectAsync();
+
+        Assert.Equal("build/analyzers.props adds project references, which the project files alone do not show", selection.Reason);
+    }
+
+    [Fact]
+    public async Task ADirectoryBuildFileAboveTheRepositoryRunsEverything()
+    {
+        await CreateGraphAsync();
+        DirectoryInfo shell = Directory.CreateTempSubdirectory("lockflight-affected-shell-");
+        string unit = Path.Combine(shell.FullName, "unit");
+        Directory.Move(root.FullName, unit);
+        try
+        {
+            File.WriteAllText(Path.Combine(shell.FullName, "Directory.Build.props"), "<Project />\n");
+            Write(unit, "src/Api/Api.cs", "class Api { int changed; }\n");
+
+            ProjectSelection selection = await ProjectSelector.SelectAsync(
+                new GateRunContext(unit, unit, GateProfile.Stop, GateSettings.Default, BaseRef: null, TimeProvider.System), TestContext.Current.CancellationToken);
+
+            Assert.Equal(SelectionKind.Everything, selection.Kind);
+        }
+        finally
+        {
+            Directory.Move(unit, root.FullName);
+            TempDirectories.DeleteRecursively(shell);
+        }
+    }
+
+    [Fact]
+    public async Task OnlyAPassingStopRunRecordsTheTreeTheNextRunComparesWith()
+    {
+        await CreateGraphAsync();
+        string record = StopPassRecord.PathOf(root.FullName, root.FullName, ".pass");
+        string greenBase = await File.ReadAllTextAsync(record, TestContext.Current.CancellationToken);
+        Write("src/Api/Api.cs", "class Api { int changed; }\n");
+
+        await GateRunner.RunAsync(Run() with { Processes = ToolsExiting(1) }, TextWriter.Null, TestContext.Current.CancellationToken);
+        string afterFailure = await File.ReadAllTextAsync(record, TestContext.Current.CancellationToken);
+        await GateRunner.RunAsync(Run() with { Processes = ToolsExiting(0) }, TextWriter.Null, TestContext.Current.CancellationToken);
+        string afterPass = await File.ReadAllTextAsync(record, TestContext.Current.CancellationToken);
+
+        Assert.Equal(greenBase, afterFailure);
+        Assert.NotEqual(greenBase, afterPass);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(root);
+
+    /// <summary>Every tool exits with the code; a passing test run writes a TRX report of one passed test.</summary>
+    private static RunTimedProcess ToolsExiting(int exitCode) => (fileName, arguments, workingDirectory, timeLimit, cancellationToken) =>
+    {
+        int results = arguments.ToList().IndexOf("--results-directory");
+        if (exitCode == 0 && results >= 0)
+        {
+            Directory.CreateDirectory(arguments[results + 1]);
+            File.WriteAllText(Path.Combine(arguments[results + 1], "lockflight.trx"), PassingTrx);
+        }
+
+        return Task.FromResult(new ProcessResult(exitCode, exitCode == 0 ? "Build succeeded." : "Api.cs(1,1): error CS1002: ; expected", string.Empty, 0, TimedOut: false));
+    };
 
     private static string[] Described(ProjectSelection selection) => [.. selection.Projects.Select(project => $"{project.Name} ({project.Reason})")];
 
@@ -396,10 +557,24 @@ public sealed class ProjectSelectorTests : IDisposable
         await CommitAsync();
     }
 
+    /// <summary>Commits everything, as a stop PASS of that tree would have recorded it.</summary>
     private async Task CommitAsync()
+    {
+        await CommitWithoutPassAsync();
+        await PassAsync();
+    }
+
+    private async Task CommitWithoutPassAsync()
     {
         await GitAsync(["add", "-A"]);
         await GitAsync(["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-qm", "graph"]);
+    }
+
+    /// <summary>What a stop PASS of the tree as it is now records.</summary>
+    private async Task PassAsync()
+    {
+        ProjectSelection selection = await ProjectSelector.SelectAsync(Run() with { FullRun = true }, TestContext.Current.CancellationToken);
+        await selection.PassRecord!.RememberAsync(TestContext.Current.CancellationToken);
     }
 
     private async Task GitAsync(string[] arguments)
@@ -409,6 +584,13 @@ public sealed class ProjectSelectorTests : IDisposable
     }
 
     private string PathOf(string relative) => Path.Combine(root.FullName, relative.Replace('/', Path.DirectorySeparatorChar));
+
+    private static void Write(string directory, string relative, string content)
+    {
+        string path = Path.Combine(directory, relative.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, content);
+    }
 
     private void Write(string relative, string content)
     {

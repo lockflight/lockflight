@@ -28,7 +28,7 @@ internal sealed record GateRunContext(
     public string? StopFilter { get; init; }
 
     /// <summary>
-    /// <c>gate run --full</c>: the stop profile builds and tests every project instead of the ones the uncommitted changes affect.
+    /// <c>gate run --full</c>: the stop profile builds and tests every project instead of the ones the changes since the last PASS affect.
     /// </summary>
     public bool FullRun { get; init; }
 

@@ -12,14 +12,6 @@ namespace Lockflight.Cli.Gates.Affected;
 /// </summary>
 internal static class SolutionFilter
 {
-    /// <summary>Where the filters live: git-ignored local state, one file per unit (<c>root</c> outside every unit).</summary>
-    public const string RelativeDirectory = ".lockflight/local/affected";
-
-    private const string RootName = "root";
-
-    public static string PathFor(string projectRoot, string? unitPath) =>
-        Path.Combine(projectRoot, RelativeDirectory.Replace('/', Path.DirectorySeparatorChar), $"{unitPath?.Replace('/', '-') ?? RootName}.slnf");
-
     public static async Task WriteAsync(string path, string solutionFile, IEnumerable<string> entries, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

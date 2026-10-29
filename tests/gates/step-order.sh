@@ -146,10 +146,11 @@ render() {
   FAKE_FAIL=deps run_case "single: pr stops at a dependency error, before secrets" single : --profile pr --base HEAD
   GITLEAKS="$scratch/no-gitleaks" run_case "single: pr without gitleaks" single : --profile pr --base HEAD
   run_case "single: pr without a base" single : --profile pr
-  run_case "layered: stop builds and tests the projects a change affects" layered 'printf "class Api { }\n" > src/Api/Api.cs' --profile stop
-  FAKE_FAIL="test" run_case "layered: a test failure among the affected projects ends the run" layered 'printf "class Api { }\n" > src/Api/Api.cs' --profile stop
-  run_case "layered: --full builds and tests every project" layered 'printf "class Api { }\n" > src/Api/Api.cs' --profile stop --full
-  run_case "layered: a shared build input runs every project" layered 'printf "<Project />\n" > Directory.Build.props' --profile stop
+  run_case "layered: stop builds and tests the projects a change affects" layered 'FAKE_FAIL= PATH="$fakes:$PATH" "$engine" gate run --profile stop > /dev/null; printf "class Api { }\n" > src/Api/Api.cs' --profile stop
+  FAKE_FAIL="test" run_case "layered: a test failure among the affected projects ends the run" layered 'FAKE_FAIL= PATH="$fakes:$PATH" "$engine" gate run --profile stop > /dev/null; printf "class Api { }\n" > src/Api/Api.cs' --profile stop
+  run_case "layered: without a recorded PASS every project runs" layered 'printf "class Api { }\n" > src/Api/Api.cs' --profile stop
+  run_case "layered: --full builds and tests every project" layered 'FAKE_FAIL= PATH="$fakes:$PATH" "$engine" gate run --profile stop > /dev/null; printf "class Api { }\n" > src/Api/Api.cs' --profile stop --full
+  run_case "layered: a shared build input runs every project" layered 'FAKE_FAIL= PATH="$fakes:$PATH" "$engine" gate run --profile stop > /dev/null; printf "<Project />\n" > Directory.Build.props' --profile stop
   run_case "workspace: edit" workspace : --profile edit
   run_case "workspace: stop judges every unit never judged" workspace : --profile stop
   FAKE_FAIL=build FAKE_FAIL_IN=orders run_case "workspace: one unit's build failure, the other unit still runs" workspace : --profile stop

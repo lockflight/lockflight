@@ -14,6 +14,9 @@ internal sealed record ProjectSelection(
 {
     private const int MaxListed = 8;
 
+    /// <summary>What a PASS of this run records for the next one to compare with; null when the working tree could not be read.</summary>
+    public StopPassRecord? PassRecord { get; init; }
+
     public static ProjectSelection Everything(string reason) => new(SelectionKind.Everything, reason, [], 0, null, RunsTests: true);
 
     /// <summary>The step's detail line: what runs and why, each affected project with its reason.</summary>
@@ -26,7 +29,7 @@ internal sealed record ProjectSelection(
 
         string listed = string.Join("; ", Projects.Take(MaxListed).Select(project => $"{project.Name} ({project.Reason})"));
         string more = Projects.Count > MaxListed ? $"; and {Projects.Count - MaxListed} more" : string.Empty;
-        return $"{Projects.Count(project => project.SolutionEntry is not null)} of {SolutionProjects} projects, by the uncommitted changes " +
+        return $"{Projects.Count(project => project.SolutionEntry is not null)} of {SolutionProjects} projects, by the changes since the last PASS " +
             $"(--full runs every project): {listed}{more}";
     }
 

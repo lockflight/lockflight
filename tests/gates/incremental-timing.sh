@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The incremental Stop gate against the full one on a real build: the ten-project solution of make-graph.sh, a change to a leaf
 # project (Api) and to a core one (Domain), each judged by `gate run` (the projects the change affects) and `gate run --full`
-# (every project, as the stop profile ran before), interleaved. Before each run the tree is reset and built, as the last Stop left
-# it, and the change is new (so it compiles). Prints each run and the median per case and mode, and checks the choice: Api and
+# (every project, as the stop profile ran before), interleaved. Before each run the tree is reset and passed with --full, as the
+# last Stop left it (built, its tree recorded), and the change is new (so it compiles). Prints each run and the median per case and mode, and checks the choice: Api and
 # Api.Tests for the leaf, every project that depends on Domain for the core change.
 #   ENGINE=<path to lockflight> bash tests/gates/incremental-timing.sh [runs per case and mode, default 5] [mtp|vstest]
 # Needs the .NET 10 SDK and network access to restore the test packages once.
@@ -17,7 +17,6 @@ trap 'rm -rf "$scratch"' EXIT
 root="$scratch/graph"
 bash "$here/make-graph.sh" "$root" "$runner"
 cd "$root"
-dotnet build --nologo -v q > /dev/null
 
 now_ms() { python3 -c 'import time; print(int(time.time() * 1000))'; }
 median() { sort -n | awk '{ v[NR] = $1 } END { print (NR % 2) ? v[(NR + 1) / 2] : int((v[NR / 2] + v[NR / 2 + 1]) / 2) }'; }
@@ -27,7 +26,8 @@ for run in $(seq 1 "$runs"); do
   for case in leaf core; do
     for mode in incremental full; do
       git checkout -q -- . && git clean -fdq -e bin -e obj -e .lockflight
-      dotnet build --nologo -v q > /dev/null
+      # The last Stop's PASS, as the agent's turn starts: everything built, the tree recorded.
+      "$engine" gate run --profile stop --full > /dev/null 2>&1 || "$engine" gate run --profile stop --full > /dev/null
       case "$case" in
         leaf) file=src/Api/ApiLayer.cs ;;
         core) file=src/Domain/DomainLayer.cs ;;

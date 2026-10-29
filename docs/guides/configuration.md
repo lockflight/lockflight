@@ -27,7 +27,7 @@ stop:
   gate: false                   # run the stop profile when the agent ends a turn; also lets a task be marked
                                 #   completed only after the stop gate passed for the current changes
   target: .                     # directory the stop gate builds and tests: in a solution, the projects the
-                                #   uncommitted changes affect (see "The stop profile builds what the change affects")
+                                #   changes since its last PASS affect (see "The stop profile builds what the change affects")
 
 gates:
   build: Shop.sln               # optional: the solution or project to build and test (default: the one in the target)
@@ -366,16 +366,21 @@ a scope checked (for example `3 changed C# files (format)`), or `nothing judged`
 
 ### The stop profile builds what the change affects
 
-In a solution, the stop profile builds and tests only the projects the uncommitted changes touch and the projects that depend
-on them, transitively. The `pr` profile and CI always build and test everything, so this shortens the Stop gate without
-narrowing the definition of done.
+In a solution, the stop profile builds and tests only the projects changed since the target's last stop PASS and the projects
+that depend on them, transitively. The `pr` profile and CI always build and test everything, so this shortens the Stop gate
+without narrowing the definition of done.
 
+- **Changed since the last PASS:** every stop PASS of a target records its working tree as a git tree object
+  (`.lockflight/local/affected/<target>.pass`, written through a private index; the person's index is untouched). The next
+  run compares the working tree with it, so edits, commits made without a stop run, reverts, deletions and new files all
+  count.
 - **The graph:** `projects.affected` reads the solution (`.sln` or `.slnx`: the `build:` file, else the only one in the target)
-  and each project file's `ProjectReference` items as text, without MSBuild. A changed file belongs to the project whose
-  directory holds it, and to a project that includes it from outside its own directory (a linked file, an imported shared
-  project).
+  and each project file's `ProjectReference` items as text, without MSBuild, following its imports and the
+  `Directory.Build` and `Directory.Packages` files above it. A changed file belongs to every project whose directory holds it
+  (an outer project of a nested one too, and projects that share a directory), and to a project that includes it from
+  outside its own directory (a linked file, an imported shared project).
 - **What runs:** the changed projects and every project that references one of them, through a solution filter
-  (`.lockflight/local/affected/<unit>.slnf`). Their project references still build. The tests are the test projects among
+  (`.lockflight/local/affected/<target>.slnf`). Their project references still build. The tests are the test projects among
   them; when none is a test project, `test` is N/A and says so.
 - **What it records:** the step's detail, in the result and in the ledger, names each project and why, for example
   `Api.Tests.csproj (affected by src/Domain/Order.cs via Api.csproj)`.
@@ -385,17 +390,18 @@ narrowing the definition of done.
   - a shared build input changed: any `Directory.Build.*`, `Directory.Packages.props`, `global.json`, `NuGet.config`,
     `.props`, `.targets`, solution, `.editorconfig` or `.globalconfig`;
   - a file changed outside every project in the target, or a source or project file outside the target that no project holds;
-  - the graph cannot be settled from the text: a reference or include through an MSBuild property other than the project's
-    own directory, a wildcard or missing reference, a `Directory.Build.props`/`.targets` or an imported file that adds
-    project references, a project type other than C#, F# or Visual Basic, or a project outside the repository or in a
-    nested one;
-  - no affected project declares tests while a `Directory.Build` file names a test framework (test projects cannot be told
-    apart);
-  - there is no single solution, no uncommitted change (after a commit), git fails, or the changes affect every project;
+  - the graph cannot be settled from the text: a reference, include or import through an MSBuild property other than the
+    file's or the project's own directory, a wildcard or missing reference, an imported or inherited file that adds project
+    references or lies outside the repository (a unit repository under a shell's `Directory.Build.props`), a project type
+    other than C#, F# or Visual Basic, or a project outside the repository or in a nested one;
+  - no affected project declares tests (in its file or a file it imports) while a `Directory.Build` or `Directory.Packages`
+    file names a test framework, so test projects cannot be told apart;
+  - there is no stop PASS of the target yet under this engine and these settings, nothing changed since it, there is no
+    single solution, git fails, or the changes affect every project;
   - `gate run --full`.
-- **The cache:** a PASS is remembered under the inputs hash as before. The choice is a function of what that hash covers (HEAD,
-  the uncommitted changes and new files, the settings), and the step's version is part of the key, so a PASS never stands for
-  a different choice.
+- **The cache:** a PASS is remembered under the inputs hash as before. The choice is a function of what that hash covers
+  (HEAD, the uncommitted changes and new files, the settings) and of the recorded tree of the last PASS, which only a PASS
+  writes and which already passed; the step's version is part of the key, so a PASS chosen by other rules is not reused.
 
 The choice is made per unit in a workspace, inside the unit's solution, after the unit itself was chosen because it changed.
 

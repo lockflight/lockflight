@@ -89,12 +89,13 @@ internal static class GateStepCanaries
 
     /// <summary>
     /// The incremental stop gate must not leave a broken dependent untested: in a solution where App.Tests → App → Core and Other
-    /// stands apart, an uncommitted change to Core is judged with App.Tests chosen, and App.Tests' planted failure fails the run.
+    /// stands apart, a change to Core committed after the last PASS is judged with App.Tests chosen, and App.Tests' planted failure
+    /// fails the run.
     /// The harmless twin: Other.Tests, which the change does not reach, is left out.
     /// </summary>
     private static async Task<CanaryReport> AffectedProjectsAsync(TimeProvider time, CancellationToken cancellationToken)
     {
-        const string name = "projects.affected: a failing test two references away from the changed project is run";
+        const string name = "projects.affected: a failing test two references away from a project committed since the last PASS is run";
         using CanaryScratch scratch = new(time);
         string Project(string reference, bool tests) =>
             $"<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup>{(tests ? "<PackageReference Include=\"xunit\" />" : string.Empty)}" +
@@ -122,9 +123,21 @@ internal static class GateStepCanaries
             return new CanaryReport(name, CanaryResult.Broken, $"{notCreated}; git is needed for this canary");
         }
 
-        await File.WriteAllTextAsync(scratch.PathOf("src/Core/Core.cs"), "class Core { int changed; }\n", cancellationToken);
         Manifest manifest = ManifestLocator.Discover(scratch.Project).Manifest!;
         GateRunContext run = GateRunContext.ForTarget(manifest, scratch.Project, GateProfile.Stop, baseRef: null, time) with { Processes = FailingAppTestsAsync };
+        if ((await ProjectSelector.SelectAsync(run with { FullRun = true }, cancellationToken)).PassRecord is not StopPassRecord passed)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, "the working tree of the green base could not be recorded");
+        }
+
+        // The base passed; the change to Core is then committed without a stop run, so it is no longer uncommitted.
+        await passed.RememberAsync(cancellationToken);
+        await File.WriteAllTextAsync(scratch.PathOf("src/Core/Core.cs"), "class Core { int changed; }\n", cancellationToken);
+        if (await CanaryGit.CommitAllAsync(scratch.Project, "core change", initialize: false, cancellationToken) is string notCommitted)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, notCommitted);
+        }
+
         GateRunFacts facts = GateRunFacts.None;
         GateStep? last = null;
         foreach (IGateStep step in GateProfiles.For(GateProfile.Stop).PerUnit)

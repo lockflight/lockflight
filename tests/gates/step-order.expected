@@ -179,7 +179,7 @@ $ lockflight gate run --profile stop
 format: PASS (N ms)
   1 files checked
 projects.affected: N/A (N ms)
-  2 of 4 projects, by the uncommitted changes (--full runs every project): Api.csproj (changed: src/Api/Api.cs); Api.Tests.csproj (affected by src/Api/Api.cs via Api.csproj)
+  2 of 4 projects, by the changes since the last PASS (--full runs every project): Api.csproj (changed: src/Api/Api.cs); Api.Tests.csproj (affected by src/Api/Api.cs via Api.csproj)
 build: PASS (N ms)
 test: PASS (N ms)
   total 1
@@ -192,13 +192,26 @@ $ lockflight gate run --profile stop
 format: PASS (N ms)
   1 files checked
 projects.affected: N/A (N ms)
-  2 of 4 projects, by the uncommitted changes (--full runs every project): Api.csproj (changed: src/Api/Api.cs); Api.Tests.csproj (affected by src/Api/Api.cs via Api.csproj)
+  2 of 4 projects, by the changes since the last PASS (--full runs every project): Api.csproj (changed: src/Api/Api.cs); Api.Tests.csproj (affected by src/Api/Api.cs via Api.csproj)
 build: PASS (N ms)
 test: FAIL (N ms)
   1 failed: Shop.Tests.OrderTotal
 Scope: 1 tests
 Result: FAIL
 exit: 1
+
+## layered: without a recorded PASS every project runs
+$ lockflight gate run --profile stop
+format: PASS (N ms)
+  1 files checked
+projects.affected: N/A (N ms)
+  every project: no stop PASS of this target, with this engine and these settings, to compare with
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+Scope: 1 tests
+Result: PASS
+exit: 0
 
 ## layered: --full builds and tests every project
 $ lockflight gate run --profile stop --full

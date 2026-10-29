@@ -10,7 +10,7 @@ namespace Lockflight.Cli.Gates;
 /// <c>lockflight gate run [--profile edit|stop|pr] [--path dir] [--unit path[,path…]] [--base ref] [--result file] [--full]</c>.
 /// Outside a Lockflight project the gates run with the default settings; an invalid manifest stops the run, so a typo in it can never
 /// weaken the gates. At the root of a workspace with units the run covers every unit, or those <c>--unit</c> names. The stop profile
-/// builds and tests the projects the uncommitted changes affect; <c>--full</c> makes it build and test every project.
+/// builds and tests the projects the changes since its last PASS affect; <c>--full</c> makes it build and test every project.
 /// </summary>
 internal sealed class GateCommand(CliContext context) : ICommand
 {
