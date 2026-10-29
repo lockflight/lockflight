@@ -1,3 +1,5 @@
+using Lockflight.Cli.Routing;
+
 namespace Lockflight.Cli.Ci;
 
 /// <summary>
@@ -28,6 +30,8 @@ internal static class JudgeChecks
             CheckId.TestsSinceRed when findings.SinceRed is IReadOnlyList<SinceRedTest> sinceRed => SinceRedCheck(level, sinceRed),
             CheckId.TestsExistingChanged when findings.ExistingChanged is IReadOnlyList<ExistingChangedTest> existing => ExistingChangedCheck(level, existing),
             CheckId.TestsHostTampering when findings.Tampering is TamperingJudgement tampering => new CheckResult(check, level, tampering.Verdict, tampering.Why),
+            CheckId.Trace when findings.Trace is TraceJudgement trace => Trace(plan, level, trace),
+            CheckId.Gates when findings.Gates is { } gates => new CheckResult(check, level, gates.Verdict, gates.Why),
             CheckId.Green when findings.Green is GreenJudgement green => new CheckResult(check, level, green.Verdict, green.Why),
             CheckId.Review => new CheckResult(check, level, CheckVerdict.Skipped, plan.Inputs.ReviewExpected ? "the report joins the review job's result" : "no review job runs for this pull request"),
             _ => new CheckResult(check, level, CheckVerdict.NotEarned, NotJudgedYet),
@@ -74,6 +78,15 @@ internal static class JudgeChecks
 
         return new CheckResult(CheckId.TestsExistingChanged, level, CheckVerdict.Pass,
             tests.Count == 0 ? "no existing test changed" : $"{tests.Count} existing tests changed, each still failing on the base's code");
+    }
+
+    /// <summary>Trace is required when it applies to a class that needs it then (a spec exists), off when it does not.</summary>
+    private static CheckResult Trace(JudgePlan plan, CheckLevel level, TraceJudgement trace)
+    {
+        CheckLevel resolved = plan.Requirements.LevelOf(RequirementKind.SpecAndTrace) == RequirementLevel.WhenApplicable
+            ? trace.Applies ? CheckLevel.Required : CheckLevel.Off
+            : level;
+        return new CheckResult(CheckId.Trace, resolved, trace.Verdict, trace.Why);
     }
 
     private static string NoRedWhy(JudgePlan plan)
