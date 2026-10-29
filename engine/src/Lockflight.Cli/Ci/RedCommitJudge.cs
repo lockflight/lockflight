@@ -19,8 +19,8 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
         foreach (RedCommit red in plan.Reds.Cycles)
         {
             string forkPoint = red.ForkPoint ?? plan.MergeBase!;
-            TreeListing fork = await trees.ListAsync(forkPoint, forkPoint == plan.MergeBase ? "base" : "fork point", cancellationToken);
-            if (fork.Inventory is not IReadOnlyList<TestCase> baseInventory)
+            TreeListing fork = await trees.ListAsync(forkPoint, forkPoint == plan.MergeBase ? "base" : "fork point", fresh: false, cancellationToken);
+            if (fork.AsBaseline is not IReadOnlyList<TestCase> baseInventory)
             {
                 cycles.Add(NotJudged(red, fork, $"the fork point {CommitIds.Short(forkPoint)} could not be listed ({TreeOutcomeNames.ToName(fork.Outcome)}: {fork.Detail})"));
                 continue;
@@ -41,7 +41,7 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
     private async Task<CycleJudgement> JudgeCycleAsync(
         RedCommit red, IReadOnlyList<TestCase> baseInventory, HashSet<string> earlierNew, List<RedGreenCycle> accepted, CancellationToken cancellationToken)
     {
-        TreeListing tree = await trees.ListAsync(red.Commit, $"red {red.Label}", cancellationToken);
+        TreeListing tree = await trees.ListAsync(red.Commit, $"red {red.Label}", fresh: true, cancellationToken);
         if (tree.Outcome == TreeOutcome.CompileFailed)
         {
             return Judged(red, tree.Outcome, [], CheckVerdict.Fail, $"COMPILE_RED: the tests do not compile at the red commit; declare the members they use as stubs. {tree.Detail}");
