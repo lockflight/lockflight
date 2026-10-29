@@ -1,5 +1,5 @@
-using Lockflight.Cli.Config;
 using Lockflight.Cli.Ci;
+using Lockflight.Cli.Config;
 
 namespace Lockflight.Cli.Tests.Ci;
 
