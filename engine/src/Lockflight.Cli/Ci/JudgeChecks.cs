@@ -27,6 +27,7 @@ internal static class JudgeChecks
             CheckId.TestsSinceRed when plan.Reds.OverCap || plan.Reds.Cycles.Count == 0 => new CheckResult(check, level, CheckVerdict.NotEarned, "no red commit to compare with"),
             CheckId.TestsSinceRed when findings.SinceRed is IReadOnlyList<SinceRedTest> sinceRed => SinceRedCheck(level, sinceRed),
             CheckId.TestsExistingChanged when findings.ExistingChanged is IReadOnlyList<ExistingChangedTest> existing => ExistingChangedCheck(level, existing),
+            CheckId.TestsHostTampering when findings.Tampering is TamperingJudgement tampering => new CheckResult(check, level, tampering.Verdict, tampering.Why),
             CheckId.Green when findings.Green is GreenJudgement green => new CheckResult(check, level, green.Verdict, green.Why),
             CheckId.Review => new CheckResult(check, level, CheckVerdict.Skipped, plan.Inputs.ReviewExpected ? "the report joins the review job's result" : "no review job runs for this pull request"),
             _ => new CheckResult(check, level, CheckVerdict.NotEarned, NotJudgedYet),

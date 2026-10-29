@@ -11,5 +11,8 @@ internal sealed record CycleJudgement(RedCommit Red, TreeOutcome Build, IReadOnl
     /// <summary>The new tests' fingerprints at the red commit, by key; a test without one counts as changed since.</summary>
     public IReadOnlyDictionary<string, string> FingerprintsAtRed { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
+    /// <summary>The host-tampering findings in the red commit's test assemblies.</summary>
+    public IReadOnlyList<TamperingFinding> Tampering { get; init; } = [];
+
     public bool Accepted => Verdict == CheckVerdict.Pass;
 }

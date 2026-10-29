@@ -53,6 +53,13 @@ internal static class CiEvidence
             ["existingChanged"] = run.Findings.ExistingChanged is IReadOnlyList<ExistingChangedTest> existing
                 ? new JsonArray([.. existing.Select(test => new JsonObject { ["key"] = Cap(test.Key), ["state"] = ExistingChangeNames.ToName(test.State), ["why"] = Cap(test.Why) })])
                 : null,
+            ["hostTampering"] = run.Findings.Tampering is TamperingJudgement tampering
+                ? new JsonObject
+                {
+                    ["new"] = new JsonArray([.. tampering.New.Select(TamperingNode)]),
+                    ["existing"] = new JsonArray([.. tampering.Existing.Select(TamperingNode)]),
+                }
+                : null,
             ["testsWithoutRed"] = Strings((run.Findings.Green?.WithoutRed ?? []).Select(Cap)),
             ["green"] = run.Findings.Green is GreenJudgement green ? GreenNode(green) : null,
             ["trace"] = null,
@@ -132,6 +139,14 @@ internal static class CiEvidence
         })]),
         ["raises"] = new JsonArray([.. classification.Raises.Select(raise => new JsonObject { ["source"] = raise.Source, ["to"] = ChangeClassNames.ToName(raise.To) })]),
         ["engine"] = engineVersion,
+    };
+
+    private static JsonObject TamperingNode(TamperingFinding finding) => new()
+    {
+        ["id"] = Cap(finding.Id),
+        ["kind"] = finding.Kind,
+        ["location"] = Cap(finding.Location),
+        ["member"] = Cap(finding.Member),
     };
 
     private static JsonObject GreenNode(GreenJudgement green) => new()

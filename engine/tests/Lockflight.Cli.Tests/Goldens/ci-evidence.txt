@@ -75,6 +75,7 @@
   ],
   "cycles": [],
   "existingChanged": null,
+  "hostTampering": null,
   "testsWithoutRed": [],
   "green": null,
   "trace": null,

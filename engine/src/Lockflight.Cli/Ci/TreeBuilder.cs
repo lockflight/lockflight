@@ -100,7 +100,7 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
         }
 
         return await workspace.ListAsync(cancellationToken) is IReadOnlyList<TestCase> inventory
-            ? new TreeListing(commit, TreeOutcome.Ok, workspace, inventory, null) { Fingerprints = TestFingerprints.Compute(workspace, inventory, worktree.Root) }
+            ? new TreeListing(commit, TreeOutcome.Ok, workspace, inventory, null) { Fingerprints = TestFingerprints.Compute(workspace, inventory, worktree.Root), Tampering = TamperingScan.Compute(workspace, worktree.Root) }
             : new TreeListing(commit, TreeOutcome.Broken, workspace, null, $"the test runner could not list the tests of {workspace.FailedApp}");
     }
 
