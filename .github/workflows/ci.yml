@@ -263,6 +263,14 @@ jobs:
         run: bash tests/install/marketplace-ref.sh
       - name: The release's engine hashes describe the packages
         run: bash tests/release/engine-hashes.sh
+      # dash, bash and BusyBox sh on the runner, then inside the .NET SDK image, whose only zip reader is perl; and the
+      # Windows install script with PowerShell 7.
+      - name: The engine install script checks the hash before anything runs it
+        run: |
+          docker run --rm busybox:1.37-musl cat /bin/busybox > "$RUNNER_TEMP/busybox" && chmod +x "$RUNNER_TEMP/busybox"
+          PATH="$PATH:$RUNNER_TEMP" SHELLS="dash bash busybox-sh" bash tests/install/install-script.sh
+          docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash tests/install/install-script.sh
+          bash tests/install/install-ps1.sh
       # The marketplace users add serves the plugins from a release tag; it must name a pushed tag whose plugins have the tag's
       # version, with the engine on nuget.org (docs/engineering/releasing.md).
       - name: The marketplace serves a published release
