@@ -67,6 +67,8 @@ quality.suppressions: N/A (N ms)
 docs.references: N/A (N ms)
   no instruction files (CLAUDE.md, AGENTS.md, .claude/)
 build: PASS (N ms)
+ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 test: PASS (N ms)
   total 1
 coverage.patch: N/A (N ms)
@@ -87,6 +89,8 @@ quality.suppressions: N/A (N ms)
 docs.references: N/A (N ms)
   no instruction files (CLAUDE.md, AGENTS.md, .claude/)
 build: PASS (N ms)
+ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 test: FAIL (N ms)
   1 failed: Shop.Tests.OrderTotal
 Scope: 1 tests
@@ -103,6 +107,8 @@ quality.suppressions: N/A (N ms)
 docs.references: N/A (N ms)
   no instruction files (CLAUDE.md, AGENTS.md, .claude/)
 build: PASS (N ms)
+ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 test: PASS (N ms)
   total 1
 coverage.patch: N/A (N ms)
@@ -123,6 +129,8 @@ quality.suppressions: N/A (N ms)
 docs.references: N/A (N ms)
   no instruction files (CLAUDE.md, AGENTS.md, .claude/)
 build: PASS (N ms)
+ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 test: PASS (N ms)
   total 1
 coverage.patch: N/A (N ms)
@@ -145,6 +153,8 @@ quality.suppressions: N/A (N ms)
 docs.references: N/A (N ms)
   no instruction files (CLAUDE.md, AGENTS.md, .claude/)
 build: PASS (N ms)
+ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 test: PASS (N ms)
   total 1
 coverage.patch: N/A (N ms)
@@ -211,12 +221,16 @@ quality.suppressions: N/A (N ms)
 docs.references: N/A (N ms)
   no instruction files (CLAUDE.md, AGENTS.md, .claude/)
 services/orders: build: PASS (N ms)
+services/orders: ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 services/orders: test: PASS (N ms)
   total 1
 services/orders: coverage.patch: N/A (N ms)
   not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
 services/orders: security.deps: PASS (N ms)
 services/billing: build: PASS (N ms)
+services/billing: ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 services/billing: test: PASS (N ms)
   total 1
 services/billing: coverage.patch: N/A (N ms)
@@ -241,12 +255,16 @@ quality.suppressions: N/A (N ms)
 docs.references: N/A (N ms)
   no instruction files (CLAUDE.md, AGENTS.md, .claude/)
 services/orders: build: PASS (N ms)
+services/orders: ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 services/orders: test: PASS (N ms)
   total 1
 services/orders: coverage.patch: N/A (N ms)
   not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
 services/orders: security.deps: PASS (N ms)
 services/billing: build: PASS (N ms)
+services/billing: ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 services/billing: test: FAIL (N ms)
   1 failed: Shop.Tests.OrderTotal
 Scope: 2 tests
@@ -267,6 +285,8 @@ quality.suppressions: N/A (N ms)
 docs.references: N/A (N ms)
   no instruction files (CLAUDE.md, AGENTS.md, .claude/)
 services/orders: build: PASS (N ms)
+services/orders: ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 services/orders: test: PASS (N ms)
   total 1
 services/orders: coverage.patch: N/A (N ms)
@@ -274,6 +294,8 @@ services/orders: coverage.patch: N/A (N ms)
 services/orders: security.deps: ERROR (N ms)
   dotnet package list exited 1 without a report
 services/billing: build: PASS (N ms)
+services/billing: ef.pendingModelChanges: N/A (N ms)
+  no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 services/billing: test: PASS (N ms)
   total 1
 services/billing: coverage.patch: N/A (N ms)

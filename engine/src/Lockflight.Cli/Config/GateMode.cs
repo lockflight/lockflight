@@ -14,4 +14,10 @@ internal enum GateMode
 
     /// <summary>The step does not run; the result lists it as off (<c>off</c>).</summary>
     Off = 3,
+
+    /// <summary>
+    /// Only for <c>gates.ef.pendingModelChanges</c>: judge as <see cref="Fail"/> when the repository pins <c>dotnet-ef</c> in a tool
+    /// manifest, and do not run (N/A) otherwise (<c>auto</c>).
+    /// </summary>
+    Auto = 4,
 }

@@ -9,7 +9,7 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
     {
         if (valueNode is not YamlMappingNode section)
         {
-            return errors.At(valueNode.Start, "'gates' must be a mapping (known keys: timeoutSeconds, build, test, coverage, quality, docs)");
+            return errors.At(valueNode.Start, "'gates' must be a mapping (known keys: timeoutSeconds, build, test, coverage, quality, docs, ef)");
         }
 
         foreach ((YamlNode keyNode, YamlNode value) in section.Children)
@@ -47,7 +47,7 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
 
                     break;
                 case "quality":
-                    if (ReadMode(value, "quality", "suppressions", out GateMode? suppressions) is ManifestError qualityError)
+                    if (ReadMode(value, "quality", "suppressions", allowsAuto: false, out GateMode? suppressions) is ManifestError qualityError)
                     {
                         return qualityError;
                     }
@@ -55,15 +55,23 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
                     gates = gates with { Suppressions = suppressions ?? gates.Suppressions };
                     break;
                 case "docs":
-                    if (ReadMode(value, "docs", "references", out GateMode? references) is ManifestError docsError)
+                    if (ReadMode(value, "docs", "references", allowsAuto: false, out GateMode? references) is ManifestError docsError)
                     {
                         return docsError;
                     }
 
                     gates = gates with { DocsReferences = references ?? gates.DocsReferences };
                     break;
+                case "ef":
+                    if (ReadMode(value, "ef", "pendingModelChanges", allowsAuto: true, out GateMode? pendingModelChanges) is ManifestError efError)
+                    {
+                        return efError;
+                    }
+
+                    gates = gates with { EfPendingModelChanges = pendingModelChanges ?? gates.EfPendingModelChanges };
+                    break;
                 default:
-                    return errors.At(keyNode.Start, $"unknown key 'gates.{key}' (known: timeoutSeconds, build, test, coverage, quality, docs)");
+                    return errors.At(keyNode.Start, $"unknown key 'gates.{key}' (known: timeoutSeconds, build, test, coverage, quality, docs, ef)");
             }
         }
 
@@ -112,8 +120,8 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
         return null;
     }
 
-    /// <summary>Reads a section of one switched step, <c>gates.&lt;section&gt;.&lt;step&gt;: fail|report|off</c>; null when the key is absent.</summary>
-    private ManifestError? ReadMode(YamlNode valueNode, string section, string step, out GateMode? mode)
+    /// <summary>Reads a section of one switched step, <c>gates.&lt;section&gt;.&lt;step&gt;: fail|report|off</c> (and <c>auto</c> where allowed); null when the key is absent.</summary>
+    private ManifestError? ReadMode(YamlNode valueNode, string section, string step, bool allowsAuto, out GateMode? mode)
     {
         mode = null;
         if (valueNode is not YamlMappingNode mapping)
@@ -133,9 +141,9 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
                 return errors.At(keyNode.Start, $"unknown key 'gates.{section}.{key}' (known: {step})");
             }
 
-            if (!GateModeNames.TryParse((value as YamlScalarNode)?.Value, out GateMode parsed))
+            if (!GateModeNames.TryParse((value as YamlScalarNode)?.Value, allowsAuto, out GateMode parsed))
             {
-                return errors.At(value.Start, $"'gates.{section}.{step}' must be {GateModeNames.Choices}");
+                return errors.At(value.Start, $"'gates.{section}.{step}' must be {(allowsAuto ? GateModeNames.ChoicesWithAuto : GateModeNames.Choices)}");
             }
 
             mode = parsed;
