@@ -10,7 +10,8 @@ namespace Lockflight.Cli.Review;
 /// migration itself stays in the diff). A snapshot or designer file whose content does not look like EF Core's generated code
 /// (<see cref="EfGeneratedCode"/>) is shown in full. A file's own marks (an <c>// &lt;auto-generated /&gt;</c> header alone, or
 /// <c>linguist-generated</c> in <c>.gitattributes</c>) are never trusted: the change under review could add them. A file that is not
-/// in the working tree (deleted), is a symbolic link, or whose path git quoted, is shown in full.
+/// in the working tree (deleted), is a symbolic link, or whose path git quoted, is shown in full. Names are compared ignoring case,
+/// as the guard's globs are.
 /// </summary>
 internal static class GeneratedFiles
 {
@@ -45,6 +46,14 @@ internal static class GeneratedFiles
         return new GeneratedFile(path, content.LongLength, Convert.ToHexStringLower(SHA256.HashData(content)));
     }
 
+    /// <summary>
+    /// Whether a file of one revision is on the fixed generated list, from its path and text alone: a lock file, or a snapshot or
+    /// designer file whose text has EF Core's shape (a designer only when <paramref name="exists"/> says its migration is there).
+    /// Routing reads both sides of a change this way, without the working tree.
+    /// </summary>
+    public static bool IsGenerated(string path, string? content, Func<string, bool> exists) =>
+        IsLockFile(path) || (content is not null && IsGeneratedPath(path, exists) && LooksGenerated(path, content));
+
     /// <summary>The note after the shown diff that lists the generated files, or nothing when there are none.</summary>
     public static string Note(IReadOnlyList<GeneratedFile> files) =>
         files.Count == 0
@@ -54,7 +63,10 @@ internal static class GeneratedFiles
                 + string.Concat(files.Select(file => $"- {file.Path} ({file.Bytes} bytes, sha256 {file.Sha256})\n"))
                 + "]";
 
-    private static bool IsGeneratedPath(string path, IReadOnlySet<string> changedPaths, string root)
+    private static bool IsGeneratedPath(string path, IReadOnlySet<string> changedPaths, string root) =>
+        IsGeneratedPath(path, migration => changedPaths.Contains(migration) || File.Exists(Path.Combine(root, migration)));
+
+    private static bool IsGeneratedPath(string path, Func<string, bool> exists)
     {
         if (IsLockFile(path))
         {
@@ -66,30 +78,30 @@ internal static class GeneratedFiles
             return false;
         }
 
-        if (path.EndsWith(SnapshotSuffix, StringComparison.Ordinal))
+        if (path.EndsWith(SnapshotSuffix, StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        if (!path.EndsWith(DesignerSuffix, StringComparison.Ordinal))
+        if (!path.EndsWith(DesignerSuffix, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        string migration = path[..^DesignerSuffix.Length] + ".cs";
-        return changedPaths.Contains(migration) || File.Exists(Path.Combine(root, migration));
+        return exists(path[..^DesignerSuffix.Length] + ".cs");
     }
 
     private static bool LooksGenerated(string path, string content) =>
-        path.EndsWith(SnapshotSuffix, StringComparison.Ordinal) ? EfGeneratedCode.IsModelSnapshot(content) : EfGeneratedCode.IsMigrationDesigner(content);
+        path.EndsWith(SnapshotSuffix, StringComparison.OrdinalIgnoreCase) ? EfGeneratedCode.IsModelSnapshot(content) : EfGeneratedCode.IsMigrationDesigner(content);
 
-    private static bool IsLockFile(string path) => LockFiles.Contains(FileName(path), StringComparer.Ordinal);
+    private static bool IsLockFile(string path) => LockFiles.Contains(FileName(path), StringComparer.OrdinalIgnoreCase);
 
     private static bool InMigrations(string path)
     {
         int slash = path.LastIndexOf('/');
         string directory = slash < 0 ? string.Empty : path[..slash];
-        return directory == MigrationsDirectory || directory.EndsWith("/" + MigrationsDirectory, StringComparison.Ordinal);
+        return directory.Equals(MigrationsDirectory, StringComparison.OrdinalIgnoreCase)
+            || directory.EndsWith("/" + MigrationsDirectory, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FileName(string path) => path[(path.LastIndexOf('/') + 1)..];
