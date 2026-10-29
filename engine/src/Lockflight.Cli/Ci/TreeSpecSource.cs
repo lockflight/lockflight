@@ -24,14 +24,9 @@ internal sealed partial class TreeSpecSource : ISpecSource
     {
         string root = plan.Inputs.Root;
         string head = plan.Inputs.Head;
-        IReadOnlyList<string> files = await JudgeGit.TreeFilesAsync(root, head, cancellationToken) ?? [];
-        string[] features = [.. files.Where(path => path.StartsWith(Specs, StringComparison.Ordinal)).Select(path => path.Split('/')).Where(parts => parts.Length >= 3).Select(parts => parts[1]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+        string[] features = await FeaturesAsync(root, head, cancellationToken);
         string[] named = [.. plan.Reds.Cycles.Select(red => SubjectFeature().Match(red.Subject)).Where(match => match.Success).Select(match => match.Groups["id"].Value).Where(features.Contains).Distinct(StringComparer.Ordinal)];
-
-        (string? id, string source) = ByBranch(branch, features) is string fromBranch ? (fromBranch, "branch")
-            : ChangedFeature(plan.ChangedFiles, features) is string changed ? (changed, "specs-diff")
-            : features.Length == 1 ? (features[0], "single")
-            : ((string?)null, "none");
+        (string? id, string source) = Find(branch, plan.ChangedFiles, features);
         if (id is null)
         {
             bool suspicious = features.Length > 0
@@ -51,6 +46,20 @@ internal sealed partial class TreeSpecSource : ISpecSource
         string? tasks = await JudgeGit.ShowFileAsync(root, head, $"{Specs}{id}/tasks.md", cancellationToken);
         return new SpecResolution(id, source, specPath, spec, tasks, SpecOrigin.Head, spec is null ? $"{specPath} does not exist at head" : null);
     }
+
+    /// <summary>The feature a pull request is about, by branch, changed specs, or the only one; null and <c>none</c> when none is found.</summary>
+    public static async Task<(string? Id, string Source)> FindAsync(string root, string head, string? branch, IReadOnlyList<string> changed, CancellationToken cancellationToken) =>
+        Find(branch, changed, await FeaturesAsync(root, head, cancellationToken));
+
+    private static (string? Id, string Source) Find(string? branch, IReadOnlyList<string> changed, string[] features) =>
+        ByBranch(branch, features) is string fromBranch ? (fromBranch, "branch")
+            : ChangedFeature(changed, features) is string changedFeature ? (changedFeature, "specs-diff")
+            : features.Length == 1 ? (features[0], "single")
+            : (null, "none");
+
+    private static async Task<string[]> FeaturesAsync(string root, string head, CancellationToken cancellationToken) =>
+        [.. (await JudgeGit.TreeFilesAsync(root, head, cancellationToken) ?? []).Where(path => path.StartsWith(Specs, StringComparison.Ordinal))
+            .Select(path => path.Split('/')).Where(parts => parts.Length >= 3).Select(parts => parts[1]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 
     private static string? ByBranch(string? branch, string[] features)
     {

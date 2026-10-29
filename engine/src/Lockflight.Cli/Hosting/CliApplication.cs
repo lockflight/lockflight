@@ -127,6 +127,10 @@ internal static class CliApplication
                                                         join the judge's evidence and the review's result into
                                                         verdict.json, the PR comment and the job summary; exits
                                                         with the context's verdict
+          ci review --head <sha> --base <sha> --out <dir> [--branch <name>] [--platform <name>]
+                                                        the review in its own CI job: the target branch's model
+                                                        and budget, against the merge base, stateless; writes
+                                                        review.json and review-result.json for the report
           route show [--base <ref>] [--head <ref>] [--json]
                                                         the change class of this branch and working tree against
                                                         the target (default: origin/HEAD, else main), its signals
