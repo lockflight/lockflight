@@ -33,8 +33,8 @@ internal static class DocumentSelection
     }
 
     /// <summary>
-    /// Whether the rules audit reads the file: the instructions an agent is given (<c>CLAUDE.md</c>, <c>.claude/rules/</c>, the
-    /// constitution, skills), not the project's other docs.
+    /// Whether the file is an instruction file (<c>lockflight facts</c> lists them): the instructions an agent is given
+    /// (<c>CLAUDE.md</c>, <c>.claude/rules/</c>, the constitution, skills), not the project's other docs.
     /// </summary>
     public static bool IsRuleSource(string path)
     {

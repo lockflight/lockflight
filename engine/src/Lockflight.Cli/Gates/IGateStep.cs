@@ -1,3 +1,5 @@
+using Lockflight.Cli.Config;
+
 namespace Lockflight.Cli.Gates;
 
 /// <summary>One check inside a gate run, registered in <see cref="GateProfiles"/>.</summary>
@@ -14,6 +16,12 @@ internal interface IGateStep
     /// cache key, so a change to them never reuses an older PASS. A built-in step has none beyond its name.
     /// </summary>
     string CacheKey { get; }
+
+    /// <summary>
+    /// How the step judges under <paramref name="settings"/>: <c>fail</c> (it can fail the run), <c>report</c> (it only reports) or
+    /// <c>off</c>. What <c>lockflight facts</c> lists; a step with a manifest toggle reads it here.
+    /// </summary>
+    GateMode ModeUnder(GateSettings settings) => GateMode.Fail;
 
     /// <param name="facts">What earlier steps of the same run reported (coverage reads the test results).</param>
     Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken);
