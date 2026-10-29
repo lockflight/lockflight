@@ -6,6 +6,7 @@ Bitbucket Pipelines or GitLab CI/CD, `init --ci-platform azure|bitbucket|gitlab`
 yet verified on the live services): see [CI on other platforms](ci-other-platforms.md).
 
 **On this page:** [What the generated workflow does](#what-the-generated-workflow-does) ·
+[What the CI judge shows](#what-the-ci-judge-shows-and-what-it-does-not) · [The CI judge action](#the-ci-judge-action) ·
 [CODEOWNERS for the protected paths](#what-you-add-codeowners-for-the-protected-paths) ·
 [Approvals of record](#approvals-of-record-the-platforms-review) · [Plan limits](#plan-limits) · [Locally](#locally) ·
 [Workspace shells](#workspace-shells-unit-repositories)
@@ -77,6 +78,22 @@ Only the PR's own commits are scanned for secrets, so existing history in a brow
 **Multi-targeted test projects.** `init` reads the test projects' `TargetFramework(s)` and makes `setup-dotnet` install every
 .NET channel they need (for example `8.0.x` and `10.0.x`); a workflow that already existed is left alone, and `init` says what
 it should install.
+
+## What the CI judge shows, and what it does not
+
+`lockflight ci` re-runs the red/green evidence instead of trusting it. For each commit with a `Lockflight-Red: <cycle>`
+trailer it builds that commit and requires its new tests to fail inside production code; it then requires every cycle test to
+be the same test at head (or to fail again on the red commit's code when it changed) and to pass there, the spec's
+requirements to be traced to those tests, and the `pr` gates to pass, all with the target branch's policy.
+
+- **Unforgeable from the pull request** (with a required check and CODEOWNERS on the workflow files): which commits and
+  tests are examined, the policy, baselines and engine version, and that the check runs at all.
+- **A strong guardrail, not a boundary:** the test results. The tests are the pull request's code and run in the judge job,
+  so a determined pull request can forge their outcome. Doing so needs deliberate code in the test assemblies that tampers
+  with the test host, which is visible in the test diff; the host-tampering check lists the plain forms of it and is
+  NOT-EARNED when one is new.
+- **Not shown:** that the tests were written first. A red commit shows that the tests tell the stub from the
+  implementation, which is what the evidence claims.
 
 ## The CI judge action
 
