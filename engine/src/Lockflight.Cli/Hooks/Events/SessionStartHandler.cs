@@ -16,14 +16,18 @@ internal sealed class SessionStartHandler : IHookHandler
 
     public Task<HookReply> DecideAsync(HookInvocation invocation, CancellationToken cancellationToken) =>
         Task.FromResult(new HookReply(
-            HookDecision.Allow, SessionBanner.ToHookOutput(invocation.Manifest, invocation.ProjectDirectory, SessionNotice(invocation.Context.Environment))));
+            HookDecision.Allow, SessionBanner.ToHookOutput(invocation.Manifest, invocation.ProjectDirectory, SessionNotice(invocation.Manifest, invocation.Context.Environment))));
 
     /// <summary>For the person, at session start: what to update, or null when nothing is behind.</summary>
-    private static string? SessionNotice(EnvironmentReader environment)
+    private static string? SessionNotice(Manifest manifest, EnvironmentReader environment)
     {
-        string[] notices = [.. new[] { PluginNotice(environment), UpdateNotice(environment) }.OfType<string>()];
+        string[] notices = [.. new[] { PluginNotice(environment), UpdateNotice(environment), ManifestVersionNotice(manifest) }.OfType<string>()];
         return notices.Length == 0 ? null : string.Join(" ", notices);
     }
+
+    /// <summary>A version 1 manifest: read with migration defaults until a person migrates it.</summary>
+    private static string? ManifestVersionNotice(Manifest manifest) =>
+        manifest.Version == ManifestVersions.Legacy ? ManifestVersions.LegacyNotice : null;
 
     /// <summary>The plugin updated from its marketplace past what this project's engine supports.</summary>
     private static string? PluginNotice(EnvironmentReader environment) =>
