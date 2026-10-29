@@ -33,7 +33,7 @@ internal static class GuardCanaries
             await BlockedAsync(scratch, "guard: an Edit of lockflight.yaml is blocked", FileCall("Edit", manifest, scratch), ProtectedPathRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "guard: a Bash redirect into .lockflight/ is blocked", BashCall("echo '{}' > .lockflight/approvals.json", scratch), ProtectedPathRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "guard: bash -ce \"rm lockflight.yaml\" is blocked", BashCall("bash -ce \"rm lockflight.yaml\"", scratch), ProtectedPathRule.RuleId, cancellationToken),
-            await BlockedAsync(scratch, "guard: a hard link to lockflight.yaml is blocked", BashCall("ln lockflight.yaml src/notes.txt", scratch), ProtectedPathRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "guard: sed -i on lockflight.yaml is blocked", BashCall("sed -i 's/version/v/' lockflight.yaml", scratch), ProtectedPathRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "guard: a Bash call of 'lockflight approve spec' is blocked", BashCall("lockflight approve spec", scratch), HumanOnlyCommandRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "approve relay: a CronCreate that sends /lockflight:approve is blocked", Call("CronCreate", new JsonObject
             {

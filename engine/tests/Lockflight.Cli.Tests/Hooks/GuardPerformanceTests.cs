@@ -10,24 +10,30 @@ namespace Lockflight.Cli.Tests.Hooks;
 public sealed class GuardPerformanceTests(GuardPerformanceTree tree) : IClassFixture<GuardPerformanceTree>
 {
     // Counted, not timed: a decision's directory reads are the same on every machine, so the bound can be tight without
-    // flaking on a loaded runner. "rm -rf node_modules" walks the whole tree once; a wildcard over it may read each entry a few
-    // times (its expansion lists the siblings again) but never once per sibling.
-    private const int MaxTimesOneWalk = 3;
-    private const int MaxSharedListings = 4;
-
-    /// <param name="separateWalks">Trees walked on their own: none when the siblings are most of the directory and one walk of it
-    /// serves them all; one per match when they are a small part of it (node_modules/p1* matches 611 of 1500).</param>
+    // flaking on a loaded runner. "rm -rf node_modules" walks the whole tree once; a wildcard below it is judged by one walk of the
+    // directory before the wildcard, never by expanding it.
     [Theory]
-    [InlineData("rm -rf node_modules/*", 0)]
-    [InlineData("rm -rf node_modules/p1*", 611)]
-    [InlineData("rm -rf node_modules/*/lib", 0)]
-    public async Task AWildcardOverThousandsOfDirectoriesReadsTheTreeAFewTimesAtMost(string command, int separateWalks)
+    [InlineData("rm -rf node_modules/*")]
+    [InlineData("rm -rf node_modules/p1*")]
+    [InlineData("rm -rf node_modules/*/lib")]
+    [InlineData("rm node_modules/*/lib/*.js")]
+    public async Task AWildcardOverThousandsOfDirectoriesReadsTheTreeOnceAtMost(string command)
     {
         DirectoryReads oneWalk = await DecideAsync("rm -rf node_modules");
         DirectoryReads wildcard = await DecideAsync(command);
 
-        Assert.InRange(wildcard.Entries, GuardPerformanceTree.PackageCount, MaxTimesOneWalk * oneWalk.Entries);
-        Assert.InRange(wildcard.Listings, 1, separateWalks + MaxSharedListings);
+        Assert.InRange(wildcard.Entries, 0, oneWalk.Entries);
+        Assert.InRange(wildcard.Listings, 0, oneWalk.Listings);
+    }
+
+    [Theory]
+    [InlineData("rm -f *.log")]
+    [InlineData("rm -rf build/*")]
+    public async Task AWildcardBesideALargeTreeDoesNotEnterIt(string command)
+    {
+        DirectoryReads reads = await DecideAsync(command);
+
+        Assert.InRange(reads.Entries, 0, GuardPerformanceTree.PackageCount / 10);
     }
 
     private async Task<DirectoryReads> DecideAsync(string command)

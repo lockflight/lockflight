@@ -86,7 +86,7 @@ internal static partial class HumanOnlyCommands
 
     /// <summary>
     /// Finds a reserved command in a shell command line: <c>lockflight …</c>, <c>dotnet lockflight …</c> or a path to the binary,
-    /// also inside the command strings it runs (<c>bash -c "…"</c>, <c>eval</c>, a here-document fed to <c>sh</c>). A request for
+    /// also inside one level of a literal command string (<c>bash -c "…"</c>, <c>eval</c>, <c>pwsh -Command</c>). A request for
     /// help passes (<see cref="FindInWords"/>) unless the command line defines a function or an alias, which could take the help
     /// option away before the engine sees it.
     /// </summary>

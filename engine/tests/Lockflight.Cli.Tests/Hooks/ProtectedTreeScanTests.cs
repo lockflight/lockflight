@@ -36,15 +36,20 @@ public sealed class ProtectedTreeScanTests : IDisposable
         Assert.False(Scan().CouldMatchUnder("node_modules/p4", BuildProps, sourceOnly: false));
     }
 
-    [Fact]
-    public void APrimedParentServesItsChildren()
+    [Theory]
+    [InlineData("node_modules/p1/*", false, true)]
+    [InlineData("node_modules/p1/*.props", false, true)]
+    [InlineData("node_modules/p1/*.json", false, false)]
+    [InlineData("node_modules/*", true, true)]
+    [InlineData("node_modules/*", false, false)]
+    [InlineData("node_modules/p2/*", true, false)]
+    public void AWildcardIsJudgedByTheProtectedFilesItMatches(string pattern, bool asTree, bool matches)
     {
         File.WriteAllText(Path.Combine(projectRoot.FullName, "node_modules", "p1", "Directory.Build.props"), "<Project />");
-        ProtectedTreeScan scan = Scan();
-        scan.Prime("node_modules", siblingCount: 10);
 
-        Assert.True(scan.CouldMatchUnder("node_modules/p1", BuildProps, sourceOnly: false));
-        Assert.False(scan.CouldMatchUnder("node_modules/p2", BuildProps, sourceOnly: false));
+        string? glob = Scan().FirstMatchOfPattern("node_modules", pattern, [BuildProps], asTree, (_, _) => false);
+
+        Assert.Equal(matches ? BuildProps : null, glob);
     }
 
     private ProtectedTreeScan Scan() => new(projectRoot.FullName, DefaultProtectedPaths.With(["secrets/**"]), new DirectoryReads());

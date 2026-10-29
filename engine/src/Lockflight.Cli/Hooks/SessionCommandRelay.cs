@@ -67,6 +67,6 @@ internal static class SessionCommandRelay
         }
 
         ShellWrites writes = ShellWriteTargets.Find(command, shell);
-        return writes.Files.Concat(writes.Trees).Concat(writes.FloatingFiles).Concat(writes.FloatingTrees).FirstOrDefault(PromptQueueFiles.Contains);
+        return writes.Files.Concat(writes.Trees).FirstOrDefault(PromptQueueFiles.Contains);
     }
 }

@@ -85,9 +85,11 @@ records the decision when the person types that code while what they were shown 
 symbolic links, Windows short names and alternate streams) and blocks writes to protected paths: `lockflight.yaml`, the tool
 pin, `.lockflight/**`, Claude Code settings, the team's `.claude/` hooks, agents, skills and commands, .NET build and analyzer
 policy, package sources, the CI job, the paths the manifest adds, and the test projects while a red/green cycle is open (the
-[full list](guides/configuration.md#built-in-protected-paths)). Shell commands are parsed for writes (redirections, copies,
-in-place editors, archive extractors and more); a write whose target the command line does not show is blocked. Agent
-worktrees under `.claude/worktrees/` get the same rules.
+[full list](guides/configuration.md#built-in-protected-paths)). Shell commands are parsed for the common writes only (redirections,
+`tee`, copies and moves, in-place editors, `rm`, `git checkout`/`restore`/`apply`, `dotnet format`, the PowerShell
+equivalents) to catch accidents; a command whose writes the guard does not parse (a script, an interpreter, a pipeline into
+`xargs`) is allowed, and the test files' red-time hashes and CI catch what it misses. Agent worktrees under
+`.claude/worktrees/` get the same rules.
 
 `init` also lists the protected paths that exist as write denials for the Claude Code sandbox, so that while the sandbox is
 on the operating system refuses a shell command's write to them however the command hides it
