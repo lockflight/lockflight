@@ -51,6 +51,17 @@
           "type": "object",
           "additionalProperties": false,
           "properties": { "references": { "$ref": "#/$defs/gateMode" } }
+        },
+        "ef": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "pendingModelChanges": {
+              "enum": ["auto", "fail", "report", "off"],
+              "default": "auto",
+              "description": "auto: fail when the repository pins dotnet-ef in its tool manifest, N/A otherwise."
+            }
+          }
         }
       }
     },

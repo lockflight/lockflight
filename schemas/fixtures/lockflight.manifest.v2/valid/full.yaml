@@ -19,6 +19,8 @@ gates:
     suppressions: fail
   docs:
     references: report
+  ef:
+    pendingModelChanges: auto
 routing:
   preset: default
   floor: fix
