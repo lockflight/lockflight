@@ -277,17 +277,17 @@ public sealed class ManifestVersionTwoTests
         Assert.Equal(expected, Error($"version: 2\nautonomy:\n  {line}\n"));
 
     [Theory]
-    [InlineData("https://github.com/example/shell.git")]
-    [InlineData("git@github.com:example/shell.git")]
-    [InlineData("ssh://git@github.com/example/shell.git")]
+    [InlineData("https://example.com/example/shell.git")]
+    [InlineData("git@example.com:example/shell.git")]
+    [InlineData("ssh://git@example.com/example/shell.git")]
     public void AShellUrlWithoutCredentialsIsAccepted(string url) =>
         Assert.Equal(new ShellSettings(url, "main", "services/orders"), Load($"version: 2\nshell:\n  url: {url}\n  ref: main\n  unit: services/orders/\n").Shell);
 
     [Theory]
-    [InlineData("https://user:secret@github.com/example/shell.git")]
-    [InlineData("https://ghp_token@github.com/example/shell.git")]
-    [InlineData("https://github.com/example/shell.git?private_token=x")]
-    [InlineData("ssh://git:secret@github.com/example/shell.git")]
+    [InlineData("https://user:secret@example.com/example/shell.git")]
+    [InlineData("https://ghp_token@example.com/example/shell.git")]
+    [InlineData("https://example.com/example/shell.git?private_token=x")]
+    [InlineData("ssh://git:secret@example.com/example/shell.git")]
     public void AShellUrlWithCredentialsIsRefused(string url) =>
         Assert.Equal(
             "'shell.url' must not carry credentials (they would be committed); use a deploy key or a CI secret for the clone",
