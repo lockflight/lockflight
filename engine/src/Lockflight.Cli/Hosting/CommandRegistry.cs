@@ -15,6 +15,7 @@ using Lockflight.Cli.Linking;
 using Lockflight.Cli.Mascot;
 using Lockflight.Cli.Proposals;
 using Lockflight.Cli.Review;
+using Lockflight.Cli.Routing;
 using Lockflight.Cli.Updating;
 using Lockflight.Cli.Workspace;
 
@@ -67,6 +68,7 @@ internal static class CommandRegistry
             Listing = CommandListing.Unlisted,
         },
         new(["ci"], CommandAudience.Anyone, [JudgeInputsReader.HeadOption, JudgeInputsReader.BaseOption, JudgeInputsReader.BranchOption, JudgeInputsReader.PlatformOption, JudgeInputsReader.EventOption, JudgeInputsReader.EvidenceOption, JudgeInputsReader.ShellOption], [JudgeInputsReader.NoReviewFlag, CiCommand.PlanFlag], CommandOperands.Options, OptionParsing.Shared, context => new CiCommand(context)),
+        new(["route", "show"], CommandAudience.Anyone, [RouteShowCommand.BaseOption, RouteShowCommand.HeadOption], [RouteShowCommand.JsonFlag], CommandOperands.Options, OptionParsing.Shared, context => new RouteShowCommand(context)),
         new(["workspace", "sync"], CommandAudience.Anyone, [], ["--check"], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceSyncCommand(context)),
         new(["adopt", "plan"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
         new(["adopt", "apply"], CommandAudience.Human, ["--speckit-preset"], ["--skip-speckit", "--no-sandbox"], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),

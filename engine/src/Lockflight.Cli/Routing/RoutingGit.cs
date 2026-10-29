@@ -46,6 +46,13 @@ internal static class RoutingGit
         return prefix.ExitCode == 0 ? prefix.Output.Trim() : null;
     }
 
+    /// <summary>The blob id of <c>&lt;commit&gt;:&lt;path&gt;</c> (path relative to the repository root); null when there is none.</summary>
+    public static async Task<string?> BlobIdAsync(string directory, string commit, string repositoryPath, CancellationToken cancellationToken)
+    {
+        ProcessResult blob = await RunAsync(directory, ["rev-parse", "--verify", "--quiet", "--end-of-options", $"{commit}:{repositoryPath}"], cancellationToken);
+        return blob.ExitCode == 0 && blob.Output.Trim() is { Length: > 0 } id ? id : null;
+    }
+
     /// <summary>
     /// A diff of <paramref name="range"/> (one commit: against the working tree; two: between them) in the given output format
     /// (<c>--raw -z --no-abbrev</c>, <c>--numstat -z</c> or <c>-U0</c>); null when git fails.
