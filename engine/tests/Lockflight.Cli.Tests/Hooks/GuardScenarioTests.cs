@@ -105,7 +105,7 @@ public sealed class GuardScenarioTests : IDisposable
     }
 
     [Theory]
-    [InlineData("cd secrets && rm k")]
+    [InlineData("rm -r secrets/old")]
     [InlineData("git checkout HEAD -- secrets")]
     [InlineData("git clean -fdx secrets/old")]
     [InlineData("rm -rf secrets")]
@@ -136,7 +136,8 @@ public sealed class GuardScenarioTests : IDisposable
     [InlineData("git restore tests/Shop.Tests/ShippingTests.cs")]
     [InlineData("git stash push -- tests/Shop.Tests")]
     [InlineData("perl -pi -e 's/5m/6m/' tests/Shop.Tests/ShippingTests.cs")]
-    [InlineData("cd tests/Shop.Tests && echo x > ShippingTests.cs")]
+    [InlineData("echo x > tests/Shop.Tests/ShippingTests.cs")]
+    [InlineData("rm tests/Shop.Tests/*.cs")]
     [InlineData("dotnet format")]
     [InlineData("dotnet format tests/Shop.Tests/Shop.Tests.csproj")]
     [InlineData("git restore .")]

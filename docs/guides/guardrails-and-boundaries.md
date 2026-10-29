@@ -32,8 +32,8 @@ Lockflight separates two kinds of control and labels every feature with one of t
 
 | Control | Label | Why |
 |---|---|---|
-| PreToolUse guard on protected paths (Edit/Write, Bash and PowerShell write detection) | G | best-effort parsing of shell commands; a script file or an interpreter can hide a write |
-| Human-only commands refused inside Claude Code (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply\|undo`, `update`) | G | detected via `CLAUDECODE=1` and command tokens, also inside the nested command strings the guard reads (`bash -c`, `eval`, a here-document fed to `sh`); `--help` or `-h` passes, because the engine then only prints its usage (the guard counts it only when the engine is the program itself, not under a wrapper such as `xargs` or `find -exec`, and not when the command line defines a function or alias); the variable can be unset |
+| PreToolUse guard on protected paths (Edit/Write, and the common Bash and PowerShell writes) | G | it catches common accidental writes; a command whose writes it does not parse (a script, an interpreter, a pipeline into `xargs`, a `cd` before a relative path) is allowed. Test-file hashes at green and review, and the CI gates, catch what it misses |
+| Human-only commands refused inside Claude Code (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply\|undo`, `update`) | G | detected via `CLAUDECODE=1` and command tokens, also inside one level of a literal command string (`bash -c '…'`, `eval '…'`, `pwsh -Command '…'`); `--help` or `-h` passes, because the engine then only prints its usage (the guard counts it only when the engine is the program itself, not under a wrapper such as `xargs` or `find -exec`, and not when the command line defines a function or alias); the variable can be unset |
 | In-session human commands (`/lockflight:approve`, `/lockflight:baseline`, `/lockflight:reset`, `/lockflight:amend`, typed by you) | G | They work only in an interactive session, and bind the decision to what the engine showed you: the artifacts' content, the entries a baseline accepts and the state of the files, the red/green record's exact bytes, the amended test and its reason. A prompt Claude Code starts by itself (a scheduled task, a loop, a message from another session) expands slash commands like a typed one: Claude Code's documentation says `UserPromptExpansion` runs for user-typed commands, but a live probe saw it fire for a prompt a `CronCreate` task queued, so this is re-probed before every release. The guard therefore blocks any tool call other than a file read or write whose input mentions one of the four commands (a Bash command, a scheduled task, a message, a subagent prompt), and every write, by a file tool or a shell command, to the files Claude Code reads such prompts from (`.claude/scheduled_tasks.json`, `.claude/loop.md`, `.claude/routines/`, `.claude/mailbox/` and team inboxes under `~/.claude/teams/`); the code is shown in the session transcript, so it binds content, it is not a secret; a fifth wrong code discards it, and a typed command is refused rather than passed on to the agent when the engine is missing or fails. It cannot stop a message sent from a session outside this project, a write to those files the guard does not see (a script, an interpreter), or an agent that drives your terminal (tmux, AppleScript). The boundary is the platform's review of the pull request, with CODEOWNERS on `specs/**` ([CI hardening](ci-hardening.md#approvals-of-record-the-platforms-review)). |
 | Linked engine trust: the hook shim runs `.lockflight/bin/lockflight` only when it is not committed to the repository, outside Windows belongs to you, and matches the SHA-256 that `lockflight link` recorded beside it (`.lockflight/bin/lockflight.sha256`); an engine without that record, or with an empty one, is refused too | G | It stops a cloned project from shipping its own program as the engine, a `lockflight.yaml` in a shared folder such as `/tmp` from running another user's binary, and an engine replaced after linking from running (`doctor` does not run it either). The record has the engine's own protection, so whatever can replace the engine can rewrite the record too. An engine linked before `link` wrote records (before 0.2.0-alpha.7) has none and is refused like a replaced one, and so is an empty record: reads pass, writes and a typed approval are blocked, and the person is told at session start and in each refusal to run `lockflight update` in a separate terminal window, which links the engine again and writes the record (`doctor` fails it without running it). The shim does not compare the binary with the released package. A passed check is remembered until the engine or its record changes (in `.git`, or beside the engine outside a git checkout): the marker counts only while it is strictly newer than both and is dated from before the check, so a replacement in the same second as a passed check, or during one, is checked again. A pass also keeps a hard link to the checked file and, outside Windows, makes the engine read-only, and is reused only while the engine is still that file and not writable: a file moved into place with an older modification time, or copied over the engine with `cp -p`, is checked again. Where no hard link can be made (another filesystem), nothing is remembered and every call hashes the engine. On Windows the engine stays writable (a read-only one could not be replaced there), so a file written into it in place that keeps its old modification time goes unnoticed by the hooks until the engine or record changes. So does, anywhere, a writer that makes the engine writable, writes into it and makes it read-only again with the old time. `doctor` compares every time. Committing the unchanged file afterwards also goes unnoticed until the engine is linked again. Without `git` on the path the committed check is skipped; without `sha256sum` or `shasum` an engine with a record is not run. A project you trust can already run code through its own hooks, so this narrows one path; it is not a sandbox. |
 | Sandbox write denials for protected paths (`sandbox.filesystem.denyWrite`, listed by `init` and `adopt apply`) | G, stronger | While the Claude Code sandbox is on (macOS, Linux, WSL2), the operating system refuses a shell command's write to those paths, in every child process, however the command hides it. It is still your machine: the sandbox is off unless you or your organisation turn it on, Claude can retry a refused command outside the sandbox unless `allowUnsandboxedCommands` is `false`, the built-in Edit and Write tools are not sandboxed (the guard covers them), and native Windows has no sandbox. See [below](#the-claude-code-sandbox) |
@@ -60,115 +60,64 @@ Lockflight separates two kinds of control and labels every feature with one of t
 
 ## What the shell write detection sees
 
-The guard parses Bash and PowerShell commands for writes. Commands are split on `;`, `&&`, `||`, `|`, `&` and **newlines**
-(`\n` and `\r\n`); subshells `( … )`, groups `{ …; }`, `if`/`for`/`while` bodies, PowerShell script blocks `& { … }` and the
-commands inside `$( … )`, backticks and `<( … )` are each checked as commands of their own. Here-document bodies and comments are
-not commands, except a here-document a shell reads (below). Prefixes that run the next word as a program are looked through:
-`command`, `env [VAR=…]` (and the command line of `env -S '…'`), `sudo [-u …]`, `time`, `nice`, `nohup`, `exec`, `timeout`,
-`busybox`, `setsid`, `flock FILE`, `caffeinate`, `arch`, `xcrun`, `ionice`, `chronic`, `!`, `function NAME {`, and `VAR=value`
-assignments. The command strings of `bash -c`/`sh -c`, `eval`, `flock … -c`, `pwsh -Command`, `Invoke-Expression`, `cmd /c`
-and `Start-Process` are parsed too, and so are the commands these runners start: `script` (`script FILE COMMAND…` and
-`script -c '…'`; the typescript and log files it writes count as written, unless `-p` plays one back), `watch` (its words
-joined as the string it runs, or as they are with `-x`) and GNU `parallel` (each job of its `:::` groups, with `{}`, `{1}`,
-`{.}`, `{/}`, `-I STR` and the other replacement strings filled in; arguments read from stdin, `::::` or `-a FILE`, and more
-than 256 jobs, are unknown, so a writer behind them is blocked like one behind `xargs`). For the POSIX shells that includes `-c` in any option spelling (`bash -ce`, `sh -cx`,
-`bash -c -e`, `bash -c --`, `bash -o pipefail -c`), positional parameters bound to the words after the string
-(`sh -c 'rm "$1"' _ file`; under `find … -exec sh -c '…' {} \;` a string that writes counts as rewriting everything under the
-start directories), and, for a shell given no script (or `-s`), the commands it reads on stdin when the command line shows
-them: a here-document (`sh <<EOF`), a here-string (`bash <<< "…"`) or the words of an `echo`/`printf` piped into it. ANSI-C
-quoting (`$'…'`) is decoded, brace lists and sequences (`secrets/{a,b}`, `k{1..3}`) are expanded, and in
-`for f in WORD…; do …; done` a reference to `$f` is checked as each word of the list (a glob such as `.lockflight/*` as the
-entries it matches).
+The guard catches **common accidental writes** in Bash and PowerShell commands. It is not a parser of everything a shell can
+do: a command whose writes it does not parse is **allowed**, not blocked. What it misses, the test files' red-time hashes at
+`redgreen green` and at review, and the CI gates with the base branch's policy, catch.
+
+Commands are split on `;`, `&&`, `||`, `|`, `&` and newlines; subshells `( … )`, groups `{ …; }`, `if`/`for`/`while` bodies,
+PowerShell script blocks `& { … }` and the commands inside `$( … )` and backticks are each checked as commands of their own.
+Here-document bodies and comments are not commands. Prefixes that run the next word as a program are looked through
+(`command`, `env`, `sudo`, `time`, `nice`, `nohup`, `exec`, `timeout`, `xargs`, `!`, `VAR=value`), and so is one level of a
+literal command string: `bash -c '…'`/`sh -c '…'` (`-c` in any option cluster), `eval '…'`, `pwsh -Command '…'` and
+`Invoke-Expression '…'`.
 
 It recognises:
 
-- **Redirections** in every form: `>`, `>>`, `>|`, `2>`, `2>>`, `N>`, `&>`, `&>>`, `>&file` (`2>&1` and other fd copies write
-  nothing).
-- **File writers:** `tee`, `rm`, `unlink`, `shred`, `truncate`, `touch`, `chmod`/`chown`, `dd of=`, `curl -o`, `wget -O`,
-  `sort -o`, `uniq INPUT OUTPUT`, `awk -i inplace` and `yq -i`.
-- **Copies and moves:** `cp`, `mv`, `install`, `ln`, `rsync`. The destination counts as written, and so does
-  `DEST/<name of each source>` — also with `-t DIR`/`--target-directory=DIR` and `.` as the destination. When the copy can create
-  a tree (`cp -r`, every `mv`, `rsync`) or the source names are unknown (`$VAR`), everything under the destination counts.
-  `mv` also removes its sources, and so does `rsync --remove-source-files` (everything under them counts). A hard link
-  (`ln` without `-s`, `cp -l`/`--link`) counts its source as written, because a later write through the link changes it.
-- **In-place editors:** `sed` with `-i` in any spelling (`-i`, `-i.bak`, `-Ei`, `-ni`, `--in-place[=suffix]`) and `perl -i`
-  (`-pi`, `-0pi`, `-i.bak`).
-- **Wildcards** (`*`, `?`, `[…]`) in any target: checked as the shell would expand them (the entries that exist) and as written.
-  `rm -rf *` at the root is therefore blocked.
-- **Writers whose files are named elsewhere:** `tar x` (`-C dir`), `unzip` (`-d dir`), `patch` (`-d dir`), `git apply`,
-  `git worktree add` and `find … -exec rm` rewrite anything under their directory, which is checked as a tree. A
-  `find … -name P -delete` deletes only names matching `P`, so it is blocked only when an existing file of that name below the
-  directory is protected.
-- **Agent worktrees.** Claude Code runs a subagent with `isolation: worktree` in `.claude/worktrees/<name>`, a full checkout of
-  the project. The guard applies every rule there too, anchored at the worktree's root, so the worktree's copies of the
-  manifest, the evidence and locked tests are protected like the originals.
-- **Targets the command line does not show** are blocked: a path entirely computed by a command substitution or a PowerShell
-  expression (`rm $(cat list)`, `> $(cmd)`, `Remove-Item (Join-Path secrets k)`), a writer fed by `xargs` (`… | xargs rm`) or, in PowerShell, by the
-  pipeline (`… | Remove-Item`), a writer that uses a name read by `… | while read f` (`… | while read f; do rm "$f"; done`),
-  .NET file APIs (`[IO.File]::WriteAllText`) and `pwsh -EncodedCommand`. So is a command string the command line does not
-  show: `eval "$X"`, `eval "$(cmd)"`, `bash -c "$CMD"`, a shell reading a process substitution (`bash <(curl …)`) or the
-  output of another command on stdin (`curl … | sh`, `cat x.sh | bash`). Note that this blocks `eval "$(ssh-agent -s)"` and
-  similar environment set-ups. One exception: a file list from `grep -l`/`-L` or `find` names the paths it searches, so
-  `grep -rl Foo web | xargs sed -i …` and `find web -name '*.tmp' | while read f; do rm "$f"; done` count as rewriting
-  anything under `web`, and are allowed when no protected file lies there.
-- **Partly computed targets:** a substitution inside literal text stands for a `*` in its segment (`logs/$(date +%F).log` is
-  `logs/*.log`), so `touch "build-$(date +%s).log"` is allowed and `echo x > "secrets/$(date).log"` is blocked; one that starts
-  the target (`"$(pwd)/x"`) is also judged like a variable.
-- **Variables in a target:** `$PWD`, `$HOME` and `~` are resolved. A target built from another variable is blocked only when the
-  literal part after it could be a protected path (`"$X/secrets/k"`, `$DIR/lockflight.yaml`); `"$TMPDIR/build.log"` or a bare
-  `"$FILE"` are allowed, because the guard cannot follow variables. The word of a default or alternative value
-  (`${X:-lockflight.yaml}`, `${X-…}`, `${X:=…}`, `${X:+…}`) is checked as a target as well. One exception: a variable the same command line set to plain
-  literal text in the current shell (`S=/tmp/out; cd $S && …`, `export S=/tmp/out`) is replaced by that text in `cd` and write
-  targets; an assignment in a subshell, a pipeline or the background, before a single command (`S=x cmd`), after `||`, inside
-  `if`/loops/functions, or to anything but literal text (`$(…)`, `~`, a glob) leaves the variable unknown, and so do `unset`,
-  `read`, `eval`, `source` and arithmetic.
-- **git commands that rewrite files** the agent did not name as edits: `git checkout [<rev>] [--] <paths>` (a single operand
-  such as `git checkout test` or `git checkout .` counts as a path; a branch name that is no path in the working tree matches
-  nothing), `git checkout -f`, `git switch -f`, `git restore`, `git stash [push] [-- <paths>]`, `git stash pop|apply`,
-  `git reset --hard`, `git clean -f`, `git read-tree -u`, `git checkout-index` (its files, or everything with `-a`; under
-  `--prefix`), `git rm`, `git mv`, and the output file of `git archive -o` (the paths
-  an archive is made of are only read, so `git archive HEAD x | tar -x -C dir` writes under `dir` only).
+- **Redirections:** `>`, `>>`, `>|`, `2>`, `2>>`, `N>`, `&>`, `&>>`, `>&file` (`2>&1` and other fd copies write nothing).
+- **File writers:** `tee`, `rm` (with `-r`, everything under its operands), `unlink`, `truncate`, `touch`.
+- **Copies and moves:** `cp`, `mv`, `install`. The destination counts as written, and so does `DEST/<name of each source>`, also
+  with `-t DIR`/`--target-directory=DIR`. `cp -r` and every `mv` count everything under the destination; `mv` also removes
+  its sources.
+- **In-place editors:** `sed -i` in any spelling (`-i`, `-i.bak`, `-Ei`, `--in-place[=suffix]`) and `perl -i` (`-pi`, `-i.bak`).
+- **git commands that rewrite files** the agent did not name as edits: `git checkout [<rev>] [--] <paths>` (a single operand such
+  as `git checkout test` or `git checkout .` counts as a path), `git checkout -f`, `git switch -f`, `git restore`, `git stash`,
+  `git reset --hard`, `git clean -f`, `git rm`, `git mv`, and `git apply`/`git am` (a patch may touch anything, so they count as
+  rewriting the whole working tree); `git -C <dir>` is followed.
 - **`dotnet format`:** its `--include` files, its project or solution directory, or the whole current directory (source files
   only).
-- **PowerShell:** `Set-Content`, `Add-Content`, `Clear-Content`, `Out-File`, `Tee-Object`, `Set-Item`, `New-Item`, `Export-Csv`,
-  `Export-Clixml`,
-  `Remove-Item`, `Copy-Item` (into a directory, a tree with `-Recurse`), `Move-Item` and `Rename-Item` (directories as trees),
-  `Invoke-WebRequest`/`Invoke-RestMethod -OutFile` (`iwr -o`), `Expand-Archive` (its destination, a tree), `robocopy` and
-  `xcopy` (their destination as a tree; with `/MOV` or `/MOVE` the source too), their aliases, and parameters in every form
-  (`-Path x`, `-Path:x`, `-LiteralPath`, `-FilePath`, `-Destination`, unambiguous prefixes such as `-Dest`). A path array
-  (`Remove-Item a,b`) is checked element by element, and a provider prefix (`FileSystem::C:\…`) is dropped.
+- **PowerShell:** `Set-Content`, `Add-Content`, `Clear-Content`, `Out-File`, `Tee-Object`, `New-Item`, `Remove-Item`,
+  `Copy-Item` (a tree with `-Recurse`), `Move-Item` (directories as trees), `>`, their aliases, and parameters in every form
+  (`-Path x`, `-Path:x`, `-LiteralPath`, `-FilePath`, `-Destination`, unambiguous prefixes). A path array (`Remove-Item a,b`) is
+  checked element by element, and a provider prefix (`FileSystem::C:\…`) is dropped.
+- **Wildcards** (`*`, `?`, `[…]`) in a target are judged by the protected and locked files that exist below the directory before
+  the first wildcard: `rm tests/*.cs` during red, or `rm -rf *` at the root, is blocked. A wildcard is never expanded entry by
+  entry.
+- **Variables:** `~`, `$HOME` and `$PWD` are resolved. A target with any other variable or with the output of a command in it
+  (`rm "$FILE"`, `> "logs/$(date).log"`) is not judged.
+- **Agent worktrees.** Claude Code runs a subagent with `isolation: worktree` in `.claude/worktrees/<name>`, a full checkout of
+  the project. The guard applies every rule there too, anchored at the worktree's root.
 
-**Directories.** A relative path is always checked as written (against the session's working directory); after a `cd <dir>`
-(or `pushd`, `Set-Location`) it is also checked under that directory. A `cd` can only add paths to check, never remove one, so a
-`cd` that fails or runs in a subshell or pipeline cannot hide a write. After a `cd` whose target cannot be known — one with `$`,
-backticks or a substitution, `~`, a glob, `cd -` or `popd` without a matching `pushd` — a relative path could lie in any
-directory, so the command is blocked when that path could match any protected rule anywhere. Because `.lockflight/**` is
-protected, that is every relative write: use a literal `cd` target or a path from the project directory.
+A relative path is checked against the session's working directory, as written: a `cd` earlier in the same command line is not
+followed. A command that may rewrite a whole directory (`git restore .`, `git checkout -- <dir>`, `rm -r`, `git clean`) is
+blocked when a locked test project or a protected file lies inside it; for rules without a fixed directory
+(`**/Directory.Build.props`) the files that exist there are checked, and a directory is walked only for the rules that could
+match below it. Because `lockflight.yaml` sits at the root, whole-repository rewrites such as `git stash`, `git restore .`,
+`git reset --hard` or `git apply` are always blocked: name the files instead. A tree that contains the project (`rm -rf ..`,
+`rm -rf ~` for a project under the home folder) is blocked without a scan.
 
-A command that may rewrite a whole directory (`git restore .`, `git checkout -- <dir>`, `rm -r`, `git clean`) is blocked when a
-locked test project or a protected path could lie inside it; for rules without a fixed directory
-(`**/Directory.Build.props`) the files that exist there are checked. A directory is walked only for rules that could match
-below it by pattern (`secrets/**` never sends a walk into `node_modules`), the walk keeps only files whose name fits such a rule,
-and a wildcard over many sibling directories shares one walk of their common parent. Because `lockflight.yaml` sits at the root, whole-repository
-rewrites such as `git stash`, `git restore .` or `git reset --hard` are always blocked: name the files instead. A tree that contains the
-project (`rm -rf ..`, `rm -rf ~` for a project under the home folder) is blocked without a scan. `dotnet format`
-rewrites source files only, so it is checked against rules that can match source files.
+It does **not** see, and so allows:
 
-It does **not** see:
-
-- writes made by **interpreters and programs that write on their own**: `python -c "open(…, 'w')"`, `node -e`, `ruby -e`,
-  build tasks, test runs, code generators, package managers;
-- **other programs that run a command line** of their own: `ssh host '…'`, `tmux new '…'`, `screen`, `entr`, `make` and the
-  like are judged as the program they are, so a write in the command they start is not seen;
-- **script files** (`./fix.sh`, `bash fix.sh`, `bash < fix.sh`, `source x`, `. ./x.ps1`) — only command strings given inline
-  are parsed;
-- **paths held in variables** whose literal part does not look protected (`rm "$FILE"`);
-- **hard links that already exist**: a protected file linked under another name before (or by a command the guard cannot
-  see) is written through that name unchecked;
-- **git commands that switch the working tree to committed states**: `git switch <branch>`, `git checkout <branch>`, `git merge`,
-  `git pull`, `git rebase`, `git cherry-pick`, `git am`. They can change protected files, but only to content that was committed
-  and is reviewed where it was committed (the CI protected-path check reads the base branch's policy);
-- a protected file that a `git checkout <rev> -- <dir>` would recreate after it was deleted.
+- writes made by **interpreters and programs that write on their own**: `python -c "open(…, 'w')"`, `node -e`, build tasks,
+  test runs, code generators, package managers, `make`;
+- **script files** (`./fix.sh`, `bash fix.sh`), commands a shell reads on stdin (`bash <<EOF`, `curl … | sh`), a shell inside a
+  nested command string, and other runners (`find -exec`, `find -delete`, `parallel`, `watch`, `script`, `ssh`, `tmux`);
+- the files `xargs` or `while read` get from a pipe, and paths built from variables or command output;
+- a relative path after a `cd` (`cd tests && rm FooTests.cs` is judged as `FooTests.cs` in the working directory);
+- other writers: `ln`, `rsync`, `tar`, `unzip`, `patch`, `dd`, `curl -o`, `wget -O`, `sort -o`, `chmod`, `Rename-Item`,
+  `Set-Item`, `Invoke-WebRequest -OutFile`, `Expand-Archive`, `robocopy`, `xcopy`, .NET file APIs;
+- **git commands that switch the working tree to committed states** (`git switch <branch>`, `git checkout <branch>`,
+  `git merge`, `git pull`, `git rebase`, `git cherry-pick`): their content is reviewed where it was committed;
+- a protected file that a `git checkout <rev> -- <dir>` would recreate after it was deleted, and hard links that already exist.
 
 Paths are compared where the operating system would really open them: symbolic links are resolved segment by segment and each
 `..` goes to the parent of the directory reached so far, as `realpath` does, so `link/../x` is judged beside the link's target. Windows collapses a `..` by its text before it follows a link (`out\..\x` is `x` beside `out`), so there a path with `..` is judged in both forms.

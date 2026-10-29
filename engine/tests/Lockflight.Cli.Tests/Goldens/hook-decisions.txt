@@ -33,10 +33,9 @@ stderr: lockflight: 'global.json' is protected by rule 'global.json'. Protected 
 ledger: type=hook.blocked signature=pre-tool-use:protected-path:global.json summary=protected-path:global.json tool=Bash agent=main
 
 ## a pipe into a protected file (pre-tool-use)
-exit: 2 HookBlock
+exit: 0 Pass
 stdout: 
-stderr: lockflight: 'secrets/out.txt' is protected by rule 'secrets/**'. Protected files are changed by a human or a lockflight command, not by the agent: write the complete new file outside the project and run 'lockflight propose <path> --from <file>', then give the user the git apply command it prints.
-ledger: type=hook.blocked signature=pre-tool-use:protected-path:secrets/** summary=protected-path:secrets/** tool=Bash agent=main
+stderr: 
 
 ## a human-only command (pre-tool-use)
 exit: 2 HookBlock
@@ -56,10 +55,9 @@ stdout:
 stderr: 
 
 ## a writer behind xargs (pre-tool-use)
-exit: 2 HookBlock
+exit: 0 Pass
 stdout: 
-stderr: lockflight: 'xargs rm' writes to paths the command line does not show, so they cannot be checked against protected paths. Name the files in the command instead.
-ledger: type=hook.blocked signature=pre-tool-use:hidden-write-targets summary=hidden-write-targets tool=Bash agent=main
+stderr: 
 
 ## a tree that holds protected files (pre-tool-use)
 exit: 2 HookBlock

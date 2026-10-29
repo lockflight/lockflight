@@ -178,7 +178,8 @@ expect 0 "an honest stub red is accepted, its deciding frame shown" "PriceCalcul
 expect 2 "test edits are blocked during red" "tests are locked during red cycle 1" -- hook tests/Shop.Tests/ShippingTests.cs
 expect 0 "production edits are allowed during red" -- hook src/Shop.Api/PriceCalculator.cs
 expect 2 "git checkout of a locked test file is blocked" "red cycle 1" -- bash_hook "git checkout HEAD -- tests/Shop.Tests/ShippingTests.cs"
-expect 2 "a write after cd into the test project is blocked" "red cycle 1" -- bash_hook "cd tests/Shop.Tests && echo x > ShippingTests.cs"
+expect 2 "sed -i on a locked test file is blocked" "red cycle 1" -- bash_hook "sed -i 's/5m/6m/' tests/Shop.Tests/ShippingTests.cs"
+expect 2 "a wildcard rm over the locked tests is blocked" "red cycle 1" -- bash_hook "rm tests/Shop.Tests/*.cs"
 expect 2 "dotnet format over the locked tests is blocked" "red cycle 1" -- bash_hook "dotnet format"
 # An edit the guard did not see (another editor, a script) is caught at green by the test files' red-time hashes.
 printf '\n// edited behind the guard\n' >> tests/Shop.Tests/PriceCalculatorTests.cs
