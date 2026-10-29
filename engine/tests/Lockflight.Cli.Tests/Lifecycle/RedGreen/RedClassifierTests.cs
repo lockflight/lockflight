@@ -52,6 +52,36 @@ public sealed class RedClassifierTests
         Assert.Equal(RedClass.RedNoProduction, Classify(Fail(exception, topFrame, file: null), callsProduction: false));
     }
 
+    /// <summary>The assertion exceptions NUnit reports (read from a TRX message), with its filtered top frame.</summary>
+    [Theory]
+    [InlineData(TrxFailureMessages.NUnitAssertion, "Shop.Tests.ShippingTests.Costs()")]
+    [InlineData(TrxFailureMessages.NUnitMultipleAssertion, "Shop.Tests.ShippingTests.Costs()")]
+    [InlineData(TrxFailureMessages.NUnitAssertion, "NUnit.Framework.Legacy.ClassicAssert.AreEqual(Object expected, Object actual)")]
+    public void NUnitAssertionsInATestThatCallsProductionCodeAreAssertionReds(string exception, string topFrame)
+    {
+        Assert.Equal(RedClass.RedAssert, Classify(Fail(exception, topFrame, file: null), callsProduction: true));
+        Assert.Equal(RedClass.RedNoProduction, Classify(Fail(exception, topFrame, file: null), callsProduction: false));
+    }
+
+    [Fact]
+    public void OtherNUnitExceptionsAreTheFrameworkFailingTheTest() =>
+        Assert.Equal(RedClass.RedInTest, Classify(Fail("NUnit.Framework.Internal.InvalidTestFixtureException", "Shop.Api.PriceCalculator..ctor()", file: null), callsProduction: true));
+
+    [Theory]
+    [InlineData("NUnit.Framework.IgnoreException")]
+    [InlineData("NUnit.Framework.InconclusiveException")]
+    [InlineData("NUnit.Framework.SuccessException")]
+    public void ARowEndedAsIgnoredInconclusiveOrPassedIsNotAnAcceptedRed(string exception) =>
+        Assert.Equal(RedClass.Skipped, Classify(Fail(exception, "Shop.Tests.ShippingTests.Costs()", file: null), callsProduction: true));
+
+    [Fact]
+    public void AStubInOneParameterizedRowAndAnAssertionInAnotherIsAnAssertionRed() =>
+        Assert.Equal(
+            RedClass.RedAssert,
+            RedClassifier.Classify(
+                [Fail("System.NotImplementedException", "Shop.Api.PriceCalculator.ShippingCost(Decimal w)", file: null), Fail(TrxFailureMessages.NUnitAssertion, "Shop.Tests.ShippingTests.Costs(Int32 a)", file: null)],
+                TestClasses, TestDirectories, Production, callsProduction: true));
+
     [Theory]
     [InlineData("NSubstitute.Exceptions.CouldNotSetReturnDueToNoLastCallException", "NSubstitute.Core.ConfigureCall.SetResultForLastCall(IReturn valueToReturn)", "RED_OTHER")]
     [InlineData(null, "Shop.Tests.ShippingTests.Costs()", "RED_IN_TEST")]

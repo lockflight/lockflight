@@ -151,7 +151,7 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
 
         if (workspace.Apps.Count == 0)
         {
-            await context.Output.WriteLineAsync("NOT-EARNED no xUnit test project found; red/green needs xUnit v3, or xUnit v2 on VSTest (other test frameworks get the gates only)");
+            await context.Output.WriteLineAsync("NOT-EARNED no test project found that red/green can drive; it needs xUnit v3, xUnit v2 on VSTest or NUnit (other test frameworks get the gates only)");
             return ExitCode.NotEarned;
         }
 
@@ -172,28 +172,35 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
         session.Save(started);
         await session.RecordAsync(LedgerSignatures.RedGreenStart, $"{session.Feature.Id}: baseline of {tests.Count} tests in {workspace.Apps.Count} test projects", cancellationToken);
         await context.Output.WriteLineAsync($"Baseline: {tests.Count} tests in {string.Join(", ", started.TestProjects)} (commit {RedGreenSession.Short(started.BaselineCommit)})");
-        await WarnAboutFailingBaselineAsync(session, cancellationToken);
+        if (await WarnAboutFailingBaselineAsync(session, cancellationToken) is IReadOnlyList<ExecutedTest> baselineRun
+            && SuiteChecks.SkippedRows(baselineRun) is { Count: > 0 } skippedRows)
+        {
+            // Rows skipped at run time before any change are no new skips at a green.
+            session.Save(started with { BaselineSkippedRows = skippedRows });
+        }
+
         await context.Output.WriteLineAsync($"Next: declare stubs, write the first story's tests, then run '{EngineCommand.Linked} redgreen red'.");
         return ExitCode.Pass;
     }
 
     /// <summary>
     /// Runs the suite once before any change: a test that already fails (often for environmental reasons) would otherwise block every
-    /// green with "other tests fail". Only a person accepts such failures, and the baseline must reach the base branch first.
+    /// green with "other tests fail". Only a person accepts such failures, and the baseline must reach the base branch first. The run's
+    /// results; null when the runner could not run the tests.
     /// </summary>
-    private async Task WarnAboutFailingBaselineAsync(RedGreenSession session, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<ExecutedTest>?> WarnAboutFailingBaselineAsync(RedGreenSession session, CancellationToken cancellationToken)
     {
         if (await session.Workspace.RunAsync(null, cancellationToken) is not IReadOnlyList<ExecutedTest> results)
         {
             await context.Output.WriteLineAsync($"WARN the test runner could not run the tests of {session.Workspace.FailedApp}, so tests that already fail are not known yet.");
-            return;
+            return null;
         }
 
         IReadOnlySet<string> knownFailing = KnownFailingTests.LoadAll(session.Manifest);
         string[] failing = [.. results.Where(result => result.Outcome == TestOutcome.Fail && !knownFailing.Contains(result.Name)).Select(result => result.Name).Distinct().Order(StringComparer.Ordinal)];
         if (failing.Length == 0)
         {
-            return;
+            return results;
         }
 
         await context.Output.WriteLineAsync($"WARN {failing.Length} {(failing.Length == 1 ? "test fails" : "tests fail")} before any change: {string.Join(", ", failing.Take(RedGreenSession.MaxTestsListed))}");
@@ -201,6 +208,8 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
             "     Every green will be refused while they fail. If they fail for reasons outside this feature, " +
             HumanOnlyCommands.AskTheUser("baseline tests") + ", and to merge that baseline in its own pull request first: CI " +
             "takes baselines from the base branch, so one added in the feature's pull request is discarded.");
+
+        return results;
     }
 
     private async Task<ExitCode> StatusAsync(Feature feature, RedGreenRecord? record)

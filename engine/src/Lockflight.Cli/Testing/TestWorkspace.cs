@@ -4,8 +4,8 @@ using Lockflight.Cli.Processes;
 namespace Lockflight.Cli.Testing;
 
 /// <summary>
-/// Builds one or more directories (a repository, or the units of a workspace) and lists and runs the tests of all their xUnit test
-/// applications; paths are reported relative to <paramref name="root"/>.
+/// Builds one or more directories (a repository, or the units of a workspace) and lists and runs the tests of all their xUnit and
+/// NUnit test applications; paths are reported relative to <paramref name="root"/>.
 /// </summary>
 internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targets, TimeSpan timeLimit, TimeProvider time)
 {
@@ -71,7 +71,7 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
             TestListing listing = await TestRunners.ListAsync(app, root, timeLimit, time, cancellationToken);
             if (!listing.Listed)
             {
-                FailedApp = Path.GetRelativePath(root, app.AssemblyPath);
+                FailedApp = listing.Problem is null ? Path.GetRelativePath(root, app.AssemblyPath) : $"{Path.GetRelativePath(root, app.AssemblyPath)} ({listing.Problem})";
                 return null;
             }
 

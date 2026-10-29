@@ -7,12 +7,15 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
 /// Finds the production code under a root: every C# project that is not one of the test applications and does not reference
-/// xUnit (a shared test-helper library is test code too). Its assembly name is the project's <c>&lt;AssemblyName&gt;</c> when that is
+/// xUnit or NUnit (a shared test-helper library is test code too). Its assembly name is the project's <c>&lt;AssemblyName&gt;</c> when that is
 /// a literal, else the project file's name; its types are read from the copies of those assemblies in the test applications'
 /// output directories.
 /// </summary>
 internal static partial class ProductionProjects
 {
+    /// <summary>What a test project's file names (its package references): <c>xunit…</c>, <c>NUnit</c>.</summary>
+    private static readonly string[] TestFrameworkMarkers = ["xunit", "nunit"];
+
     public static ProductionCode Find(string root, IReadOnlyList<TestApp> apps)
     {
         HashSet<string> testDirectories = new(apps.Select(app => Normalize(app.ProjectDirectory)), StringComparer.OrdinalIgnoreCase);
@@ -22,7 +25,7 @@ internal static partial class ProductionProjects
         {
             string directory = Path.GetDirectoryName(project)!;
             string text = File.ReadAllText(project);
-            if (testDirectories.Contains(Normalize(directory)) || text.Contains("xunit", StringComparison.OrdinalIgnoreCase))
+            if (testDirectories.Contains(Normalize(directory)) || TestFrameworkMarkers.Any(marker => text.Contains(marker, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
