@@ -50,6 +50,11 @@
     <None Include="../../../docs/assets/levi-avatar.png" Pack="true" PackagePath="/icon.png" Visible="false" />
     <None Include="../../../THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" Visible="false" />
   </ItemGroup>
+  <!-- The release packs the per-platform executable hashes (lockflight.engine-hashes/v1) into the pointer package, from which
+       `lockflight update` writes a project's engine lock: -p:EngineHashesFile=<path to engine-hashes.json>. -->
+  <ItemGroup Condition="'$(EngineHashesFile)' != '' And '$(RuntimeIdentifier)' == ''">
+    <None Include="$(EngineHashesFile)" Pack="true" PackagePath="/engine-hashes.json" Visible="false" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
