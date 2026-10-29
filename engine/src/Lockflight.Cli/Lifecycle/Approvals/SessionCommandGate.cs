@@ -1,5 +1,5 @@
 using Lockflight.Cli.Config;
-using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Linking;
 
@@ -34,20 +34,20 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
     public SessionCodes Codes => new(manifest.Root, context.Time, context.Random);
 
     /// <summary>Any spelling of the command: a differently cased one is refused rather than passed to the agent unchecked.</summary>
-    public static bool Names(HookInput input, SessionCommandSpec spec) => string.Equals(input.CommandName, spec.Name, StringComparison.OrdinalIgnoreCase);
+    public static bool Names(HookRequest input, SessionCommandSpec spec) => string.Equals(input.Prompt?.Name, spec.Name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The words the person typed after the command, split on white space.</summary>
-    public static string[] Words(HookInput input) => (input.CommandArguments ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+    public static string[] Words(HookRequest input) => (input.Prompt?.Arguments ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
     /// <summary>
     /// Why the command cannot run here: it comes from another source than the plugin, or the session is not one a person attends.
     /// Null when it can. <paramref name="whatItDoes"/> completes "/lockflight:x … only when you type it" (<c>records an approval</c>).
     /// </summary>
-    public SessionRefusal? NotTypedByAPerson(HookInput input, string whatItDoes)
+    public SessionRefusal? NotTypedByAPerson(HookRequest input, string whatItDoes)
     {
-        if (input.CommandSource != PluginSource)
+        if (input.Prompt?.Source != PluginSource)
         {
-            return new SessionRefusal("not-plugin", $"/{spec.Name} here comes from '{input.CommandSource ?? "(unknown)"}', not from the Lockflight plugin");
+            return new SessionRefusal("not-plugin", $"/{spec.Name} here comes from '{input.Prompt?.Source ?? "(unknown)"}', not from the Lockflight plugin");
         }
 
         return UnattendedReason() is string unattended

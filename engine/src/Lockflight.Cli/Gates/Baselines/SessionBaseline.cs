@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Lockflight.Cli.Config;
-using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.Approvals;
 using Lockflight.Cli.Processes;
@@ -41,7 +41,7 @@ internal sealed class SessionBaseline(CliContext context, Manifest manifest) : I
 
     private SessionCommandGate Gate => new(context, manifest, Spec);
 
-    public async Task<SessionCommandResult> DecideAsync(HookInput input, CancellationToken cancellationToken)
+    public async Task<SessionCommandResult> DecideAsync(HookRequest input, CancellationToken cancellationToken)
     {
         string[] words = SessionCommandGate.Words(input);
         if (Gate.NotTypedByAPerson(input, "accepts a baseline") is SessionRefusal notTyped)

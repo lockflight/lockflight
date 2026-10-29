@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Hooks.Adapters;
 using Lockflight.Cli.Hooks.Guard;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Paths;
@@ -51,7 +52,7 @@ public sealed class GuardPerformanceTests(GuardPerformanceTree tree) : IClassFix
         };
 
         HookDecision decision = await GuardRules.DecideAsync(
-            HookInput.Parse(payload)!, ManifestLocator.Discover(tree.Root).Manifest!, context, reads, TestContext.Current.CancellationToken);
+            ClaudeCodeAdapter.Parse(payload, projectDirectory: null)!, ManifestLocator.Discover(tree.Root).Manifest!, context, reads, TestContext.Current.CancellationToken);
 
         Assert.Equal(HookOutcome.Allow, decision.Outcome);
         return reads;

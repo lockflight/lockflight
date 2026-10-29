@@ -24,6 +24,9 @@ internal static class EnvironmentVariables
     /// <summary>The hook API version the plugin shim speaks; unset for direct invocations.</summary>
     public const string PluginApi = "LOCKFLIGHT_PLUGIN_API";
 
+    /// <summary>Which client's payload a hook call carries (<c>claude-code</c>, the default, or <c>neutral</c>); never a command-line argument.</summary>
+    public const string HookAdapter = "LOCKFLIGHT_HOOK_ADAPTER";
+
     /// <summary>
     /// The oldest engine the plugin works with, read by the shim from the plugin's <c>min-engine-version</c> file at session start;
     /// unset otherwise.

@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Lifecycle.RedGreen;
 
 namespace Lockflight.Cli.Hooks.Guard;
@@ -8,23 +9,21 @@ namespace Lockflight.Cli.Hooks.Guard;
 /// <see cref="Manifest"/> has that root). Each fact is computed the first time a rule asks for it, so a rule that blocks early
 /// spares the rest the cost (and the risk) of scanning test locks and parsing the command.
 /// </summary>
-internal sealed class GuardFacts(HookInput input, Manifest manifest)
+internal sealed class GuardFacts(HookRequest input, Manifest manifest)
 {
-    private static readonly HashSet<string> FileEditingTools = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
-
     private IReadOnlyList<string>? protectedGlobs;
     private IReadOnlyList<(string Glob, string Reason)>? testLocks;
     private IReadOnlySet<string>? amendedFiles;
     private ShellWrites? writes;
 
-    public HookInput Input => input;
+    public HookRequest Input => input;
 
     public Manifest Manifest => manifest;
 
-    public ShellDialect Dialect => input.ToolName == "PowerShell" ? ShellDialect.PowerShell : ShellDialect.Posix;
+    public ShellDialect Dialect => input.Tool.Shell ?? ShellDialect.Posix;
 
-    /// <summary>Whether the tool edits one literal path (<c>Edit</c>, <c>Write</c>, …) rather than running a command.</summary>
-    public bool IsFileEditingTool => input.ToolName is string toolName && FileEditingTools.Contains(toolName);
+    /// <summary>Whether the tool writes the literal paths it names (an edit or write tool) rather than running a command.</summary>
+    public bool IsFileEditingTool => input.Tool.WritesFiles;
 
     /// <summary>The built-in protected paths plus the manifest's rules.</summary>
     public IReadOnlyList<string> ProtectedGlobs => protectedGlobs ??= DefaultProtectedPaths.For(manifest);
@@ -38,28 +37,15 @@ internal sealed class GuardFacts(HookInput input, Manifest manifest)
     /// <summary>What the call writes: the edited file, or the targets parsed from its shell command.</summary>
     public ShellWrites Writes => writes ??= WritesOf(input);
 
-    private static ShellWrites WritesOf(HookInput input)
+    private static ShellWrites WritesOf(HookRequest input)
     {
-        if (input.ToolName is not string toolName)
+        if (input.Tool.WritesFiles && input.Paths.Count > 0)
         {
-            return ShellWrites.None;
+            return ShellWrites.None with { Files = input.Paths };
         }
 
-        if (FileEditingTools.Contains(toolName) && input.FilePath is string filePath)
-        {
-            return ShellWrites.OfFile(filePath);
-        }
-
-        if (input.Command is not string command)
-        {
-            return ShellWrites.None;
-        }
-
-        return toolName switch
-        {
-            "Bash" => ShellWriteTargets.Find(command, ShellDialect.Posix),
-            "PowerShell" => ShellWriteTargets.Find(command, ShellDialect.PowerShell),
-            _ => ShellWrites.None,
-        };
+        return input.Tool is { Kind: ToolKind.Shell, Shell: ShellDialect shell } && input.Command is string command
+            ? ShellWriteTargets.Find(command, shell)
+            : ShellWrites.None;
     }
 }

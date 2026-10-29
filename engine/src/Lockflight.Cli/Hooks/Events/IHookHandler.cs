@@ -1,3 +1,5 @@
+using Lockflight.Cli.Hooks.Requests;
+
 namespace Lockflight.Cli.Hooks.Events;
 
 /// <summary>The engine side of one Claude Code hook event, registered in <see cref="HookHandlers"/>.</summary>
@@ -9,7 +11,7 @@ internal interface IHookHandler
     HookFailurePolicy OnEngineError(HookFailureState state);
 
     /// <summary>Whether the payload is the engine's business at all, decided before the manifest is read.</summary>
-    bool Claims(HookInput input);
+    bool Claims(HookRequest input);
 
     Task<HookReply> DecideAsync(HookInvocation invocation, CancellationToken cancellationToken);
 }
