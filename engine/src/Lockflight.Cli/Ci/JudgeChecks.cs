@@ -93,6 +93,6 @@ internal static class JudgeChecks
     {
         int malformed = plan.Reds.All.Count(red => red.Malformed is not null);
         string trailers = malformed > 0 ? $" ({malformed} commits carry a malformed Lockflight-Red trailer)" : string.Empty;
-        return $"no red commit in this pull request{trailers}; commit each story's failing tests and stubs with a 'Lockflight-Red: <cycle>' trailer before the implementation";
+        return $"no red commit in this pull request{trailers}; make each story's tests fail with 'lockflight redgreen red', which commits them with a 'Lockflight-Red: <cycle>' trailer, before the implementation";
     }
 }
