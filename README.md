@@ -87,8 +87,9 @@ when the guard says no. Only you see him: he stays out of anything the agent rea
 - **macOS (Apple silicon or Intel), Linux (x64 or arm64), or Windows (x64) with Git for Windows** (Git Bash runs the hooks).
   On Windows install with `scripts\dev-install.ps1`: see [Install on Windows](docs/guides/getting-started.md#install-on-windows).
 - **The .NET 10 SDK** for the engine, plus the SDK your project needs; git.
-- **An SDK-style .NET 8, 9 or 10 project.** xUnit v3 (Microsoft.Testing.Platform) gets everything; xUnit v2 (VSTest) is
-  supported; NUnit and MSTest get the gates only, no red/green or trace yet. .NET Framework projects are not supported.
+- **An SDK-style .NET 8, 9 or 10 project.** xUnit v3 (Microsoft.Testing.Platform) gets everything; xUnit v2 (VSTest) and
+  NUnit (VSTest or Microsoft.Testing.Platform) get red/green and trace too; MSTest gets the gates only, no red/green or trace
+  yet. .NET Framework projects are not supported.
 - **Claude Code 2.1.295 or newer.**
 - **[gitleaks](https://github.com/gitleaks/gitleaks)** on `PATH` for the secrets step of the `pr` profile.
 - For CI: GitHub Actions; templates for Azure Pipelines, Bitbucket Pipelines and GitLab CI/CD are generated too but not yet

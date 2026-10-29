@@ -34,6 +34,26 @@ public sealed class RedGreenRecordTests : IDisposable
     }
 
     [Fact]
+    public void RowsSkippedAtTheBaselineRoundTripAndAreLeftOutWhenThereAreNone()
+    {
+        string path = Path.Combine(root.FullName, ".lockflight", "features", "f1", RedGreenRecord.FileName);
+        RedGreenRecord record = new()
+        {
+            BaselineCommit = "abc",
+            BaselineAt = DateTimeOffset.UnixEpoch,
+            BaselineTests = new HashSet<string> { "T:A.B" },
+            TestProjects = ["tests/Shop.Tests"],
+        };
+        record.Save(path, "f1");
+        Assert.DoesNotContain("skippedRows", File.ReadAllText(path), StringComparison.Ordinal);
+        Assert.Empty(RedGreenRecord.Load(path)!.BaselineSkippedRows);
+
+        (record with { BaselineSkippedRows = new Dictionary<string, int> { ["T:A.B"] = 2 } }).Save(path, "f1");
+
+        Assert.Equal(2, RedGreenRecord.Load(path)!.BaselineSkippedRows["T:A.B"]);
+    }
+
+    [Fact]
     public void AnAssertionFreeTestRoundTripsAndOtherTestsReadAsAsserting()
     {
         string path = Path.Combine(root.FullName, ".lockflight", "features", "f1", RedGreenRecord.FileName);
