@@ -61,6 +61,11 @@ public sealed class RedAtRedCommitsTests : IAsyncLifetime
         Assert.Equal(["head", "base", "red 1", "red 2"], document["builds"]!.AsArray().Select(build => build!["purpose"]!.GetValue<string>()));
         Assert.Equal("PASS", Check(document, "green")["verdict"]!.GetValue<string>());
         Assert.Equal(["pass", "pass"], cycles.SelectMany(cycle => cycle!["tests"]!.AsArray()).Select(test => test!["atHead"]!.GetValue<string>()));
+
+        // Cycle 2 added a test to cycle 1's class: cycle 1's test is still the one that went red.
+        JsonNode first = cycles[0]!["tests"]![0]!;
+        Assert.NotNull(first["fingerprintAtRed"]);
+        Assert.Equal(first["fingerprintAtRed"]!.GetValue<string>(), first["fingerprintAtHead"]!.GetValue<string>());
     }
 
     [Fact]
