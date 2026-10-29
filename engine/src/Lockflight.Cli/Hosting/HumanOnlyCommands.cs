@@ -7,7 +7,7 @@ namespace Lockflight.Cli.Hosting;
 /// Engine commands that change what the gates accept or record a human decision. Two guardrails keep them away from the agent: the
 /// PreToolUse guard blocks shell commands that invoke them, and the engine refuses to run them inside a Claude Code session
 /// (<c>CLAUDECODE</c> is set in every shell the agent starts). Both are guardrails, not boundaries: a determined agent can strip the
-/// variable or hide the call; signed approvals checked in CI are the boundary.
+/// variable or hide the call; the platform's review of the pull request is the approval of record.
 /// </summary>
 internal static partial class HumanOnlyCommands
 {

@@ -6,18 +6,18 @@ using Lockflight.Cli.Ledger;
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
-/// <c>/lockflight:approve spec|tasks [--feature id] [--sign [--key file]]</c> typed by the person in Claude Code (the two steps and
+/// <c>/lockflight:approve spec|tasks [--feature id]</c> typed by the person in Claude Code (the two steps and
 /// their checks: <see cref="SessionCommandGate"/>). Without a code the engine shows the person what would be approved with a one-time
 /// code bound to the artifacts' hashes; with that code it records the approval exactly as <c>lockflight approve</c> does. Both steps
-/// first run the matching phase check and refuse while it fails (<see cref="ApprovalReadiness"/>). Signed approvals verified in CI
-/// are the boundary.
+/// first run the matching phase check and refuse while it fails (<see cref="ApprovalReadiness"/>). The record is the
+/// agent loop's guardrail; the approval of record is the platform's review of the pull request.
 /// </summary>
 internal sealed class SessionApproval(CliContext context, Manifest manifest) : ISessionDecider
 {
     public const string CommandName = "lockflight:approve";
 
-    private static readonly string[] ValueOptions = ["--feature", "--key"];
-    private static readonly string[] Flags = ["--sign"];
+    private static readonly string[] ValueOptions = ["--feature"];
+    private static readonly string[] Flags = [];
 
     public static SessionCommandSpec Spec { get; } = new(
         CommandName, "approve", "nothing was approved", "approves", "session-approval", (context, manifest) => new SessionApproval(context, manifest),
@@ -40,13 +40,13 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest) : I
 
         if (words.Length == 0 || !ApprovalPhaseNames.TryParse(words[0], out ApprovalPhase phase))
         {
-            return Refuse(new SessionRefusal("usage", $"type /{CommandName} spec or /{CommandName} tasks (optionally with --feature <id> and --sign)"), words);
+            return Refuse(new SessionRefusal("usage", $"type /{CommandName} spec or /{CommandName} tasks (optionally with --feature <id>)"), words);
         }
 
         if (SessionCommandGate.SplitCode(words[1..], ValueOptions) is not { } split
             || CommandOptions.Parse(split.OptionWords, ValueOptions, Flags) is not { Options: CommandOptions options })
         {
-            return Refuse(new SessionRefusal("usage", $"/{CommandName} takes {words[0]}, then optionally --feature <id>, --sign, --key <file> and the code it showed you"), words);
+            return Refuse(new SessionRefusal("usage", $"/{CommandName} takes {words[0]}, then optionally --feature <id> and the code it showed you"), words);
         }
 
         if (options.Value("--feature") is string requested && !FeatureLocator.IsPlainId(requested))
@@ -103,9 +103,7 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest) : I
 
         (string Name, string Hash)[] artifacts = [.. snapshot.Select(artifact => (artifact.Name, artifact.Hash))];
         string code = Gate.Codes.Issue(ApprovalPhaseNames.ToName(phase), feature.Id, artifacts);
-        string typedOptions = (options.Flag("--sign") ? " --sign" : string.Empty)
-            + (options.Value("--key") is string key ? $" --key {key}" : string.Empty);
-        return SessionCommandResult.Shown(ApprovalDigest.Render(feature, phase, snapshot, store.Check(phase, artifacts), code, typedOptions));
+        return SessionCommandResult.Shown(ApprovalDigest.Render(feature, phase, snapshot, store.Check(phase, artifacts), code));
     }
 
     private async Task<SessionCommandResult> RecordAsync(ApprovalPhase phase, string code, CommandOptions options, string[] words, CancellationToken cancellationToken)
@@ -147,16 +145,11 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest) : I
         }
 
         ApprovalRecording recording = await new ApprovalRecorder(context, manifest.Root).RecordAsync(
-            feature, phase, check.Bound, options.Flag("--sign"), options.Value("--key"), ApprovalChannel.Session, cancellationToken);
-        if (!recording.Recorded)
-        {
-            return Refuse(new SessionRefusal("record-failed", recording.Problem!), words);
-        }
-
+            feature, phase, check.Bound, ApprovalChannel.Session, cancellationToken);
         codes.Discard(phaseName);
         string artifacts = recording.ArtifactSummary.Replace('=', ' ').Replace(",", ", ", StringComparison.Ordinal);
         return SessionCommandResult.Recorded(
-            $"Step 2 of 2 — approved: the {phaseName} of {feature.Id} ({artifacts}){(recording.Signed ? ", signed" : string.Empty)}.",
+            $"Step 2 of 2 — approved: the {phaseName} of {feature.Id} ({artifacts}).",
             $"The person approved the {phaseName} of {feature.Id} in this session; continue with the next step. "
             + $"Re-read the approval state from the engine ({EngineCommand.Linked} approve verify --feature {feature.Id} --require {phaseName}), never assume it.");
     }

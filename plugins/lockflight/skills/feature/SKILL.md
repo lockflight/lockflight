@@ -141,7 +141,7 @@ Never approve for them.
    commits (their branch and message conventions; commit locally, never push here). The commit holds:
    - the production code and the tests;
    - the feature's files under `specs/<id>/` (`spec.md`, `plan.md`, `tasks.md` and the rest);
-   - the engine's evidence under `.lockflight/features/<id>/`: `approvals/*.json` (and any `.sig` next to them),
+   - the engine's evidence under `.lockflight/features/<id>/`: `approvals/*.json`,
      `redgreen.json` and `reviews/`. CI's `approve verify` and the pull request read them there; never leave them untracked.
    Git ignores the engine's local state (`.lockflight/bin/`, `ledger/`, `local/`, `backup/`, `adopt/`); never force-add it.
    Run `git status` afterwards: nothing of the feature may stay changed or untracked.

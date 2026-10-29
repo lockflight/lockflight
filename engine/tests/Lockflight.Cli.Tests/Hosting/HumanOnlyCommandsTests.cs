@@ -9,7 +9,7 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("dotnet lockflight baseline build", "baseline build")]
     [InlineData("lockflight  baseline tests", "baseline tests")]
     [InlineData("lockflight --verbose approve spec", "approve spec")]
-    [InlineData(".lockflight/bin/lockflight.exe approve tasks --sign", "approve tasks")]
+    [InlineData(".lockflight/bin/lockflight.exe approve tasks --feature f1", "approve tasks")]
     [InlineData("cd src && \"/opt/tools/lockflight\" redgreen reset", "redgreen reset")]
     [InlineData(".lockflight/bin/lockflight redgreen amend ShippingTests.FirstKilogramCostsFive --reason \"wrong rate\"", "redgreen amend")]
     [InlineData("echo ok\ndotnet lockflight baseline deps", "baseline deps")]
@@ -23,7 +23,7 @@ public sealed class HumanOnlyCommandsTests
         Assert.Equal(expected, HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 
     [Theory]
-    [InlineData("dotnet lockflight approve verify --allowed-signers signers")]
+    [InlineData("dotnet lockflight approve verify --base main")]
     [InlineData("lockflight redgreen red")]
     [InlineData("lockflight review --base main")]
     [InlineData("lockflight review status --feature 001-orders")]
@@ -85,8 +85,8 @@ public sealed class HumanOnlyCommandsTests
     [Fact]
     public void TheCommandToCopyQuotesArgumentsTheShellWouldSplit() =>
         Assert.Contains(
-            "`cd '/work/my shop' && dotnet lockflight approve tasks --sign --key '/keys/it'\\''s key'`",
-            HumanOnlyCommands.Refusal(["approve", "tasks", "--sign", "--key", "/keys/it's key"], "/work/my shop", EngineCommand.Tool),
+            "`cd '/work/my shop' && dotnet lockflight approve tasks --feature 'it'\\''s feature'`",
+            HumanOnlyCommands.Refusal(["approve", "tasks", "--feature", "it's feature"], "/work/my shop", EngineCommand.Tool),
             StringComparison.Ordinal);
 
     [Theory]

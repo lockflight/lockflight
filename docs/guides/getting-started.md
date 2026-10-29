@@ -297,9 +297,9 @@ project in this release; the lifecycle commands do not depend on either check.
    | Step | Who | Check |
    |---|---|---|
    | write `spec.md`: the crew's spec writer, `/speckit-specify` and `/speckit-clarify`, or by hand | agent + you | `lockflight phase check specify` |
-   | approve the spec | **you**: type `/lockflight:approve spec` in Claude Code, review what the engine shows, then type the line with its code; or, in a separate terminal window (not `!` in Claude Code), `.lockflight/bin/lockflight approve spec [--sign]` | hash-bound record |
+   | approve the spec | **you**: type `/lockflight:approve spec` in Claude Code, review what the engine shows, then type the line with its code; or, in a separate terminal window (not `!` in Claude Code), `.lockflight/bin/lockflight approve spec` | hash-bound record |
    | write `plan.md` and `tasks.md`: the crew's planner, `/speckit-plan` and `/speckit-tasks`, or by hand | agent | `lockflight phase check tasks` |
-   | approve the tasks | **you**, the same way: `/lockflight:approve tasks`, or `.lockflight/bin/lockflight approve tasks [--sign]` | hash-bound record |
+   | approve the tasks | **you**, the same way: `/lockflight:approve tasks`, or `.lockflight/bin/lockflight approve tasks` | hash-bound record |
    | per story: stubs → tests → `redgreen red` → implement → `redgreen green` | agent | red must fail in production code; tests locked until green |
    | a test turns out wrong during red | **you**: `/lockflight:amend <Class.Method> --reason <why>` in Claude Code, or `.lockflight/bin/lockflight redgreen amend` in a separate terminal window | the next `redgreen red` must fail in production code again |
    | `lockflight trace`, `lockflight review`, `gate run --profile pr` | agent | every requirement covered; review findings confirmed by reproductions |

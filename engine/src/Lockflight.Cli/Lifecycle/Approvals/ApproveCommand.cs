@@ -5,11 +5,10 @@ using Lockflight.Cli.Ledger;
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
-/// <c>lockflight approve spec|tasks [--feature id] [--sign] [--key file]</c> records a person's approval of the feature's artifacts
-/// (human-only), once the matching phase check passes (<see cref="ApprovalReadiness"/>). <c>lockflight approve verify (--feature id
-/// | --base ref) [--allowed-signers file] [--require spec,tasks]</c> checks records, hashes and — with an allowed-signers file read
-/// from the base branch — SSH signatures for the named feature or every feature the change touches; every phase is required unless
-/// <c>--require</c> narrows it. It is what CI runs.
+/// <c>lockflight approve spec|tasks [--feature id]</c> records a person's approval of the feature's artifacts (human-only), once the
+/// matching phase check passes (<see cref="ApprovalReadiness"/>). <c>lockflight approve verify (--feature id | --base ref) [--require
+/// spec,tasks]</c> checks records and hashes for the named feature or every feature the change touches; every phase is required unless
+/// <c>--require</c> narrows it. The records are the local loop's guardrail; the approval of record is the platform's review.
 /// </summary>
 internal sealed class ApproveCommand(CliContext context) : ICommand
 {
@@ -69,20 +68,9 @@ internal sealed class ApproveCommand(CliContext context) : ICommand
 
         ApprovalStore store = new(feature);
         ApprovalRecording recording = await new ApprovalRecorder(context, manifest.Root).RecordAsync(
-            feature, phase, [.. store.CurrentHashes(phase)], options.Flag("--sign"), options.Value("--key"), ApprovalChannel.Terminal, cancellationToken);
-        if (!recording.Recorded)
-        {
-            await context.Error.WriteLineAsync($"lockflight: {recording.Problem}");
-            return recording.FailureCode;
-        }
-
-        string record = Path.GetRelativePath(manifest.Root, recording.RecordPath!);
+            feature, phase, [.. store.CurrentHashes(phase)], ApprovalChannel.Terminal, cancellationToken);
+        string record = Path.GetRelativePath(manifest.Root, recording.RecordPath);
         await context.Output.WriteLineAsync($"Approved {ApprovalPhaseNames.ToName(phase)} of {feature.Id} as {recording.ApprovedBy}: {record}");
-        if (recording.Signed)
-        {
-            await context.Output.WriteLineAsync($"Signed: {record}.sig");
-        }
-
         return ExitCode.Pass;
     }
 }

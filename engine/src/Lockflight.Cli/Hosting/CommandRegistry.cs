@@ -58,10 +58,10 @@ internal static class CommandRegistry
         new(["ledger", "retro"], CommandAudience.Anyone, ["--days", "--min"], [], CommandOperands.Options, OptionParsing.Shared, context => new RetroCommand(context)),
         new(["propose"], CommandAudience.Anyone, ["--from"], ["--delete"], CommandOperands.Any, OptionParsing.Own, context => new ProposeCommand(context)),
         new(["trace"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new TraceCommand(context)),
-        new(["approve", "spec"], CommandAudience.Human, ["--feature", "--key"], ["--sign"], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
-        new(["approve", "tasks"], CommandAudience.Human, ["--feature", "--key"], ["--sign"], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
-        new(["approve", "verify"], CommandAudience.Anyone, ["--feature", "--base", "--allowed-signers", "--require"], [], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
-        new(["approve"], CommandAudience.Human, ["--feature", "--key"], ["--sign"], CommandOperands.AtLeastOne, OptionParsing.Shared, context => new ApproveCommand(context))
+        new(["approve", "spec"], CommandAudience.Human, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
+        new(["approve", "tasks"], CommandAudience.Human, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
+        new(["approve", "verify"], CommandAudience.Anyone, ["--feature", "--base", "--require"], [], CommandOperands.Options, OptionParsing.Shared, context => new ApproveCommand(context)),
+        new(["approve"], CommandAudience.Human, ["--feature"], [], CommandOperands.AtLeastOne, OptionParsing.Shared, context => new ApproveCommand(context))
         {
             Listing = CommandListing.Unlisted,
         },

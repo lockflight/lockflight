@@ -292,8 +292,8 @@ a line scan, not a compiler: a suppression it cannot see (a directive inside an 
 | Command | Who | Purpose |
 |---|---|---|
 | `phase check specify\|tasks [--feature id]` | agent | deterministic phase-exit checks; for tasks, a failure names each task, its line and how it was classified (test, stub or implementation) |
-| `approve spec\|tasks [--sign [--key file]]` | **human** | hash-bound approval, optional SSH signature |
-| `approve verify (--feature id \| --base ref) [--allowed-signers file] [--require spec,tasks]` | CI | verify records, hashes, signatures |
+| `approve spec\|tasks [--feature id]` | **human** | hash-bound approval record (local) |
+| `approve verify (--feature id \| --base ref) [--require spec,tasks]` | CI | verify records and hashes |
 | `redgreen start\|red\|green\|status` | agent | red/green cycles; tests locked while red; `red`/`green` refuse while the spec or tasks approval is stale or missing |
 | `redgreen reset` | **human** | discard the feature's red/green evidence |
 | `redgreen amend <test> --reason "…"` | **human** | let one test of the open red cycle change until the next red re-checks it |

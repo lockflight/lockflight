@@ -40,12 +40,12 @@ public sealed class ApprovalLedgerTests : IDisposable
         Assert.Equal("001-orders", record.GetProperty("feature").GetString());
         Assert.Equal("spec", record.GetProperty("phase").GetString());
         Assert.Equal($"spec.md={ArtifactHash.Of(spec)[..12]}", record.GetProperty("artifacts").GetString());
-        Assert.False(record.GetProperty("signed").GetBoolean());
+        Assert.False(record.TryGetProperty("signed", out _));
         Assert.Equal("terminal", record.GetProperty("channel").GetString());
     }
 
     [Fact]
-    public async Task ASigningFailureOnTheCommandLineRecordsNothing()
+    public async Task SigningIsNoLongerAnOption()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await ProcessRunner.RunAsync("git", ["init", "-q"], root.FullName, cancellationToken);
@@ -57,8 +57,8 @@ public sealed class ApprovalLedgerTests : IDisposable
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(
             ["approve", "spec", "--feature", "001-orders", "--sign", "--key", Path.Combine(root.FullName, "missing-key")], string.Empty, root.FullName);
 
-        Assert.Equal(ExitCode.Error, exitCode);
-        Assert.Contains("signing failed, so nothing was recorded", error, StringComparison.Ordinal);
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("--sign", error, StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(root.FullName, ".lockflight", "features", "001-orders", "approvals", "spec.json")));
         Assert.False(Directory.Exists(Path.Combine(root.FullName, LedgerWriter.RelativeDirectory)));
     }
