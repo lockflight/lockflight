@@ -436,6 +436,14 @@ CI
                                                 policy: the red commits (Lockflight-Red trailer), the change
                                                 class and each check, into evidence.json; --plan prints the
                                                 steps without building (local: HEAD against the target)
+  ci report --evidence <dir> --head <sha> --out <dir> [--review <dir>] [--context gates|lockflight/judge]
+                                                join the judge's evidence and the review's result into
+                                                verdict.json, the PR comment and the job summary; exits
+                                                with the context's verdict
+  ci review --head <sha> --base <sha> --out <dir> [--branch <name>] [--platform <name>]
+                                                the review in its own CI job: the target branch's model
+                                                and budget, against the merge base, stateless; writes
+                                                review.json and review-result.json for the report
   route show [--base <ref>] [--head <ref>] [--json]
                                                 the change class of this branch and working tree against
                                                 the target (default: origin/HEAD, else main), its signals

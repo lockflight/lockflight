@@ -92,6 +92,30 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
             manifest, feature, claude, reviewBase, ReviewDiff.Fit(diff, manifest.Review.MaxDiffCharacters, manifest.Root).WithTextShownAsBinary(code.TextShownAsBinary), tree, options.Value("--model") ?? manifest.Review.Model, budget, cancellationToken);
     }
 
+    /// <summary>
+    /// The review in a CI job (<c>lockflight ci review</c>): the policy is the target branch's (<paramref name="manifest"/>), the base
+    /// is the merge base by construction, nothing is read from the tree's earlier runs or red/green record (the run is stored under the
+    /// feature's record directory, which the caller points outside the checkout), and the exit code is the local review's.
+    /// </summary>
+    public async Task<ExitCode> ReviewForCiAsync(Manifest manifest, Feature feature, ReviewBase reviewBase, CancellationToken cancellationToken)
+    {
+        if (Executables.FindOnPath("claude", context.Environment.Get(EnvironmentVariables.Path)) is not string claude)
+        {
+            await context.Output.WriteLineAsync("NOT-EARNED claude is not on PATH; install Claude Code in the review job");
+            return ExitCode.NotEarned;
+        }
+
+        if (await CodeDiffAsync(manifest.Root, reviewBase.Ref, cancellationToken) is not CodeDiff code || code.Text.Trim().Length == 0)
+        {
+            await context.Output.WriteLineAsync($"NOT-EARNED no reviewable changes against {reviewBase.Ref}");
+            return ExitCode.NotEarned;
+        }
+
+        ReviewedTree tree = await ReviewedTrees.FindAsync(manifest.Root, feature.SpecPath, cancellationToken);
+        ReviewDiff diff = ReviewDiff.Fit(code.Text, manifest.Review.MaxDiffCharacters, manifest.Root).WithTextShownAsBinary(code.TextShownAsBinary);
+        return await ReviewAsync(manifest, feature, claude, reviewBase, diff, tree, manifest.Review.Model, manifest.Review.BudgetUsd, cancellationToken);
+    }
+
     /// <summary>Asks the reviewer, confirms its findings and the open ones, stores the run and turns the outcome into the exit code.</summary>
     private async Task<ExitCode> ReviewAsync(
         Manifest manifest,
