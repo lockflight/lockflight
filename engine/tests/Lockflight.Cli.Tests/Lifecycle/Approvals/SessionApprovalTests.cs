@@ -71,13 +71,13 @@ public sealed class SessionApprovalTests : IDisposable
             environment[EnvironmentVariables.ClaudeCodeSessionAttended] = attended;
         }
 
-        (ExitCode exitCode, string output, string error) = await TypeAsync("spec --sign", environment);
+        (ExitCode exitCode, string output, string error) = await TypeAsync($"spec --feature {FeatureId}", environment);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Empty(output);
         Assert.Contains("nothing was approved", error, StringComparison.Ordinal);
         Assert.Contains($"Or open a separate terminal window ({HumanOnlyCommands.NotWithBang}) and run `cd ", error, StringComparison.Ordinal);
-        Assert.Contains("approve spec --sign`.", error, StringComparison.Ordinal);
+        Assert.Contains($"approve spec --feature {FeatureId}`.", error, StringComparison.Ordinal);
         Assert.False(File.Exists(WaitingCodePath("spec")));
         Assert.False(File.Exists(RecordPath("spec")));
     }
@@ -280,41 +280,19 @@ public sealed class SessionApprovalTests : IDisposable
     }
 
     [Fact]
-    public async Task ASigningFailureRecordsNothingAndKeepsTheCode()
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec --sign");
-
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code} --sign --key {Path.Combine(root.FullName, "missing-key")}");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("signing failed, so nothing was recorded", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(RecordPath("spec")));
-        Assert.False(File.Exists(RecordPath("spec") + ".sig"));
-        Assert.True(File.Exists(WaitingCodePath("spec")));
-    }
-
-    [Fact]
-    public async Task ASignedSessionApprovalVerifiesAgainstTheAllowedSigners()
+    public async Task ASignatureFileFromAnOlderEngineIsIgnored()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await CreateProjectAsync();
-        string key = Path.Combine(root.FullName, "approver-key");
-        await ProcessRunner.RunAsync("ssh-keygen", ["-q", "-t", "ed25519", "-N", string.Empty, "-C", ApproverEmail, "-f", key], root.FullName, cancellationToken);
-        string publicKey = (await File.ReadAllTextAsync(key + ".pub", cancellationToken)).Trim();
-        string signers = Path.Combine(root.FullName, "allowed_signers");
-        await File.WriteAllTextAsync(signers, $"{ApproverEmail} namespaces=\"{ApprovalStore.SignatureNamespace}\" {publicKey}\n", cancellationToken);
-        await TypeAsync("spec --sign");
+        await TypeAsync("spec");
+        await TypeAsync($"spec {Code}");
+        await File.WriteAllTextAsync(RecordPath("spec") + ".sig", "-----BEGIN SSH SIGNATURE-----\nnot a signature\n", cancellationToken);
 
-        (ExitCode exitCode, string output, _) = await TypeAsync($"spec {Code} --sign --key {key}");
-
-        Assert.Equal(ExitCode.Pass, exitCode);
-        Assert.Contains(", signed.", output, StringComparison.Ordinal);
-        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(RecordPath("spec"))!, "*.unsigned*"));
         (ExitCode verifyExit, string verifyOutput, _) = await TestConsole.RunAsync(
-            ["approve", "verify", "--feature", FeatureId, "--require", "spec", "--allowed-signers", signers], string.Empty, root.FullName);
+            ["approve", "verify", "--feature", FeatureId, "--require", "spec"], string.Empty, root.FullName);
+
         Assert.Equal(ExitCode.Pass, verifyExit);
-        Assert.Contains("signed by", verifyOutput, StringComparison.Ordinal);
+        Assert.Contains($"PASS {FeatureId}", verifyOutput, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -516,9 +494,9 @@ public sealed class SessionApprovalTests : IDisposable
 
     [Theory]
     [InlineData("spec --force")]
-    [InlineData("spec --sign=yes")]
+    [InlineData("spec --sign")]
     [InlineData("spec --feature")]
-    [InlineData("spec --sign --sign")]
+    [InlineData("spec --key approver-key")]
     [InlineData("spec k7m2qx extra")]
     [InlineData("spec k7m2qx --yes")]
     [InlineData("spec k7m2qx --feature 001-orders --feature 001-orders")]

@@ -70,7 +70,6 @@ internal sealed class LedgerWriter(string projectRoot, TimeProvider time)
                 writer.WriteString("feature", approval.Feature);
                 writer.WriteString("phase", approval.Phase);
                 writer.WriteString("artifacts", approval.Artifacts);
-                writer.WriteBoolean("signed", approval.Signed);
                 writer.WriteString("channel", ApprovalChannelNames.ToName(approval.Channel));
             }
 

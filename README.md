@@ -60,7 +60,7 @@ hold the keys to the two that need a person.
 | | |
 |---|---|
 | **Deterministic gates**<br>Format, build with no new warnings, tests, patch coverage, vulnerable packages, secrets. `PASS`, `FAIL` or `NOT-EARNED`, never "probably". | **Protected paths**<br>The files that define the rules can't be changed by the agent, through edits or the shell ([full list](docs/guides/configuration.md#built-in-protected-paths)). |
-| **Spec-driven, [Spec Kit](https://github.com/github/spec-kit) optional**<br>A [documented spec format](docs/guides/spec-contract.md): requirement IDs, approvals you sign, checks between phases. Written by the crew, by hand, or by Spec Kit with a preset. | **Red/green evidence**<br>New tests must fail before the code exists and pass after, locked while red. xUnit v3 and v2. |
+| **Spec-driven, [Spec Kit](https://github.com/github/spec-kit) optional**<br>A [documented spec format](docs/guides/spec-contract.md): requirement IDs, approvals you give, checks between phases. Written by the crew, by hand, or by Spec Kit with a preset. | **Red/green evidence**<br>New tests must fail before the code exists and pass after, locked while red. xUnit v3 and v2. |
 | **Requirement trace**<br>A matrix of every requirement and the tests that went red, then green, for it. | **Evidence-bound review**<br>An independent reviewer whose blocking findings count only with a failing reproduction test. |
 | **Adopts your setup**<br>Keeps your hooks, skills, agents and Spec Kit, protects them and flags conflicts. `adopt undo` reverts it. | **One repo or twenty**<br>Workspace shells with service repositories beneath: only changed services are built, and each keeps its own CI policy. |
 
@@ -143,7 +143,7 @@ first, and `adopt undo` reverts it.
 
 | Guardrail, on your machine | Boundary, where the agent can't reach |
 |---|---|
-| The agent runs with your credentials. The guard and the Stop gate prevent accidents and make the right path the easy one. | CI with the base branch's policy, as a required check. Signed approvals can be one too. |
+| The agent runs with your credentials. The guard and the Stop gate prevent accidents and make the right path the easy one. | CI with the base branch's policy, as a required check. The spec approved in the pull request, with CODEOWNERS on `specs/**`. |
 
 Every control is labelled one or the other: [guardrails and boundaries](docs/guides/guardrails-and-boundaries.md),
 [CI hardening](docs/guides/ci-hardening.md).

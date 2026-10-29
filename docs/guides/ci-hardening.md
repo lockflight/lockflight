@@ -7,7 +7,7 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
 
 **On this page:** [What the generated workflow does](#what-the-generated-workflow-does) ·
 [CODEOWNERS for the protected paths](#what-you-add-codeowners-for-the-protected-paths) ·
-[Verify approvals in CI](#optional-verify-approvals-in-ci) · [Plan limits](#plan-limits) · [Locally](#locally) ·
+[Approvals of record](#approvals-of-record-the-platforms-review) · [Plan limits](#plan-limits) · [Locally](#locally) ·
 [Workspace shells](#workspace-shells-unit-repositories)
 
 ## What the generated workflow does
@@ -113,29 +113,49 @@ Then make it binding:
 2. Turn on **Require review from Code Owners**.
 3. Turn on **Require status checks: `gates`**.
 
-## Optional: verify approvals in CI
+## Approvals of record: the platform's review
 
-The generated workflow does not check approvals. To make missing or stale approvals fail a PR, keep an SSH
-[allowed signers](https://man.openbsd.org/ssh-keygen#ALLOWED_SIGNERS) file on the base branch (for example
-`.github/allowed_signers`, covered by CODEOWNERS) and add a step after the gates:
+The approval of record is a person approving the pull request on the platform. Lockflight delegates it there: the platform
+enforces it, and Lockflight does not read platform reviews. `/lockflight:approve` and `lockflight approve` stay as the local
+loop's records (the agent waits for them before it plans or writes code); they are guardrails, not the approval a team relies
+on.
+
+**One pull request by default.** The spec, the tasks and the code of a feature go in one pull request, and `specs/**` is owned
+by the people who approve specs. Add to `.github/CODEOWNERS`:
+
+```text
+# Specs: approving the pull request approves the spec
+/specs/                                  @your-org/product-owners
+```
+
+With **Require review from Code Owners** on the ruleset (above), a pull request that adds or changes a spec cannot merge
+until one of those owners approves it. GitHub never counts the author's own approval; requiring the approval after the most
+recent push (**Require approval of the most recent reviewable push**) makes a change after the review need a new one. These
+are platform settings, and they are the boundary.
+
+**Planned, not built yet:** the CI check will verify that the base branch's CODEOWNERS covers `specs/**`, show the spec diff
+first in its pull request comment, and, with `approvals: spec-first` in the manifest, check that the spec was merged on the
+base branch first and is unchanged in the code pull request.
+
+**Local records in CI (optional).** To make a pull request fail when a feature it touches has no local approval record, or one
+that no longer matches the artifacts, add a step after the gates:
 
 ```yaml
       - name: Approvals
         if: github.event_name == 'pull_request'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          git show "$BASE:.github/allowed_signers" > "$RUNNER_TEMP/allowed_signers"
-          lockflight approve verify --base "$BASE" --allowed-signers "$RUNNER_TEMP/allowed_signers"
+        run: lockflight approve verify --base "$BASE"
 ```
 
 `approve verify --base` checks every feature the PR touches (changed, renamed or deleted records count as touching it; feature
 directories with non-ASCII names are found too). A touched feature whose `specs/` directory no longer exists — deleted, or
 renamed away — is reported as `NOTE … removed — nothing to verify`, not a failure; after a rename the new name is verified as
-usual, so re-approve it under that name. For every other touched feature, each required approval exists, names its own feature and phase, matches the current artifact
-hashes and carries a valid signature from a listed signer. A `--base` value starting with `-` is refused. It is a **boundary** only when the signing key needs your physical
-presence (Touch ID or a security key), the signers file comes from the base branch as above, and the job is a required check;
-see [guardrails and boundaries](guardrails-and-boundaries.md).
+usual, so re-approve it under that name. For every other touched feature, each required approval exists, names its own feature
+and phase, and matches the current artifact hashes. A `--base` value starting with `-` is refused. The records are written on
+a machine where the agent has your credentials, so this step is a **guardrail**; the review above is the approval of record.
+A `.sig` file next to a record (written by a 0.2 engine with `--sign`) is ignored. See
+[guardrails and boundaries](guardrails-and-boundaries.md).
 
 ## Plan limits
 

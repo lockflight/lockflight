@@ -132,7 +132,8 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
   and records nothing while it fails. The format they read is a public contract ([the spec contract](guides/spec-contract.md)):
   the crew's spec writer and planner, Spec Kit with the preset, or a person can write it.
 - **Approvals** bind the SHA-256 of the approved files to a person. Any later edit makes the approval stale, and the steps that
-  depend on it refuse to run. They can be SSH-signed and verified in CI against signers read from the base branch.
+  depend on it refuse to run. They are the local loop's records; the approval of record is the platform's review of the pull request, with CODEOWNERS on
+  `specs/**`.
 - **Red/green.** The plan declares new signatures; stubs throw `NotImplementedException`. `redgreen red` accepts a cycle only
   when every new test fails because of production code: a stub's `NotImplementedException` thrown from production code
   (`RED_STUB`), or an assertion (xUnit or a recognised assertion or mocking library) in a test that calls production
@@ -180,7 +181,7 @@ types add fields, and readers ignore fields they do not know:
 |---|---|
 | `hook.blocked` | `tool`, `call` (shortened, credentials masked), `session`, `agent` |
 | `gate.completed` | `trigger` (`command` for `lockflight gate run`, `stop-hook` for the Stop hook), `durationMs`, `cache` (`hit` when the Stop gate's cache of the last PASS answered, `miss` when it was consulted and the gate ran, `none` when it was not consulted) |
-| `approval.recorded` | `feature`, `phase`, `artifacts` (each artifact with the first 12 characters of its hash), `signed`, `channel` (`terminal` for `lockflight approve`, `session` for `/lockflight:approve`) |
+| `approval.recorded` | `feature`, `phase`, `artifacts` (each artifact with the first 12 characters of its hash), `channel` (`terminal` for `lockflight approve`, `session` for `/lockflight:approve`) |
 | `evidence.recorded`, `config.written` | none |
 | `session-command.answered` | none: an in-session human command answered without recording anything (a usage hint, a wrong, expired or used code, changed content). It is the person's own typing, so neither the status line nor `ledger retro` counts it; a refusal for an unattended session or a command from another source stays `hook.blocked` |
 
@@ -192,12 +193,12 @@ keeps the summary and SHA-256 of each amend's diff since the red.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/guardrails-boundaries-dark.svg">
-  <img src="assets/guardrails-boundaries-light.svg" alt="Guardrails run on your machine, with your credentials: the guard, the Stop gate, red/green evidence and the trace, the review of record, approvals recorded locally. Boundaries sit outside the agent's reach, past the pull request: CI with the base branch's policy as a required check, presence-gated signed approvals verified in CI, and merge when the agent has its own identity." width="100%">
+  <img src="assets/guardrails-boundaries-light.svg" alt="Guardrails run on your machine, with your credentials: the guard, the Stop gate, red/green evidence and the trace, the review of record, approvals recorded locally. Boundaries sit outside the agent's reach, past the pull request: CI with the base branch's policy as a required check, the spec approved in the pull request (CODEOWNERS), and merge when the agent has its own identity." width="100%">
 </picture>
 
 | On your machine (guardrails) | Outside the agent's reach (boundaries) |
 |---|---|
-| The guard, the Stop gate, red/green evidence, trace, the review of record, local approvals | CI running the pinned engine with the base branch's policy as a required check; signed approvals verified in CI; merge by a person, when the agent has its own identity (otherwise it can merge with your token) |
+| The guard, the Stop gate, red/green evidence, trace, the review of record, local approvals | CI running the pinned engine with the base branch's policy as a required check; the spec approved in the pull request (CODEOWNERS on `specs/**`, enforced by the platform); merge by a person, when the agent has its own identity (otherwise it can merge with your token) |
 
 The in-session controls make the right path the easy one and catch accidents early. The pull request is where the verdict
 counts.
