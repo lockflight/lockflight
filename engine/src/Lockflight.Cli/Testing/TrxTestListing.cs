@@ -3,7 +3,7 @@ using Lockflight.Cli.Gates;
 namespace Lockflight.Cli.Testing;
 
 /// <summary>
-/// Lists an NUnit assembly's tests from its metadata, once the platform it would run on can write the TRX the run is
+/// Lists an NUnit or MSTest assembly's tests from its metadata, once the platform it would run on can write the TRX the run is
 /// read from: a Microsoft.Testing.Platform application needs the TRX report extension in its output, a VSTest run needs VSTest's
 /// test host (<c>Microsoft.NET.Test.Sdk</c>). Without it the listing says what to add, so the probe can try the other platform.
 /// </summary>
@@ -16,7 +16,7 @@ internal static class TrxTestListing
     public static TestListing List(TestApp app, TestRunnerKind platform, TestFrameworkKind framework, RunnerMode mode)
     {
         string output = Path.GetDirectoryName(app.AssemblyPath) ?? string.Empty;
-        string name = framework == TestFrameworkKind.NUnit ? "NUnit" : "The test framework";
+        string name = framework == TestFrameworkKind.NUnit ? "NUnit" : "MSTest";
         if (platform == TestRunnerKind.MicrosoftTestingPlatform && !File.Exists(Path.Combine(output, TrxExtension)))
         {
             return TestListing.Unavailable(

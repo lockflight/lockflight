@@ -44,7 +44,7 @@ on one line. Plain `Given … When … Then …` does not count. Numbered lines 
 
 **Requirements.** A requirement line must start with a bullet and the bold ID: `- **FR-001**: System MUST reject …`. An ID
 written anywhere else (`FR-001` in a sentence, `**FR-001**` without a bullet) is not a requirement. Each requirement should be
-testable: it is what the tests are traced to with `[Trait("Requirement", "FR-001")]` (NUnit: `[Property("Requirement", "FR-001")]`).
+testable: it is what the tests are traced to with `[Trait("Requirement", "FR-001")]` (NUnit: `[Property("Requirement", "FR-001")]`, MSTest: `[TestProperty("Requirement", "FR-001")]`).
 
 **Placeholders.** The check rejects text left over from a template:
 

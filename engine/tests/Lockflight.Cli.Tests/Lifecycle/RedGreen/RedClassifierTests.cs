@@ -52,25 +52,29 @@ public sealed class RedClassifierTests
         Assert.Equal(RedClass.RedNoProduction, Classify(Fail(exception, topFrame, file: null), callsProduction: false));
     }
 
-    /// <summary>The assertion exceptions NUnit reports (read from a TRX message), with its filtered top frame.</summary>
+    /// <summary>The assertion exceptions NUnit and MSTest report (read from a TRX message), with their filtered top frame.</summary>
     [Theory]
     [InlineData(TrxFailureMessages.NUnitAssertion, "Shop.Tests.ShippingTests.Costs()")]
     [InlineData(TrxFailureMessages.NUnitMultipleAssertion, "Shop.Tests.ShippingTests.Costs()")]
+    [InlineData(TrxFailureMessages.MSTestAssertion, "Shop.Tests.ShippingTests.Costs()")]
     [InlineData(TrxFailureMessages.NUnitAssertion, "NUnit.Framework.Legacy.ClassicAssert.AreEqual(Object expected, Object actual)")]
-    public void NUnitAssertionsInATestThatCallsProductionCodeAreAssertionReds(string exception, string topFrame)
+    public void NUnitAndMSTestAssertionsInATestThatCallsProductionCodeAreAssertionReds(string exception, string topFrame)
     {
         Assert.Equal(RedClass.RedAssert, Classify(Fail(exception, topFrame, file: null), callsProduction: true));
         Assert.Equal(RedClass.RedNoProduction, Classify(Fail(exception, topFrame, file: null), callsProduction: false));
     }
 
-    [Fact]
-    public void OtherNUnitExceptionsAreTheFrameworkFailingTheTest() =>
-        Assert.Equal(RedClass.RedInTest, Classify(Fail("NUnit.Framework.Internal.InvalidTestFixtureException", "Shop.Api.PriceCalculator..ctor()", file: null), callsProduction: true));
+    [Theory]
+    [InlineData("NUnit.Framework.Internal.InvalidTestFixtureException", "Shop.Api.PriceCalculator..ctor()")]
+    [InlineData("Microsoft.VisualStudio.TestTools.UnitTesting.TestFailedException", "Shop.Api.PriceCalculator.ShippingCost(Decimal w)")]
+    public void OtherNUnitAndMSTestExceptionsAreTheFrameworkFailingTheTest(string exception, string topFrame) =>
+        Assert.Equal(RedClass.RedInTest, Classify(Fail(exception, topFrame, file: null), callsProduction: true));
 
     [Theory]
     [InlineData("NUnit.Framework.IgnoreException")]
     [InlineData("NUnit.Framework.InconclusiveException")]
     [InlineData("NUnit.Framework.SuccessException")]
+    [InlineData(TrxFailureMessages.MSTestInconclusive)]
     public void ARowEndedAsIgnoredInconclusiveOrPassedIsNotAnAcceptedRed(string exception) =>
         Assert.Equal(RedClass.Skipped, Classify(Fail(exception, "Shop.Tests.ShippingTests.Costs()", file: null), callsProduction: true));
 
