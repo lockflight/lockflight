@@ -24,6 +24,7 @@ review status: reserved=False words=- shell=- powershell=-
 review dismiss: reserved=True words=review dismiss shell=review dismiss powershell=review dismiss
 propose: reserved=False words=- shell=- powershell=-
 trace: reserved=False words=- shell=- powershell=-
+blocked validate: reserved=False words=- shell=- powershell=-
 approve spec: reserved=True words=approve spec shell=approve spec powershell=approve spec
 approve tasks: reserved=True words=approve tasks shell=approve tasks powershell=approve tasks
 approve verify: reserved=False words=- shell=- powershell=-
