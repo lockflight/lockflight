@@ -225,7 +225,7 @@ public sealed class SecretsStepTests : IDisposable
             Executables.Find("gitleaks", Environment.GetEnvironmentVariable(EnvironmentVariables.Gitleaks)) is null,
             "gitleaks is not installed (set LOCKFLIGHT_GITLEAKS or put it on PATH)");
         GateRunContext run = new(repository.FullName, repository.FullName, GateProfile.PullRequest, GateSettings.Default, baseRef, TimeProvider.System);
-        return await SecretsStep.RunAsync(run, TestContext.Current.CancellationToken);
+        return (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
     }
 
     private async Task InitRepositoryAsync()

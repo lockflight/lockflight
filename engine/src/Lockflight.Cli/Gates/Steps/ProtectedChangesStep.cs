@@ -11,24 +11,33 @@ namespace Lockflight.Cli.Gates.Steps;
 /// The step reports and never fails: a person changing policy on purpose is legitimate. Paths are those under the project root
 /// (which may be a subdirectory of the repository), relative to it; a rename lists the old path too.
 /// </summary>
-internal static class ProtectedChangesStep
+internal sealed class ProtectedChangesStep : IGateStep
 {
-    public const string Name = "policy.protected";
+    public const string StepName = "policy.protected";
 
     private const int MaxFilesListed = 10;
 
-    public static async Task<GateStep> RunAsync(GateRunContext run, CancellationToken cancellationToken)
+    public string Name => StepName;
+
+    public StepScope Scope => StepScope.Root;
+
+    public string CacheKey => StepName;
+
+    public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken) =>
+        new(await CheckAsync(run, cancellationToken), facts);
+
+    private static async Task<GateStep> CheckAsync(GateRunContext run, CancellationToken cancellationToken)
     {
         if (run.BaseRef is null)
         {
-            return new GateStep(Name, 0, Verdict.NotApplicable, 0, "not applicable without --base");
+            return new GateStep(StepName, 0, Verdict.NotApplicable, 0, "not applicable without --base");
         }
 
         Stopwatch stopwatch = Stopwatch.StartNew();
         IReadOnlyList<string>? changed = await WorkspaceGit.ChangedNamesAsync(run.ProjectRoot, Git.SinceMergeBase(run.BaseRef), run.TimeLeft(), cancellationToken);
         if (changed is null)
         {
-            return new GateStep(Name, 0, Verdict.Error, stopwatch.ElapsedMilliseconds, $"git diff against '{run.BaseRef}' failed; is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
+            return new GateStep(StepName, 0, Verdict.Error, stopwatch.ElapsedMilliseconds, $"git diff against '{run.BaseRef}' failed; is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
         }
 
         Manifest? manifest = ManifestLocator.Discover(run.ProjectRoot).Manifest;
@@ -37,7 +46,7 @@ internal static class ProtectedChangesStep
             .Where(file => PathRules.FindMatch(run.ProjectRoot, Path.Combine(run.ProjectRoot, file), globs) is not null)
             .Order(StringComparer.Ordinal)];
 
-        return new GateStep(Name, 0, Verdict.Pass, stopwatch.ElapsedMilliseconds, touched.Length == 0
+        return new GateStep(StepName, 0, Verdict.Pass, stopwatch.ElapsedMilliseconds, touched.Length == 0
             ? string.Empty
             : $"{touched.Length} protected files changed, needs human review: {string.Join(", ", touched.Take(MaxFilesListed))}{(touched.Length > MaxFilesListed ? ", …" : string.Empty)}");
     }

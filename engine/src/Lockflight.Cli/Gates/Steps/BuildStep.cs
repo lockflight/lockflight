@@ -5,23 +5,33 @@ using Lockflight.Cli.Processes;
 namespace Lockflight.Cli.Gates.Steps;
 
 /// <summary>Build; fails on errors and on warnings beyond the accepted baseline (brownfield: "no new problems").</summary>
-internal static class BuildStep
+internal sealed class BuildStep : IGateStep
 {
-    public const string Name = "build";
+    public const string StepName = "build";
 
     private const int MaxListed = 3;
 
-    public static async Task<GateStep> RunAsync(GateRunContext run, CancellationToken cancellationToken)
+    public string Name => StepName;
+
+    public StepScope Scope => StepScope.Unit;
+
+    public string CacheKey => StepName;
+
+    public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken) =>
+        new(await BuildAsync(run, cancellationToken), facts);
+
+    /// <summary>The build's verdict; <see cref="Baselines.BaselineRun"/> calls it directly before it takes a test baseline.</summary>
+    public static async Task<GateStep> BuildAsync(GateRunContext run, CancellationToken cancellationToken)
     {
-        ProcessResult buildRun = await ProcessRunner.RunAsync("dotnet", ["build", .. run.BuildFileArguments, "--nologo", "--interactive", "false"], run.Target, run.TimeLeft(), cancellationToken);
-        if (StepHealth.Unhealthy(Name, buildRun, run) is GateStep unhealthy)
+        ProcessResult buildRun = await run.Processes("dotnet", ["build", .. run.BuildFileArguments, "--nologo", "--interactive", "false"], run.Target, run.TimeLeft(), cancellationToken);
+        if (StepHealth.Unhealthy(StepName, buildRun, run) is GateStep unhealthy)
         {
             return unhealthy;
         }
 
         if (buildRun.ExitCode != 0)
         {
-            return new GateStep(Name, buildRun.ExitCode, Verdict.Fail, buildRun.DurationMs, FirstErrorLine(buildRun.Combined));
+            return new GateStep(StepName, buildRun.ExitCode, Verdict.Fail, buildRun.DurationMs, FirstErrorLine(buildRun.Combined));
         }
 
         IReadOnlyList<BuildDiagnostic> diagnostics = BuildDiagnostics.Parse(buildRun.Output, run.ProjectRoot);
@@ -29,13 +39,13 @@ internal static class BuildStep
         if (!baseline.Exists)
         {
             string note = diagnostics.Count == 0 ? string.Empty : $"{diagnostics.Count} warnings, no baseline yet (a person types /lockflight:baseline build in Claude Code, or opens a separate terminal window and runs `.lockflight/bin/lockflight baseline build`)";
-            return new GateStep(Name, buildRun.ExitCode, Verdict.Pass, buildRun.DurationMs, note);
+            return new GateStep(StepName, buildRun.ExitCode, Verdict.Pass, buildRun.DurationMs, note);
         }
 
         IReadOnlyList<BuildDiagnostic> fresh = baseline.NewIn(diagnostics);
         return fresh.Count == 0
-            ? new GateStep(Name, buildRun.ExitCode, Verdict.Pass, buildRun.DurationMs, string.Empty)
-            : new GateStep(Name, buildRun.ExitCode, Verdict.Fail, buildRun.DurationMs, DescribeNew(fresh));
+            ? new GateStep(StepName, buildRun.ExitCode, Verdict.Pass, buildRun.DurationMs, string.Empty)
+            : new GateStep(StepName, buildRun.ExitCode, Verdict.Fail, buildRun.DurationMs, DescribeNew(fresh));
     }
 
     private static string DescribeNew(IReadOnlyList<BuildDiagnostic> fresh)

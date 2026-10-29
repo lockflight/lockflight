@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks.Guard;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Lifecycle.Approvals;
@@ -81,7 +82,7 @@ internal sealed class HookCommand(CliContext context) : ICommand
         }
 
         Manifest manifest = loadResult.Manifest!;
-        if (PreconditionFailure(hookEvent, input, manifest) is HookDecision precondition)
+        if (PreconditionFailure(hookEvent) is HookDecision precondition)
         {
             return await ReportAsync(precondition, hookEvent, manifest.Root, input, cancellationToken);
         }
@@ -93,8 +94,7 @@ internal sealed class HookCommand(CliContext context) : ICommand
 
         HookDecision decision = hookEvent switch
         {
-            HookEvent.PreToolUse => SessionCommandRelay.Decide(input)
-                ?? await new ProtectedPathGuard(context.Error, context.Environment, new DirectoryReads()).DecideAsync(input, manifest),
+            HookEvent.PreToolUse => await GuardRules.DecideAsync(input, manifest, context, new DirectoryReads(), cancellationToken),
             HookEvent.Stop => await StopGate.DecideAsync(manifest, input.SessionId, context.Time, cancellationToken),
             HookEvent.TaskCompleted => await TaskCompletedGate.DecideAsync(manifest, input, cancellationToken),
             _ => HookDecision.Allow,
@@ -163,8 +163,11 @@ internal sealed class HookCommand(CliContext context) : ICommand
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>Checks that apply before any guard: protocol compatibility, known event, lockdown, engine version parity.</summary>
-    private HookDecision? PreconditionFailure(HookEvent hookEvent, HookInput input, Manifest manifest)
+    /// <summary>
+    /// Checks that apply to every event before it is decided: protocol compatibility and a known event. The guard's own
+    /// preconditions (lockdown, engine version parity) are its first rules (<see cref="GuardRules"/>).
+    /// </summary>
+    private HookDecision? PreconditionFailure(HookEvent hookEvent)
     {
         if (PluginHandshake.IncompatibleApi(context.Environment) is string announcedApi)
         {
@@ -178,40 +181,7 @@ internal sealed class HookCommand(CliContext context) : ICommand
             return HookDecision.Block("unknown-hook-event", "lockflight: this engine does not know the hook event it was called for; update it with: " + RecoveryCommands.RestoreAndLink);
         }
 
-        if (hookEvent != HookEvent.PreToolUse)
-        {
-            return null;
-        }
-
-        if (LockdownPolicy.IsActive(manifest.Root))
-        {
-            HookDecision lockdown = LockdownPolicy.Decide(input);
-            return lockdown.Outcome == HookOutcome.Block ? lockdown : null;
-        }
-
-        return PinMismatch(input, manifest);
-    }
-
-    /// <summary>
-    /// Gate parity: a stale linked binary must not judge the project with old rules. Like recovery mode in the shim, reading and the
-    /// exact restore/link command stay allowed so the agent can repair it; a tool manifest that cannot be read blocks the same way.
-    /// </summary>
-    private static HookDecision? PinMismatch(HookInput input, Manifest manifest)
-    {
-        ToolPinReading pin = ToolPin.ReadPin(manifest.Root);
-        bool mismatch = pin.Status == ToolPinStatus.Unreadable
-            || (pin.Status == ToolPinStatus.Pinned && !ToolPin.Matches(pin.Version!, ToolPin.RunningVersion));
-        if (!mismatch || ReadOnlyTools.Allows(input) || RecoveryCommands.Allows(input))
-        {
-            return null;
-        }
-
-        string reason = pin.Status == ToolPinStatus.Unreadable
-            ? $"lockflight: the engine pin cannot be read: {pin.Problem}. Fix dotnet-tools.json (a protected file: a human edit), then run exactly: {RecoveryCommands.RestoreAndLink}"
-            : EngineVersion.IsDevelopmentBuild(pin.Version!)
-                ? $"lockflight: running engine {ToolPin.RunningVersion} but the project pins the development build {pin.Version}, which no package feed has. Ask the user to {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} update")} in the project."
-                : $"lockflight: running engine {ToolPin.RunningVersion} but the project pins {pin.Version}. Run exactly: {RecoveryCommands.RestoreAndLink}";
-        return HookDecision.Block("stale-engine", reason);
+        return null;
     }
 
     /// <summary>For the person, at session start: what to update, or null when nothing is behind.</summary>

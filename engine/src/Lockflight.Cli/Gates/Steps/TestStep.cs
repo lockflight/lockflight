@@ -12,14 +12,29 @@ namespace Lockflight.Cli.Gates.Steps;
 /// known-failing baseline do not fail the gate — but only when every failure the runner counted was matched to a test name, so a
 /// failure the output does not name can never hide behind the baseline.
 /// </summary>
-internal static partial class TestStep
+internal sealed partial class TestStep : IGateStep
 {
-    public const string Name = "test";
+    public const string StepName = "test";
 
     /// <summary>Where a VSTest run writes its TRX and coverage files: git-ignored local state, emptied before each run.</summary>
     public const string ResultsRelativePath = ".lockflight/local/test-results";
 
-    public static Task<TestStepOutcome> RunAsync(GateRunContext run, CancellationToken cancellationToken) =>
+    public string Name => StepName;
+
+    public StepScope Scope => StepScope.Unit;
+
+    public string CacheKey => StepName;
+
+    /// <summary>The test verdict; the facts gain the test count and where and when the tests ran, for the coverage step.</summary>
+    public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken)
+    {
+        DateTimeOffset started = run.Time.GetUtcNow();
+        TestStepOutcome tests = await RunTestsAsync(run, cancellationToken);
+        return new(tests.Step, facts with { TestsTotal = tests.TestsTotal, TestResultsDirectory = tests.ResultsDirectory, TestsStarted = started });
+    }
+
+    /// <summary>The test run with the failures it named, which <see cref="Baselines.BaselineRun"/> records as a baseline.</summary>
+    public static Task<TestStepOutcome> RunTestsAsync(GateRunContext run, CancellationToken cancellationToken) =>
         TestRunnerDetection.For(run.Target) == TestRunnerKind.MicrosoftTestingPlatform
             ? RunOnTestingPlatformAsync(run, cancellationToken)
             : RunOnVSTestAsync(run, cancellationToken);
@@ -48,8 +63,8 @@ internal static partial class TestStep
             arguments.AddRange(["--filter", filter]);
         }
 
-        ProcessResult testRun = await ProcessRunner.RunAsync("dotnet", arguments, run.Target, run.TimeLeft(), cancellationToken);
-        if (StepHealth.Unhealthy(Name, testRun, run) is GateStep unhealthy)
+        ProcessResult testRun = await run.Processes("dotnet", arguments, run.Target, run.TimeLeft(), cancellationToken);
+        if (StepHealth.Unhealthy(StepName, testRun, run) is GateStep unhealthy)
         {
             return new TestStepOutcome(unhealthy, null, []) { ResultsDirectory = results };
         }
@@ -62,7 +77,7 @@ internal static partial class TestStep
         }
         catch (Exception exception) when (exception is XmlException or IOException)
         {
-            return new TestStepOutcome(new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs, $"a TRX report could not be read: {exception.Message}"), null, []) { ResultsDirectory = results };
+            return new TestStepOutcome(new GateStep(StepName, testRun.ExitCode, Verdict.Error, testRun.DurationMs, $"a TRX report could not be read: {exception.Message}"), null, []) { ResultsDirectory = results };
         }
 
         GateStep step = JudgeVSTest(testRun, reports.Length, summary, () => new KnownFailingTests(run.ProjectRoot, run.UnitPath).Load(), AppliedStopFilter(run));
@@ -81,19 +96,19 @@ internal static partial class TestStep
         if (reportCount == 0)
         {
             return testRun.ExitCode == 0
-                ? new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, NoTestsRan(stopFilter, "no test project found: dotnet test wrote no TRX report"))
-                : new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs, $"dotnet test exited {testRun.ExitCode} without writing a TRX report; run 'dotnet test' to see why");
+                ? new GateStep(StepName, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, NoTestsRan(stopFilter, "no test project found: dotnet test wrote no TRX report"))
+                : new GateStep(StepName, testRun.ExitCode, Verdict.Error, testRun.DurationMs, $"dotnet test exited {testRun.ExitCode} without writing a TRX report; run 'dotnet test' to see why");
         }
 
         if (summary.Incomplete.Count > 0)
         {
-            return new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs,
+            return new GateStep(StepName, testRun.ExitCode, Verdict.Error, testRun.DurationMs,
                 $"a test run did not complete, so its results are missing ({string.Join("; ", summary.Incomplete)}); run 'dotnet test' to see why");
         }
 
         if (summary.AbnormalTests.Count > 0)
         {
-            return new GateStep(Name, testRun.ExitCode, Verdict.Fail, testRun.DurationMs,
+            return new GateStep(StepName, testRun.ExitCode, Verdict.Fail, testRun.DurationMs,
                 FailedTests.Describe(summary.AbnormalTests, "did not complete (timeout, aborted or error)"));
         }
 
@@ -104,14 +119,14 @@ internal static partial class TestStep
 
         if (testRun.ExitCode != 0)
         {
-            return new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs, $"dotnet test exited {testRun.ExitCode} but no test failed: a project or a test host did not run; run 'dotnet test' to see why");
+            return new GateStep(StepName, testRun.ExitCode, Verdict.Error, testRun.DurationMs, $"dotnet test exited {testRun.ExitCode} but no test failed: a project or a test host did not run; run 'dotnet test' to see why");
         }
 
         return summary.Executed == 0
-            ? new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, NoTestsRan(stopFilter, summary.Total == 0
+            ? new GateStep(StepName, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, NoTestsRan(stopFilter, summary.Total == 0
                 ? "the TRX reports count no test"
                 : $"the TRX reports count {summary.Total} tests and none executed: all skipped or not run"))
-            : new GateStep(Name, testRun.ExitCode, Verdict.Pass, testRun.DurationMs, $"total {summary.Total}");
+            : new GateStep(StepName, testRun.ExitCode, Verdict.Pass, testRun.DurationMs, $"total {summary.Total}");
     }
 
     private static async Task<TestStepOutcome> RunOnTestingPlatformAsync(GateRunContext run, CancellationToken cancellationToken)
@@ -121,7 +136,7 @@ internal static partial class TestStep
         {
             if (TraitFilter(filter) is not string[] traitArguments)
             {
-                return new TestStepOutcome(new GateStep(Name, 0, Verdict.Error, 0,
+                return new TestStepOutcome(new GateStep(StepName, 0, Verdict.Error, 0,
                     $"test.stopFilter '{filter}' is not supported on Microsoft.Testing.Platform; use one trait condition such as Category!=Integration"), null, []);
             }
 
@@ -136,11 +151,11 @@ internal static partial class TestStep
         IReadOnlyList<string> coverageArguments = run.Profile == GateProfile.PullRequest ? CoverageStep.TestArguments(run.Settings.Coverage.Collector, TestRunnerKind.MicrosoftTestingPlatform) : [];
         arguments.AddRange(coverageArguments);
 
-        ProcessResult coloured = await ProcessRunner.RunAsync("dotnet", arguments, run.Target, run.TimeLeft(), cancellationToken);
+        ProcessResult coloured = await run.Processes("dotnet", arguments, run.Target, run.TimeLeft(), cancellationToken);
         ProcessResult testRun = coloured with { Output = AnsiEscapes.Strip(coloured.Output), Error = AnsiEscapes.Strip(coloured.Error) };
         int? testsTotal = SumOf(TestsTotalPattern(), testRun.Output);
         IReadOnlyList<string> failedTests = FailedTests.Find(testRun.Output);
-        if (StepHealth.Unhealthy(Name, testRun, run) is GateStep unhealthy)
+        if (StepHealth.Unhealthy(StepName, testRun, run) is GateStep unhealthy)
         {
             return new TestStepOutcome(unhealthy, testsTotal, failedTests);
         }
@@ -150,7 +165,7 @@ internal static partial class TestStep
             string explanation = coverageArguments.Count > 0
                 ? CoverageStep.MissingExtension(run.Settings.Coverage.Collector, TestRunnerKind.MicrosoftTestingPlatform)
                 : "a test application rejected its command line (exit 5, invalid command line); check gates.test.framework in lockflight.yaml and run 'dotnet test' to see the message";
-            return new TestStepOutcome(new GateStep(Name, testRun.ExitCode, Verdict.Error, testRun.DurationMs, explanation), testsTotal, failedTests);
+            return new TestStepOutcome(new GateStep(StepName, testRun.ExitCode, Verdict.Error, testRun.DurationMs, explanation), testsTotal, failedTests);
         }
 
         GateStep step = JudgeTestingPlatform(testRun, AppliedStopFilter(run));
@@ -176,17 +191,17 @@ internal static partial class TestStep
         Verdict verdict = Judge(testRun.ExitCode, testsTotal);
         if (verdict == Verdict.NotEarned || (verdict == Verdict.Pass && !ExecutedAny(testRun.Output)))
         {
-            return new GateStep(Name, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, NoTestsRan(stopFilter, NothingExecutedReason(testRun.Output, testsTotal)));
+            return new GateStep(StepName, testRun.ExitCode, Verdict.NotEarned, testRun.DurationMs, NoTestsRan(stopFilter, NothingExecutedReason(testRun.Output, testsTotal)));
         }
 
         if (verdict == Verdict.Error)
         {
-            return new GateStep(Name, testRun.ExitCode, verdict, testRun.DurationMs, $"dotnet test exited {testRun.ExitCode}, which is not a test verdict");
+            return new GateStep(StepName, testRun.ExitCode, verdict, testRun.DurationMs, $"dotnet test exited {testRun.ExitCode}, which is not a test verdict");
         }
 
         string[] idle = [.. ZeroTestsModulePattern().Matches(testRun.Output).Select(match => Path.GetFileName(match.Groups["module"].Value.Trim())).Distinct(StringComparer.Ordinal)];
         string detail = verdict == Verdict.Pass && idle.Length > 0 ? $"total {testsTotal}; ran no test: {string.Join(", ", idle)}" : $"total {testsTotal}";
-        return new GateStep(Name, testRun.ExitCode, verdict, testRun.DurationMs, detail);
+        return new GateStep(StepName, testRun.ExitCode, verdict, testRun.DurationMs, detail);
     }
 
     /// <summary>The summary counts a test that passed or failed; a summary without the succeeded figure proves no test executed.</summary>
@@ -237,18 +252,18 @@ internal static partial class TestStep
         List<string> unexpected = [.. failedTests.Where(name => !known.Contains(name))];
         if (unexpected.Count > 0)
         {
-            return new GateStep(Name, testRun.ExitCode, Verdict.Fail, testRun.DurationMs, FailedTests.Describe(unexpected));
+            return new GateStep(StepName, testRun.ExitCode, Verdict.Fail, testRun.DurationMs, FailedTests.Describe(unexpected));
         }
 
         if (countedFailures is not int counted)
         {
-            return new GateStep(Name, testRun.ExitCode, Verdict.Fail, testRun.DurationMs,
+            return new GateStep(StepName, testRun.ExitCode, Verdict.Fail, testRun.DurationMs,
                 $"{named} failures are known (baseline), but the runner's summary of failures is missing, so further failures could not be ruled out");
         }
 
         return counted == named
-            ? new GateStep(Name, testRun.ExitCode, Verdict.Pass, testRun.DurationMs, $"total {testsTotal}; {failedTests.Count} known failures (baseline)")
-            : new GateStep(Name, testRun.ExitCode, Verdict.Fail, testRun.DurationMs,
+            ? new GateStep(StepName, testRun.ExitCode, Verdict.Pass, testRun.DurationMs, $"total {testsTotal}; {failedTests.Count} known failures (baseline)")
+            : new GateStep(StepName, testRun.ExitCode, Verdict.Fail, testRun.DurationMs,
                 $"{Math.Abs(counted - named)} failures could not be attributed: the runner counted {counted} failed and named {named}, all known (baseline); run 'dotnet test' to see them");
     }
 

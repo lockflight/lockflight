@@ -12,8 +12,8 @@
         "source": "git-subdir",
         "url": "https://github.com/lockflight/lockflight.git",
         "path": "plugins/lockflight",
-        "ref": "v0.2.0-alpha.8",
-        "sha": "d2a00f2f5f5b39b0cd3a0140af0efc15e0531a05"
+        "ref": "v0.2.0-alpha.9",
+        "sha": "a8036f82de1b9bdba2a3b9d938ca48e5c68b31af"
       },
       "description": "Gated, spec-driven delivery for Claude Code agents on .NET: deterministic gates, protected-path guards, a spec lifecycle with approvals, red/green evidence and trace, and evidence-bound review."
     },
@@ -23,8 +23,8 @@
         "source": "git-subdir",
         "url": "https://github.com/lockflight/lockflight.git",
         "path": "plugins/lockflight-crew",
-        "ref": "v0.2.0-alpha.8",
-        "sha": "d2a00f2f5f5b39b0cd3a0140af0efc15e0531a05"
+        "ref": "v0.2.0-alpha.9",
+        "sha": "a8036f82de1b9bdba2a3b9d938ca48e5c68b31af"
       },
       "description": "Optional agents for the Lockflight lifecycle: a spec writer and a planner that write the spec and tasks until `phase check` passes, and a test author that writes a story's failing tests until `redgreen red` accepts them. An aid; the gates still judge."
     }
