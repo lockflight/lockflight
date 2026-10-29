@@ -166,7 +166,7 @@ stderr: lockflight propose: name a project file and its new content: propose <pa
 $ lockflight init x
 exit: 4 Config
 stdout: 
-stderr: lockflight: unknown init option 'x'; use --profile lite|standard, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --no-link or --no-sandbox
+stderr: lockflight: unknown init option 'x'; use --profile lite|standard, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --dry-run, --unit-of <shell url> --unit-path <path>, --speckit-preset <dir>, --no-link or --no-sandbox
 
 $ lockflight update x
 exit: 4 Config
@@ -249,14 +249,14 @@ stdout:
 stderr: lockflight: 'review dismiss' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight review dismiss 0123 --reason r`.
 
 $ lockflight adopt apply (CLAUDECODE=1)
-exit: 2 HookBlock
+exit: 4 Config
 stdout: 
-stderr: lockflight: 'adopt apply' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight adopt apply`.
+stderr: lockflight: unknown command 'adopt apply'. Run 'lockflight --help'.
 
 $ lockflight adopt undo (CLAUDECODE=1)
-exit: 2 HookBlock
+exit: 4 Config
 stdout: 
-stderr: lockflight: 'adopt undo' records a human decision and does not run inside a Claude Code session. Open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `cd '<dir>' && dotnet lockflight adopt undo`.
+stderr: lockflight: unknown command 'adopt undo'. Run 'lockflight --help'.
 
 $ lockflight adopt xyz (CLAUDECODE=1)
 exit: 4 Config
@@ -325,13 +325,19 @@ Usage: lockflight <command> [options]   (in a project, from its root: .lockfligh
 
 Setup
   init [--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab]
-       [--quality] [--architecture-tests] [--no-link] [--no-sandbox]
-                                                onboard: manifest, tool pin, settings, CI job, link; --ci:
+       [--quality] [--architecture-tests] [--dry-run] [--unit-of <shell url> --unit-path <path>]
+       [--speckit-preset <dir>] [--no-link] [--no-sandbox]
+                                                onboard: manifest, tool pin, settings, CLAUDE.md block, CI
+                                                job, link; adopts an existing Claude Code / Spec Kit setup
+                                                (keeps and protects it, marks existing features); --ci:
                                                 the job runs on pull requests, only by hand, or is not written;
                                                 --ci-platform: the CI service the job is for (default github);
                                                 --quality: recommended analyzers and code metrics rules (an
                                                 existing file gets a proposal); --architecture-tests: a layer
-                                                dependency test project
+                                                dependency test project; --dry-run: print the plan, write
+                                                nothing; --unit-of: this repository is a unit of that
+                                                workspace shell; --speckit-preset: upgrade the existing Spec
+                                                Kit with the Lockflight preset. Undo: git revert
   doctor [--self-test]                          readiness report with fixes; --self-test: plant a violation
                                                 before the guard, a human-only command, the linked engine
                                                 check, the test gate and red in a scratch project and
@@ -347,8 +353,6 @@ Setup
   statusline                                    Claude Code status line: Levi and the last verdict
   update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
                                                 package feed), re-pin this project
-  adopt plan                                    inventory an existing Claude Code / Spec Kit setup into
-                                                .lockflight/adopt/plan.md (read only)
   workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
                                                 engine pin, baselines, workflow); --check reports drift
   link                                          copy the pinned engine to .lockflight/bin/ for the hooks
@@ -385,7 +389,7 @@ Lifecycle (agent)
                                                 .lockflight/local/proposals/ for a person to review and
                                                 git apply; applies nothing itself
 
-Human decisions (approve, redgreen reset|amend, review dismiss, baseline, adopt apply|undo and update refuse to run inside a
+Human decisions (approve, redgreen reset|amend, review dismiss, baseline and update refuse to run inside a
 Claude Code session, a `!` command included: run them in a separate terminal window)
   approve spec|tasks [--feature <id>]           approve the feature's artifacts (a local record; the
                                                 approval of record is the pull request's review);
@@ -398,10 +402,6 @@ Claude Code session, a `!` command included: run them in a separate terminal win
                                                 close an open review finding, recording who, when and why
   baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories
   baseline suppressions                         accept the suppressions the branch adds (file and rule)
-  adopt apply [--speckit-preset <dir>] [--skip-speckit] [--no-sandbox]
-                                                apply the reviewed adoption plan (backs up first)
-  adopt undo [--backup <id>] [--force]          revert what apply changed; files changed since are kept
-                                                unless --force
 
 CI
   approve verify (--feature <id> | --base <ref>) [--require spec,tasks]

@@ -30,9 +30,6 @@ approve tasks: reserved=True words=approve tasks shell=approve tasks powershell=
 approve verify: reserved=False words=- shell=- powershell=-
 ci: reserved=False words=- shell=- powershell=-
 workspace sync: reserved=False words=- shell=- powershell=-
-adopt plan: reserved=False words=- shell=- powershell=-
-adopt apply: reserved=True words=adopt apply shell=adopt apply powershell=adopt apply
-adopt undo: reserved=True words=adopt undo shell=adopt undo powershell=adopt undo
 (nothing): reserved=False words=- shell=- powershell=-
 approve: reserved=True words=approve shell=approve powershell=approve
 approve xyz: reserved=True words=approve xyz shell=approve xyz powershell=approve xyz

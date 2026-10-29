@@ -163,7 +163,7 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
   reviewer. A blocker or major finding counts only when its reproduction test, which the engine compiles and runs, fails on the
   current code. Such a finding stays open across review runs until every reproduction it was given passes or a person dismisses it.
 
-Commands that record a human decision (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo`,
+Commands that record a human decision (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`,
 `update`) refuse to run inside a Claude Code session.
 
 ## Topologies
@@ -175,10 +175,10 @@ it needs to be judged on its own.
 
 ## Adoption
 
-`adopt plan` reads an existing setup (hooks, skills, agents, commands, Spec Kit, `CLAUDE.md`) and proposes an action for each
-item: keep, protect, flag, add, upgrade or mark. Nothing changes until a person runs `adopt apply`, which backs up first;
-`adopt undo` reverts it. The team's hooks, skills and agents are never removed, and features that predate Lockflight are
-marked rather than failed.
+`init` reads an existing setup (hooks, skills, agents, commands, Spec Kit, `CLAUDE.md`) and decides an action for each item:
+keep, protect, flag, add, upgrade or mark; `init --dry-run` prints that plan and writes nothing. The team's hooks, skills and
+agents are never removed, Spec Kit is upgraded only with `--speckit-preset`, and features that predate Lockflight are marked
+(by the init that creates the manifest) rather than failed. Git is the undo: init's changes are one commit to revert.
 
 ## The ledger
 

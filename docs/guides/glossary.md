@@ -23,11 +23,12 @@ Short definitions of the terms the other pages use, in the order you are likely 
 | **Review of record** | `lockflight review`: an independent reviewer whose prompt the engine builds. Blocker and major findings count only when their reproduction test fails. |
 | **Protected path** | A file or glob that only a human or a Lockflight command may change. The PreToolUse guard blocks agent writes to it; the agent proposes a change with `lockflight propose` instead. |
 | **Guardrail / boundary** | A guardrail prevents accidents but can be circumvented from the agent's own shell. A boundary holds even against a determined agent. See [guardrails and boundaries](guardrails-and-boundaries.md). |
+| **Adoption** | What `init` does in a repository with its own Claude Code or Spec Kit setup: keeps and protects the team's hooks, skills and agents, flags what interacts with Lockflight, and (on the init that creates the manifest) marks existing features as predating Lockflight. `init --dry-run` shows the plan; git is the undo. |
 | **Baseline** | Accepted existing problems (build warnings, failing tests, advisories) for brownfield adoption. Only a human records them. |
 | **Lockdown** | `.lockflight/lockdown` exists: only reads are allowed until a human removes it. |
 | **Recovery mode** | The engine isn't linked yet: only reads and the restore command are allowed. |
 | **In-session human command** | `/lockflight:approve`, `/lockflight:baseline`, `/lockflight:reset`, `/lockflight:amend`, typed by a person in Claude Code: step 1 shows what would be recorded with a one-time code, step 2 (the line with the code) records it. |
-| **Human-only command** | `approve` (except `approve verify`), `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply\|undo`, `update`: refused inside a Claude Code session; `--help` or `-h` on one only prints the usage and is allowed. |
+| **Human-only command** | `approve` (except `approve verify`), `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `update`: refused inside a Claude Code session; `--help` or `-h` on one only prints the usage and is allowed. |
 | **Ledger** | Local JSON-lines event log (blocks, verdicts, rejected reds, confirmed findings) that the crew's `retro` skill reads. It is not an audit log. |
 | **Lite / standard** | Onboarding profiles. Lite: guard and gates. Standard: adds the lifecycle (spec and tasks, approvals, red/green, trace, review); Spec Kit is optional in it. |
 | **Crew** | The optional `lockflight-crew` plugin: a spec writer, a planner and a test author, each briefed for one step and judged by that step's engine check. An aid, not a judge. |

@@ -1,5 +1,6 @@
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Linking;
@@ -10,143 +11,247 @@ using Lockflight.Cli.Quality;
 namespace Lockflight.Cli.Init;
 
 /// <summary>
-/// <c>lockflight init</c> — lite or standard profile onboarding: manifest, tool pin, git-ignored local state, Claude Code plugin settings and one
-/// CI job; then links the engine. Idempotent: existing content is kept and merged into, never overwritten. As a sanctioned
-/// writer of protected files it records every change in the ledger.
+/// <c>lockflight init</c> — lite or standard profile onboarding: manifest, tool pin, git-ignored local state, Claude Code plugin settings,
+/// the Lockflight block in <c>CLAUDE.md</c> and one CI job; then links the engine. It also adopts an existing Claude Code and Spec Kit
+/// setup (<see cref="InitAdoption"/>): the team's hooks, skills and agents are kept and protected, existing features are marked as
+/// predating Lockflight. Idempotent: existing content is kept and merged into, never overwritten. <c>--dry-run</c> prints the plan and
+/// writes nothing; git is the undo (commit init's changes as one commit, <c>git revert</c> it). As a sanctioned writer of protected
+/// files it records every change in the ledger.
 /// </summary>
 internal sealed class InitCommand(CliContext context) : ICommand
 {
-    /// <summary><c>[--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests] [--no-link] [--no-sandbox]</c> in any order.</summary>
+    private const string Commit = "Review init's changes and commit them as one commit; to undo init, `git revert` that commit.";
+
+    private const string Choices = "--profile lite|standard, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --dry-run, --unit-of <shell url> --unit-path <path>, --speckit-preset <dir>, --no-link or --no-sandbox";
+
+    /// <summary>
+    /// <c>[--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests]
+    /// [--dry-run] [--unit-of url --unit-path path] [--speckit-preset dir] [--no-link] [--no-sandbox]</c> in any order.
+    /// </summary>
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
         string[] options = arguments.RestArray;
-        bool link = true;
-        bool sandbox = true;
-        InitProfile profile = InitProfile.Lite;
-        CiTrigger? requestedCi = null;
-        CiPlatform platform = CiPlatform.GitHub;
-        InitQuality quality = new(Analyzers: false, ArchitectureTests: false);
+        InitOptions init = new(Link: true, Sandbox: true, InitProfile.Lite, RequestedCi: null, CiPlatform.GitHub, new InitQuality(Analyzers: false, ArchitectureTests: false), DryRun: false, Shell: null, SpecKitPreset: null);
+        string? shellUrl = null;
+        string? unitPath = null;
         for (int index = 0; index < options.Length; index++)
         {
-            switch (options[index])
+            string option = options[index];
+            bool hasValue = index + 1 < options.Length;
+            switch (option)
             {
                 case "--no-link":
-                    link = false;
+                    init = init with { Link = false };
                     break;
                 case "--no-sandbox":
-                    sandbox = false;
+                    init = init with { Sandbox = false };
+                    break;
+                case "--dry-run":
+                    init = init with { DryRun = true };
                     break;
                 case "--quality":
-                    quality = quality with { Analyzers = true };
+                    init = init with { Quality = init.Quality with { Analyzers = true } };
                     break;
                 case "--architecture-tests":
-                    quality = quality with { ArchitectureTests = true };
+                    init = init with { Quality = init.Quality with { ArchitectureTests = true } };
                     break;
-                case "--profile" when index + 1 < options.Length:
+                case "--profile" when hasValue:
                     string name = options[++index];
-                    if (!InitProfileNames.TryParse(name, out profile))
+                    if (!InitProfileNames.TryParse(name, out InitProfile profile))
                     {
                         return await RefuseAsync($"unknown profile '{name}'; use lite or standard");
                     }
 
+                    init = init with { Profile = profile };
                     break;
-                case "--profile":
-                    return await RefuseAsync("--profile needs a value: lite or standard");
-                case "--ci" when index + 1 < options.Length:
+                case "--ci" when hasValue:
                     string trigger = options[++index];
                     if (!CiTriggerNames.TryParse(trigger, out CiTrigger parsedCi))
                     {
                         return await RefuseAsync($"unknown CI trigger '{trigger}'; use pr, manual or none");
                     }
 
-                    requestedCi = parsedCi;
-
+                    init = init with { RequestedCi = parsedCi };
                     break;
-                case "--ci":
-                    return await RefuseAsync("--ci needs a value: pr, manual or none");
-                case "--ci-platform" when index + 1 < options.Length:
+                case "--ci-platform" when hasValue:
                     string platformName = options[++index];
-                    if (!CiPlatformNames.TryParse(platformName, out platform))
+                    if (!CiPlatformNames.TryParse(platformName, out CiPlatform platform))
                     {
                         return await RefuseAsync($"unknown CI platform '{platformName}'; use {CiPlatformNames.Choices}");
                     }
 
+                    init = init with { Platform = platform };
                     break;
+                case "--unit-of" when hasValue:
+                    shellUrl = options[++index];
+                    break;
+                case "--unit-path" when hasValue:
+                    unitPath = UnitsSectionReader.UnitPath(options[++index]);
+                    if (unitPath is null || !unitPath.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-' or '/'))
+                    {
+                        return await RefuseAsync("--unit-path takes this repository's path in the shell's units:, relative, of letters, digits, '.', '_', '-' and '/', without '.' or '..' segments");
+                    }
+
+                    break;
+                case "--speckit-preset" when hasValue:
+                    init = init with { SpecKitPreset = options[++index] };
+                    break;
+                case "--profile":
+                    return await RefuseAsync("--profile needs a value: lite or standard");
+                case "--ci":
+                    return await RefuseAsync("--ci needs a value: pr, manual or none");
                 case "--ci-platform":
                     return await RefuseAsync($"--ci-platform needs a value: {CiPlatformNames.Choices}");
+                case "--unit-of" or "--unit-path" or "--speckit-preset":
+                    return await RefuseAsync($"{option} needs a value");
                 default:
-                    return await RefuseAsync($"unknown init option '{options[index]}'; use --profile lite|standard, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --no-link or --no-sandbox");
+                    return await RefuseAsync($"unknown init option '{option}'; use {Choices}");
             }
         }
 
-        return await InitializeAsync(link, sandbox, profile, requestedCi, platform, quality, cancellationToken);
+        if ((unitPath is null) != (shellUrl is null))
+        {
+            return await RefuseAsync("--unit-of <shell url> and --unit-path <path> go together: the shell's clone URL and this repository's path among its units");
+        }
+
+        return await InitializeAsync(shellUrl is null ? init : init with { Shell = new ShellSettings(shellUrl, Ref: null, unitPath!) }, cancellationToken);
     }
 
-    private async Task<ExitCode> InitializeAsync(
-        bool link, bool sandbox, InitProfile profile, CiTrigger? requestedCi, CiPlatform platform, InitQuality quality, CancellationToken cancellationToken)
+    private async Task<ExitCode> InitializeAsync(InitOptions init, CancellationToken cancellationToken)
     {
         // The pin init writes is this engine's version: a newer pin is refused below and an older one is raised to it.
         bool developmentPin = EngineVersion.IsDevelopmentBuild(ToolPin.RunningVersion);
-        CiTrigger ci = requestedCi ?? CiTriggerDefault.For(ToolPin.RunningVersion);
+        CiTrigger ci = init.RequestedCi ?? CiTriggerDefault.For(ToolPin.RunningVersion);
         string root = ProjectRoot();
+        bool write = !init.DryRun;
         if (await PreflightProblemAsync(root, cancellationToken) is string problem)
         {
             return await RefuseAsync($"{problem}; nothing was written");
         }
 
-        IReadOnlyList<LayerProject> layers = quality.ArchitectureTests ? ArchitectureTestProject.Layers(root) : [];
-        if (quality.ArchitectureTests && ArchitectureTestProject.Problem(layers) is string layerProblem)
+        string manifestPath = Path.Combine(root, Manifest.FileName);
+        string? existingManifestText = File.Exists(manifestPath) ? await File.ReadAllTextAsync(manifestPath, cancellationToken) : null;
+        Manifest? existingManifest = existingManifestText is null ? null : ManifestLocator.Discover(root).Manifest;
+        // Only the very first init marks features: no manifest of either kind and no Lockflight state yet. A later init (which the
+        // agent may run) must never exempt a feature from approval.
+        bool firstInit = existingManifestText is null && ManifestLocator.Discover(root).Status == ManifestLoadStatus.NotFound
+            && !Directory.Exists(Path.Combine(root, ".lockflight"));
+        if (existingManifestText is not null && existingManifest is null)
+        {
+            return await RefuseAsync($"{Manifest.FileName} does not load; fix it first (lockflight doctor shows the error); nothing was written");
+        }
+
+        if (InitAdoption.ShellProblem(existingManifest, init.Shell) is string shellProblem)
+        {
+            return await RefuseAsync($"--unit-of: {shellProblem}; nothing was written");
+        }
+
+        if (init.SpecKitPreset is string requested && HumanOnlyCommands.RunsUnderAgent(context.Environment))
+        {
+            // The upgrade rewrites the team's protected Spec Kit skills and runs a preset from the directory named: a person's decision.
+            string line = $"cd {ShellQuoting.Quote(root)} && {EngineCommand.Linked} init --speckit-preset {ShellQuoting.Quote(Path.GetFullPath(requested, context.WorkingDirectory))}";
+            await context.Error.WriteLineAsync($"lockflight: 'init --speckit-preset' upgrades the team's Spec Kit and is a person's decision, so it does not run inside a Claude Code session. Ask the user to {HumanOnlyCommands.OpenATerminalAndRun(line)}.");
+            return ExitCode.HookBlock;
+        }
+
+        if (init.SpecKitPreset is string presetOption && !Directory.Exists(Path.GetFullPath(presetOption, context.WorkingDirectory)))
+        {
+            return await RefuseAsync($"--speckit-preset: '{presetOption}' is not a directory; nothing was written");
+        }
+
+        IReadOnlyList<LayerProject> layers = init.Quality.ArchitectureTests ? ArchitectureTestProject.Layers(root) : [];
+        if (init.Quality.ArchitectureTests && ArchitectureTestProject.Problem(layers) is string layerProblem)
         {
             return await RefuseAsync($"{layerProblem}; nothing was written");
         }
 
-        string[] testFrameworks = [.. ProjectFiles.TestProjects(root).SelectMany(project => ProjectFiles.TargetFrameworks(root, project)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
-        IReadOnlyList<string> dotnetChannels = DotnetChannels.For(testFrameworks);
+        AdoptionPlan plan = SetupInventory.Build(root, existingManifest, context.Environment.Get(EnvironmentVariables.Home), context.Time.GetUtcNow());
         // A workspace shell: the child directories that look like units go into a new manifest, and the child
         // repositories into the shell's .gitignore so the shell's git never tracks their files.
-        IReadOnlyList<UnitCandidate> units = UnitDiscovery.Find(root);
-        string manifest = units.Count == 0 ? Templates.Manifest(profile) : ManifestListEditor.Append(Templates.Manifest(profile), "units", [.. units.Select(unit => unit.ManifestEntry)]) ?? Templates.Manifest(profile);
+        IReadOnlyList<UnitCandidate> units = init.Shell is null ? UnitDiscovery.Find(root) : [];
+        ManifestPlan manifest = InitAdoption.Manifest(existingManifestText, existingManifest, init.Profile, plan, units, init.Shell);
+        ManifestLoadResult plannedLoad = new ManifestParser(root, manifestPath).Parse(manifest.Content);
+        if (plannedLoad.Manifest is not Manifest planned)
+        {
+            return await RefuseAsync($"the {Manifest.FileName} init would write does not load ({plannedLoad.Error?.Message}); nothing was written");
+        }
+
+        IReadOnlyList<string> globs = DefaultProtectedPaths.For(planned);
+        string[] testFrameworks = [.. ProjectFiles.TestProjects(root).SelectMany(project => ProjectFiles.TargetFrameworks(root, project)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
+        IReadOnlyList<string> dotnetChannels = DotnetChannels.For(testFrameworks);
         string[] childRepositories = [.. units.Where(unit => unit.OwnRepository).Select(unit => unit.Path + "/")];
         List<InitStep> steps =
         [
-            await WriteIfMissingAsync(root, Manifest.FileName, manifest, cancellationToken),
-            await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, cancellationToken),
-            await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), cancellationToken),
+            await TransformAsync(root, Manifest.FileName, _ => (manifest.Content, manifest.Changed), write, cancellationToken),
+            await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, write, cancellationToken),
+            await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), write, cancellationToken),
+            await TransformAsync(root, ClaudeMdBlock.FileName, existing => ClaudeMdBlock.IsCurrent(existing ?? string.Empty) ? (existing!, false) : (ClaudeMdBlock.Upsert(existing ?? string.Empty), true), write, cancellationToken),
         ];
+        IReadOnlyList<string> predating = firstInit ? InitAdoption.PredatingFeatures(plan) : [];
+        if (predating.Count > 0)
+        {
+            steps.Add(MarkPredating(root, predating, write));
+        }
+
         List<InitStep> ciSteps = [];
         if (ci != CiTrigger.None)
         {
-            foreach (CiFile file in CiPipeline.Files(platform, root, dotnetChannels, ci, developmentPin))
+            foreach (CiFile file in CiPipeline.Files(init.Platform, root, dotnetChannels, ci, developmentPin))
             {
-                ciSteps.Add(await WriteIfMissingAsync(root, file.RelativePath, file.Content, cancellationToken));
+                ciSteps.Add(await WriteIfMissingAsync(root, file.RelativePath, file.Content, write, cancellationToken));
             }
         }
 
         steps.AddRange(ciSteps);
         List<QualityFile> proposals = [];
-        if (quality.Analyzers)
+        if (init.Quality.Analyzers)
         {
-            await AddQualityPackAsync(root, steps, proposals, cancellationToken);
+            await AddQualityPackAsync(root, steps, proposals, write, cancellationToken);
         }
 
         string? architectureProject = null;
-        if (quality.ArchitectureTests)
+        if (init.Quality.ArchitectureTests)
         {
-            architectureProject = await AddArchitectureTestsAsync(root, layers, steps, proposals, cancellationToken);
+            architectureProject = await AddArchitectureTestsAsync(root, layers, steps, proposals, write, cancellationToken);
         }
 
-        if (profile == InitProfile.Standard)
+        if (init.Profile == InitProfile.Standard)
         {
-            steps.Add(await TransformAsync(root, ".gitattributes", GitAttributesUpdater.Update, cancellationToken));
+            steps.Add(await TransformAsync(root, ".gitattributes", GitAttributesUpdater.Update, write, cancellationToken));
         }
 
         // Last, so the deny rules and the sandbox write denials cover every protected file init has just written (the CI workflow included).
         steps.Add(await TransformAsync(
-            root, ClaudeSettingsMerger.RelativePath, existing => ClaudeSettingsMerger.Merge(existing, DenyRules(root), sandbox ? SandboxDenials(root) : null), cancellationToken));
+            root, ClaudeSettingsMerger.RelativePath, existing => ClaudeSettingsMerger.Merge(existing, PermissionDenyRules.For(root, globs), init.Sandbox ? SandboxSettings.DenyWrite(root, globs) : null), write, cancellationToken));
+
+        if (init.DryRun)
+        {
+            return await DryRunAsync(root, plan, steps, proposals, manifest, predating);
+        }
 
         foreach (InitStep step in steps)
         {
             await context.Output.WriteLineAsync($"{Describe(step.Outcome),-10} {step.RelativePath}");
+        }
+
+        List<string> done = [];
+        List<string> manual = [.. manifest.Manual];
+        string? preset = init.SpecKitPreset is string presetDirectory ? Path.GetFullPath(presetDirectory, context.WorkingDirectory) : null;
+        if (InitAdoption.ChangesSpecKit(plan))
+        {
+            if (preset is not null)
+            {
+                await InitAdoption.AdoptSpecKitAsync(root, plan, preset, done, manual, cancellationToken);
+            }
+            else
+            {
+                manual.Add(InitAdoption.SpecKitLine(root, PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root)));
+            }
+        }
+
+        foreach (string line in InitAdoption.Notes(plan).Concat(done.Select(line => $"done       {line}")).Concat(manual.Select(line => $"manual     {line}")))
+        {
+            await context.Output.WriteLineAsync(line);
         }
 
         if (ciSteps.FirstOrDefault() is InitStep pipeline)
@@ -157,24 +262,25 @@ internal sealed class InitCommand(CliContext context) : ICommand
                 await ExplainPreviewCiAsync(pipeline.RelativePath, ci);
             }
 
-            foreach (string line in CiPipeline.NextSteps(platform, root, ciSteps))
+            foreach (string line in CiPipeline.NextSteps(init.Platform, root, ciSteps))
             {
                 await context.Output.WriteLineAsync(line);
             }
         }
 
-        await RecordAsync(root, steps, cancellationToken);
+        await RecordAsync(root, steps, done, cancellationToken);
         if (proposals.Count > 0 && await ProposeAsync(root, proposals, cancellationToken) is ExitCode proposeFailure)
         {
             return proposeFailure;
         }
 
-        foreach (string line in QualityNextSteps.For(quality, steps, proposals, architectureProject))
+        foreach (string line in QualityNextSteps.For(init.Quality, steps, proposals, architectureProject))
         {
             await context.Output.WriteLineAsync(line);
         }
 
-        if (!link)
+        await context.Output.WriteLineAsync(Commit);
+        if (!init.Link)
         {
             return ExitCode.Pass;
         }
@@ -186,8 +292,8 @@ internal sealed class InitCommand(CliContext context) : ICommand
             SpecKitSetup specKit = !Directory.Exists(Path.Combine(root, ".specify")) ? SpecKitSetup.None
                 : LockflightPresetRegistry.IsInstalled(root) ? SpecKitSetup.WithPreset
                 : SpecKitSetup.WithoutPreset;
-            string? preset = profile == InitProfile.Standard && specKit == SpecKitSetup.None ? PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root) : null;
-            foreach (string line in InitNextSteps.For(profile, specKit, preset))
+            string? foundPreset = init.Profile == InitProfile.Standard && specKit != SpecKitSetup.WithPreset ? PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root) : null;
+            foreach (string line in InitNextSteps.For(init.Profile, specKit, foundPreset))
             {
                 await context.Output.WriteLineAsync(line);
             }
@@ -196,11 +302,62 @@ internal sealed class InitCommand(CliContext context) : ICommand
         return linkResult;
     }
 
+    /// <summary>What init would write and what it would adopt, with nothing written: the plan a person reviews before running init.</summary>
+    private async Task<ExitCode> DryRunAsync(string root, AdoptionPlan plan, List<InitStep> steps, List<QualityFile> proposals, ManifestPlan manifest, IReadOnlyList<string> predating)
+    {
+        TextWriter output = context.Output;
+        await output.WriteLineAsync($"init --dry-run: nothing was written. Running init in {root} would:");
+        foreach (InitStep step in steps)
+        {
+            await output.WriteLineAsync($"{DescribePlanned(step.Outcome),-16} {step.RelativePath}");
+        }
+
+        foreach (QualityFile proposal in proposals)
+        {
+            await output.WriteLineAsync($"{"propose",-16} {proposal.RelativePath} (exists: a patch for you to apply)");
+        }
+
+        foreach (string line in manifest.Manual)
+        {
+            await output.WriteLineAsync($"{"manual",-16} {line}");
+        }
+
+        if (predating.Count > 0)
+        {
+            await output.WriteLineAsync($"It marks {predating.Count} existing feature{(predating.Count == 1 ? string.Empty : "s")} as predating Lockflight: {string.Join(", ", predating)}.");
+        }
+
+        await output.WriteLineAsync();
+        await output.WriteAsync(AdoptionPlanWriter.Markdown(plan));
+        await output.WriteLineAsync(Commit);
+        return ExitCode.Pass;
+    }
+
+    /// <summary>Marks the features that predate Lockflight, so <c>approve verify --base</c> and <c>trace</c> require nothing of them.</summary>
+    private static InitStep MarkPredating(string root, IReadOnlyList<string> features, bool write)
+    {
+        string relative = $"{BaselinePaths.Directory}/{AdoptedFeatures.FileName}";
+        AdoptedFeatures adopted = new(root);
+        IReadOnlySet<string> already = adopted.Load();
+        if (features.All(already.Contains))
+        {
+            return new InitStep(relative, FileOutcome.Unchanged);
+        }
+
+        bool existed = File.Exists(Path.Combine(root, relative));
+        if (write)
+        {
+            adopted.Save(already.Concat(features));
+        }
+
+        return new InitStep(relative, existed ? FileOutcome.Updated : FileOutcome.Created);
+    }
+
     /// <summary>
     /// The quality pack's files: one that does not exist yet is written, as init writes every protected file it starts; one the
     /// team already has is only proposed, because init never changes the team's own content.
     /// </summary>
-    private static async Task AddQualityPackAsync(string root, List<InitStep> steps, List<QualityFile> proposals, CancellationToken cancellationToken)
+    private static async Task AddQualityPackAsync(string root, List<InitStep> steps, List<QualityFile> proposals, bool write, CancellationToken cancellationToken)
     {
         foreach (QualityFile file in QualityPack.Files(root))
         {
@@ -210,20 +367,20 @@ internal sealed class InitCommand(CliContext context) : ICommand
             }
             else
             {
-                steps.Add(await WriteIfMissingAsync(root, file.RelativePath, file.Content, cancellationToken));
+                steps.Add(await WriteIfMissingAsync(root, file.RelativePath, file.Content, write, cancellationToken));
             }
         }
     }
 
     /// <summary>The architecture test project, unless it exists; a central package list that lacks its packages is proposed.</summary>
     private static async Task<string> AddArchitectureTestsAsync(
-        string root, IReadOnlyList<LayerProject> layers, List<InitStep> steps, List<QualityFile> proposals, CancellationToken cancellationToken)
+        string root, IReadOnlyList<LayerProject> layers, List<InitStep> steps, List<QualityFile> proposals, bool write, CancellationToken cancellationToken)
     {
         string directory = ArchitectureTestProject.RelativeDirectory(root, layers);
         string project = $"{directory}/{ArchitectureTestProject.Name(layers)}.csproj";
         bool centralPackages = ArchitectureTestProject.UsesCentralPackages(root);
-        steps.Add(await WriteIfMissingAsync(root, project, ArchitectureTestProject.ProjectFile(root, directory, layers, centralPackages), cancellationToken));
-        steps.Add(await WriteIfMissingAsync(root, $"{directory}/{ArchitectureTestProject.TestFileName}", ArchitectureTestProject.TestFile(layers), cancellationToken));
+        steps.Add(await WriteIfMissingAsync(root, project, ArchitectureTestProject.ProjectFile(root, directory, layers, centralPackages), write, cancellationToken));
+        steps.Add(await WriteIfMissingAsync(root, $"{directory}/{ArchitectureTestProject.TestFileName}", ArchitectureTestProject.TestFile(layers), write, cancellationToken));
         string packagesPath = Path.Combine(root, ArchitectureTestProject.CentralPackagesFile);
         if (centralPackages && ArchitectureTestProject.CentralPackages(root, await File.ReadAllTextAsync(packagesPath, cancellationToken)) is string packages)
         {
@@ -300,20 +457,12 @@ internal sealed class InitCommand(CliContext context) : ICommand
             : null;
     }
 
-    /// <summary>The protected paths of the manifest just written (built-in, per unit and its own) as sandbox write denials.</summary>
-    private static IReadOnlyList<string> SandboxDenials(string root) => SandboxSettings.DenyWrite(root, ProtectedGlobs(root));
-
-    /// <summary>The same protected paths as <c>Edit</c> deny rules.</summary>
-    private static IReadOnlyList<string> DenyRules(string root) => PermissionDenyRules.For(root, ProtectedGlobs(root));
-
-    private static IReadOnlyList<string> ProtectedGlobs(string root) =>
-        ManifestLocator.Discover(root).Manifest is Manifest manifest ? DefaultProtectedPaths.For(manifest) : DefaultProtectedPaths.Globs;
-
     /// <summary>The nearest existing Lockflight project, else the current directory.</summary>
     private string ProjectRoot() =>
         ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory;
 
-    private static async Task<InitStep> WriteIfMissingAsync(string root, string relativePath, string content, CancellationToken cancellationToken)
+    /// <param name="write">False for <c>--dry-run</c>: the outcome is worked out and nothing is written.</param>
+    private static async Task<InitStep> WriteIfMissingAsync(string root, string relativePath, string content, bool write, CancellationToken cancellationToken)
     {
         string path = Path.Combine(root, relativePath);
         if (File.Exists(path))
@@ -321,13 +470,17 @@ internal sealed class InitCommand(CliContext context) : ICommand
             return new InitStep(relativePath, FileOutcome.Unchanged);
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, content, cancellationToken);
+        if (write)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, content, cancellationToken);
+        }
+
         return new InitStep(relativePath, FileOutcome.Created);
     }
 
     private static async Task<InitStep> TransformAsync(
-        string root, string relativePath, Func<string?, (string Content, bool Changed)> transform, CancellationToken cancellationToken)
+        string root, string relativePath, Func<string?, (string Content, bool Changed)> transform, bool write, CancellationToken cancellationToken)
     {
         string path = Path.Combine(root, relativePath);
         string? existing = File.Exists(path) ? await File.ReadAllTextAsync(path, cancellationToken) : null;
@@ -337,17 +490,26 @@ internal sealed class InitCommand(CliContext context) : ICommand
             return new InitStep(relativePath, FileOutcome.Unchanged);
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await File.WriteAllTextAsync(path, content, cancellationToken);
+        if (write)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, content, cancellationToken);
+        }
+
         return new InitStep(relativePath, existing is null ? FileOutcome.Created : FileOutcome.Updated);
     }
 
-    private async Task RecordAsync(string root, List<InitStep> steps, CancellationToken cancellationToken)
+    private async Task RecordAsync(string root, List<InitStep> steps, List<string> done, CancellationToken cancellationToken)
     {
         LedgerWriter ledger = new(root, context.Time);
         foreach (InitStep step in steps.Where(step => step.Outcome != FileOutcome.Unchanged))
         {
             await ledger.AppendAsync(new LedgerEvent(LedgerEventType.ConfigWritten, $"init:{step.RelativePath}", Describe(step.Outcome), null), cancellationToken);
+        }
+
+        if (done.Count > 0)
+        {
+            await ledger.AppendAsync(new LedgerEvent(LedgerEventType.ConfigWritten, "init:speckit", string.Join("; ", done), null), cancellationToken);
         }
     }
 
@@ -356,6 +518,13 @@ internal sealed class InitCommand(CliContext context) : ICommand
         await context.Error.WriteLineAsync($"lockflight: {message}");
         return ExitCode.Config;
     }
+
+    private static string DescribePlanned(FileOutcome outcome) => outcome switch
+    {
+        FileOutcome.Created => "would create",
+        FileOutcome.Updated => "would update",
+        _ => "unchanged",
+    };
 
     private static string Describe(FileOutcome outcome) => outcome switch
     {
