@@ -66,4 +66,17 @@ public sealed class UnifiedDiffTests
 
         Assert.Equal(expected, file.ChangesByteOrderMark);
     }
+
+    [Fact]
+    public void PatchFilesKeepDeletedFilesWithTheirRemovedLines()
+    {
+        const string diff = "--- a/gone.cs\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-class Gone\n-{ }\n--- /dev/null\n+++ b/new.cs\n@@ -0,0 +1 @@\n+class New { }\n";
+
+        IReadOnlyList<PatchFile> files = UnifiedDiff.PatchFilesOf(diff);
+
+        Assert.Equal([("gone.cs", (string?)null), (null, "new.cs")], files.Select(file => (file.OldFile, file.NewFile)));
+        Assert.Equal(["class Gone", "{ }"], files[0].Removed.Select(line => line.Text));
+        Assert.Equal([1, 2], files[0].Removed.Select(line => line.Line));
+        Assert.Equal(["new.cs"], UnifiedDiff.FilesOf(diff).Select(file => file.File));
+    }
 }
