@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Paths;
 
@@ -21,7 +22,7 @@ internal static class GuardRules
     public static IReadOnlyList<IGuardRule> PerRoot(CliContext context, DirectoryReads reads) =>
         [new HumanOnlyCommandRule(), new ProtectedPathRule(context.Error, context.Environment, reads)];
 
-    public static async Task<HookDecision> DecideAsync(HookInput input, Manifest manifest, CliContext context, DirectoryReads reads, CancellationToken cancellationToken)
+    public static async Task<HookDecision> DecideAsync(HookRequest input, Manifest manifest, CliContext context, DirectoryReads reads, CancellationToken cancellationToken)
     {
         GuardFacts project = new(input, manifest);
         if (await FirstBlockAsync(OncePerCall, project, cancellationToken) is GuardBlock precondition)

@@ -445,6 +445,7 @@ Evidence lives in `.lockflight/features/<feature>/` (approvals, `redgreen.json`,
 | `LOCKFLIGHT_GITLEAKS` | path to the gitleaks binary (else PATH) |
 | `LOCKFLIGHT_DEBUG` | hooks print path-matching diagnostics to stderr |
 | `LOCKFLIGHT_HOOK_LOG` | append every raw hook payload to this file |
+| `LOCKFLIGHT_HOOK_ADAPTER` | which client's payload `lockflight hook` reads: unset or `claude-code` (the plugin), `neutral` (a `lockflight.hook-request/v1` document, experimental). Another value blocks a tool call |
 
 The engine sets these for every tool it starts (builds, test runs, git): `MSBUILDDISABLENODEREUSE=1` (no MSBuild servers left
 behind), `DOTNET_CLI_TELEMETRY_OPTOUT=1`, `DOTNET_NOLOGO=1`, `GIT_OPTIONAL_LOCKS=0` (read-only git calls take no index lock) and

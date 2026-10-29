@@ -2,7 +2,8 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Lockflight.Cli.Config;
-using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Hooks.Adapters;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Tests.Hooks;
@@ -116,9 +117,9 @@ public sealed class HookInputRobustnessTests : IDisposable
     [Fact]
     public void ToolInputStringsHoldsEveryStringAndNameButNoOtherValue()
     {
-        HookInput input = HookInput.Parse("""{"tool_input":{"a":1,"b":[true,null,"s",{"c":"t"}],"d":2.5}}""")!;
+        HookRequest input = ClaudeCodeAdapter.Parse("""{"tool_input":{"a":1,"b":[true,null,"s",{"c":"t"}],"d":2.5}}""", projectDirectory: null)!;
 
-        Assert.Equal(["a", "b", "s", "c", "t", "d"], input.ToolInputStrings);
+        Assert.Equal(["a", "b", "s", "c", "t", "d"], input.InputStrings);
     }
 
     [Theory]
@@ -128,7 +129,7 @@ public sealed class HookInputRobustnessTests : IDisposable
     [InlineData("{\"tool_input\":")]
     [InlineData("{\"a\":1}{\"b\":2}")]
     public void InputThatIsNotOneJsonObjectIsNotParsed(string rawInput) =>
-        Assert.Null(HookInput.Parse(rawInput));
+        Assert.Null(ClaudeCodeAdapter.Parse(rawInput, projectDirectory: null));
 
     public void Dispose() => TempDirectories.DeleteRecursively(projectRoot);
 

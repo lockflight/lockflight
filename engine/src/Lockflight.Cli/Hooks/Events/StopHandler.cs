@@ -1,3 +1,5 @@
+using Lockflight.Cli.Hooks.Requests;
+
 namespace Lockflight.Cli.Hooks.Events;
 
 /// <summary>Stop: the stop gate (<see cref="StopGate"/>). An engine error is reported and never bricks the session.</summary>
@@ -7,8 +9,8 @@ internal sealed class StopHandler : IHookHandler
 
     public HookFailurePolicy OnEngineError(HookFailureState state) => HookFailurePolicy.Allow;
 
-    public bool Claims(HookInput input) => true;
+    public bool Claims(HookRequest input) => true;
 
     public async Task<HookReply> DecideAsync(HookInvocation invocation, CancellationToken cancellationToken) =>
-        HookReply.Of(await StopGate.DecideAsync(invocation.Manifest, invocation.Input.SessionId, invocation.Context.Time, cancellationToken));
+        HookReply.Of(await StopGate.DecideAsync(invocation.Manifest, invocation.Input.Session.Id, invocation.Context.Time, cancellationToken));
 }

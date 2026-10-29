@@ -1,5 +1,5 @@
 using Lockflight.Cli.Config;
-using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 
@@ -25,7 +25,7 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest) : I
 
     private SessionCommandGate Gate => new(context, manifest, Spec);
 
-    public async Task<SessionCommandResult> DecideAsync(HookInput input, CancellationToken cancellationToken)
+    public async Task<SessionCommandResult> DecideAsync(HookRequest input, CancellationToken cancellationToken)
     {
         string[] words = SessionCommandGate.Words(input);
         if (Gate.NotTypedByAPerson(input, "records an approval") is SessionRefusal notTyped)

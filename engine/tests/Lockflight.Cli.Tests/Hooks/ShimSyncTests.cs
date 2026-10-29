@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Hooks.Adapters;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Linking;
 
 namespace Lockflight.Cli.Tests.Hooks;
@@ -9,13 +11,30 @@ public sealed partial class ShimSyncTests
 {
     private static readonly Lazy<string> Shim = new(() => File.ReadAllText(ShimLocation.Path));
 
+    /// <summary>
+    /// The shim keeps Claude Code's tool names for its own recovery decisions; the engine decides on kinds. The names the shim
+    /// allows must be exactly the Claude Code tools the adapter maps to a kind that only reads.
+    /// </summary>
     [Fact]
-    public void TheShimAllowsTheSameReadOnlyToolsAsTheEngine()
+    public void TheShimAllowsTheClaudeCodeToolsTheAdapterMapsToReadOnlyKinds()
     {
         Match tools = ReadOnlyToolsCase().Match(Shim.Value);
+        string[] readOnly = [.. ClaudeCodeAdapter.ToolKinds
+            .Where(tool => new HookTool(tool.Key, tool.Value.Kind, tool.Value.Shell, WritesFiles: false).OnlyReads)
+            .Select(tool => tool.Key)
+            .Order(StringComparer.Ordinal)];
 
         Assert.True(tools.Success, "the shim's read-only tool case was not found");
-        Assert.Equal(ReadOnlyTools.Names.Order(StringComparer.Ordinal), tools.Groups["tools"].Value.Split('|').Order(StringComparer.Ordinal));
+        Assert.Equal(readOnly, tools.Groups["tools"].Value.Split('|').Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void TheShimRunsRecoveryCommandsInTheToolTheAdapterMapsToThePosixShell()
+    {
+        Match tool = RecoveryToolCheck().Match(Shim.Value);
+
+        Assert.True(tool.Success, "the shim's recovery tool check was not found");
+        Assert.Equal((ToolKind.Shell, ShellDialect.Posix), ClaudeCodeAdapter.KindOf(tool.Groups["tool"].Value));
     }
 
     [Fact]
@@ -76,6 +95,9 @@ public sealed partial class ShimSyncTests
 
     [GeneratedRegex(@"case ""\$tool"" in\s+(?<tools>[A-Za-z|]+)\)")]
     private static partial Regex ReadOnlyToolsCase();
+
+    [GeneratedRegex(@"\[ ""\$tool"" = ""(?<tool>[A-Za-z]+)"" \]")]
+    private static partial Regex RecoveryToolCheck();
 
     [GeneratedRegex(@"case ""\$command"" in\s+(?<commands>""[^)]*"")\)")]
     private static partial Regex RecoveryCommandsCase();
