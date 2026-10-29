@@ -35,3 +35,5 @@ plugins/evals/results/
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+/out/
