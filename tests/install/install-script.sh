@@ -178,8 +178,13 @@ for shell_name in $shells; do
       && [ "$(sha256 "$work/case/out/lockflight")" = "$engine_hash" ] && ok "the package opens with $tool alone"
   done
 
-  run "no unzip" 1 PATH="$work/bare" -- --lock "$work/engine.lock" --dir "$work/case/out" \
-    && says "no unzip, bsdtar, python3 or perl" "without an unzip tool it refuses, naming them"
+  # BusyBox sh may run its own unzip applet whatever PATH says, so "no zip reader" cannot be set up for it.
+  if [ "$shell_name" = busybox-sh ] && ${shell% sh} --list 2>/dev/null | grep -qx unzip; then
+    ok "no zip reader: not checked, BusyBox sh has its own unzip"
+  else
+    run "no unzip" 1 PATH="$work/bare" -- --lock "$work/engine.lock" --dir "$work/case/out" \
+      && says "no unzip, bsdtar, python3 or perl" "without an unzip tool it refuses, naming them"
+  fi
 
   rm -f "$work/curl-args" "$work/curl-stdin"
   if run "credentials" 0 PATH="$work/spy:$PATH" LOCKFLIGHT_NUGET_USER=alice LOCKFLIGHT_NUGET_TOKEN=s3cr3t-t0ken -- --lock "$work/engine.lock" --dir "$work/case/out"; then
