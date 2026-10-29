@@ -11,6 +11,8 @@ public sealed class TestRunnersTests
     [InlineData(3, 3)]
     [InlineData(4, 4)]
     [InlineData(5, 5)]
+    [InlineData(6, 6)]
+    [InlineData(7, 7)]
     public void AnAppRunsOnTheRunnerOfItsMode(int mode, int runner) => Assert.Equal((RunnerMode)runner, TestRunners.For((RunnerMode)mode, TimeProvider.System).Mode);
 
     [Fact]
@@ -22,7 +24,9 @@ public sealed class TestRunnersTests
     [Theory]
     [InlineData(5, "Microsoft.Testing.Extensions.TrxReport")]
     [InlineData(4, "Microsoft.NET.Test.Sdk")]
-    public async Task AnNUnitAppWithoutWhatItsPlatformNeedsSaysWhatToAdd(int mode, string package)
+    [InlineData(7, "Microsoft.Testing.Extensions.TrxReport")]
+    [InlineData(6, "Microsoft.NET.Test.Sdk")]
+    public async Task AnNUnitOrMSTestAppWithoutWhatItsPlatformNeedsSaysWhatToAdd(int mode, string package)
     {
         DirectoryInfo output = Directory.CreateTempSubdirectory("lockflight-runners-");
         try

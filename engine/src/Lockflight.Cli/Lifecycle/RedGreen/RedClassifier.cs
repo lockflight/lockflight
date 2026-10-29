@@ -4,7 +4,7 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
 /// Classifies a new test from its pre-implementation run. A red is accepted only when the failure comes from production code:
-/// a <c>NotImplementedException</c> whose top stack frame is in production code (RED_STUB), or an assertion (xUnit's, NUnit's,
+/// a <c>NotImplementedException</c> whose top stack frame is in production code (RED_STUB), or an assertion (xUnit's, NUnit's, MSTest's,
 /// or one of the assertion and mocking libraries below) in a test that calls production code (RED_ASSERT). Test code is recognised by the frame's source file under a test project, or, without
 /// symbols, by its declaring type; production code by the frame's file under a production project or its type in a production
 /// assembly. Runtime and static evidence, not proof of history: the review judges assertion quality.
@@ -17,16 +17,17 @@ internal static class RedClassifier
     /// The namespaces of test frameworks' own exceptions. One that is not an assertion is the framework failing the test (xUnit's
     /// <c>Assert.Fail</c>, a throwing fixture or constructor, a timeout), never the production code.
     /// </summary>
-    private static readonly string[] TestFrameworkNamespaces = [XunitNamespace, "NUnit.Framework."];
+    private static readonly string[] TestFrameworkNamespaces = [XunitNamespace, "NUnit.Framework.", "Microsoft.VisualStudio.TestTools.UnitTesting."];
 
     /// <summary>
     /// The exceptions a framework uses to end a test as ignored, inconclusive or passed rather than failed (NUnit's
-    /// <c>Assert.Ignore</c>, <c>Assert.Inconclusive</c>, <c>Assert.Pass</c>). Their runs report the
+    /// <c>Assert.Ignore</c>, <c>Assert.Inconclusive</c>, <c>Assert.Pass</c>; MSTest's <c>Assert.Inconclusive</c>). Their runs report the
     /// test skipped or passed; a row that still names one did not fail on an assertion and is judged as not run.
     /// </summary>
     private static readonly HashSet<string> NotFailureExceptions = new(
         [
             "NUnit.Framework.IgnoreException", "NUnit.Framework.InconclusiveException", "NUnit.Framework.SuccessException",
+            TrxFailureMessages.MSTestInconclusive,
         ],
         StringComparer.Ordinal);
 
@@ -47,15 +48,15 @@ internal static class RedClassifier
     /// <summary>
     /// The failure exceptions of assertion and mocking libraries, checked against the packages: <c>Xunit.Sdk.XunitException</c>
     /// (FluentAssertions and AwesomeAssertions throw it under xUnit, and an xUnit v2 assertion in a VSTest run reports it; xUnit itself
-    /// never throws it bare), NUnit's <c>AssertionException</c> and <c>MultipleAssertException</c> (the assertion libraries throw
-    /// these under NUnit), Shouldly's <c>Should…</c> failures, the two libraries' own exception without a test framework, a failed
+    /// never throws it bare), NUnit's <c>AssertionException</c> and <c>MultipleAssertException</c> and MSTest's
+    /// <c>AssertFailedException</c> (the assertion libraries throw these under NUnit and MSTest), Shouldly's <c>Should…</c> failures, the two libraries' own exception without a test framework, a failed
     /// NSubstitute <c>Received</c> or <c>Received.InOrder</c>, a failed Moq verification (or an unexpected call on a strict mock), and
     /// a failed Verify snapshot. A library's other exceptions report its misuse, not the production code.
     /// </summary>
     private static readonly HashSet<string> LibraryAssertionExceptions = new(
         [
             "Xunit.Sdk.XunitException",
-            TrxFailureMessages.NUnitAssertion, TrxFailureMessages.NUnitMultipleAssertion,
+            TrxFailureMessages.NUnitAssertion, TrxFailureMessages.NUnitMultipleAssertion, TrxFailureMessages.MSTestAssertion,
             "Shouldly.ShouldAssertException", "Shouldly.ShouldMatchApprovedException", "Shouldly.ShouldCompleteInException",
             "FluentAssertions.Execution.AssertionFailedException", "AwesomeAssertions.Execution.AssertionFailedException",
             "NSubstitute.Exceptions.ReceivedCallsException", "NSubstitute.Exceptions.CallSequenceNotFoundException",

@@ -4,7 +4,7 @@ namespace Lockflight.Cli.Testing;
 
 /// <summary>
 /// The one place lifecycle test runners are registered, and the order an app's runner is probed in: an app the build marked as
-/// VSTest (xUnit v2) lists from its assembly metadata only; an NUnit app on Microsoft.Testing.Platform tries the platform
+/// VSTest (xUnit v2) lists from its assembly metadata only; an NUnit or MSTest app on Microsoft.Testing.Platform tries the platform
 /// first, then VSTest, and one without the platform VSTest only; any other app tries xUnit's console runner first, then MTP, unless
 /// an earlier listing already found that only MTP works.
 /// </summary>
@@ -14,6 +14,7 @@ internal static class TestRunners
     [
         new VSTestRunner(time), new XunitConsoleRunner(time), new MtpRunner(time),
         new NUnitRunner(time, TestRunnerKind.VSTest), new NUnitRunner(time, TestRunnerKind.MicrosoftTestingPlatform),
+        new MSTestRunner(time, TestRunnerKind.VSTest), new MSTestRunner(time, TestRunnerKind.MicrosoftTestingPlatform),
     ];
 
     /// <summary>The runner for an app's mode; an app not probed yet runs on xUnit's console runner.</summary>
@@ -23,6 +24,8 @@ internal static class TestRunners
         RunnerMode.Mtp => new MtpRunner(time),
         RunnerMode.NUnit => new NUnitRunner(time, TestRunnerKind.VSTest),
         RunnerMode.NUnitMtp => new NUnitRunner(time, TestRunnerKind.MicrosoftTestingPlatform),
+        RunnerMode.MSTest => new MSTestRunner(time, TestRunnerKind.VSTest),
+        RunnerMode.MSTestMtp => new MSTestRunner(time, TestRunnerKind.MicrosoftTestingPlatform),
         _ => new XunitConsoleRunner(time),
     };
 
@@ -41,6 +44,8 @@ internal static class TestRunners
             RunnerMode.Mtp => [RunnerMode.Mtp],
             RunnerMode.NUnit => [RunnerMode.NUnit],
             RunnerMode.NUnitMtp => [RunnerMode.NUnitMtp, RunnerMode.NUnit],
+            RunnerMode.MSTest => [RunnerMode.MSTest],
+            RunnerMode.MSTestMtp => [RunnerMode.MSTestMtp, RunnerMode.MSTest],
             _ => [RunnerMode.Native, RunnerMode.Mtp],
         };
         TestListing? unlisted = null;

@@ -359,7 +359,7 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
             return (unjudged, null, null);
         }
 
-        // Reproductions are written as xUnit tests: an NUnit project cannot build them.
+        // Reproductions are written as xUnit tests: an NUnit or MSTest project cannot build them.
         if (await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> listed || XunitApps(workspace) is not { Count: > 0 } apps)
         {
             return (unjudged, null, null);

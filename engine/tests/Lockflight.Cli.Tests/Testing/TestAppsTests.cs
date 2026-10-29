@@ -55,16 +55,18 @@ public sealed class TestAppsTests : IDisposable
     }
 
     [Fact]
-    public async Task NUnitProjectsRunOnTheTestingPlatformWhenTheyAreTestingPlatformApplications()
+    public async Task NUnitAndMSTestProjectsRunOnTheTestingPlatformWhenTheyAreTestingPlatformApplications()
     {
         TestProject("tests/NUnit.Vs/NUnit.Vs.csproj", onTestingPlatform: false, "nunit.framework.dll");
         TestProject("tests/NUnit.Mtp/NUnit.Mtp.csproj", onTestingPlatform: true, "nunit.framework.dll");
+        TestProject("tests/MSTest.Vs/MSTest.Vs.csproj", onTestingPlatform: false, "Microsoft.VisualStudio.TestPlatform.TestFramework.dll");
+        TestProject("tests/MSTest.Mtp/MSTest.Mtp.csproj", onTestingPlatform: true, "MSTest.TestFramework.dll");
         TestProject("tests/Other/Other.csproj", onTestingPlatform: false, "tunit.core.dll");
 
         TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeLimit, TimeProvider.System, TestContext.Current.CancellationToken);
 
         Assert.Equal(
-            [("NUnit.Mtp", RunnerMode.NUnitMtp), ("NUnit.Vs", RunnerMode.NUnit)],
+            [("MSTest.Mtp", RunnerMode.MSTestMtp), ("MSTest.Vs", RunnerMode.MSTest), ("NUnit.Mtp", RunnerMode.NUnitMtp), ("NUnit.Vs", RunnerMode.NUnit)],
             discovery.Apps.Select(app => (app.AssemblyName, app.Mode)).Order());
     }
 

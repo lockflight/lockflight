@@ -109,7 +109,7 @@ tests. A build that fails is a verdict (FAIL, or COMPILE_RED for a red).
 
 After the build, red/green, `trace` and `review` find the test projects by evaluating every `.csproj` under the root (or the
 unit) with `dotnet msbuild -getProperty`, all within `gates.timeoutSeconds` together. A project that evaluates and is not an
-xUnit or NUnit test project is left out. A project whose evaluation fails or times out might be a test project whose tests would be
+xUnit, NUnit or MSTest test project is left out. A project whose evaluation fails or times out might be a test project whose tests would be
 left out, so `redgreen start`, `red` and `green` and `trace` end NOT-EARNED (exit 5), naming the project and the first line
 of the error (or the timeout); an amend's re-check does the same, and the amend stays open. `review` still runs, but it runs no
 reproduction, so its blocker and major findings stay unverified. Fix the project so `dotnet msbuild <project>

@@ -4,8 +4,8 @@ using Lockflight.Cli.Processes;
 namespace Lockflight.Cli.Testing;
 
 /// <summary>
-/// Builds one or more directories (a repository, or the units of a workspace) and lists and runs the tests of all their xUnit and
-/// NUnit test applications; paths are reported relative to <paramref name="root"/>.
+/// Builds one or more directories (a repository, or the units of a workspace) and lists and runs the tests of all their xUnit, NUnit
+/// and MSTest test applications; paths are reported relative to <paramref name="root"/>.
 /// </summary>
 internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targets, TimeSpan timeLimit, TimeProvider time)
 {
