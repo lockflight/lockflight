@@ -15,6 +15,9 @@ internal sealed record GateSettings(string? TestFramework, int TimeoutSeconds, C
     /// </summary>
     public GateMode Suppressions { get; init; } = GateMode.Report;
 
+    /// <summary>How the pr profile's <c>docs.references</c> step judges (<c>gates.docs.references</c>); absent, it reports only.</summary>
+    public GateMode DocsReferences { get; init; } = GateMode.Report;
+
     public const int DefaultTimeoutSeconds = 600;
     public const int MaxTimeoutSeconds = 7200;
 

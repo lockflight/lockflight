@@ -12,7 +12,7 @@ internal sealed class DriftContext(RepositoryFiles files, CancellationToken canc
 
     public RepositoryFiles Files => files;
 
-    public Task<PathHistory> HistoryAsync() => history ??= PathHistory.LoadAsync(files.Root, cancellationToken);
+    public Task<PathHistory> HistoryAsync() => history ??= PathHistory.LoadAsync(files.Root, files.Revision, cancellationToken);
 
     /// <summary>Whether the history was read, so its notes belong in the report.</summary>
     public bool HistoryRead => history is not null;
@@ -22,7 +22,7 @@ internal sealed class DriftContext(RepositoryFiles files, CancellationToken canc
     {
         if (!anchors.TryGetValue(path, out IReadOnlySet<string>? found))
         {
-            found = HeadingSlugs.Of(MarkdownDocument.Parse(File.ReadAllText(Path.Combine(files.Root, path))));
+            found = HeadingSlugs.Of(MarkdownDocument.Parse(files.ReadText(path)));
             anchors[path] = found;
         }
 

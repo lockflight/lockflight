@@ -12,6 +12,7 @@ public sealed class GateProfilesTests : IDisposable
     {
         ["policy.protected"] = "policy",
         ["quality.suppressions"] = "suppressions",
+        ["docs.references"] = "references",
         ["coverage.patch"] = "patch coverage",
         ["security.deps"] = "dependencies",
         ["security.secrets"] = "secrets",

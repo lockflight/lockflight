@@ -25,14 +25,39 @@ internal static class DocsDrift
                 findings.Add(budget);
             }
 
-            foreach (MarkdownLine line in lines)
-            {
-                findings.AddRange(await CheckLineAsync(document, line, context, plugins));
-            }
+            findings.AddRange(await CheckLinesAsync(document, lines, context, plugins));
         }
 
         IReadOnlyList<string> notes = context.HistoryRead ? (await context.HistoryAsync()).Notes : [];
         return new DocsDriftReport(Scanned: true, documents.Length, findings, notes);
+    }
+
+    /// <summary>
+    /// The references in <paramref name="documents"/> that do not resolve in <paramref name="files"/> (a working tree or a commit):
+    /// links and anchors, code-span paths, engine and plugin command lines. No size budget: that is not a reference.
+    /// </summary>
+    public static async Task<IReadOnlyList<DriftFinding>> ReferencesAsync(RepositoryFiles files, IEnumerable<string> documents, CancellationToken cancellationToken)
+    {
+        DriftContext context = new(files, cancellationToken);
+        PluginCommandCheck plugins = PluginCommandCheck.For(files.Present);
+        List<DriftFinding> findings = [];
+        foreach (string document in documents)
+        {
+            findings.AddRange(await CheckLinesAsync(document, MarkdownDocument.Parse(files.ReadText(document)), context, plugins));
+        }
+
+        return findings;
+    }
+
+    private static async Task<IReadOnlyList<DriftFinding>> CheckLinesAsync(string document, IReadOnlyList<MarkdownLine> lines, DriftContext context, PluginCommandCheck plugins)
+    {
+        List<DriftFinding> findings = [];
+        foreach (MarkdownLine line in lines)
+        {
+            findings.AddRange(await CheckLineAsync(document, line, context, plugins));
+        }
+
+        return findings;
     }
 
     private static async Task<IReadOnlyList<DriftFinding>> CheckLineAsync(string document, MarkdownLine line, DriftContext context, PluginCommandCheck plugins)
