@@ -9,12 +9,12 @@
     {
       "name": "lockflight",
       "source": "./lockflight",
-      "description": "Gated, spec-driven delivery for Claude Code agents on .NET: deterministic gates, protected-path guards, a Spec Kit lifecycle with approvals, red/green evidence and trace, and evidence-bound review."
+      "description": "Gated, spec-driven delivery for Claude Code agents on .NET: deterministic gates, protected-path guards, a spec lifecycle with approvals, red/green evidence and trace, and evidence-bound review."
     },
     {
       "name": "lockflight-crew",
       "source": "./lockflight-crew",
-      "description": "Optional agents for the Lockflight lifecycle: a test author that writes a story's failing tests until `redgreen red` accepts them. An aid; the gates still judge."
+      "description": "Optional agents for the Lockflight lifecycle: a spec writer and a planner that write the spec and tasks until `phase check` passes, and a test author that writes a story's failing tests until `redgreen red` accepts them. An aid; the gates still judge."
     }
   ]
 }
