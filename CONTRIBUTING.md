@@ -44,8 +44,9 @@ than a fix, please open an issue first, because the design still moves. Everyone
 - **Marketplaces:** [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json), the one users add, serves each
   plugin from the last release tag and its commit, so a merge to `main` reaches users only through a release;
   `scripts/marketplace-ref.sh` checks that pin and the release moves it ([releasing](docs/engineering/releasing.md)).
-  [`plugins/.claude-plugin/marketplace.json`](plugins/.claude-plugin/marketplace.json) lists the same plugins from the checkout:
-  `scripts/dev-install.sh` adds it.
+  [`plugins/.claude-plugin/marketplace.json`](plugins/.claude-plugin/marketplace.json) lists the plugins from the checkout:
+  `scripts/dev-install.sh` adds it. Describe a change to the plugins there; the published marketplace keeps the descriptions
+  this file had at the tag it serves, and the release copies the new ones.
 - **Releases** are published to nuget.org by the release workflow from a version tag, after a maintainer approves it: see
   [releasing](docs/engineering/releasing.md).
 

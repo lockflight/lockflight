@@ -79,8 +79,11 @@ push to `main`) fails unless:
 - every entry names the same tag and commit, and the tag exists on GitHub and points at that commit;
 - at that commit, both `plugin.json` files have the tag's version, and `min-engine-version` is at most that version;
 - nuget.org lists `Lockflight.Cli` at the tag's version and at `min-engine-version`;
-- the development marketplace, [`plugins/.claude-plugin/marketplace.json`](../../plugins/.claude-plugin/marketplace.json),
-  lists the same plugins from the checkout (`scripts/dev-install.sh` adds it, to try `main`).
+- the marketplace and plugin descriptions are those of the development marketplace,
+  [`plugins/.claude-plugin/marketplace.json`](../../plugins/.claude-plugin/marketplace.json), **at that tag**, not on `main`:
+  users get the tag's plugins, so they read what the tag says about them, and `main` may describe plugins not yet released;
+- the development marketplace in the checkout serves each plugin from the checkout (`scripts/dev-install.sh` adds it, to try
+  `main`).
 
 The release pull request raises the versions on `main` while the pin still names the previous tag, so the check passes
 throughout and users stay on the previous release until the last step below.
@@ -94,7 +97,8 @@ throughout and users stay on the previous release until the last step below.
 3. Approve the `publish` job when the build and smoke tests are green.
 4. Edit and publish the draft GitHub Release.
 5. Once nuget.org lists the packages, move the marketplace to the release in a pull request of its own:
-   `scripts/marketplace-ref.sh set vX.Y.Z` writes the tag and its commit into both entries and runs the check. Merge it; users
+   `scripts/marketplace-ref.sh set vX.Y.Z` writes the tag and its commit into both entries, copies the descriptions from the
+   development marketplace at the tag, and runs the check. Merge it; users
    then get the release from `claude plugin update` or auto-update. If the release is abandoned before this step, users never
    see it.
 
