@@ -1,7 +1,9 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Lifecycle.Approvals;
+using Lockflight.Cli.Processes;
 using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Lifecycle.RedGreen;
@@ -74,14 +76,30 @@ internal sealed class RedGreenSession(CliContext context, Manifest manifest, Fea
     /// Approvals bind the artifacts: red/green builds only on a spec and tasks that someone approved and nobody changed
     /// since. A missing record (never approved, deleted, or without artifact hashes) refuses like a stale one: fail closed.
     /// </summary>
-    public string? UnapprovedArtifacts()
+    public string? UnapprovedArtifacts() => UnapprovedArtifacts(NotApproved());
+
+    /// <summary>The phases whose approval is not valid now (missing, stale or a record that approves nothing).</summary>
+    public IReadOnlyList<ApprovalCheck> NotApproved()
     {
         ApprovalStore approvals = new(feature);
-        ApprovalCheck[] notValid = [.. new[] { approvals.Check(ApprovalPhase.Spec), approvals.Check(ApprovalPhase.Tasks) }.Where(check => check.State != ApprovalState.Valid)];
-        return notValid.Length == 0
+        return [.. new[] { approvals.Check(ApprovalPhase.Spec), approvals.Check(ApprovalPhase.Tasks) }.Where(check => check.State != ApprovalState.Valid)];
+    }
+
+    /// <summary>
+    /// Refuses the step because <paramref name="notValid"/> phases are not approved: writes the blocked report a person reads
+    /// (<c>.lockflight/local/blocked.json</c>) and fails with the message.
+    /// </summary>
+    public async Task<ExitCode> RefuseUnapprovedAsync(string command, IReadOnlyList<ApprovalCheck> notValid, CancellationToken cancellationToken)
+    {
+        string? head = await Git.HeadAsync(manifest.Root, cancellationToken);
+        BlockedReportFile.WriteLocal(manifest.Root, ApprovalBlockedReport.For($"engine:{command}", manifest.Root, feature, notValid, context.Time.GetUtcNow(), head));
+        return await FailAsync(UnapprovedArtifacts(notValid)!, cancellationToken);
+    }
+
+    private static string? UnapprovedArtifacts(IReadOnlyList<ApprovalCheck> notValid) =>
+        notValid.Count == 0
             ? null
             : $"{string.Join("; ", notValid.Select(check => check.Describe()))} (red/green works from approved artifacts only)";
-    }
 
     /// <summary>Test project directories relative to the root, '/'-separated; a project at the root is "." (locked as <c>**</c>).</summary>
     public string[] RelativeProjects() =>

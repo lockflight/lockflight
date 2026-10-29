@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.Approvals;
@@ -59,6 +60,37 @@ public sealed class StaleApprovalTests : IDisposable
         Assert.Equal(ExitCode.Fail, exitCode);
         Assert.Contains("spec is not approved", error, StringComparison.Ordinal);
         Assert.Contains("open a separate terminal window", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARefusedRedLeavesABlockedReportForThePerson()
+    {
+        SaveRecord(openCycle: false);
+        File.AppendAllText(Feature.TasksPath, "- [ ] T002 [US1] (FR-001) Sneaked in\n");
+
+        await TestConsole.RunAsync(["redgreen", "red", "--feature", "f1"], "", root.FullName);
+
+        BlockedReading reading = BlockedReportReader.Read(File.ReadAllText(BlockedReportFile.PathIn(root.FullName)));
+        Assert.True(reading.Valid, string.Join("; ", reading.Problems));
+        BlockedReport report = reading.Report!;
+        Assert.Equal(("engine:redgreen-red", BlockedReasonCode.ApprovalStale, "f1", true), (report.Source, report.Code, report.Feature, report.Resumable));
+        BlockedNeed need = Assert.Single(report.Needs);
+        Assert.Equal((BlockedWho.Person, BlockedAction.Approve, true), (need.Who, need.Action, need.HumanOnly));
+        Assert.Equal(["specs/f1/tasks.md", "specs/f1/plan.md"], need.Paths);
+        Assert.Equal([".lockflight/features/f1/approvals/tasks.json"], report.Evidence);
+    }
+
+    [Fact]
+    public async Task AMissingApprovalIsReportedAsMissing()
+    {
+        SaveRecord(openCycle: false);
+        File.Delete(new ApprovalStore(Feature).RecordPath(ApprovalPhase.Spec));
+
+        await TestConsole.RunAsync(["redgreen", "red", "--feature", "f1"], "", root.FullName);
+
+        BlockedReport report = BlockedReportReader.Read(File.ReadAllText(BlockedReportFile.PathIn(root.FullName))).Report!;
+        Assert.Equal(BlockedReasonCode.ApprovalMissing, report.Code);
+        Assert.Empty(report.Evidence);
     }
 
     public void Dispose() => root.Delete(recursive: true);

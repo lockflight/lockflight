@@ -63,6 +63,8 @@ internal static class CliApplication
                                                         red --verbose also prints each test's deciding
                                                         stack frame and the production call found
           trace [--feature <id>]                        requirement → red/green tests matrix
+          blocked validate <file>                       check a lockflight.blocked/v1 report (what stopped and what
+                                                        a person must do) against its contract (read only)
           review [--feature <id>] [--base <ref>] [--model <name>] [--budget <usd>]
                                                         review bound to evidence (defaults: the target branch,
                                                         the manifest's review model and budget, else sonnet, 3.00);
