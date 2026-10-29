@@ -23,12 +23,12 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
     public TimeSpan ProcessLimit => TimeSpan.FromSeconds(policy.Manifest?.Gates.TimeoutSeconds ?? DefaultTimeoutSeconds);
 
     /// <summary>
-    /// The tree at <paramref name="commit"/>, built and listed. A commit listed before is not built again: its inventory stands, but
-    /// its workspace may no longer hold that commit's build, so tests are run only on the listing just made.
+    /// The tree at <paramref name="commit"/>, built and listed. A commit listed before is not built again unless
+    /// <paramref name="fresh"/> asks for its build to be in the worktree (to run its tests) and the worktree has moved on since.
     /// </summary>
-    public async Task<TreeListing> ListAsync(string commit, string purpose, CancellationToken cancellationToken)
+    public async Task<TreeListing> ListAsync(string commit, string purpose, bool fresh, CancellationToken cancellationToken)
     {
-        if (listed.TryGetValue(commit, out TreeListing? known))
+        if (listed.TryGetValue(commit, out TreeListing? known) && (!fresh || worktree.Commit == commit))
         {
             return known;
         }
