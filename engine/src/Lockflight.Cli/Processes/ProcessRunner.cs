@@ -85,6 +85,47 @@ internal static class ProcessRunner
         return new ProcessResult(process.ExitCode, await standardOutput, await standardError, stopwatch.ElapsedMilliseconds, TimedOut: false);
     }
 
+    /// <summary>
+    /// Runs a process that reads <paramref name="input"/> and writes binary output (<c>git cat-file --batch</c>, whose headers count
+    /// bytes, not characters): standard output is returned as raw bytes. Past <paramref name="timeLimit"/> the process tree is killed.
+    /// </summary>
+    public static async Task<BinaryProcessResult> RunForBytesAsync(
+        string fileName, IEnumerable<string> arguments, string workingDirectory, byte[] input, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        ProcessStartInfo startInfo = StartInfo(fileName, arguments, workingDirectory, redirectInput: true);
+        using Process process = Start(startInfo);
+        using MemoryStream output = new();
+        Task standardOutput = process.StandardOutput.BaseStream.CopyToAsync(output, CancellationToken.None);
+        Task<string> standardError = process.StandardError.ReadToEndAsync(CancellationToken.None);
+
+        using CancellationTokenSource limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limit.CancelAfter(timeLimit);
+        try
+        {
+            try
+            {
+                await process.StandardInput.BaseStream.WriteAsync(input, limit.Token);
+                process.StandardInput.Close();
+            }
+            catch (IOException)
+            {
+                // The process closed its input early; its exit code says what happened.
+            }
+
+            await process.WaitForExitAsync(limit.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync(CancellationToken.None);
+            await standardOutput;
+            return new BinaryProcessResult(TimedOutExitCode, output.ToArray(), await standardError, TimedOut: true);
+        }
+
+        await standardOutput;
+        return new BinaryProcessResult(process.ExitCode, output.ToArray(), await standardError, TimedOut: false);
+    }
+
     private static ProcessStartInfo StartInfo(string fileName, IEnumerable<string> arguments, string workingDirectory, bool redirectInput)
     {
         ProcessStartInfo startInfo = new(fileName)
