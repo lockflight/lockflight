@@ -26,7 +26,8 @@ protected:                      # extra globs the agent must not change (the bui
 stop:
   gate: false                   # run the stop profile when the agent ends a turn; also lets a task be marked
                                 #   completed only after the stop gate passed for the current changes
-  target: .                     # directory the stop gate builds and tests
+  target: .                     # directory the stop gate builds and tests: in a solution, the projects the
+                                #   changes since its last PASS affect (see "The stop profile builds what the change affects")
 
 gates:
   build: Shop.sln               # optional: the solution or project to build and test (default: the one in the target)
@@ -348,7 +349,7 @@ operating system enforces them for shell commands while the sandbox is on: see
 | Profile | Steps | Typical use |
 |---|---|---|
 | `edit` | format (changed lines) | quick feedback |
-| `stop` | format → build (no new warnings vs baseline) → test | end of an agent turn |
+| `stop` | format → projects.affected → build (no new warnings vs baseline) → test, of the projects the change affects | end of an agent turn |
 | `pr` | policy.protected → format → quality.suppressions → docs.references → build → ef.pendingModelChanges → test (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
 
 Verdicts and exit codes:
@@ -368,6 +369,52 @@ that applied. When **no** step applied (for example `edit` with no changed C# li
 
 The `Scope:` line says what the run judged: the number of tests when the tests ran, otherwise what the last step that reports
 a scope checked (for example `3 changed C# files (format)`), or `nothing judged`.
+
+### The stop profile builds what the change affects
+
+In a solution, the stop profile builds and tests only the projects changed since the target's last stop PASS and the projects
+that depend on them, transitively. The `pr` profile and CI always build and test everything, so this shortens the Stop gate
+without narrowing the definition of done.
+
+- **Changed since the last PASS:** every stop PASS of a target records its working tree as a git tree object
+  (`.lockflight/local/affected/<target>.pass`, written through a private index; the person's index is untouched). The next
+  run compares the working tree with it, so edits, commits made without a stop run, reverts, deletions and new files all
+  count.
+- **The graph:** `projects.affected` reads the solution (`.sln` or `.slnx`: the `build:` file, else the only one in the target)
+  and each project file's `ProjectReference` items as text, without MSBuild, following its imports and the
+  `Directory.Build` and `Directory.Packages` files above it. A changed file belongs to every project whose directory holds it
+  (an outer project of a nested one too, and projects that share a directory), and to a project that includes it from
+  outside its own directory (a linked file, an imported shared project).
+- **What runs:** the changed projects and every project that references one of them, through a solution filter
+  (`.lockflight/local/affected/<target>.slnf`). Their project references still build. The tests are the test projects among
+  them; when none is a test project, `test` is N/A and says so.
+- **What it records:** the step's detail, in the result and in the ledger, names each project and why, for example
+  `Api.Tests.csproj (affected by src/Domain/Order.cs via Api.csproj)`.
+- **Changes that choose nothing:** files in another unit of the workspace, and Lockflight's own directories (`.lockflight/`,
+  `.claude/`, `.specify/`, `specs/`).
+- **Everything runs** (the detail says why) when the choice could miss a project:
+  - a shared build input changed: any `Directory.Build.*`, `Directory.Packages.props`, `global.json`, `NuGet.config`,
+    `.props`, `.targets`, solution, `.editorconfig` or `.globalconfig`;
+  - a file changed outside every project in the target, or a source or project file outside the target that no project holds;
+  - the graph cannot be settled from the text: a reference, include or import through an MSBuild property other than the
+    file's or the project's own directory, a wildcard or missing reference, an imported or inherited file that adds project
+    references or lies outside the repository (a unit repository under a shell's `Directory.Build.props`), a project type
+    other than C#, F# or Visual Basic, or a project outside the repository or in a nested one;
+  - no affected project declares tests (in its file or a file it imports) while a `Directory.Build` or `Directory.Packages`
+    file names a test framework, so test projects cannot be told apart;
+  - an input git does not see: a git-ignored file a project imports or includes (a `local.props`), or an index entry marked
+    assume-unchanged or skip-worktree (a sparse checkout);
+  - there is no stop PASS of the target yet under this engine, these settings and the SDK the target resolves, nothing
+    changed since it, there is no
+    single solution, git fails, or the changes affect every project;
+  - `gate run --full`.
+- **The cache:** a PASS is remembered under the inputs hash as before. The choice is a function of what that hash covers
+  (HEAD, the uncommitted changes and new files, the settings) and of the recorded tree of the last PASS, which only a PASS
+  writes and which already passed; the step's version is part of the key, so a PASS chosen by other rules is not reused.
+
+The choice is made per unit in a workspace, inside the unit's solution, after the unit itself was chosen because it changed.
+A monorepo unit whose projects reference or include files in another unit is not chosen when only that other unit changes
+(the unit's state covers its own directory and the shared build inputs outside every unit); CI's `pr` run builds both.
 
 ### The format step judges the change, not the file
 
