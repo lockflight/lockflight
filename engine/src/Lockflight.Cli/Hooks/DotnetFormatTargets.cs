@@ -42,7 +42,7 @@ internal static class DotnetFormatTargets
         List<string> trees = includes.Count > 0 ? includes
             : positional.Count == 0 ? [ShellArguments.CurrentDirectory]
             : [.. positional.Select(DirectoryOfWorkspace)];
-        return new CommandWrites([], [], trees, null);
+        return new CommandWrites([], [], trees);
     }
 
     /// <summary>A project or solution file stands for its directory; a folder for itself.</summary>

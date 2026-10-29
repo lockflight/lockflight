@@ -186,7 +186,11 @@ profile is capped; `baseline tests` and the `pr` profile use the full `gates.tim
 
 ### Built-in protected paths
 
-These always apply; `protected:` can add paths but never remove these.
+These always apply; `protected:` can add paths but never remove these. The guard blocks the agent's edits to them and the
+common shell writes it parses (redirections, `tee`, `cp`/`mv`, `sed -i`, `rm`, `git checkout`/`restore`, `dotnet format`, the
+PowerShell equivalents); a script, an interpreter or another command whose writes it does not parse is allowed. That is a
+guardrail against accidents: the CI `policy.protected` step, with the base branch's policy, is where a change to these paths is
+judged. See [what the shell write detection sees](guardrails-and-boundaries.md#what-the-shell-write-detection-sees).
 
 | Path | Why |
 |---|---|

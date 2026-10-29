@@ -5,11 +5,16 @@ using Lockflight.Cli.Lifecycle.RedGreen;
 
 namespace Lockflight.Cli.Tests.Hooks;
 
-public sealed class HiddenTargetScenarioTests : IDisposable
+/// <summary>
+/// Targets the guard does not resolve (command output, unknown variables, pipelines, interpreters, file APIs) are not judged, so
+/// the command is allowed: the guard catches common accidental writes, and test-file hashes at green and review and the CI gates
+/// catch the rest. Targets it can resolve stay blocked.
+/// </summary>
+public sealed class OpaqueTargetScenarioTests : IDisposable
 {
-    private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-hidden-");
+    private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-opaque-");
 
-    public HiddenTargetScenarioTests()
+    public OpaqueTargetScenarioTests()
     {
         File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "secrets"));
@@ -32,20 +37,38 @@ public sealed class HiddenTargetScenarioTests : IDisposable
     [InlineData("echo x > \"$(pwd)/lockflight.yaml\"")]
     [InlineData("echo x > \"$(git rev-parse --show-toplevel)/secrets/key.txt\"")]
     [InlineData("find . -name '*.tmp' | xargs rm")]
-    [InlineData("echo x > \"$PWD/secrets/key.txt\"")]
     [InlineData("echo x > \"${HOME}/../../\"$X/secrets/key.txt")]
     [InlineData("echo x > \"$X/secrets/key.txt\"")]
     [InlineData("rm $DIR/lockflight.yaml")]
-    [InlineData("echo x > secrets/{a,b}")]
-    [InlineData("echo x > $'lockflight.yaml'")]
     [InlineData("busybox rm secrets/key.txt")]
     [InlineData("find . -name 'Directory.Build.props' -delete")]
     [InlineData("find . -name '*.props' -delete")]
     [InlineData("find . -name '*.txt' -delete")]
     [InlineData("find . -name '*.tmp' -exec rm {} +")]
-    public async Task ComputedAndExpandedBashTargetsAreBlocked(string command)
+    [InlineData("python3 -c \"open('secrets/key.txt', 'w').write('x')\"")]
+    [InlineData("bash -c \"bash -c 'rm secrets/key.txt'\"")]
+    [InlineData("cd secrets && rm key.txt")]
+    public async Task OpaqueBashTargetsAreAllowed(string command)
     {
-        (ExitCode exitCode, _, _) = await RunAsync("Bash", command);
+        (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
+
+        Assert.True(exitCode == ExitCode.Pass, $"'{command}' was blocked: {error}");
+    }
+
+    [Theory]
+    [InlineData("echo x > \"$PWD/secrets/key.txt\"")]
+    [InlineData("echo x > ~/secrets/key.txt")]
+    [InlineData("echo x > $'lockflight.yaml'")]
+    [InlineData("rm $(cat list) secrets/key.txt")]
+    [InlineData("rm secrets/*.txt")]
+    [InlineData("echo x > secrets/{a,b}")]
+    [InlineData("cp x src/*.props")]
+    [InlineData("bash -c 'rm secrets/key.txt'")]
+    public async Task ResolvedBashTargetsStayBlocked(string command)
+    {
+        Dictionary<string, string> environment = new() { [EnvironmentVariables.Home] = projectRoot.FullName };
+
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], Payload("Bash", command), projectRoot.FullName, environment);
 
         Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
     }
@@ -64,11 +87,11 @@ public sealed class HiddenTargetScenarioTests : IDisposable
     [InlineData("cmd /c del secrets\\key.txt")]
     [InlineData("cmd /c \"type nul > lockflight.yaml\"")]
     [InlineData("Start-Process rm -ArgumentList secrets/key.txt")]
-    public async Task ComputedPowerShellTargetsAreBlocked(string command)
+    public async Task OpaquePowerShellTargetsAreAllowed(string command)
     {
-        (ExitCode exitCode, _, _) = await RunAsync("PowerShell", command);
+        (ExitCode exitCode, _, string error) = await RunAsync("PowerShell", command);
 
-        Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
+        Assert.True(exitCode == ExitCode.Pass, $"'{command}' was blocked: {error}");
     }
 
     [Theory]
@@ -87,6 +110,8 @@ public sealed class HiddenTargetScenarioTests : IDisposable
     [InlineData("PowerShell", "Set-Content src\\v.txt (Get-Date)")]
     [InlineData("PowerShell", "Add-Content log.txt \"$(Get-Date)\"")]
     [InlineData("Bash", "find . -type f -name '*.tmp' -delete")]
+    [InlineData("Bash", "rm -f docs/x[z-a]*")]
+    [InlineData("Bash", "rm -f *.log")]
     [InlineData("Bash", "echo x > \"$PWD/notes.txt\"")]
     [InlineData("PowerShell", "Get-ChildItem | Select-Object Name")]
     [InlineData("PowerShell", "[IO.File]::ReadAllText('secrets/key.txt')")]
@@ -105,8 +130,10 @@ public sealed class HiddenTargetScenarioTests : IDisposable
     [InlineData("Bash", "rm -rf $HOME")]
     [InlineData("Bash", "cd src && rm -rf ../..")]
     [InlineData("Bash", "mv .. /tmp/elsewhere")]
-    [InlineData("Bash", "rsync -a --delete /tmp/empty/ ..")]
     [InlineData("PowerShell", "Remove-Item -Recurse ..")]
+    [InlineData("Bash", "rm -rf ../*")]
+    [InlineData("Bash", "cd src && rm -rf ../../*")]
+    [InlineData("Bash", "rm -rf ~/*")]
     public async Task ATreeThatContainsTheProjectIsBlocked(string toolName, string command)
     {
         Dictionary<string, string> environment = new() { [EnvironmentVariables.Home] = Path.GetDirectoryName(projectRoot.FullName)! };
@@ -125,15 +152,33 @@ public sealed class HiddenTargetScenarioTests : IDisposable
         Assert.True(exitCode == ExitCode.Pass, error);
     }
 
-    [Fact]
-    public async Task AnUnfollowableCdNamesTheSpecificRule()
+    [Theory]
+    [InlineData("rm test/Shop.Tests/ShippingTests.cs")]
+    [InlineData("rm test/Shop.Tests/*Tests.cs")]
+    [InlineData("sed -i 's/5m/6m/' test/Shop.Tests/*.cs")]
+    [InlineData("git checkout -- test")]
+    [InlineData("echo x > test/Shop.Tests/ShippingTests.cs")]
+    public async Task CommonWritesToALockedTestAreBlockedDuringRed(string command)
     {
-        (_, _, string protectedError) = await RunAsync("Bash", "cd $X && rm secrets/key.txt");
         OpenRedCycle();
-        (_, _, string lockedError) = await RunAsync("Bash", "cd $X && rm ShippingTests.cs");
 
-        Assert.Contains("'secrets/**'", protectedError, StringComparison.Ordinal);
-        Assert.Contains("red cycle 1", lockedError, StringComparison.Ordinal);
+        (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
+
+        Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
+        Assert.Contains("red cycle 1", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("python3 -c \"open('test/Shop.Tests/ShippingTests.cs', 'w')\"")]
+    [InlineData("cd test/Shop.Tests && rm ShippingTests.cs")]
+    [InlineData("ls test/Shop.Tests/*.cs | xargs rm")]
+    public async Task OpaqueWritesToALockedTestAreAllowed(string command)
+    {
+        OpenRedCycle();
+
+        (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
+
+        Assert.True(exitCode == ExitCode.Pass, $"'{command}' was blocked: {error}");
     }
 
     private void OpenRedCycle()

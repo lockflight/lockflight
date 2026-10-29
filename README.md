@@ -47,7 +47,7 @@ hold the keys to the two that need a person.
 
 | | Skills, agents and Spec Kit alone | With Lockflight |
 |---|---|---|
-| **Protected config** | "Please don't edit" in `CLAUDE.md` | The guard blocks the edit, shell writes included |
+| **Protected config** | "Please don't edit" in `CLAUDE.md` | The guard blocks the edit and common shell writes; CI checks the rest |
 | **"Tests pass"** | The agent's word | The Stop gate builds and tests before the turn can end |
 | **Test-first** | A habit, when remembered | Red/green evidence: new tests fail first, then pass |
 | **Spec to code** | A sequence the agent may skip | Hash-bound approvals and phase checks between steps |

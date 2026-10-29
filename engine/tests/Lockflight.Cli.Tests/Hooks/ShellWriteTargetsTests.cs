@@ -27,10 +27,7 @@ public sealed class ShellWriteTargetsTests
     [InlineData("git stash -- tests/A.cs", "tests/A.cs")]
     [InlineData("git stash push -m wip tests/A.cs", "tests/A.cs")]
     [InlineData("git -C tests checkout -- A.cs", "tests/A.cs")]
-    [InlineData("cd tests/Shop.Tests && echo x > T.cs", "tests/Shop.Tests/T.cs")]
-    [InlineData("cd tests && cd Shop.Tests && sed -i 's/a/b/' T.cs", "tests/Shop.Tests/T.cs")]
-    [InlineData("(cd tests && rm T.cs)", "tests/T.cs")]
-    [InlineData("cd /repo/tests; echo x > T.cs", "/repo/tests/T.cs")]
+    [InlineData("(cd tests && rm T.cs)", "T.cs")]
     public void VisibleWritesAreFound(string command, string expectedTarget) =>
         Assert.Contains(expectedTarget, ShellWriteTargets.Find(command, ShellDialect.Posix).Files);
 
@@ -40,7 +37,6 @@ public sealed class ShellWriteTargetsTests
     [InlineData("dotnet format tests/Shop.Tests/Shop.Tests.csproj", "tests/Shop.Tests")]
     [InlineData("dotnet format Shop.sln --severity warn", ".")]
     [InlineData("dotnet format --include tests/A.cs src/B.cs", "tests/A.cs")]
-    [InlineData("cd tests && dotnet format", "tests")]
     [InlineData("git restore .", ".")]
     [InlineData("git checkout -- tests", "tests")]
     [InlineData("git stash", ".")]
@@ -65,23 +61,10 @@ public sealed class ShellWriteTargetsTests
     }
 
     [Theory]
-    [InlineData("cd tests && echo x > T.cs", "T.cs", "tests/T.cs")]
-    [InlineData("(cd /tmp); rm secrets/k", "secrets/k", "secrets/k")]
-    [InlineData("cd $(pwd) && rm secrets/k", "secrets/k", "secrets/k")]
-    [InlineData("cd /tmp | true; rm secrets/k", "secrets/k", "secrets/k")]
-    public void APathAfterACdIsAlwaysCheckedAsWrittenToo(string command, string asWritten, string underTheCd)
-    {
-        IReadOnlyList<string> files = ShellWriteTargets.Find(command, ShellDialect.Posix).Files;
-
-        Assert.Contains(asWritten, files);
-        Assert.Contains(underTheCd, files);
-    }
-
-    [Theory]
     [InlineData("Set-Content -Path global.json -Value x", "global.json")]
     [InlineData("Remove-Item .lockflight\\lockdown", ".lockflight\\lockdown")]
     [InlineData("'x' | Out-File -FilePath C:\\repo\\secrets\\k.txt", "C:\\repo\\secrets\\k.txt")]
-    [InlineData("Set-Location tests; Set-Content -Path T.cs -Value x", "tests\\T.cs")]
+    [InlineData("Set-Content -Path tests\\T.cs -Value x", "tests\\T.cs")]
     public void PowerShellWritesKeepBackslashPaths(string command, string expectedTarget) =>
         Assert.Contains(expectedTarget, ShellWriteTargets.Find(command, ShellDialect.PowerShell).Files);
 
