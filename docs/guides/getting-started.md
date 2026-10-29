@@ -130,6 +130,28 @@ or add `~/.lockflight/bin` to `PATH` yourself.
   install is the one released with the engine on nuget.org. Changes merged to `main` reach you with the next release; to try
   them earlier, [install from source](#install-from-source).
 
+- **Without the .NET SDK:** [`scripts/install.sh`](../../scripts/install.sh) (macOS and glibc Linux) and
+  [`scripts/install.ps1`](../../scripts/install.ps1) (Windows, x64) install the engine from nuget.org with no `dotnet`,
+  for a release that publishes its executable hashes (`engine-hashes.json` in the pointer package):
+
+  ```sh
+  sh scripts/install.sh --version <version>          # into ~/.lockflight/tools/<version>; prints the path last
+  ```
+
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File scripts\install.ps1 -Version <version>
+  ```
+
+  The script downloads the platform's package, extracts the executable and compares its SHA-256 with the hash the release
+  published, before anything runs it; a mismatch deletes the file and fails. It needs `curl`, one of `unzip`, `bsdtar`,
+  `python3` or `perl`, and `sha256sum` or `shasum` (`install.ps1` needs nothing beyond Windows PowerShell 5.1). Alpine (musl)
+  is refused: the engine is built for glibc. `LOCKFLIGHT_NUGET_FEED` names another feed (a flat-container base or a v3
+  `index.json`, `https://` only), with `LOCKFLIGHT_NUGET_USER` and `LOCKFLIGHT_NUGET_TOKEN` for basic auth (passed to `curl`
+  on its standard input, never on its command line); `--via-dotnet [--nuget-config <file>]` fetches through
+  `dotnet tool install` for feeds that need a NuGet credential provider, with the same hash check;
+  `LOCKFLIGHT_RELEASE_FALLBACK=1` downloads the executable from the GitHub Release instead of the feed. What the check proves:
+  the executable is the one the hashes name (integrity), not who built it; the release's build provenance attestation covers
+  that (`gh attestation verify`).
 - **Why `--tool-path` and not `dotnet tool install --local` in the project:** the engine package is built for each platform,
   and only the .NET 10 SDK can install such a package. In a repository whose `global.json` pins an older SDK, a local tool
   install or `dotnet tool restore` fails. Installed into `~/.lockflight/bin` from your home directory, the engine is a native
