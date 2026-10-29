@@ -16,6 +16,8 @@ public sealed class TestInventoryTests
 
         Assert.Equal(["Shop.Tests:Shop.Tests.ProbeTests.Stub", "Shop.Tests:Shop.Tests.ProbeTests+Nested.Inner"], tests.Select(test => test.Key));
         Assert.Equal(["FR-003"], tests[0].Requirements);
+        Assert.Equal([KeyValuePair.Create("Requirement", "FR-003")], tests[0].Traits);
+        Assert.Empty(tests[1].Traits);
         Assert.Equal("later", tests[1].SkipReason);
         Assert.Equal("Shop.Tests.ProbeTests+Nested.Inner", tests[1].MethodFilter);
     }
@@ -51,6 +53,9 @@ public sealed class TestInventoryTests
 
         Assert.Equal(4, tests.Count);
         Assert.Equal(["FR-001", "FR-002"], tests[0].Requirements);
+        Assert.Equal(
+            [KeyValuePair.Create("Category", "Fast"), KeyValuePair.Create("Requirement", "FR-001"), KeyValuePair.Create("Requirement", "FR-002")],
+            tests[0].Traits);
         Assert.Equal("later", tests[1].SkipReason);
         Assert.Equal("Parlot.Tests:Parlot.Tests.NumberTests.Rows", tests[2].Key);
         Assert.Equal("Parlot.Tests.LockflightProbeTests+Nested", tests[3].Class);

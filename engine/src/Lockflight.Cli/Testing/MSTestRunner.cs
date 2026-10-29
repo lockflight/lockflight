@@ -15,7 +15,7 @@ internal sealed class MSTestRunner(TimeProvider time, TestRunnerKind platform) :
         Task.FromResult(TrxTestListing.List(app, platform, TestFrameworkKind.MSTest, Mode));
 
     public async Task<TestRunOutcome> RunAsync(
-        TestApp app, IReadOnlyList<string>? methodFilters, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
+        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
         TestRunOutcome.Of(await TrxTestRun.RunAsync(
-            app, platform, VSTestRunner.FilterBatches(methodFilters), TrxFailureMessages.MSTest, workingDirectory, timeLimit, time, cancellationToken));
+            app, platform, VSTestRunner.FilterBatches(methodFilters, suiteFilter), TrxFailureMessages.MSTest, workingDirectory, timeLimit, time, cancellationToken));
 }

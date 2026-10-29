@@ -24,7 +24,7 @@ internal sealed record GateRunContext(
     /// <summary>The project file argument for <c>dotnet build</c> and <c>dotnet test</c>: the build file, if any.</summary>
     public IReadOnlyList<string> BuildFileArguments => BuildFile is null ? [] : [BuildFile];
 
-    /// <summary>The unit's <c>test.stopFilter</c>: tests the stop profile leaves to the pr profile; null for none.</summary>
+    /// <summary>The unit's <c>test.stopFilter</c>, else the root's <c>gates.test.stopFilter</c>: tests the stop profile leaves to the pr profile; null for none.</summary>
     public string? StopFilter { get; init; }
 
     /// <summary>Runs the tools the steps judge (the .NET SDK, gitleaks); real processes unless a test supplies its own.</summary>
@@ -41,19 +41,19 @@ internal sealed record GateRunContext(
         GateRunContext run = new(target, manifest.Root, profile, manifest.Gates, baseRef, time, underStopHook);
         return UnitResolver.Owning(manifest, target) is Unit unit
             ? run.ForUnit(unit, Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar)))
-            : run with { BuildFile = manifest.Gates.BuildFile };
+            : run with { BuildFile = manifest.Gates.BuildFile, StopFilter = manifest.Gates.StopFilter };
     }
 
     /// <summary>
     /// This run with a unit's settings: its <c>build:</c> file (relative to the unit's directory, passed relative to the target),
-    /// its test framework (else the root's) and its stop filter. The root's <c>gates.build</c> never applies to a unit.
+    /// its test framework and stop filter (else the root's). The root's <c>gates.build</c> never applies to a unit.
     /// </summary>
     public GateRunContext ForUnit(Unit unit, string unitDirectory) => this with
     {
         Settings = Settings with { TestFramework = unit.TestFramework ?? Settings.TestFramework },
         UnitPath = unit.Path,
         BuildFile = unit.Build is null ? null : Path.GetRelativePath(Target, Path.Combine(unitDirectory, unit.Build.Replace('/', Path.DirectorySeparatorChar))),
-        StopFilter = unit.StopFilter,
+        StopFilter = unit.StopFilter ?? Settings.StopFilter,
     };
 
     /// <summary>The plugin's Stop hook timeout (<c>plugins/lockflight/hooks/hooks.json</c>), in seconds.</summary>

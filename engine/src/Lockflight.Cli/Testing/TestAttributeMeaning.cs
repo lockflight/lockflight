@@ -16,5 +16,8 @@ internal enum TestAttributeMeaning
     Explicit = 3,
 
     /// <summary>A name/value trait or property, a requirement when its name is <c>Requirement</c>.</summary>
-    Requirement = 4,
+    NamedTrait = 4,
+
+    /// <summary>A category (NUnit's <c>[Category]</c>, MSTest's <c>[TestCategory]</c>): a trait without a name of its own.</summary>
+    Category = 5,
 }

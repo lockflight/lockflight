@@ -135,6 +135,19 @@ public sealed class SuiteChecksTests
         Assert.Equal("new skipped tests: T:A.Old", Assert.Single(problems));
     }
 
+    [Fact]
+    public void AKnownTestLeftOutByTheStopFilterSinceTheBaselineIsRefusedButOneLeftOutThenIsNot()
+    {
+        RedGreenRecord record = Record(explicitAtBaseline: []) with { BaselineRegressionFilter = new(["Category!=Slow"], 0) { ExcludedTests = [] } };
+        OpenCycle(record);
+        HashSet<string> excluded = new(StringComparer.Ordinal) { "T:A.Old", "T:A.New" };
+
+        Assert.Equal(["T:A.Old"], SuiteChecks.NewlyLeftOut(record, excluded));
+
+        RedGreenRecord leftOutThen = record with { BaselineRegressionFilter = new(["Category!=Slow"], 1) { ExcludedTests = ["T:A.Old"] } };
+        Assert.Empty(SuiteChecks.NewlyLeftOut(leftOutThen, excluded));
+    }
+
     private static RedGreenRecord Record(string[] explicitAtBaseline)
     {
         RedGreenRecord record = new()

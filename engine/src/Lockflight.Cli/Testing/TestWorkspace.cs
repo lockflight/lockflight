@@ -53,7 +53,7 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
             }
 
             TestAppDiscovery discovery = await TestApps.FindAsync(target.Directory, target.PreferredFramework, timeLimit, time, cancellationToken);
-            apps.AddRange(discovery.Apps);
+            apps.AddRange(discovery.Apps.Select(app => app with { StopFilter = target.StopFilter }));
             unevaluated.AddRange(discovery.Unevaluated);
         }
 
@@ -91,7 +91,49 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
     /// Runs the given tests within <paramref name="budget"/> for all apps together, on top of the per-process time limit
     /// (<see cref="Timeout.InfiniteTimeSpan"/>: the per-process limit only); null when the budget runs out.
     /// </summary>
-    public async Task<IReadOnlyList<ExecutedTest>?> RunAsync(IReadOnlyList<TestCase>? tests, TimeSpan budget, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<ExecutedTest>?> RunAsync(IReadOnlyList<TestCase>? tests, TimeSpan budget, CancellationToken cancellationToken) =>
+        RunAsync(tests, budget, suiteFilters: null, cancellationToken);
+
+    /// <summary>
+    /// Red/green's whole-suite regression pass: every app's tests but those its <c>test.stopFilter</c> leaves out, which
+    /// <paramref name="inventory"/> (the listing) names, so they are known as left out rather than missing. A filter that is not one
+    /// trait condition is not applied: the app runs every test, and the run says so. Null when a runner could not run.
+    /// </summary>
+    public async Task<RegressionRun?> RunRegressionAsync(IReadOnlyList<TestCase> inventory, CancellationToken cancellationToken)
+    {
+        Dictionary<TestApp, TraitCondition> conditions = [];
+        List<string> unsupported = [];
+        foreach (TestApp app in Apps.Where(app => app.StopFilter is not null))
+        {
+            if (TraitCondition.Parse(app.StopFilter!) is TraitCondition condition)
+            {
+                conditions[app] = condition;
+            }
+            else
+            {
+                unsupported.Add(app.StopFilter!);
+            }
+        }
+
+        if (await RunAsync(null, Timeout.InfiniteTimeSpan, conditions, cancellationToken) is not IReadOnlyList<ExecutedTest> results)
+        {
+            return null;
+        }
+
+        string[] excluded = [.. Apps.Where(conditions.ContainsKey)
+            .SelectMany(app => inventory.Where(test => test.Assembly == app.AssemblyName && conditions[app].Excludes(test)))
+            .Select(test => test.Key)
+            .Distinct(StringComparer.Ordinal)];
+        string[] applied = [.. Apps.Where(conditions.ContainsKey).Select(app => app.StopFilter!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+        return new RegressionRun(
+            results,
+            excluded.ToHashSet(StringComparer.Ordinal),
+            applied.Length == 0 ? null : new RegressionFilter(applied, excluded.Length) { ExcludedTests = [.. excluded.Order(StringComparer.Ordinal)] },
+            [.. unsupported.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)]);
+    }
+
+    private async Task<IReadOnlyList<ExecutedTest>?> RunAsync(
+        IReadOnlyList<TestCase>? tests, TimeSpan budget, IReadOnlyDictionary<TestApp, TraitCondition>? suiteFilters, CancellationToken cancellationToken)
     {
         List<ExecutedTest> results = [];
         AbnormalExit = null;
@@ -111,7 +153,8 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
                 return null;
             }
 
-            TestRunOutcome run = await TestRunners.For(app.Mode, time).RunAsync(app, filters, root, left < timeLimit ? left : timeLimit, cancellationToken);
+            TraitCondition? suiteFilter = suiteFilters?.GetValueOrDefault(app);
+            TestRunOutcome run = await TestRunners.For(app.Mode, time).RunAsync(app, filters, suiteFilter, root, left < timeLimit ? left : timeLimit, cancellationToken);
             if (!run.Reported)
             {
                 FailedApp = Path.GetRelativePath(root, app.AssemblyPath);

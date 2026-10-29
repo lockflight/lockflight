@@ -31,7 +31,10 @@
         "test": {
           "type": "object",
           "additionalProperties": false,
-          "properties": { "framework": { "type": "string", "pattern": "^net" } }
+          "properties": {
+            "framework": { "type": "string", "pattern": "^net" },
+            "stopFilter": { "$ref": "#/$defs/nonEmpty" }
+          }
         },
         "coverage": {
           "type": "object",

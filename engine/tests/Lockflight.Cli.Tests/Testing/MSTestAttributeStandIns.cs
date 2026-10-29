@@ -37,3 +37,9 @@ internal sealed class TestPropertyAttribute(string name, string value) : Attribu
 
     public string Value { get; } = value;
 }
+
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true)]
+internal sealed class TestCategoryAttribute(string testCategory) : Attribute
+{
+    public string TestCategory { get; } = testCategory;
+}
