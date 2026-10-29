@@ -43,7 +43,16 @@ internal static class JudgeExecutor
             IReadOnlyList<SinceRedTest>? sinceRed = cycles is not null && plan.Levels[CheckId.TestsSinceRed] != CheckLevel.Off
                 ? await new SinceRedJudge(trees, time).JudgeAsync(plan, head.Listing, cycles, cancellationToken)
                 : null;
-            return new JudgeFindings(greenAtHead, cycles, trees.Builds) { HeadFingerprints = head.Listing.Fingerprints, SinceRed = sinceRed, HeadCommit = plan.Inputs.Head };
+            IReadOnlyList<ExistingChangedTest>? existingChanged = baseListing is not null && plan.Levels[CheckId.TestsExistingChanged] != CheckLevel.Off
+                ? await new ExistingChangedJudge(trees, time).JudgeAsync(plan, head.Listing, baseListing, cancellationToken)
+                : null;
+            return new JudgeFindings(greenAtHead, cycles, trees.Builds)
+            {
+                HeadFingerprints = head.Listing.Fingerprints,
+                SinceRed = sinceRed,
+                ExistingChanged = existingChanged,
+                HeadCommit = plan.Inputs.Head,
+            };
         }
         finally
         {
