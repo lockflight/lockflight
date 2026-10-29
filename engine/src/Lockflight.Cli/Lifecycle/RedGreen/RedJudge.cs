@@ -56,7 +56,7 @@ internal sealed class RedJudge(RedGreenSession session, bool verbose)
 
     /// <summary>
     /// Classifies each new test by how it failed, with why; tests that passed every time they ran are re-run together to tell flaky
-    /// from green.
+    /// from green (<see cref="RedEvaluation"/>).
     /// </summary>
     public async Task<(List<RedGreenTest> Classified, FlakyCheckResult FlakyCheck, IReadOnlyDictionary<string, RedVerdict> Verdicts)> ClassifyAsync(
         TestWorkspace workspace,
@@ -67,60 +67,7 @@ internal sealed class RedJudge(RedGreenSession session, bool verbose)
         DateTimeOffset deadline,
         CancellationToken cancellationToken)
     {
-        IReadOnlySet<string> testClasses = inventory.Select(test => test.Class).ToHashSet(StringComparer.Ordinal);
-        string[] testDirectories = [.. workspace.Apps.Select(app => app.ProjectDirectory)];
-        ProductionCode production = ProductionProjects.Find(root, workspace.Apps);
-        NewTestScan scan = Scan(workspace, fresh, production);
-        List<(TestCase Test, RedVerdict Verdict)> first = [.. fresh.Select(test => (test, RedClassifier.Judge(
-            [.. results.Where(result => result.Key == test.Key)], testClasses, testDirectories, production, scan.ProductionCalls.GetValueOrDefault(test.Key))))];
-
-        // Only a test whose rows all passed is re-run: a theory with mixed rows is GREEN_BEFORE, not flaky.
-        TestCase[] candidates = [.. first.Where(entry => entry.Verdict.Class == RedClass.GreenBefore && SuiteChecks.PassedEveryRow(results, entry.Test.Key)).Select(entry => entry.Test)];
-        FlakyCheckResult flakyCheck = candidates.Length == 0
-            ? new FlakyCheckResult(new HashSet<string>(StringComparer.Ordinal), 0, BudgetExhausted: false)
-            : await new FlakyCheck(workspace.RunAsync, session.Context.Time).RunAsync(candidates, deadline, cancellationToken);
-
-        List<RedGreenTest> classified = [.. first.Select(entry => new RedGreenTest(
-            entry.Test.Key,
-            entry.Test.MethodFilter,
-            flakyCheck.Flaky.Contains(entry.Test.Key) ? RedClass.Flaky : entry.Verdict.Class,
-            entry.Test.Requirements)
-        {
-            AssertionFree = scan.AssertionFree.Contains(entry.Test.Key),
-            Rows = results.Count(result => result.Key == entry.Test.Key),
-        })];
-        Dictionary<string, RedVerdict> verdicts = first.ToDictionary(
-            entry => entry.Test.Key,
-            entry => flakyCheck.Flaky.Contains(entry.Test.Key) ? entry.Verdict with { Class = RedClass.Flaky, Why = "passed, then failed when run again" } : entry.Verdict,
-            StringComparer.Ordinal);
-        return (classified, flakyCheck, verdicts);
-    }
-
-    /// <summary>Which production member each new test reaches first, and which assert nothing, read from the built test assemblies.</summary>
-    private static NewTestScan Scan(TestWorkspace workspace, TestCase[] fresh, ProductionCode production)
-    {
-        Dictionary<string, string> calls = new(StringComparer.Ordinal);
-        HashSet<string> assertionFree = new(StringComparer.Ordinal);
-        foreach (TestApp app in workspace.Apps)
-        {
-            TestCase[] tests = [.. fresh.Where(test => test.Assembly == app.AssemblyName)];
-            if (tests.Length == 0)
-            {
-                continue;
-            }
-
-            using TestCodeScanner scanner = new(app.AssemblyPath, production.AssemblyNames);
-            foreach (TestCase test in tests)
-            {
-                if (scanner.ProductionCall(test.Class, test.Method) is string call)
-                {
-                    calls[test.Key] = call;
-                }
-            }
-
-            assertionFree.UnionWith(tests.Where(test => scanner.AssertsNothing(test.Class, test.Method)).Select(test => test.Key));
-        }
-
-        return new NewTestScan(calls, assertionFree);
+        RedEvaluationResult evaluation = await RedEvaluation.ClassifyAsync(workspace, root, inventory, fresh, results, deadline, session.Context.Time, cancellationToken);
+        return (evaluation.Classified, evaluation.FlakyCheck, evaluation.Verdicts);
     }
 }
