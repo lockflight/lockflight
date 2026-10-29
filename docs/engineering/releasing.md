@@ -22,14 +22,15 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
    the pointer's copy must be byte-identical, and so must the bare executables. The file that ships describes the packages
    that ship.
 5. **Publishes, after approval.** The `publish` job runs in the `nuget` environment, so it waits for a required reviewer. It
-   writes `SHA256SUMS` of the packages, the bare executables and `engine-hashes.json`, records a build provenance attestation
+   writes `SHA256SUMS` of the packages, the bare executables, `engine-hashes.json` and the install scripts
+   (`scripts/install.sh`, `scripts/install.ps1`), records a build provenance attestation
    for all of them, signs in to nuget.org with Trusted Publishing (a short-lived key from GitHub's OIDC token, no stored API
    key) and pushes the RID packages first and the pointer last. A RID package that already exists on nuget.org fails the
    push: Native AOT builds are not guaranteed reproducible, so a re-run must not leave older packages beside hashes of new
    bytes (a partial push needs a new version). It then downloads every package back from nuget.org (polling for up to 30
    minutes while nuget.org validates them) and verifies them against `engine-hashes.json` again.
 6. **Publishes the GitHub Release** for the tag, with notes from git-cliff (the commits since the previous tag) and the
-   packages, the bare executables, `engine-hashes.json`, `SHA256SUMS` and the SBOM attached. It is published at once, not
+   packages, the bare executables, `engine-hashes.json`, `install.sh`, `install.ps1`, `SHA256SUMS` and the SBOM attached. It is published at once, not
    drafted, so the hashes are downloadable as soon as the packages are on nuget.org; edit the notes afterwards.
 
 A manual dispatch from the tag (Actions → release-packages → Run workflow → "Use workflow from": the tag) with `publish` off
