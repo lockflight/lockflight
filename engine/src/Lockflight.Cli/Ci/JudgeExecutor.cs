@@ -25,6 +25,7 @@ internal static class JudgeExecutor
         }
 
         string root = plan.Inputs.Root;
+        JudgeBudget budget = new(TimeSpan.FromMinutes(plan.Policy.Ci.TimeoutMinutes), time);
         TimeSpan gitLimit = TimeSpan.FromMinutes(5);
         string parent = await ParentAsync(plan.Inputs, environment, cancellationToken);
         if (await JudgeWorktree.OpenAsync(root, parent, plan.Inputs.Head, gitLimit, cancellationToken) is not JudgeWorktree worktree)
@@ -36,7 +37,7 @@ internal static class JudgeExecutor
 
         try
         {
-            TreeBuilder trees = new(worktree, plan.Policy, root, time);
+            TreeBuilder trees = new(worktree, plan.Policy, root, budget, time);
             HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);
             TreeListing? baseListing = plan.MergeBase is string mergeBase ? await trees.ListAsync(mergeBase, "base", fresh: false, cancellationToken) : null;
             IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, cancellationToken) : null;
@@ -55,7 +56,9 @@ internal static class JudgeExecutor
             TraceJudgement? trace = plan.Levels[CheckId.Trace] != CheckLevel.Off
                 ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, cycles ?? [], sinceRed, greenAtHead, cancellationToken)
                 : null;
-            (CheckVerdict Verdict, string Why, JsonNode? Result, string? TestStep) gates = await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: false, cancellationToken) is string notMoved
+            (CheckVerdict Verdict, string Why, JsonNode? Result, string? TestStep) gates = !budget.TryStart("gates")
+                ? (CheckVerdict.NotEarned, budget.Why(trees.Builds.Count), null, null)
+                : await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: false, cancellationToken) is string notMoved
                 ? (CheckVerdict.Error, notMoved, null, null)
                 : await GatesJudge.RunAsync(worktree, plan, context, plan.Inputs.EvidenceDirectory, cancellationToken);
             if (head.Listing.Outcome == TreeOutcome.NoTestApps && gates.TestStep is string testStep)
@@ -77,6 +80,7 @@ internal static class JudgeExecutor
                 SinceRed = sinceRed,
                 ExistingChanged = existingChanged,
                 HeadCommit = plan.Inputs.Head,
+                Budget = budget,
             };
         }
         finally

@@ -104,8 +104,8 @@ internal static class CiEvidence
             {
                 ["limitSeconds"] = plan.Policy.Ci.TimeoutMinutes * 60,
                 ["usedSeconds"] = (int)(run.FinishedAt - run.StartedAt).TotalSeconds,
-                ["exhausted"] = false,
-                ["notRun"] = new JsonArray(),
+                ["exhausted"] = run.Findings.Budget?.Exhausted ?? false,
+                ["notRun"] = Strings(run.Findings.Budget?.NotRun ?? []),
             },
             ["builds"] = new JsonArray([.. run.Findings.Builds.Select(build => new JsonObject
             {
