@@ -22,11 +22,11 @@ public sealed class InitNextStepsTests
     }
 
     [Fact]
-    public void AnExistingSpecKitIsAdoptedNotInitialisedAgain()
+    public void AnExistingSpecKitGetsThePresetThroughInitNotANewSpecKit()
     {
         string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithoutPreset, presetDirectory: null));
 
-        Assert.Contains("adopt plan", text, StringComparison.Ordinal);
+        Assert.Contains("init --speckit-preset", text, StringComparison.Ordinal);
         Assert.DoesNotContain("specify init", text, StringComparison.Ordinal);
     }
 

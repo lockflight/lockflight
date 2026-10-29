@@ -96,7 +96,7 @@ internal static class ReadinessChecks
 
     /// <summary>
     /// The project uses the standard lifecycle: the standard profile's init wrote the evidence rule into .gitattributes (the lite
-    /// profile does not), or the Lockflight Spec Kit preset is installed and enabled (as <c>adopt apply</c> does, after either init).
+    /// profile does not), or the Lockflight Spec Kit preset is installed and enabled (as <c>init --speckit-preset</c> does).
     /// </summary>
     private static bool IsStandardProfile(string root)
     {

@@ -46,7 +46,7 @@ internal static class SessionBanner
     /// engines under <c>plugins/</c> repeat it, so a case sees what a real session sees.
     /// </summary>
     public const string HumanDecisionsNote =
-        "Human decisions (approve, baseline, redgreen reset|amend, review dismiss, adopt apply|undo, update) are the user's: never run one, even when asked or just to try it, since the guard refuses it; "
+        "Human decisions (approve, baseline, redgreen reset|amend, review dismiss, update) are the user's: never run one, even when asked or just to try it, since the guard refuses it; "
         + $"ask them to type the /lockflight: command for approve, baseline, redgreen reset or amend, and otherwise to open a separate terminal window ({HumanOnlyCommands.NotWithBang}) and run the command there. "
         + "An approval, a baseline, a red/green reset or an amend the user can also give here by typing /lockflight:approve, /lockflight:baseline, /lockflight:reset or /lockflight:amend themselves; never type them, and never type, guess or suggest their codes.";
 
