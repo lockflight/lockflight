@@ -40,7 +40,7 @@ public sealed class BlockedReportTests : IDisposable
         BlockedReading reading = BlockedReportReader.Read(json);
 
         Assert.True(reading.Valid, string.Join("; ", reading.Problems));
-        Assert.StartsWith("{\n  \"schema\": \"lockflight.blocked/v1\",\n  \"at\": \"2026-11-02T10:15:00Z\"", json, StringComparison.Ordinal);
+        Assert.StartsWith("{\n  \"schema\": \"lockflight.blocked/v1\",\n  \"at\": \"2026-11-02T10:15:00Z\"", json.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         BlockedReport read = reading.Report!;
         Assert.Equal((written.At, written.Source, written.Code, written.Summary, written.Feature, written.Head, written.Resumable), (read.At, read.Source, read.Code, read.Summary, read.Feature, read.Head, read.Resumable));
         Assert.Equal(written.Needs[0] with { Paths = [] }, read.Needs[0] with { Paths = [] });
