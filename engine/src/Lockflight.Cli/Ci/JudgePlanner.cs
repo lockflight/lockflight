@@ -111,8 +111,8 @@ internal static class JudgePlanner
             new("P0", null, "inputs", "resolve the merge base, the base policy, the red commits and the change class (git only)", 0),
             new("P1", inputs.Head, "head", "build, list and run the whole suite with the base policy laid over", 1),
         ];
-        bool needsBase = inputs.Event == JudgeEvent.PullRequest && mergeBase is not null
-            && (levels[CheckId.Red] != CheckLevel.Off || levels[CheckId.TestsExistingChanged] != CheckLevel.Off || levels[CheckId.TestsHostTampering] != CheckLevel.Off);
+        // Green compares the head with the base's inventory: nothing deleted, skipped or made explicit since.
+        bool needsBase = mergeBase is not null && levels[CheckId.Green] != CheckLevel.Off;
         if (needsBase)
         {
             steps.Add(new("P2", mergeBase, "base", "build and list the tests (no tests run): the baseline inventory", 1));

@@ -24,6 +24,7 @@ internal static class JudgeChecks
                 $"{plan.Reds.Cycles.Count} red commits, more than ci.maxRedCommits ({plan.Policy.Ci.MaxRedCommits}); split the pull request"),
             CheckId.Red when plan.Reds.Cycles.Count == 0 => new CheckResult(check, level, CheckVerdict.NotEarned, NoRedWhy(plan)),
             CheckId.Red when findings.Cycles is IReadOnlyList<CycleJudgement> cycles => Red(level, cycles),
+            CheckId.Green when findings.Green is GreenJudgement green => new CheckResult(check, level, green.Verdict, green.Why),
             CheckId.Review => new CheckResult(check, level, CheckVerdict.Skipped, plan.Inputs.ReviewExpected ? "the report joins the review job's result" : "no review job runs for this pull request"),
             _ => new CheckResult(check, level, CheckVerdict.NotEarned, NotJudgedYet),
         };
