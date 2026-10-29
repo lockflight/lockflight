@@ -1,12 +1,8 @@
-using System.Text;
-using System.Text.Json;
 using Lockflight.Cli.Config;
-using Lockflight.Cli.Hooks.Guard;
+using Lockflight.Cli.Hooks.Events;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Lifecycle.Approvals;
-using Lockflight.Cli.Paths;
-using Lockflight.Cli.Updating;
 
 namespace Lockflight.Cli.Hooks;
 
@@ -34,15 +30,12 @@ internal sealed class HookCommand(CliContext context) : ICommand
         }
         catch (Exception exception)
         {
-            if (expanding is SessionCommandSpec spec)
-            {
-                await context.Error.WriteLineAsync(SessionCommands.InternalError(spec, exception.Message));
-                return ExitCode.HookBlock;
-            }
-
-            await context.Error.WriteLineAsync($"lockflight: internal error: {exception.Message}");
-            bool guardsAToolCall = hookEvent is HookEvent.PreToolUse or HookEvent.Unknown;
-            return guardsAToolCall ? ExitCode.HookBlock : ExitCode.Pass;
+            // An event this engine does not know may guard a tool call: it fails closed.
+            HookFailurePolicy policy = HookHandlers.For(hookEvent)?.OnEngineError(new HookFailureState(expanding is not null)) ?? HookFailurePolicy.Block;
+            await context.Error.WriteLineAsync(expanding is SessionCommandSpec spec
+                ? SessionCommands.InternalError(spec, exception.Message)
+                : $"lockflight: internal error: {exception.Message}");
+            return policy == HookFailurePolicy.Block ? ExitCode.HookBlock : ExitCode.Pass;
         }
     }
 
@@ -64,8 +57,9 @@ internal sealed class HookCommand(CliContext context) : ICommand
             return await ReportAsync(HookDecision.Block("invalid-hook-input", "lockflight: hook input is not valid JSON"), hookEvent, projectRoot: null, input: null, cancellationToken);
         }
 
-        // Every typed slash command expands through this hook; only the in-session human commands are the engine's business.
-        if (hookEvent == HookEvent.UserPromptExpansion && SessionCommands.Of(input) is null)
+        // Every typed slash command expands through UserPromptExpansion; only the in-session human commands are the engine's business.
+        IHookHandler? handler = HookHandlers.For(hookEvent);
+        if (handler is not null && !handler.Claims(input))
         {
             return ExitCode.Pass;
         }
@@ -87,85 +81,25 @@ internal sealed class HookCommand(CliContext context) : ICommand
             return await ReportAsync(precondition, hookEvent, manifest.Root, input, cancellationToken);
         }
 
-        if (hookEvent == HookEvent.UserPromptExpansion && SessionCommands.Of(input) is SessionCommandSpec typed)
+        // The preconditions block every event this engine does not know, so a handler exists from here on.
+        HookInvocation invocation = new(input, manifest, ProjectDirectory(input), context);
+        HookReply reply = await (handler ?? throw new InvalidOperationException($"no handler for {hookEvent}")).DecideAsync(invocation, cancellationToken);
+        if (reply.WrittenExitCode is ExitCode written)
         {
-            return await DecideInSessionAsync(typed, input, manifest, cancellationToken);
+            return written;
         }
 
-        HookDecision decision = hookEvent switch
+        if (reply.Output is string output)
         {
-            HookEvent.PreToolUse => await GuardRules.DecideAsync(input, manifest, context, new DirectoryReads(), cancellationToken),
-            HookEvent.Stop => await StopGate.DecideAsync(manifest, input.SessionId, context.Time, cancellationToken),
-            HookEvent.TaskCompleted => await TaskCompletedGate.DecideAsync(manifest, input, cancellationToken),
-            _ => HookDecision.Allow,
-        };
-
-        if (hookEvent == HookEvent.SessionStart)
-        {
-            await context.Output.WriteLineAsync(SessionBanner.ToHookOutput(manifest, ProjectDirectory(input), SessionNotice()));
+            await context.Output.WriteLineAsync(output);
         }
 
-        return await ReportAsync(decision, hookEvent, manifest.Root, input, cancellationToken);
-    }
-
-    /// <summary>
-    /// An in-session human command: a refusal or the digest goes to stderr with exit 2, which Claude Code shows the person and keeps
-    /// from the agent; a recorded decision lets the command run, with a confirmation for the person and a note for the agent.
-    /// </summary>
-    private async Task<ExitCode> DecideInSessionAsync(SessionCommandSpec spec, HookInput input, Manifest manifest, CancellationToken cancellationToken)
-    {
-        SessionCommandResult result;
-        try
-        {
-            result = await SessionCommands.DecideAsync(spec, input, context, manifest, cancellationToken);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // Failing open here would hand the command to the agent; nothing is recorded either way, so the person sees why.
-            result = SessionCommandResult.Refused($"{spec.RefusalPrefix}:internal-error", SessionCommands.InternalError(spec, exception.Message));
-        }
-
-        switch (result.Outcome)
-        {
-            case SessionCommandOutcome.Refused:
-                return await ReportAsync(HookDecision.Block(result.Code!, result.Message!), HookEvent.UserPromptExpansion, manifest.Root, input, cancellationToken);
-            case SessionCommandOutcome.Answered:
-                await context.Error.WriteLineAsync(result.Message);
-                await new LedgerWriter(manifest.Root, context.Time).AppendAsync(
-                    new LedgerEvent(LedgerEventType.SessionCommandAnswered, $"{HookEventNames.ToName(HookEvent.UserPromptExpansion)}:{result.Code}", result.Code!, null),
-                    cancellationToken);
-                return ExitCode.HookBlock;
-            case SessionCommandOutcome.Shown:
-                await context.Error.WriteLineAsync(result.Message);
-                return ExitCode.HookBlock;
-            case SessionCommandOutcome.Recorded:
-                await context.Output.WriteLineAsync(ToExpansionOutput(result.Message!, result.AgentContext!));
-                return ExitCode.Pass;
-            default:
-                return ExitCode.Pass;
-        }
-    }
-
-    private static string ToExpansionOutput(string userMessage, string agentContext)
-    {
-        using MemoryStream stream = new();
-        using (Utf8JsonWriter writer = new(stream))
-        {
-            writer.WriteStartObject();
-            writer.WriteString("systemMessage", userMessage);
-            writer.WriteStartObject("hookSpecificOutput");
-            writer.WriteString("hookEventName", "UserPromptExpansion");
-            writer.WriteString("additionalContext", agentContext);
-            writer.WriteEndObject();
-            writer.WriteEndObject();
-        }
-
-        return Encoding.UTF8.GetString(stream.ToArray());
+        return await ReportAsync(reply.Decision, hookEvent, manifest.Root, input, cancellationToken);
     }
 
     /// <summary>
     /// Checks that apply to every event before it is decided: protocol compatibility and a known event. The guard's own
-    /// preconditions (lockdown, engine version parity) are its first rules (<see cref="GuardRules"/>).
+    /// preconditions (lockdown, engine version parity) are its first rules (<see cref="Guard.GuardRules"/>).
     /// </summary>
     private HookDecision? PreconditionFailure(HookEvent hookEvent)
     {
@@ -183,29 +117,6 @@ internal sealed class HookCommand(CliContext context) : ICommand
 
         return null;
     }
-
-    /// <summary>For the person, at session start: what to update, or null when nothing is behind.</summary>
-    private string? SessionNotice()
-    {
-        string[] notices = [.. new[] { PluginNotice(), UpdateNotice() }.OfType<string>()];
-        return notices.Length == 0 ? null : string.Join(" ", notices);
-    }
-
-    /// <summary>The plugin updated from its marketplace past what this project's engine supports.</summary>
-    private string? PluginNotice() =>
-        PluginHandshake.EngineTooOld(context.Environment, ToolPin.RunningVersion) is string minimum
-            ? $"The Lockflight plugin needs engine {minimum} or newer; this project runs {ToolPin.RunningVersion}. {HumanOnlyCommands.Sentence(HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} update"))} in the project."
-            : null;
-
-    /// <summary>
-    /// For the person, at session start: a newer engine is installed than the one this project runs (after an update in another
-    /// project). Null when they match or there is no user install.
-    /// </summary>
-    private string? UpdateNotice() =>
-        context.Environment.HomeDirectory() is string home && UserInstall.InstalledVersion(home) is string installed
-        && !ToolPin.Matches(installed, ToolPin.RunningVersion)
-            ? $"Lockflight {installed} is installed; this project runs {ToolPin.RunningVersion}. {HumanOnlyCommands.Sentence(HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} update"))} in the project."
-            : null;
 
     /// <summary>CLAUDE_PROJECT_DIR stays at the session's root after `cd` or entering a worktree; the payload cwd does not.</summary>
     private string ProjectDirectory(HookInput input) =>
