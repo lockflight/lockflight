@@ -41,6 +41,9 @@ gates:
                                 #   Microsoft.NET.Test.Sdk (built in) or coverlet.collector
     patchThreshold: 80          # % of changed coverable lines that tests must execute
     minChangedLines: 10         # below this many coverable changed lines, coverage is not judged (N/A)
+  quality:
+    suppressions: report        # fail | report | off (default report): whether new suppressions fail the pr profile,
+                                #   are only listed, or are not checked
 
 units:                          # workspace shell or monorepo; omit for a single repository
   - path: services/orders       # relative to this file, no '..'; units cannot be nested
@@ -200,7 +203,7 @@ operating system enforces them for shell commands while the sandbox is on: see
 |---|---|---|
 | `edit` | format (changed lines) | quick feedback |
 | `stop` | format → build (no new warnings vs baseline) → test | end of an agent turn |
-| `pr` | policy.protected → stop steps (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
+| `pr` | policy.protected → format → quality.suppressions → build → test (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
 
 Verdicts and exit codes:
 
@@ -235,6 +238,32 @@ removes; an edit inside an existing BOM file is not blamed for its encoding. If 
 whole files and says so; if git cannot list the changed lines, it is NOT-EARNED. With `--base`, the changed lines include the
 branch's commits since the merge base, so `--base` also scopes `format` (and `coverage.patch`).
 
+### New suppressions fail the pr profile
+
+`quality.suppressions` reads the lines the change adds (with `--base`, everything since the merge base; without, the uncommitted
+changes and untracked files) and lists each suppression it finds, with file, line and rule:
+
+| Added line | Rule it names |
+|---|---|
+| `#pragma warning disable CA1822` (C#) | each listed id; `all` when none is listed |
+| `[SuppressMessage("…", "CA1822:…")]`, also `[assembly: …]` in `GlobalSuppressions.cs` and `[UnconditionalSuppressMessage]` | the check id |
+| `<NoWarn>`, `<WarningsNotAsErrors>` (a property, or `NoWarn="…"` on an item) in a project, `.props` or `.targets` file | each listed id; `$(NoWarn)` is not one |
+| `dotnet_diagnostic.<id>.severity` (or a category, or all analyzers) in `.editorconfig` or a `.globalconfig`, set below `warning` or below what the line said before | the id, `category-<name>` or `all` |
+| `#nullable disable` | `nullable` |
+| `[ExcludeFromCodeCoverage]` | `ExcludeFromCodeCoverage` |
+
+Suppressions already in the code are not judged, and one moved within its file is not new. Comments and strings are not read
+as code. Generated files are left out by path and shape (package lock files, EF Core model snapshots and migration designer
+files, as the review leaves them out), and so is the `#nullable disable` EF Core writes at the top of a migration whose designer
+is EF Core's. A person accepts a needed suppression with `lockflight baseline suppressions`, by file and rule: that rule may then
+be suppressed again in that file, any other file or rule still fails.
+
+`gates.quality.suppressions` decides what a finding does: `fail` fails the run, `report` lists the findings on a `PASS`
+(`report only …`), `off` skips the step (`off by manifest`). An `ERROR` (git could not diff) is an `ERROR` in every mode. The
+default is `report`, so upgrading the engine never turns a green repository red by itself; set `fail` to make it a gate. This is
+a line scan, not a compiler: a suppression it cannot see (a directive inside an inactive `#if` region is still read; a
+`<NoWarn>` value split over lines is not) is a known gap.
+
 ## Baselines (brownfield adoption; human-only)
 
 | Command | Accepts | File |
@@ -242,6 +271,7 @@ branch's commits since the merge base, so `--base` also scopes `format` (and `co
 | `lockflight baseline build` | current build warnings | `.lockflight/baselines/build-diagnostics.json` |
 | `lockflight baseline tests` | currently failing tests | `.lockflight/baselines/known-failing-tests.json` |
 | `lockflight baseline deps` | current vulnerable-package advisories | `.lockflight/baselines/vulnerable-packages.json` |
+| `lockflight baseline suppressions` | the suppressions the branch adds since it left the default branch, by file and rule, added to those accepted before | `.lockflight/baselines/suppressions.json` |
 | `.gitleaksignore` | known false-positive secrets (gitleaks' own format) | repository root |
 
 ## Lifecycle commands (standard profile)

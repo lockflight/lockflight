@@ -24,6 +24,8 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
             collector: coverlet
             patchThreshold: 70
             minChangedLines: 5
+          quality:
+            suppressions: fail
         units:
           - path: services/orders
             build: Orders.sln
@@ -45,6 +47,7 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
         { "gates.coverage.collector", "    collector: coverlet", "    collector: microsoft" },
         { "gates.coverage.patchThreshold", "    patchThreshold: 70", "    patchThreshold: 71" },
         { "gates.coverage.minChangedLines", "    minChangedLines: 5", "    minChangedLines: 6" },
+        { "gates.quality.suppressions", "    suppressions: fail", "    suppressions: report" },
         { "units[].path", "  - path: services/orders", "  - path: services/billing" },
         { "units[].build", "    build: Orders.sln", "    build: Orders.slnx" },
         { "units[].kind", "    kind: dotnet", "    kind: none" },
@@ -69,7 +72,7 @@ public sealed class StopCacheSettingsKeyTests : IDisposable
 
     /// <summary>A field added to one of these records must join the key, and a case above, before this list is updated.</summary>
     [Theory]
-    [InlineData(typeof(GateSettings), "BuildFile,Coverage,TestFramework,TimeoutSeconds")]
+    [InlineData(typeof(GateSettings), "BuildFile,Coverage,Suppressions,TestFramework,TimeoutSeconds")]
     [InlineData(typeof(CoverageSettings), "Collector,MinChangedLines,PatchThreshold")]
     [InlineData(typeof(Unit), "Build,Kind,Path,StopFilter,TestFramework")]
     public void EverySettingsFieldIsKnownToTheKey(Type settings, string fields) =>

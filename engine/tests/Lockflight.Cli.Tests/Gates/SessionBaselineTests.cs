@@ -99,8 +99,8 @@ public sealed class SessionBaselineTests : IDisposable
         (ExitCode exitCode, _, string error) = await TypeAsync(arguments);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("type /lockflight:baseline build, tests or deps", error, StringComparison.Ordinal);
-        Assert.Contains("lockflight baseline build|tests|deps", error, StringComparison.Ordinal);
+        Assert.Contains("type /lockflight:baseline build, tests, deps or suppressions", error, StringComparison.Ordinal);
+        Assert.Contains("lockflight baseline build|tests|deps|suppressions", error, StringComparison.Ordinal);
     }
 
     [Fact]

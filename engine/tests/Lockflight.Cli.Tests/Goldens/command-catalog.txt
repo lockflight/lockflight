@@ -11,6 +11,7 @@ hook: [] arguments
 baseline build: [--path]
 baseline tests: [--path]
 baseline deps: [--path]
+baseline suppressions: []
 gate run: [--profile --path --unit --base --result]
 phase check: [--feature] arguments
 redgreen start: [--feature]

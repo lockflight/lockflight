@@ -9,6 +9,12 @@ internal sealed record GateSettings(string? TestFramework, int TimeoutSeconds, C
     /// <summary>The solution or project file the gates build and test (<c>gates.build</c>); null for the one in the target directory.</summary>
     public string? BuildFile { get; init; }
 
+    /// <summary>
+    /// How the pr profile's <c>quality.suppressions</c> step judges (<c>gates.quality.suppressions</c>). Absent, it reports only, so a
+    /// new engine never turns a green repository red by itself; a team sets <c>fail</c> to let it fail the run.
+    /// </summary>
+    public GateMode Suppressions { get; init; } = GateMode.Report;
+
     public const int DefaultTimeoutSeconds = 600;
     public const int MaxTimeoutSeconds = 7200;
 

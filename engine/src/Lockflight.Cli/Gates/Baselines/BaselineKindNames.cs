@@ -1,6 +1,6 @@
 namespace Lockflight.Cli.Gates.Baselines;
 
-/// <summary>The command-line names of <see cref="BaselineKind"/> (<c>build</c>, <c>tests</c>, <c>deps</c>) and what each accepts.</summary>
+/// <summary>The command-line names of <see cref="BaselineKind"/> (<c>build</c>, <c>tests</c>, <c>deps</c>, <c>suppressions</c>) and what each accepts.</summary>
 internal static class BaselineKindNames
 {
     public static string ToName(BaselineKind kind) => kind switch
@@ -8,6 +8,7 @@ internal static class BaselineKindNames
         BaselineKind.Build => "build",
         BaselineKind.Tests => "tests",
         BaselineKind.Dependencies => "deps",
+        BaselineKind.Suppressions => "suppressions",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 
@@ -18,6 +19,7 @@ internal static class BaselineKindNames
             "build" => BaselineKind.Build,
             "tests" => BaselineKind.Tests,
             "deps" => BaselineKind.Dependencies,
+            "suppressions" => BaselineKind.Suppressions,
             _ => 0,
         };
         return kind != 0;
@@ -30,6 +32,8 @@ internal static class BaselineKindNames
         (BaselineKind.Build, false) => "build warnings",
         (BaselineKind.Tests, true) => "failing test",
         (BaselineKind.Tests, false) => "failing tests",
+        (BaselineKind.Suppressions, true) => "suppression",
+        (BaselineKind.Suppressions, false) => "suppressions",
         (_, true) => "advisory",
         _ => "advisories",
     };

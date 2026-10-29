@@ -2,14 +2,14 @@ using YamlDotNet.RepresentationModel;
 
 namespace Lockflight.Cli.Config;
 
-/// <summary>Reads the <c>gates</c> section of <c>lockflight.yaml</c>: timeout, build file, test framework and coverage.</summary>
+/// <summary>Reads the <c>gates</c> section of <c>lockflight.yaml</c>: timeout, build file, test framework, coverage and the switched steps.</summary>
 internal sealed class GatesSectionReader(ManifestErrors errors)
 {
     public ManifestError? Read(YamlNode valueNode, ref GateSettings gates)
     {
         if (valueNode is not YamlMappingNode section)
         {
-            return errors.At(valueNode.Start, "'gates' must be a mapping (known keys: timeoutSeconds, build, test, coverage)");
+            return errors.At(valueNode.Start, "'gates' must be a mapping (known keys: timeoutSeconds, build, test, coverage, quality)");
         }
 
         foreach ((YamlNode keyNode, YamlNode value) in section.Children)
@@ -46,8 +46,15 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
                     }
 
                     break;
+                case "quality":
+                    if (ReadQuality(value, ref gates) is ManifestError qualityError)
+                    {
+                        return qualityError;
+                    }
+
+                    break;
                 default:
-                    return errors.At(keyNode.Start, $"unknown key 'gates.{key}' (known: timeoutSeconds, build, test, coverage)");
+                    return errors.At(keyNode.Start, $"unknown key 'gates.{key}' (known: timeoutSeconds, build, test, coverage, quality)");
             }
         }
 
@@ -93,6 +100,36 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
         }
 
         gates = gates with { Coverage = settings };
+        return null;
+    }
+
+    private ManifestError? ReadQuality(YamlNode valueNode, ref GateSettings gates)
+    {
+        if (valueNode is not YamlMappingNode quality)
+        {
+            return errors.At(valueNode.Start, "'gates.quality' must be a mapping (known keys: suppressions)");
+        }
+
+        foreach ((YamlNode keyNode, YamlNode value) in quality.Children)
+        {
+            if (keyNode is not YamlScalarNode { Value: string key })
+            {
+                return errors.NotAName(keyNode);
+            }
+
+            if (key != "suppressions")
+            {
+                return errors.At(keyNode.Start, $"unknown key 'gates.quality.{key}' (known: suppressions)");
+            }
+
+            if (!GateModeNames.TryParse((value as YamlScalarNode)?.Value, out GateMode mode))
+            {
+                return errors.At(value.Start, $"'gates.quality.suppressions' must be {GateModeNames.Choices}");
+            }
+
+            gates = gates with { Suppressions = mode };
+        }
+
         return null;
     }
 

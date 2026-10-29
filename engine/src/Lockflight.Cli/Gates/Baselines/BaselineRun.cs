@@ -1,6 +1,7 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Gates.Steps;
+using Lockflight.Cli.Gates.Suppressions;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Processes;
@@ -14,11 +15,15 @@ namespace Lockflight.Cli.Gates.Baselines;
 /// </summary>
 internal sealed class BaselineRun(CliContext context, Manifest manifest)
 {
+    /// <summary>The branch suppressions are compared with when the clone does not know its remote's default branch.</summary>
+    private const string DefaultBranchFallback = "main";
+
     /// <param name="underHook">Whether a hook with a time limit runs this: the test run's budget is then capped as under the Stop hook.</param>
     public async Task<BaselineCapture> CaptureAsync(BaselineKind kind, string target, TimeSpan timeLimit, bool underHook, CancellationToken cancellationToken) => kind switch
     {
         BaselineKind.Tests => await FailingTestsAsync(target, underHook, cancellationToken),
         BaselineKind.Dependencies => await AdvisoriesAsync(target, cancellationToken),
+        BaselineKind.Suppressions => await SuppressionsAsync(timeLimit, cancellationToken),
         _ => await WarningsAsync(target, timeLimit, cancellationToken),
     };
 
@@ -27,6 +32,7 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
     {
         BaselineKind.Tests => new KnownFailingTests(manifest.Root, unitPath).RelativePath,
         BaselineKind.Dependencies => new AcceptedAdvisories(manifest.Root, unitPath).RelativePath,
+        BaselineKind.Suppressions => AcceptedSuppressions.RelativePath,
         _ => new DiagnosticsBaseline(manifest.Root, unitPath).RelativePath,
     };
 
@@ -35,6 +41,7 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
     {
         BaselineKind.Tests => [.. new KnownFailingTests(manifest.Root, unitPath).Load()],
         BaselineKind.Dependencies => [.. new AcceptedAdvisories(manifest.Root, unitPath).Load()],
+        BaselineKind.Suppressions => [.. new AcceptedSuppressions(manifest.Root).Load()],
         _ => new DiagnosticsBaseline(manifest.Root, unitPath).Accepted(),
     };
 
@@ -50,6 +57,9 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
             case BaselineKind.Dependencies:
                 new AcceptedAdvisories(manifest.Root, unitPath).Save(entries);
                 break;
+            case BaselineKind.Suppressions:
+                new AcceptedSuppressions(manifest.Root).Save(entries);
+                break;
             default:
                 new DiagnosticsBaseline(manifest.Root, unitPath).Save(entries);
                 break;
@@ -60,6 +70,7 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
         {
             BaselineKind.Build => $"{count} warnings accepted",
             BaselineKind.Tests => $"{count} failing {(count == 1 ? "test" : "tests")} accepted",
+            BaselineKind.Suppressions => $"{count} {BaselineKindNames.Entries(kind, count)} (file and rule) accepted",
             _ => $"{count} advisories accepted",
         };
         await new LedgerWriter(manifest.Root, context.Time).AppendAsync(new LedgerEvent(LedgerEventType.ConfigWritten, $"baseline:{name}", accepted, null), cancellationToken);
@@ -93,6 +104,23 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
         return tests.Step.Verdict == Verdict.Error
             ? BaselineCapture.Failed($"the test run itself broke ({tests.Step.Detail}); a baseline needs a test run that completes", ExitCode.Error)
             : BaselineCapture.Taken(tests.FailedTests, run.UnitPath);
+    }
+
+    /// <summary>
+    /// The file-and-rule keys of the suppressions the branch adds since it left the default branch (uncommitted ones included), joined
+    /// with those accepted already: accepting one change's suppressions never drops another's.
+    /// </summary>
+    private async Task<BaselineCapture> SuppressionsAsync(TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        string baseRef = await Git.DefaultBranchAsync(manifest.Root, DefaultBranchFallback, cancellationToken);
+        SuppressionScanResult scan = await SuppressionScan.FindAsync(manifest.Root, baseRef, timeLimit, cancellationToken);
+        if (scan.Found is not IReadOnlyList<Suppression> found)
+        {
+            return BaselineCapture.Failed(scan.Problem ?? "the suppressions could not be listed", ExitCode.Error);
+        }
+
+        IReadOnlySet<string> accepted = new AcceptedSuppressions(manifest.Root).Load();
+        return BaselineCapture.Taken([.. accepted.Concat(found.Select(suppression => suppression.Key)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)], unitPath: null);
     }
 
     private async Task<BaselineCapture> AdvisoriesAsync(string target, CancellationToken cancellationToken)

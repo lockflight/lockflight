@@ -61,6 +61,31 @@ internal static class WorkspaceGit
         return string.Join('\n', diffs.Where(diff => diff.Length > 0));
     }
 
+    /// <summary>
+    /// The zero-context diff from each working tree's comparison point to the working tree itself, committed and uncommitted changes in
+    /// one: the merge base with <paramref name="baseRef"/> (CI), or without one the last commit (git's empty tree before the first).
+    /// A line moved between a commit and the working tree is then seen once, as it ends up. Null when git fails in any of them.
+    /// </summary>
+    public static async Task<string?> DiffToWorkingTreeAsync(
+        string projectRoot, string? baseRef, IReadOnlyList<string> pathspecs, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        List<string> diffs = [];
+        foreach (RepoRoot repo in WorkspaceRepos.Of(projectRoot))
+        {
+            string? from = baseRef is null
+                ? await Git.UncommittedBaseAsync(repo.Directory, cancellationToken)
+                : await Git.MergeBaseAsync(repo.Directory, baseRef, cancellationToken);
+            if (from is null || await Git.DiffHunksAsync(repo.Directory, from, pathspecs, repo.Prefix, timeLimit, cancellationToken) is not string diff)
+            {
+                return null;
+            }
+
+            diffs.Add(diff);
+        }
+
+        return string.Join('\n', diffs.Where(diff => diff.Length > 0));
+    }
+
     /// <summary>A working tree's paths under the project root; the root's own entries for child repositories are dropped.</summary>
     private static IEnumerable<string> Prefixed(IReadOnlyList<RepoRoot> repos, RepoRoot repo, IReadOnlyList<string> paths) => repo.Prefix.Length == 0
         ? paths.Where(path => !WorkspaceRepos.InChildRepository(repos, path))
