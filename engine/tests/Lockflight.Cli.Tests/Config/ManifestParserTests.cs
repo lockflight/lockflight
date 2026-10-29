@@ -159,6 +159,8 @@ public sealed class ManifestParserTests
     [InlineData("gates:\n  quality: fail\n", "'gates.quality' must be a mapping")]
     [InlineData("gates:\n  quality:\n    suppressions: warn\n", "'gates.quality.suppressions' must be fail, report or off")]
     [InlineData("gates:\n  quality:\n    analyzers: fail\n", "unknown key 'gates.quality.analyzers'")]
+    [InlineData("gates:\n  docs:\n    references: yes\n", "'gates.docs.references' must be fail, report or off")]
+    [InlineData("gates:\n  docs:\n    links: fail\n", "unknown key 'gates.docs.links'")]
     public void InvalidGateSettingsAreRejectedWithTheKey(string yaml, string expectedFragment)
     {
         ManifestLoadResult result = Parse(yaml);
@@ -174,6 +176,13 @@ public sealed class ManifestParserTests
     [InlineData("version: 1\ngates:\n  quality:\n    suppressions: off\n", "off")]
     public void TheSuppressionsStepReportsUnlessTheManifestSaysOtherwise(string yaml, string expected) =>
         Assert.Equal(expected, GateModeNames.ToName(Parse(yaml).Manifest!.Gates.Suppressions));
+
+    [Theory]
+    [InlineData("version: 1\n", "report")]
+    [InlineData("version: 1\ngates:\n  docs:\n    references: fail\n", "fail")]
+    [InlineData("version: 1\ngates:\n  docs:\n    references: off\n", "off")]
+    public void TheReferencesStepReportsUnlessTheManifestSaysOtherwise(string yaml, string expected) =>
+        Assert.Equal(expected, GateModeNames.ToName(Parse(yaml).Manifest!.Gates.DocsReferences));
 
     [Theory]
     [InlineData("[a, b]: 1\n")]

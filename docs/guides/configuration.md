@@ -44,6 +44,9 @@ gates:
   quality:
     suppressions: report        # fail | report | off (default report): whether new suppressions fail the pr profile,
                                 #   are only listed, or are not checked
+  docs:
+    references: report          # fail | report | off (default report): whether references this change breaks in the
+                                #   instruction files fail the pr profile, are only listed, or are not checked
 
 units:                          # workspace shell or monorepo; omit for a single repository
   - path: services/orders       # relative to this file, no '..'; units cannot be nested
@@ -203,7 +206,7 @@ operating system enforces them for shell commands while the sandbox is on: see
 |---|---|---|
 | `edit` | format (changed lines) | quick feedback |
 | `stop` | format → build (no new warnings vs baseline) → test | end of an agent turn |
-| `pr` | policy.protected → format → quality.suppressions → build → test (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
+| `pr` | policy.protected → format → quality.suppressions → docs.references → build → test (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
 
 Verdicts and exit codes:
 
@@ -263,6 +266,22 @@ be suppressed again in that file, any other file or rule still fails.
 default is `report`, so upgrading the engine never turns a green repository red by itself; set `fail` to make it a gate. This is
 a line scan, not a compiler: a suppression it cannot see (a directive inside an inactive `#if` region is still read; a
 `<NoWarn>` value split over lines is not) is a known gap.
+
+### References the change breaks in the instruction files
+
+`docs.references` reads the files the agent takes instructions from: every `CLAUDE.md` and `AGENTS.md`, and the Markdown under
+`.claude/rules/`, `.claude/skills/`, `.claude/agents/` and `.claude/commands/`. It runs the reference checks of
+[`docs check`](commands.md#setup) on them (links and heading anchors, code-span paths that history deleted or
+renamed, engine and plugin command lines) twice: on the working tree, and on the comparison commit — the merge base with
+`--base`, else the last commit — read through git, without a checkout. A reference broken now but not then fails, with file,
+line, reference and reason; one that was already broken is listed (`broken before this change, not judged`) and left to you.
+A reference is the same when its file, text and kind are, wherever its line moved, so renaming an instruction file makes its
+broken references new. `docs check` itself stays advisory and also reads `docs/` and `README.md`; this step does not.
+
+`gates.docs.references` takes `fail`, `report` (the default: findings listed on a `PASS`) or `off`, as
+`gates.quality.suppressions` does; an `ERROR` (an unknown base, a shallow checkout) stays an `ERROR`. Locally the step is a guardrail; in CI it is a
+boundary only with `fail`, a required check and the manifest taken from the base branch. What it checks is what `docs check`
+checks: a path the repository never had is not reported, and a code-span path counts only with evidence from history.
 
 ## Baselines (brownfield adoption; human-only)
 

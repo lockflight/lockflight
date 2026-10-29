@@ -45,6 +45,9 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
      rule; it fails only with `gates.quality.suppressions: fail` (the default, `report`, lists them). A needed one is accepted
      with `baseline suppressions`, merged in its own pull request like every baseline. With the manifest and the baseline taken
      from the base branch and the check required, a PR cannot switch the step off or accept its own suppressions;
+     then `docs.references` — links, anchors, code-span paths and command lines in `CLAUDE.md`, `AGENTS.md` and `.claude/`
+     that this PR broke, compared with the merge base (references broken before are listed, not judged); it fails only
+     with `gates.docs.references: fail`. It needs the full history (`fetch-depth: 0`, as the workflow checks out);
   3. `build` → `test` (with coverage when `gates.coverage.collector` is set);
   4. `coverage.patch` — covered share of the changed coverable lines ≥ `patchThreshold` (default 80 %; N/A below
      `minChangedLines`, default 10, and when `gates.coverage.collector` is not set). A deterministic CI build
