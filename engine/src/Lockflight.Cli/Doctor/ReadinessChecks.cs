@@ -35,9 +35,6 @@ internal static class ReadinessChecks
 
     private static readonly TimeSpan ClaudeVersionTimeLimit = TimeSpan.FromSeconds(30);
 
-    public static Task<IReadOnlyList<DoctorCheck>> RunAsync(string root, CancellationToken cancellationToken) =>
-        RunAsync(root, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, cancellationToken);
-
     /// <param name="userHome">
     /// The user's home, for the user-scope plugin check of a workspace and for the local feed and tools cache of the pin check; null
     /// skips those inputs (the plugin is reported as not enabled, the pin as not found locally).

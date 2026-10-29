@@ -7,7 +7,8 @@ namespace Lockflight.Cli.Testing;
 /// <summary>
 /// Runs tests of an xUnit v3 application selected by method and collects xUnit XML (each failure's exception type and stack):
 /// through the in-process console runner (<c>-method … -result-xml …</c>, <c>-xml</c> before xUnit v3 4.0) or, for MTP-only apps, through xUnit's MTP options
-/// (<c>--filter-method … --report-xunit-xml</c>). Method filters go in batches so the command line stays under Windows' limit.
+/// (<c>--filter-method … --report-xunit-xml</c>). Method filters go in batches so the command line stays under Windows' limit. The
+/// runs of <see cref="XunitConsoleRunner"/> and <see cref="MtpRunner"/>, and the xUnit XML both read.
 /// </summary>
 internal static class NativeTestRunner
 {
@@ -27,18 +28,14 @@ internal static class NativeTestRunner
     /// first exit code that is not a test verdict is kept in the report, so a run that crashed half-way is not taken at its word.
     /// The batches share <paramref name="timeLimit"/>; null too when it runs out before the last batch.
     /// </summary>
+    /// <param name="mode"><see cref="RunnerMode.Mtp"/> for xUnit's MTP options, else the console runner's.</param>
     public static async Task<TestRunReport?> RunAsync(
-        TestApp app, IReadOnlyList<string>? methodFilters, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
+        TestApp app, RunnerMode mode, IReadOnlyList<string>? methodFilters, string workingDirectory, TimeSpan timeLimit, TimeProvider time, CancellationToken cancellationToken)
     {
-        if (app.Mode == RunnerMode.VSTest)
-        {
-            return await VSTestRunner.RunAsync(app, methodFilters, workingDirectory, timeLimit, cancellationToken);
-        }
-
         List<ExecutedTest> results = [];
         int? abnormalExitCode = null;
         IEnumerable<string[]> batches = methodFilters is null ? [[]] : methodFilters.Chunk(MethodsPerBatch);
-        TimeBudget budget = new(timeLimit, TimeProvider.System);
+        TimeBudget budget = new(timeLimit, time);
         foreach (string[] batch in batches)
         {
             if (budget.IsSpent)
@@ -49,13 +46,13 @@ internal static class NativeTestRunner
             string report = Path.Combine(Path.GetTempPath(), $"lockflight-tests-{Guid.CreateVersion7()}.xml");
             try
             {
-                List<string> arguments = app.Mode == RunnerMode.Mtp
+                List<string> arguments = mode == RunnerMode.Mtp
                     ? [app.AssemblyPath, "--no-ansi", "--no-progress", "--report-xunit-xml", "--report-xunit-xml-filename", Path.GetFileName(report),
                        "--results-directory", Path.GetDirectoryName(report)!]
                     : [app.AssemblyPath, "-noLogo", "-noColor", InProcessRunner.ResultXmlSwitch(InProcessRunner.VersionOf(app.AssemblyPath)), report];
                 foreach (string method in batch)
                 {
-                    arguments.AddRange([app.Mode == RunnerMode.Mtp ? "--filter-method" : "-method", method]);
+                    arguments.AddRange([mode == RunnerMode.Mtp ? "--filter-method" : "-method", method]);
                 }
 
                 ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, workingDirectory, budget.Left, cancellationToken);
@@ -64,7 +61,7 @@ internal static class NativeTestRunner
                     return null;
                 }
 
-                abnormalExitCode ??= IsTestVerdict(app.Mode, run) ? null : run.ExitCode;
+                abnormalExitCode ??= IsTestVerdict(mode, run) ? null : run.ExitCode;
                 results.AddRange(Parse(app.AssemblyName, await File.ReadAllTextAsync(report, cancellationToken)));
             }
             finally

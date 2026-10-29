@@ -66,7 +66,7 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
             return ExitCode.Config;
         }
 
-        TestWorkspace workspace = TestWorkspaces.For(manifest, feature);
+        TestWorkspace workspace = TestWorkspaces.For(manifest, feature, context.Time);
         RedGreenSession session = new(context, manifest, feature, workspace);
         RedGreenRecord? record;
         try

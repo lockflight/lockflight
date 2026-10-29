@@ -43,7 +43,7 @@ public sealed class ReadinessChecksTests : IDisposable
         // adopt apply installs the preset into a project set up by a plain init, which writes no .gitattributes rule.
         Write(".specify/presets/.registry", """{ "presets": { "lockflight": { "version": "0.1.0", "enabled": true } } }""");
 
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
 
         Assert.Contains(checks, check => check is { Name: "lockflight preset", Status: CheckStatus.Pass });
         Assert.Contains(checks, check => check.Name == "spec kit presets");
@@ -55,7 +55,7 @@ public sealed class ReadinessChecksTests : IDisposable
     {
         Write(".specify/presets/.registry", """{ "presets": { "lockflight": { "version": "0.1.0", "enabled": false } } }""");
 
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(checks, check => check.Name is "lockflight preset" or "spec kit presets");
     }
@@ -96,7 +96,7 @@ public sealed class ReadinessChecksTests : IDisposable
     {
         Write(Manifest.FileName, "version: 1\n");
 
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(checks, check => check.Name == "coverage collector");
     }
@@ -462,7 +462,7 @@ public sealed class ReadinessChecksTests : IDisposable
 
     private async Task<DoctorCheck> CheckAsync(string name)
     {
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
         return Assert.Single(checks, check => check.Name == name);
     }
 

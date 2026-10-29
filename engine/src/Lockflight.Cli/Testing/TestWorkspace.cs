@@ -7,7 +7,7 @@ namespace Lockflight.Cli.Testing;
 /// Builds one or more directories (a repository, or the units of a workspace) and lists and runs the tests of all their xUnit test
 /// applications; paths are reported relative to <paramref name="root"/>.
 /// </summary>
-internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targets, TimeSpan timeLimit)
+internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targets, TimeSpan timeLimit, TimeProvider time)
 {
     public IReadOnlyList<TestApp> Apps { get; private set; } = [];
 
@@ -33,7 +33,7 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
     /// The same build targets at the same places under <paramref name="otherRoot"/> (a worktree of the project), with nothing built yet.
     /// </summary>
     public TestWorkspace MovedTo(string otherRoot) =>
-        new(otherRoot, [.. targets.Select(target => target with { Directory = Path.GetFullPath(Path.Combine(otherRoot, Path.GetRelativePath(root, target.Directory))) })], timeLimit);
+        new(otherRoot, [.. targets.Select(target => target with { Directory = Path.GetFullPath(Path.Combine(otherRoot, Path.GetRelativePath(root, target.Directory))) })], timeLimit, time);
 
     /// <summary>
     /// Builds and finds the test applications; returns the build output when the build fails, null on success (then check
@@ -52,7 +52,7 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
                 return build.Combined;
             }
 
-            TestAppDiscovery discovery = await TestApps.FindAsync(target.Directory, target.PreferredFramework, timeLimit, cancellationToken);
+            TestAppDiscovery discovery = await TestApps.FindAsync(target.Directory, target.PreferredFramework, timeLimit, time, cancellationToken);
             apps.AddRange(discovery.Apps);
             unevaluated.AddRange(discovery.Unevaluated);
         }
@@ -68,14 +68,15 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
         List<TestApp> probed = [];
         foreach (TestApp app in Apps)
         {
-            if (await TestInventory.ListAsync(app, root, timeLimit, cancellationToken) is not (IReadOnlyList<TestCase> tests, RunnerMode mode))
+            TestListing listing = await TestRunners.ListAsync(app, root, timeLimit, time, cancellationToken);
+            if (!listing.Listed)
             {
                 FailedApp = Path.GetRelativePath(root, app.AssemblyPath);
                 return null;
             }
 
-            all.AddRange(tests);
-            probed.Add(app with { Mode = mode });
+            all.AddRange(listing.Tests);
+            probed.Add(app with { Mode = listing.Mode });
         }
 
         Apps = probed;
@@ -110,11 +111,14 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
                 return null;
             }
 
-            if (await NativeTestRunner.RunAsync(app, filters, root, left < timeLimit ? left : timeLimit, cancellationToken) is not TestRunReport report)
+            TestRunOutcome run = await TestRunners.For(app.Mode, time).RunAsync(app, filters, root, left < timeLimit ? left : timeLimit, cancellationToken);
+            if (!run.Reported)
             {
                 FailedApp = Path.GetRelativePath(root, app.AssemblyPath);
                 return null;
             }
+
+            TestRunReport report = run.Report;
 
             if (report.AbnormalExitCode is int exitCode)
             {

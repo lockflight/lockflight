@@ -36,8 +36,9 @@ internal static class ReproductionBuild
         string root,
         string outputFolder,
         TimeSpan timeLimit,
+        TimeProvider time,
         CancellationToken cancellationToken) =>
-        RunAsync(app, candidates, usings, [], [], root, outputFolder, timeLimit, cancellationToken);
+        RunAsync(app, candidates, usings, [], [], root, outputFolder, timeLimit, time, cancellationToken);
 
     /// <param name="fixedFiles">Production files to build as a fix changes them; the files on disk stay as they are.</param>
     /// <param name="alsoRun">Method filters of the project's own tests to run with the reproductions.</param>
@@ -50,6 +51,7 @@ internal static class ReproductionBuild
         string root,
         string outputFolder,
         TimeSpan timeLimit,
+        TimeProvider time,
         CancellationToken cancellationToken)
     {
         if (TestProjectProfiles.ProjectFile(app.ProjectDirectory, app.AssemblyName) is not string project)
@@ -101,7 +103,8 @@ internal static class ReproductionBuild
             }
 
             string[] filters = [.. candidates.Select(candidate => $"{Namespace}.{candidate.ClassName}.{candidate.Method}"), .. alsoRun];
-            TestRunReport? report = await NativeTestRunner.RunAsync(app with { AssemblyPath = assembly }, filters, root, timeLimit, cancellationToken);
+            TestRunOutcome run = await TestRunners.For(app.Mode, time).RunAsync(app with { AssemblyPath = assembly }, filters, root, timeLimit, cancellationToken);
+            TestRunReport? report = run.Reported ? run.Report : null;
             return report is null
                 ? new ReproductionBuildResult(ReproductionBuildStatus.NotRun, [], [])
                 : new ReproductionBuildResult(ReproductionBuildStatus.Ran, [], report.Results);

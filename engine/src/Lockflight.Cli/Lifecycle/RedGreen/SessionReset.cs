@@ -103,7 +103,7 @@ internal sealed class SessionReset(CliContext context, Manifest manifest) : ISes
             return Refuse(new SessionRefusal("changed", $"the red/green evidence of {feature.Id} changed since you saw it; run /{CommandName} again"), words);
         }
 
-        string refs = await RedGreenCommand.DiscardAsync(new RedGreenSession(context, manifest, feature, TestWorkspaces.For(manifest, feature)), cancellationToken);
+        string refs = await RedGreenCommand.DiscardAsync(new RedGreenSession(context, manifest, feature, TestWorkspaces.For(manifest, feature, context.Time)), cancellationToken);
         codes.Discard(Slot);
         return SessionCommandResult.Recorded(
             $"Step 2 of 2 — reset: the red/green evidence of {feature.Id} is discarded, and the test projects are unlocked for this feature.{refs}",

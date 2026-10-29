@@ -13,7 +13,7 @@ namespace Lockflight.Cli.Testing;
 /// <c>Xunit.Sdk.XunitException</c>, the base of xUnit's assertion exceptions. A message that names neither an exception type nor
 /// an assertion (a fixture or constructor failure) has no type, so the red classifier judges it by its stack, never as an assertion.
 /// </summary>
-internal static partial class VSTestRunner
+internal sealed partial class VSTestRunner(TimeProvider time) : ITestRunner
 {
     public const string AssertionException = "Xunit.Sdk.XunitException";
 
@@ -22,13 +22,32 @@ internal static partial class VSTestRunner
     /// <summary>VSTest's exit code when a test failed; any other non-zero exit is abnormal.</summary>
     private const int TestsFailed = 1;
 
-    public static async Task<TestRunReport?> RunAsync(
+    public RunnerMode Mode => RunnerMode.VSTest;
+
+    /// <summary>The tests from the assembly's metadata (xUnit v2 attributes): VSTest's own listing runs a test host for nothing.</summary>
+    public Task<TestListing> ListAsync(TestApp app, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return Task.FromResult(TestListing.Of(AssemblyTestMetadata.Read(app.AssemblyPath), RunnerMode.VSTest));
+        }
+        catch (Exception exception) when (exception is BadImageFormatException or IOException or InvalidOperationException)
+        {
+            return Task.FromResult(TestListing.NotListed);
+        }
+    }
+
+    public async Task<TestRunOutcome> RunAsync(
+        TestApp app, IReadOnlyList<string>? methodFilters, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
+        TestRunOutcome.Of(await RunBatchesAsync(app, methodFilters, workingDirectory, timeLimit, cancellationToken));
+
+    private async Task<TestRunReport?> RunBatchesAsync(
         TestApp app, IReadOnlyList<string>? methodFilters, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         List<ExecutedTest> results = [];
         int? abnormalExitCode = null;
         IEnumerable<string[]> batches = methodFilters is null ? [[]] : methodFilters.Chunk(MethodsPerBatch);
-        TimeBudget budget = new(timeLimit, TimeProvider.System);
+        TimeBudget budget = new(timeLimit, time);
         foreach (string[] batch in batches)
         {
             if (budget.IsSpent)

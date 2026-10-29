@@ -22,7 +22,7 @@ public sealed class TestAppsTests : IDisposable
     {
         WriteProject("tools/Broken/Broken.csproj", """<Import Project="missing.props" />""");
 
-        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeLimit, TestContext.Current.CancellationToken);
+        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeLimit, TimeProvider.System, TestContext.Current.CancellationToken);
 
         Assert.Empty(discovery.Apps);
         UnevaluatedProject unevaluated = Assert.Single(discovery.Unevaluated);
@@ -37,7 +37,7 @@ public sealed class TestAppsTests : IDisposable
     {
         WriteProject("src/Shop/Shop.csproj", "<PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>");
 
-        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeLimit, TestContext.Current.CancellationToken);
+        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeLimit, TimeProvider.System, TestContext.Current.CancellationToken);
 
         Assert.Empty(discovery.Apps);
         Assert.Empty(discovery.Unevaluated);
@@ -48,7 +48,7 @@ public sealed class TestAppsTests : IDisposable
     {
         WriteProject("src/Shop/Shop.csproj", "<PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>");
 
-        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeSpan.FromMilliseconds(1), TestContext.Current.CancellationToken);
+        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeSpan.FromMilliseconds(1), TimeProvider.System, TestContext.Current.CancellationToken);
 
         UnevaluatedProject unevaluated = Assert.Single(discovery.Unevaluated);
         Assert.Equal(ProjectEvaluationFailure.TimedOut, unevaluated.Failure);
