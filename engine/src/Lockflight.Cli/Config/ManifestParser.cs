@@ -69,7 +69,7 @@ internal sealed class ManifestParser(string root, string path)
         bool stopGate = false;
         string? stopTarget = null;
         // Checks a version 2 manifest leaves out judge; in version 1 they only report (an engine upgrade turns nothing red).
-        GateSettings gates = current ? GateSettings.Default with { Suppressions = GateMode.Fail } : GateSettings.Default;
+        GateSettings gates = current ? GateSettings.Default with { Suppressions = GateMode.Fail, DocsReferences = GateMode.Fail } : GateSettings.Default;
         ReviewSettings review = ReviewSettings.Default;
         RoutingSettings routing = RoutingSettings.Default;
         ApprovalSettings approvals = current ? ApprovalSettings.Default : ApprovalSettings.ForVersion1;

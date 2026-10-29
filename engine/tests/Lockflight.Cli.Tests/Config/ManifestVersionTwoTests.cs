@@ -30,6 +30,7 @@ public sealed class ManifestVersionTwoTests
 
         Assert.Equal(2, manifest.Version);
         Assert.Equal(GateMode.Fail, manifest.Gates.Suppressions);
+        Assert.Equal(GateMode.Fail, manifest.Gates.DocsReferences);
         Assert.Equal(ApprovalCheckMode.Fail, manifest.Approvals.Check);
         Assert.Equal(ApprovalMode.SamePr, manifest.Approvals.Mode);
         Assert.Equal(["specs/**"], manifest.Approvals.SpecPaths);
@@ -46,6 +47,7 @@ public sealed class ManifestVersionTwoTests
 
         Assert.Equal(1, manifest.Version);
         Assert.Equal(GateMode.Report, manifest.Gates.Suppressions);
+        Assert.Equal(GateMode.Report, manifest.Gates.DocsReferences);
         Assert.Equal(ApprovalCheckMode.Report, manifest.Approvals.Check);
         Assert.Equal(RoutingPreset.Default, manifest.Routing.Preset);
         Assert.False(manifest.Routing.FromManifest);

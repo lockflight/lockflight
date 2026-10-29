@@ -46,6 +46,11 @@
           "type": "object",
           "additionalProperties": false,
           "properties": { "suppressions": { "$ref": "#/$defs/gateMode" } }
+        },
+        "docs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "references": { "$ref": "#/$defs/gateMode" } }
         }
       }
     },

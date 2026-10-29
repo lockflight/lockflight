@@ -65,6 +65,7 @@ public sealed partial class ManifestSchemaSyncTests
     [InlineData("gates.test", "version: 2\ngates:\n  test:\n    x: 1\n")]
     [InlineData("gates.coverage", "version: 2\ngates:\n  coverage:\n    x: 1\n")]
     [InlineData("gates.quality", "version: 2\ngates:\n  quality:\n    x: 1\n")]
+    [InlineData("gates.docs", "version: 2\ngates:\n  docs:\n    x: 1\n")]
     [InlineData("stop", "version: 2\nstop:\n  x: 1\n")]
     [InlineData("routing", "version: 2\nrouting:\n  preset: default\n  x: 1\n")]
     [InlineData("routing.fix", "version: 2\nrouting:\n  preset: default\n  fix:\n    x: 1\n")]

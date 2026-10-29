@@ -17,6 +17,8 @@ gates:
     minChangedLines: 10
   quality:
     suppressions: fail
+  docs:
+    references: report
 routing:
   preset: default
   floor: fix

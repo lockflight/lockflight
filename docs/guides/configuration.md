@@ -42,10 +42,10 @@ gates:
     patchThreshold: 80          # % of changed coverable lines that tests must execute
     minChangedLines: 10         # below this many coverable changed lines, coverage is not judged (N/A)
   quality:
-    suppressions: report        # fail | report | off (default report): whether new suppressions fail the pr profile,
+    suppressions: report        # fail | report | off (default report; fail in version 2): whether new suppressions fail the pr profile,
                                 #   are only listed, or are not checked
   docs:
-    references: report          # fail | report | off (default report): whether references this change breaks in the
+    references: report          # fail | report | off (default report; fail in version 2): whether references this change breaks in the
                                 #   instruction files fail the pr profile, are only listed, or are not checked
   ef:
     pendingModelChanges: auto   # auto | fail | report | off (default auto): auto runs the check, and can fail, only
@@ -190,7 +190,8 @@ profile is capped; `baseline tests` and the `pr` profile use the full `gates.tim
 ### Manifest version 2
 
 `version: 2` adds the sections below. A manifest without `version`, or with `version: 1`, is read as version 2 with
-**migration defaults**: the checks version 2 added (`gates.quality.suppressions`, `approvals.check`) only report, so a new
+**migration defaults**: the checks version 2 added (`gates.quality.suppressions`, `gates.docs.references`,
+`approvals.check`) only report, so a new
 engine never turns a green repository red by itself. In a version 2 manifest they default to `fail`. A version 1 manifest that
 holds a version 2 section is an error naming the version it needs.
 
