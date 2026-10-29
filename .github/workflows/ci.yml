@@ -100,6 +100,12 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/lifecycle-xunit2.sh "$RUNNER_TEMP/lifecycle-xunit2"
+      - name: Lifecycle end to end on NUnit (VSTest and Microsoft.Testing.Platform)
+        shell: bash
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/e2e/lifecycle-nunit.sh "$RUNNER_TEMP/lifecycle-nunit"
       - name: The spec contract's example passes the phase checks, without Spec Kit
         shell: bash
         run: |
@@ -249,6 +255,8 @@ jobs:
         run: sh tests/install/user-path.sh
       - name: The marketplace pin check refuses incoherent pins
         run: bash tests/install/marketplace-ref.sh
+      - name: The release's engine hashes describe the packages
+        run: bash tests/release/engine-hashes.sh
       # The marketplace users add serves the plugins from a release tag; it must name a pushed tag whose plugins have the tag's
       # version, with the engine on nuget.org (docs/engineering/releasing.md).
       - name: The marketplace serves a published release

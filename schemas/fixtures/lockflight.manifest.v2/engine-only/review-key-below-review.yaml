@@ -1,0 +1,4 @@
+version: 2
+routing:
+  preset: default
+  require: { reviewFrom: critical, reviewKeyFrom: feature }

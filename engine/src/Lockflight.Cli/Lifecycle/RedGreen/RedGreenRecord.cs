@@ -25,6 +25,13 @@ internal sealed record RedGreenRecord
     public IReadOnlySet<string> BaselineSkipped { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
+    /// How many rows of a test the suite's run skipped at run time when the baseline was taken (<c>Assert.Skip</c>,
+    /// <c>Assert.Ignore</c>, an NUnit <c>[TestCase(…, Ignore = "…")]</c> row), by test key; a green may skip no more of them. Only
+    /// tests with such rows are listed; a record written before this field existed reads as "none".
+    /// </summary>
+    public IReadOnlyDictionary<string, int> BaselineSkippedRows { get; init; } = new Dictionary<string, int>(StringComparer.Ordinal);
+
+    /// <summary>
     /// Tests already marked <c>Explicit = true</c> when the baseline was taken; any other explicit test fails a red or a green. A record
     /// written before this field existed reads as "none were explicit" (strict).
     /// </summary>
@@ -62,6 +69,8 @@ internal sealed record RedGreenRecord
             BaselineTests = Strings(baseline["tests"]).ToHashSet(StringComparer.Ordinal),
             BaselineSkipped = Strings(baseline["skipped"]).ToHashSet(StringComparer.Ordinal),
             BaselineExplicit = Strings(baseline["explicit"]).ToHashSet(StringComparer.Ordinal),
+            BaselineSkippedRows = (baseline["skippedRows"] as JsonObject ?? new JsonObject()).Where(entry => entry.Value is not null)
+                .ToDictionary(entry => entry.Key, entry => entry.Value!.GetValue<int>(), StringComparer.Ordinal),
             TestProjects = Strings(root["testProjects"]),
             Cycles = [.. (root["cycles"] as JsonArray ?? []).OfType<JsonObject>().Select(ReadCycle)],
         };
@@ -126,18 +135,30 @@ internal sealed record RedGreenRecord
             cycles.Add((JsonNode)saved);
         }
 
+        JsonObject baseline = new()
+        {
+            ["commit"] = BaselineCommit,
+            ["at"] = BaselineAt.ToString("O", CultureInfo.InvariantCulture),
+            ["tests"] = Array(BaselineTests.Order(StringComparer.Ordinal)),
+            ["skipped"] = Array(BaselineSkipped.Order(StringComparer.Ordinal)),
+            ["explicit"] = Array(BaselineExplicit.Order(StringComparer.Ordinal)),
+        };
+        if (BaselineSkippedRows.Count > 0)
+        {
+            JsonObject rows = new();
+            foreach ((string key, int count) in BaselineSkippedRows.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+            {
+                rows[key] = count;
+            }
+
+            baseline["skippedRows"] = rows;
+        }
+
         JsonObject root = new()
         {
             ["schema"] = Schema,
             ["feature"] = featureId,
-            ["baseline"] = new JsonObject
-            {
-                ["commit"] = BaselineCommit,
-                ["at"] = BaselineAt.ToString("O", CultureInfo.InvariantCulture),
-                ["tests"] = Array(BaselineTests.Order(StringComparer.Ordinal)),
-                ["skipped"] = Array(BaselineSkipped.Order(StringComparer.Ordinal)),
-                ["explicit"] = Array(BaselineExplicit.Order(StringComparer.Ordinal)),
-            },
+            ["baseline"] = baseline,
             ["testProjects"] = Array(TestProjects),
             ["cycles"] = cycles,
         };

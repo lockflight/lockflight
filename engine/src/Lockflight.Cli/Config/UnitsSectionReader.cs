@@ -131,7 +131,7 @@ internal sealed class UnitsSectionReader(ManifestErrors errors)
     }
 
     /// <summary>A unit path with forward slashes and no trailing slash, or null when it is empty, absolute or leaves the root.</summary>
-    private static string? UnitPath(string? text)
+    public static string? UnitPath(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {

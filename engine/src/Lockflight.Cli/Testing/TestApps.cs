@@ -5,8 +5,9 @@ namespace Lockflight.Cli.Testing;
 
 /// <summary>
 /// Finds the test applications red/green and trace can drive under a root after a build: xUnit v3 applications
-/// (<c>IsTestingPlatformApplication</c>, <c>xunit.v3.core.dll</c> in the output) and xUnit v2 test projects on VSTest
-/// (<c>IsTestProject</c>, <c>xunit.core.dll</c> in the output).
+/// (<c>IsTestingPlatformApplication</c>, <c>xunit.v3.core.dll</c> in the output), xUnit v2 test projects on VSTest
+/// (<c>IsTestProject</c>, <c>xunit.core.dll</c> in the output), and NUnit test projects (<c>nunit.framework.dll</c> in the output),
+/// on Microsoft.Testing.Platform when the project is a testing-platform application, else on VSTest.
 /// </summary>
 internal static class TestApps
 {
@@ -18,7 +19,7 @@ internal static class TestApps
     /// <summary>
     /// The projects are evaluated in parallel (<c>dotnet msbuild -getProperty</c> only evaluates; it builds nothing), within
     /// <paramref name="timeLimit"/> for all of them together. A project whose evaluation fails or runs out of time is reported as
-    /// unevaluated, never taken for a project without tests; one that evaluates and is no xUnit test application is left out.
+    /// unevaluated, never taken for a project without tests; one that evaluates and is no test application of these frameworks is left out.
     /// </summary>
     /// <param name="preferredFramework">For multi-targeted test projects: the framework to run (<c>gates.test.framework</c>); else the newest one.</param>
     public static async Task<TestAppDiscovery> FindAsync(string root, string? preferredFramework, TimeSpan timeLimit, TimeProvider time, CancellationToken cancellationToken)
@@ -44,7 +45,7 @@ internal static class TestApps
             return ProjectEvaluation.Of(unevaluated);
         }
 
-        if (Parse(properties.Output) is not (true, string targetPath, string frameworks))
+        if (Parse(properties.Output) is not (true, bool onTestingPlatform, string targetPath, string frameworks))
         {
             return ProjectEvaluation.NotATestApp;
         }
@@ -59,7 +60,7 @@ internal static class TestApps
                 return ProjectEvaluation.Of(unevaluatedFramework);
             }
 
-            targetPath = Parse(single.Output) is (true, string path, _) ? path : string.Empty;
+            targetPath = Parse(single.Output) is (true, _, string path, _) ? path : string.Empty;
         }
 
         if (targetPath.Length == 0)
@@ -73,8 +74,14 @@ internal static class TestApps
             return ProjectEvaluation.Of(new TestApp(Path.GetDirectoryName(project)!, targetPath));
         }
 
-        return File.Exists(Path.Combine(output, "xunit.core.dll"))
-            ? ProjectEvaluation.Of(new TestApp(Path.GetDirectoryName(project)!, targetPath, RunnerMode.VSTest))
+        string directory = Path.GetDirectoryName(project)!;
+        if (File.Exists(Path.Combine(output, "xunit.core.dll")))
+        {
+            return ProjectEvaluation.Of(new TestApp(directory, targetPath, RunnerMode.VSTest));
+        }
+
+        return File.Exists(Path.Combine(output, "nunit.framework.dll"))
+            ? ProjectEvaluation.Of(new TestApp(directory, targetPath, onTestingPlatform ? RunnerMode.NUnitMtp : RunnerMode.NUnit))
             : ProjectEvaluation.NotATestApp;
     }
 
@@ -118,7 +125,7 @@ internal static class TestApps
         return line.Length <= MaxDetailLength ? line : line[..MaxDetailLength] + "…";
     }
 
-    private static (bool IsTestApp, string TargetPath, string Frameworks)? Parse(string output)
+    private static (bool IsTestApp, bool OnTestingPlatform, string TargetPath, string Frameworks)? Parse(string output)
     {
         int start = output.IndexOf('{', StringComparison.Ordinal);
         if (start < 0)
@@ -128,9 +135,10 @@ internal static class TestApps
 
         using JsonDocument document = JsonDocument.Parse(output[start..]);
         JsonElement properties = document.RootElement.GetProperty("Properties");
-        bool isTestApp = string.Equals(properties.GetProperty("IsTestingPlatformApplication").GetString(), "true", StringComparison.OrdinalIgnoreCase)
+        bool onTestingPlatform = string.Equals(properties.GetProperty("IsTestingPlatformApplication").GetString(), "true", StringComparison.OrdinalIgnoreCase);
+        bool isTestApp = onTestingPlatform
             || (properties.TryGetProperty("IsTestProject", out JsonElement testProject) && string.Equals(testProject.GetString(), "true", StringComparison.OrdinalIgnoreCase));
-        return (isTestApp, properties.GetProperty("TargetPath").GetString() ?? string.Empty, properties.GetProperty("TargetFrameworks").GetString() ?? string.Empty);
+        return (isTestApp, onTestingPlatform, properties.GetProperty("TargetPath").GetString() ?? string.Empty, properties.GetProperty("TargetFrameworks").GetString() ?? string.Empty);
     }
 
     /// <summary>The preferred framework when the project targets it, else the newest <c>netN.M</c> (the SDK's own runtime is the likeliest to be installed).</summary>

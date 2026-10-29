@@ -119,7 +119,7 @@ internal sealed class TraceCommand(CliContext context) : ICommand
 
         if (workspace.Apps.Count == 0)
         {
-            await context.Output.WriteLineAsync("NOT-EARNED no xUnit test project found (v3 on Microsoft.Testing.Platform, or v2 on VSTest) to list the current tests from");
+            await context.Output.WriteLineAsync("NOT-EARNED no test project found to list the current tests from (xUnit v3, xUnit v2 on VSTest or NUnit)");
             return null;
         }
 

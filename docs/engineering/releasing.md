@@ -1,6 +1,6 @@
 # Releasing
 
-A release publishes the `Lockflight.Cli` tool packages to nuget.org and drafts a GitHub Release, all from
+A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishes a GitHub Release, all from
 [`.github/workflows/release-packages.yml`](../../.github/workflows/release-packages.yml). Nothing is published from a laptop.
 
 ## What the workflow does
@@ -11,17 +11,30 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and drafts a
 2. **Builds and tests every platform** (osx-arm64, osx-x64, linux-x64, linux-arm64, win-x64), each on its own runner: build
    with warnings as errors, `dotnet test`, pack the Native AOT package, install it with `dotnet tool install` from a local
    feed, check that `lockflight version` prints the version, `lockflight link` it into a scratch project, run the linked
-   copy, and run the hook compatibility suite (`tests/compat/probe-suite.sh`) on it.
-3. **Packs the pointer package** and writes a CycloneDX software bill of materials.
-4. **Publishes, after approval.** The `publish` job runs in the `nuget` environment, so it waits for a required reviewer. It
-   writes `SHA256SUMS`, records a build provenance attestation for every package, signs in to nuget.org with Trusted
-   Publishing (a short-lived key from GitHub's OIDC token, no stored API key) and pushes the RID packages first and the
-   pointer last, with `--skip-duplicate` so a re-run after a partial push finishes the job.
-5. **Drafts the GitHub Release** for the tag, with notes from git-cliff (the commits since the previous tag) and the
-   packages, `SHA256SUMS` and the SBOM attached. It stays a draft until you publish it.
+   copy, and run the hook compatibility suite (`tests/compat/probe-suite.sh`) on it. Then it hashes the executable inside
+   its package (`tools/any/<rid>/lockflight[.exe]`) and keeps a bare copy of it (`lockflight-<version>-<rid>[.exe]`). The hash
+   is of the executable, not of the package: nuget.org adds its repository signature to every package after the push, which
+   changes the package's bytes but not the executable's.
+3. **Packs the pointer package** with `engine-hashes.json` at its root: `lockflight.engine-hashes/v1`, the version, the
+   tagged commit and the SHA-256 of each platform's executable, merged from the platform jobs (exactly five). It also writes a
+   CycloneDX software bill of materials.
+4. **Verifies the hashes**, on dry runs too: every RID package is extracted again and compared with `engine-hashes.json`,
+   the pointer's copy must be byte-identical, and so must the bare executables. The file that ships describes the packages
+   that ship.
+5. **Publishes, after approval.** The `publish` job runs in the `nuget` environment, so it waits for a required reviewer. It
+   writes `SHA256SUMS` of the packages, the bare executables and `engine-hashes.json`, records a build provenance attestation
+   for all of them, signs in to nuget.org with Trusted Publishing (a short-lived key from GitHub's OIDC token, no stored API
+   key) and pushes the RID packages first and the pointer last. A RID package that already exists on nuget.org fails the
+   push: Native AOT builds are not guaranteed reproducible, so a re-run must not leave older packages beside hashes of new
+   bytes (a partial push needs a new version). It then downloads every package back from nuget.org (polling for up to 30
+   minutes while nuget.org validates them) and verifies them against `engine-hashes.json` again.
+6. **Publishes the GitHub Release** for the tag, with notes from git-cliff (the commits since the previous tag) and the
+   packages, the bare executables, `engine-hashes.json`, `SHA256SUMS` and the SBOM attached. It is published at once, not
+   drafted, so the hashes are downloadable as soon as the packages are on nuget.org; edit the notes afterwards.
 
 A manual dispatch from the tag (Actions → release-packages → Run workflow → "Use workflow from": the tag) with `publish` off
-runs steps 1 to 3 only: a dry run.
+runs steps 1 to 4 only: a dry run. A dispatch from a branch is a dry run of version `0.0.0-ci.<run number>`; its artifacts
+(packages and `engine-hashes.json`) can fill a test feed.
 
 ## One-time setup
 
@@ -95,7 +108,7 @@ throughout and users stay on the previous release until the last step below.
    pull request. Leave `.claude-plugin/marketplace.json` alone. Merge it.
 2. Tag the merge commit and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
 3. Approve the `publish` job when the build and smoke tests are green.
-4. Edit and publish the draft GitHub Release.
+4. Edit the notes of the GitHub Release the workflow published.
 5. Once nuget.org lists the packages, move the marketplace to the release in a pull request of its own:
    `scripts/marketplace-ref.sh set vX.Y.Z` writes the tag and its commit into both entries, copies the descriptions from the
    development marketplace at the tag, and runs the check. Merge it; users
@@ -104,4 +117,6 @@ throughout and users stay on the previous release until the last step below.
 
 Check a published package against its attestation with
 `gh attestation verify Lockflight.Cli.X.Y.Z.nupkg --repo lockflight/lockflight`, using the file from the GitHub Release
-(nuget.org adds its repository signature to the copy it serves, so that file's hash differs).
+(nuget.org adds its repository signature to the copy it serves, so that file's hash differs). `engine-hashes.json` and the bare
+executables are attested the same way; the executable inside nuget.org's copy of a package is byte-identical to the one in
+`engine-hashes.json`.

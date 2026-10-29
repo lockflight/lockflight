@@ -77,7 +77,8 @@ Never approve for them.
    `/lockflight:baseline tests` in Claude Code, and merge that baseline in its own pull request first.
 6. **For each user story, one red/green cycle:**
    1. Declare the members the tests need with bodies `throw new NotImplementedException();`.
-   2. Write the story's xUnit tests (v3 or v2), each tagged `[Trait("Requirement", "FR-001")]`, asserting the specified behaviour.
+   2. Write the story's tests in the project's framework (xUnit v3 or v2, or NUnit), each tagged with its requirement
+      (`[Trait("Requirement", "FR-001")]`; NUnit: `[Property("Requirement", "FR-001")]`), asserting the specified behaviour.
    3. `.lockflight/bin/lockflight redgreen red`. Every new test (one not in the inventory `start` recorded) must fail because
       of production code: the stub's `NotImplementedException` (RED_STUB) or an assertion in a test that calls the production
       code (RED_ASSERT). If the red is rejected, fix the tests — never weaken an assertion to make a red "work". A test the
@@ -93,14 +94,15 @@ Never approve for them.
       | RED_OTHER | another exception, or one thrown by the runtime or a library | stub the member, or assert on its result |
       | RED_NO_PRODUCTION | an assertion fails but the test reaches no production member (a type argument such as `Deserialize<T>`, or `typeof`, is not a call; a method, a constructor or a property read is) | call the member under test |
       | GREEN_BEFORE | the test passes before the code exists | test behaviour that is still missing |
-      | SKIPPED | skipped or not run | remove `Skip` / `Explicit` |
+      | SKIPPED | skipped or not run | remove `Skip` / `Explicit` / `[Ignore]`, `Assert.Ignore`, `Assert.Inconclusive` |
       | FLAKY | repeated runs disagree | make the test deterministic |
 
       Under each test, `redgreen red` says why it got its class; `redgreen red --verbose` adds the exception, the deciding
       stack frame with its line, and the production member the test reaches.
 
-      Assertions recognised: xUnit `Assert` (v2 and v3), Shouldly, FluentAssertions, AwesomeAssertions, NSubstitute
-      `Received`, Moq `Verify`, Verify snapshots. Their other exceptions (misusing the library) are not assertions.
+      Assertions recognised: xUnit `Assert` (v2 and v3), NUnit `Assert.That` and classic asserts, Shouldly,
+      FluentAssertions, AwesomeAssertions, NSubstitute `Received`, Moq `Verify`, Verify snapshots. Their other exceptions
+      (misusing the library) are not assertions.
 
       **Optional test author.** If the agent type `lockflight-crew:test-author` is available (the `lockflight-crew` plugin
       is installed), delegate steps 2–3 for this story to it instead, in these steps; none of them may be skipped:
@@ -152,5 +154,5 @@ Never approve for them.
     Its body holds the trace table, the gate summary and the "Pull request summary" from `review status`, unchanged.
     Merging is always the user's decision.
 
-If the project has no xUnit tests, `redgreen` reports NOT-EARNED (it could not judge): say so, follow the steps without
+If the project has no xUnit or NUnit tests, `redgreen` reports NOT-EARNED (it could not judge): say so, follow the steps without
 red/green, and rely on the gates.

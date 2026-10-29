@@ -26,6 +26,8 @@ internal sealed class SuppressionsStep : IGateStep
 
     public string CacheKey => StepName;
 
+    public GateMode ModeUnder(GateSettings settings) => settings.Suppressions;
+
     public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken)
     {
         GateMode mode = run.Settings.Suppressions;

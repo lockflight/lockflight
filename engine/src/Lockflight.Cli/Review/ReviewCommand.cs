@@ -313,11 +313,12 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
         }
 
         DateTimeOffset started = context.Time.GetUtcNow();
+        IReadOnlyList<TestApp> apps = XunitApps(workspace);
         IReadOnlyList<ReviewFinding> fixChecked = await FixChecks.CheckAsync(
             judged,
-            workspace.Apps,
-            ChangeTests.Find(diff, manifest.Root, workspace.Apps, listed),
-            ChangeTests.Files(diff, manifest.Root, workspace.Apps),
+            apps,
+            ChangeTests.Find(diff, manifest.Root, apps, listed),
+            ChangeTests.Files(diff, manifest.Root, apps),
             manifest.Root,
             TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds),
             context.Time,
@@ -358,16 +359,19 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
             return (unjudged, null, null);
         }
 
-        if (await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> listed || workspace.Apps.Count == 0)
+        // Reproductions are written as xUnit tests: an NUnit project cannot build them.
+        if (await workspace.ListAsync(cancellationToken) is not IReadOnlyList<TestCase> listed || XunitApps(workspace) is not { Count: > 0 } apps)
         {
             return (unjudged, null, null);
         }
 
         TimeSpan timeLimit = TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds);
         IReadOnlyList<ReviewFinding> judged = FindingLifecycle.CombineReproductions(
-            findings, await Reproductions.ConfirmAsync(checks, workspace.Apps, manifest.Root, timeLimit, context.Time, repairer, repairable, cancellationToken));
+            findings, await Reproductions.ConfirmAsync(checks, apps, manifest.Root, timeLimit, context.Time, repairer, repairable, cancellationToken));
         return (judged, workspace, listed);
     }
+
+    private static IReadOnlyList<TestApp> XunitApps(TestWorkspace workspace) => [.. workspace.Apps.Where(app => TestRunners.IsXunit(app.Mode))];
 
     /// <summary>Records the run and every finding it fixed in the ledger, and turns the open findings into the exit code.</summary>
     private async Task<ExitCode> RecordAsync(Manifest manifest, ReviewRun run, ReviewOutcome outcome, CancellationToken cancellationToken)

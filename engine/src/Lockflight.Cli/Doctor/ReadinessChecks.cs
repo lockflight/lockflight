@@ -46,7 +46,7 @@ internal static class ReadinessChecks
     public static async Task<IReadOnlyList<DoctorCheck>> RunAsync(
         string root, string? userHome, string? nugetPackages, string? gitleaks, EnvironmentReader environment, TimeProvider time, CancellationToken cancellationToken)
     {
-        List<DoctorCheck> checks = [CheckManifest(root), CheckPin(root)];
+        List<DoctorCheck> checks = [CheckManifest(root), .. ManifestSettingsChecks.Check(root), CheckPin(root)];
         if (CheckDevelopmentPin(root, userHome, nugetPackages) is DoctorCheck developmentPin)
         {
             checks.Add(developmentPin);
@@ -111,7 +111,9 @@ internal static class ReadinessChecks
 
     private static DoctorCheck CheckManifest(string root) => ManifestLocator.Discover(root) switch
     {
-        { Status: ManifestLoadStatus.Loaded } => new("manifest", CheckStatus.Pass, Manifest.FileName + " is valid", null),
+        { Manifest: Manifest { Version: ManifestVersions.Legacy } } =>
+            new("manifest", CheckStatus.Pass, $"{Manifest.FileName} is valid (version 1, read with migration defaults: the newer checks only report)", null),
+        { Status: ManifestLoadStatus.Loaded } => new("manifest", CheckStatus.Pass, $"{Manifest.FileName} is valid (version 2)", null),
         { Error: ManifestError error } => new("manifest", CheckStatus.Fail, error.Describe(), $"fix {Manifest.FileName} (a human edit; it is protected)"),
         _ => new("manifest", CheckStatus.Fail, $"no {Manifest.FileName}", $"{EngineCommand.Name} init"),
     };

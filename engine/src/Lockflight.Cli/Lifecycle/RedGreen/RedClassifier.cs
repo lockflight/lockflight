@@ -4,14 +4,31 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
 /// Classifies a new test from its pre-implementation run. A red is accepted only when the failure comes from production code:
-/// a <c>NotImplementedException</c> whose top stack frame is in production code (RED_STUB), or an assertion (xUnit's, or one of the
-/// assertion and mocking libraries below) in a test that calls production code (RED_ASSERT). Test code is recognised by the frame's source file under a test project, or, without
+/// a <c>NotImplementedException</c> whose top stack frame is in production code (RED_STUB), or an assertion (xUnit's, NUnit's,
+/// or one of the assertion and mocking libraries below) in a test that calls production code (RED_ASSERT). Test code is recognised by the frame's source file under a test project, or, without
 /// symbols, by its declaring type; production code by the frame's file under a production project or its type in a production
 /// assembly. Runtime and static evidence, not proof of history: the review judges assertion quality.
 /// </summary>
 internal static class RedClassifier
 {
     private const string XunitNamespace = "Xunit.Sdk.";
+
+    /// <summary>
+    /// The namespaces of test frameworks' own exceptions. One that is not an assertion is the framework failing the test (xUnit's
+    /// <c>Assert.Fail</c>, a throwing fixture or constructor, a timeout), never the production code.
+    /// </summary>
+    private static readonly string[] TestFrameworkNamespaces = [XunitNamespace, "NUnit.Framework."];
+
+    /// <summary>
+    /// The exceptions a framework uses to end a test as ignored, inconclusive or passed rather than failed (NUnit's
+    /// <c>Assert.Ignore</c>, <c>Assert.Inconclusive</c>, <c>Assert.Pass</c>). Their runs report the
+    /// test skipped or passed; a row that still names one did not fail on an assertion and is judged as not run.
+    /// </summary>
+    private static readonly HashSet<string> NotFailureExceptions = new(
+        [
+            "NUnit.Framework.IgnoreException", "NUnit.Framework.InconclusiveException", "NUnit.Framework.SuccessException",
+        ],
+        StringComparer.Ordinal);
 
     /// <summary>
     /// The exceptions of xUnit's assertions (v2 and v3). Other <c>Xunit.Sdk</c> exceptions are the test framework failing the test
@@ -30,13 +47,15 @@ internal static class RedClassifier
     /// <summary>
     /// The failure exceptions of assertion and mocking libraries, checked against the packages: <c>Xunit.Sdk.XunitException</c>
     /// (FluentAssertions and AwesomeAssertions throw it under xUnit, and an xUnit v2 assertion in a VSTest run reports it; xUnit itself
-    /// never throws it bare), Shouldly's <c>Should…</c> failures, the two libraries' own exception without a test framework, a failed
+    /// never throws it bare), NUnit's <c>AssertionException</c> and <c>MultipleAssertException</c> (the assertion libraries throw
+    /// these under NUnit), Shouldly's <c>Should…</c> failures, the two libraries' own exception without a test framework, a failed
     /// NSubstitute <c>Received</c> or <c>Received.InOrder</c>, a failed Moq verification (or an unexpected call on a strict mock), and
     /// a failed Verify snapshot. A library's other exceptions report its misuse, not the production code.
     /// </summary>
     private static readonly HashSet<string> LibraryAssertionExceptions = new(
         [
             "Xunit.Sdk.XunitException",
+            TrxFailureMessages.NUnitAssertion, TrxFailureMessages.NUnitMultipleAssertion,
             "Shouldly.ShouldAssertException", "Shouldly.ShouldMatchApprovedException", "Shouldly.ShouldCompleteInException",
             "FluentAssertions.Execution.AssertionFailedException", "AwesomeAssertions.Execution.AssertionFailedException",
             "NSubstitute.Exceptions.ReceivedCallsException", "NSubstitute.Exceptions.CallSequenceNotFoundException",
@@ -63,7 +82,7 @@ internal static class RedClassifier
         IReadOnlyList<ExecutedTest> rows, IReadOnlySet<string> testClasses, IReadOnlyList<string> testDirectories, ProductionCode production, string? productionCall)
     {
         string calls = productionCall is null ? "no production call found" : $"calls {productionCall}";
-        if (rows.Count == 0 || rows.Any(row => row.Outcome is TestOutcome.Skip or TestOutcome.NotRun))
+        if (rows.Count == 0 || rows.Any(row => row.Outcome is TestOutcome.Skip or TestOutcome.NotRun || (row.ExceptionType is string type && NotFailureExceptions.Contains(type))))
         {
             return new RedVerdict(RedClass.Skipped, "skipped or not run", calls);
         }
@@ -92,7 +111,7 @@ internal static class RedClassifier
                 : new RedVerdict(RedClass.RedAssert, $"{exception} fails; calls {productionCall}", detail);
         }
 
-        if (row.ExceptionType?.StartsWith(XunitNamespace, StringComparison.Ordinal) == true)
+        if (row.ExceptionType is string frameworkException && TestFrameworkNamespaces.Any(space => frameworkException.StartsWith(space, StringComparison.Ordinal)))
         {
             return new RedVerdict(RedClass.RedInTest, $"{exception} from the test framework (Assert.Fail, a throwing fixture or constructor, a timeout)", detail);
         }

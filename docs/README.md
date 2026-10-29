@@ -36,6 +36,7 @@ New here? Start with <a href="guides/getting-started.md">getting started</a>, th
 | Page | Read it when |
 |---|---|
 | [How it works](architecture.md) | You want the parts and how they fit: the engine, the plugin, the guard, gates, the lifecycle and where the trust comes from. |
+| [Risk routing](guides/risk-routing.md) | You want to know how a pull request's change class is computed from its diff: file roles, size, moves (being built). |
 | [Guardrails and boundaries](guides/guardrails-and-boundaries.md) | You need to know what Lockflight can and cannot guarantee, and what the shell write detection sees. |
 | [Glossary](guides/glossary.md) | A term is unfamiliar: verdicts, profiles, cycles, approvals, the ledger. |
 

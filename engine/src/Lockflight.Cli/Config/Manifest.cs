@@ -15,4 +15,22 @@ internal sealed record Manifest(string Root, IReadOnlyList<string> ProtectedGlob
 
     /// <summary>What a review needs to be the review of record (<c>review:</c>); the defaults when the manifest has no such section.</summary>
     public ReviewSettings Review { get; init; } = ReviewSettings.Default;
+
+    /// <summary>The manifest's <c>version</c>: 1 (or absent, read with migration defaults) or 2.</summary>
+    public int Version { get; init; } = ManifestVersions.Current;
+
+    /// <summary>The lowest engine version the manifest needs (<c>requiresEngine</c>); null when it names none.</summary>
+    public string? RequiresEngine { get; init; }
+
+    /// <summary>How a change's class is computed and what each class must prove (<c>routing:</c>).</summary>
+    public RoutingSettings Routing { get; init; } = RoutingSettings.Default;
+
+    /// <summary>Where specs are approved and what the CI judge checks about it (<c>approvals:</c>).</summary>
+    public ApprovalSettings Approvals { get; init; } = ApprovalSettings.Default;
+
+    /// <summary>The reserved <c>autonomy:</c> section; null when the manifest has none. Nothing but <c>doctor</c> reads it.</summary>
+    public AutonomySettings? Autonomy { get; init; }
+
+    /// <summary>The workspace shell this repository is a unit of (<c>shell:</c>); null for a single repository, a shell or a monorepo.</summary>
+    public ShellSettings? Shell { get; init; }
 }

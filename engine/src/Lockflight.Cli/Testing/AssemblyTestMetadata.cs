@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
@@ -6,16 +5,19 @@ using System.Reflection.PortableExecutable;
 namespace Lockflight.Cli.Testing;
 
 /// <summary>
-/// The xUnit v2 tests of a built assembly, read from its metadata without loading it (AOT-safe): public methods of non-abstract
-/// classes visible outside the assembly — inherited ones from base classes in the same assembly too — whose attribute is <c>FactAttribute</c>,
-/// <c>TheoryAttribute</c> or one derived by name (<c>SkippableFactAttribute</c>), with their <c>Skip</c> reason and
-/// <c>[Trait("Requirement", …)]</c> values. VSTest's own listing has neither assembly nor traits.
+/// The tests of a built xUnit v2 or NUnit assembly, read from its metadata without loading it (AOT-safe): public methods, inherited
+/// ones from base classes in the same assembly too, carrying the framework's test attributes (<see cref="TestAttributes"/>), with
+/// their skip reason, explicit mark and <c>Requirement</c> values. The classes are those the framework runs: for xUnit v2
+/// non-abstract classes visible outside the assembly; for NUnit non-abstract or static classes of any visibility, generic ones left
+/// out. VSTest's own listing has neither assembly nor traits. A test is one case per method: parameterized rows
+/// (<c>[TestCase]</c>) are not enumerated.
 /// </summary>
 internal static class AssemblyTestMetadata
 {
-    private const string RequirementTrait = "Requirement";
+    /// <summary>The xUnit v2 tests of the assembly.</summary>
+    public static IReadOnlyList<TestCase> Read(string assemblyPath) => Read(assemblyPath, TestFrameworkKind.XunitV2);
 
-    public static IReadOnlyList<TestCase> Read(string assemblyPath)
+    public static IReadOnlyList<TestCase> Read(string assemblyPath, TestFrameworkKind framework)
     {
         using FileStream stream = File.OpenRead(assemblyPath);
         using PEReader pe = new(stream);
@@ -24,14 +26,12 @@ internal static class AssemblyTestMetadata
         List<TestCase> tests = [];
         foreach (TypeDefinitionHandle handle in reader.TypeDefinitions)
         {
-            TypeDefinition type = reader.GetTypeDefinition(handle);
-            if ((type.Attributes & TypeAttributes.Abstract) != 0 || (type.Attributes & TypeAttributes.ClassSemanticsMask) == TypeAttributes.Interface
-                || !IsVisibleOutsideAssembly(reader, handle))
+            if (!IsTestClass(reader, handle, framework))
             {
-                // xUnit v2 runs public, non-abstract classes only (its discovery reads the assembly's exported types).
                 continue;
             }
 
+            TestAttributeSet fixture = TestAttributes.OfClass(reader, reader.GetTypeDefinition(handle).GetCustomAttributes(), framework);
             string className = FullName(reader, handle);
             HashSet<string> seen = new(StringComparer.Ordinal);
             for (TypeDefinitionHandle? current = handle; current is TypeDefinitionHandle currentHandle; current = BaseInSameAssembly(reader, currentHandle))
@@ -45,16 +45,41 @@ internal static class AssemblyTestMetadata
                         continue;
                     }
 
-                    (bool isTest, string? skip, IReadOnlyList<string> requirements) = TestAttributes(reader, method);
-                    if (isTest && seen.Add(name))
+                    TestAttributeSet attributes = TestAttributes.OfMethod(reader, method.GetCustomAttributes(), framework);
+                    if (attributes.IsTest && seen.Add(name))
                     {
-                        tests.Add(new TestCase(assembly, className, name, requirements, skip));
+                        tests.Add(new TestCase(
+                            assembly,
+                            className,
+                            name,
+                            [.. fixture.Requirements.Concat(attributes.Requirements).Distinct(StringComparer.Ordinal)],
+                            attributes.SkipReason ?? fixture.SkipReason,
+                            attributes.IsExplicit || fixture.IsExplicit));
                     }
                 }
             }
         }
 
         return tests;
+    }
+
+    /// <summary>Whether the framework runs the tests of a class (see the class summary for each framework's rule).</summary>
+    private static bool IsTestClass(MetadataReader reader, TypeDefinitionHandle handle, TestFrameworkKind framework)
+    {
+        TypeDefinition type = reader.GetTypeDefinition(handle);
+        if ((type.Attributes & TypeAttributes.ClassSemanticsMask) == TypeAttributes.Interface)
+        {
+            return false;
+        }
+
+        bool isAbstract = (type.Attributes & TypeAttributes.Abstract) != 0;
+        return framework switch
+        {
+            // A static class is abstract and sealed in metadata; NUnit runs its static tests.
+            TestFrameworkKind.NUnit => (!isAbstract || (type.Attributes & TypeAttributes.Sealed) != 0) && type.GetGenericParameters().Count == 0,
+            // xUnit v2 runs public, non-abstract classes only (its discovery reads the assembly's exported types).
+            _ => !isAbstract && IsVisibleOutsideAssembly(reader, handle),
+        };
     }
 
     /// <summary>A public class, or a public class nested only in public classes: what <c>Assembly.GetExportedTypes</c> lists.</summary>
@@ -69,49 +94,6 @@ internal static class AssemblyTestMetadata
             _ => false,
         };
     }
-
-    /// <summary>Whether a method is a test, its skip reason and its Requirement trait values.</summary>
-    private static (bool IsTest, string? Skip, IReadOnlyList<string> Requirements) TestAttributes(MetadataReader reader, MethodDefinition method)
-    {
-        bool isTest = false;
-        string? skip = null;
-        List<string> requirements = [];
-        foreach (CustomAttributeHandle handle in method.GetCustomAttributes())
-        {
-            CustomAttribute attribute = reader.GetCustomAttribute(handle);
-            string attributeType = AttributeTypeName(reader, attribute);
-            if (attributeType.EndsWith("FactAttribute", StringComparison.Ordinal) || attributeType.EndsWith("TheoryAttribute", StringComparison.Ordinal))
-            {
-                isTest = true;
-                CustomAttributeValue<string> value = attribute.DecodeValue(StringTypes.Instance);
-                skip = value.NamedArguments.FirstOrDefault(argument => argument.Name == "Skip").Value as string ?? skip;
-            }
-            else if (attributeType == "TraitAttribute")
-            {
-                ImmutableArray<CustomAttributeTypedArgument<string>> arguments = attribute.DecodeValue(StringTypes.Instance).FixedArguments;
-                if (arguments.Length == 2 && arguments[0].Value as string == RequirementTrait && arguments[1].Value is string requirement)
-                {
-                    requirements.Add(requirement);
-                }
-            }
-        }
-
-        return (isTest, skip, requirements);
-    }
-
-    private static string AttributeTypeName(MetadataReader reader, CustomAttribute attribute) => attribute.Constructor.Kind switch
-    {
-        HandleKind.MemberReference => TypeName(reader, reader.GetMemberReference((MemberReferenceHandle)attribute.Constructor).Parent),
-        HandleKind.MethodDefinition => reader.GetString(reader.GetTypeDefinition(reader.GetMethodDefinition((MethodDefinitionHandle)attribute.Constructor).GetDeclaringType()).Name),
-        _ => string.Empty,
-    };
-
-    private static string TypeName(MetadataReader reader, EntityHandle handle) => handle.Kind switch
-    {
-        HandleKind.TypeReference => reader.GetString(reader.GetTypeReference((TypeReferenceHandle)handle).Name),
-        HandleKind.TypeDefinition => reader.GetString(reader.GetTypeDefinition((TypeDefinitionHandle)handle).Name),
-        _ => string.Empty,
-    };
 
     /// <summary><c>Namespace.Outer+Inner</c>, as VSTest's fully qualified names and xUnit write nested classes.</summary>
     private static string FullName(MetadataReader reader, TypeDefinitionHandle handle)
@@ -128,32 +110,29 @@ internal static class AssemblyTestMetadata
         return space.Length == 0 ? name : $"{space}.{name}";
     }
 
+    /// <summary>The base class when this assembly defines it, a generic base (<c>Base&lt;int&gt;</c>) included; null otherwise.</summary>
     private static TypeDefinitionHandle? BaseInSameAssembly(MetadataReader reader, TypeDefinitionHandle handle)
     {
         EntityHandle baseType = reader.GetTypeDefinition(handle).BaseType;
+        if (!baseType.IsNil && baseType.Kind == HandleKind.TypeSpecification)
+        {
+            baseType = GenericDefinition(reader, (TypeSpecificationHandle)baseType);
+        }
+
         return !baseType.IsNil && baseType.Kind == HandleKind.TypeDefinition ? (TypeDefinitionHandle)baseType : null;
     }
 
-    /// <summary>Decodes attribute arguments far enough to read strings; every other type is named, not resolved.</summary>
-    private sealed class StringTypes : ICustomAttributeTypeProvider<string>
+    /// <summary>The generic type a <c>GENERICINST</c> type specification instantiates; a nil handle for any other specification.</summary>
+    private static EntityHandle GenericDefinition(MetadataReader reader, TypeSpecificationHandle handle)
     {
-        public static StringTypes Instance { get; } = new();
+        BlobReader signature = reader.GetBlobReader(reader.GetTypeSpecification(handle).Signature);
+        if (signature.ReadSignatureTypeCode() != SignatureTypeCode.GenericTypeInstance)
+        {
+            return default;
+        }
 
-        public string GetPrimitiveType(PrimitiveTypeCode typeCode) => typeCode.ToString();
-
-        public string GetSystemType() => "System.Type";
-
-        public string GetSZArrayType(string elementType) => elementType + "[]";
-
-        public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind) => reader.GetString(reader.GetTypeDefinition(handle).Name);
-
-        public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind) => reader.GetString(reader.GetTypeReference(handle).Name);
-
-        public string GetTypeFromSerializedName(string name) => name;
-
-        // Enum arguments are not needed (Fact, Theory and Trait take strings); a 32-bit underlying type is the common case.
-        public PrimitiveTypeCode GetUnderlyingEnumType(string type) => PrimitiveTypeCode.Int32;
-
-        public bool IsSystemType(string type) => type is "System.Type" or "Type";
+        // CLASS or VALUETYPE, then the generic type itself.
+        signature.ReadSignatureTypeCode();
+        return signature.ReadTypeHandle();
     }
 }
