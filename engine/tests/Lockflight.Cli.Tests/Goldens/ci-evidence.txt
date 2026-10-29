@@ -1,0 +1,166 @@
+{
+  "schema": "lockflight.ci-evidence/v1",
+  "engine": {
+    "version": "0.3.0",
+    "rid": "linux-x64",
+    "sha256": null
+  },
+  "platform": "github",
+  "event": "pr",
+  "run": null,
+  "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base": {
+    "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "mergeBase": "cccccccccccccccccccccccccccccccccccccccc",
+    "otherMergeBases": []
+  },
+  "branch": "012-checkout",
+  "policy": {
+    "from": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "manifestSha256": null,
+    "restored": [
+      "lockflight.yaml"
+    ]
+  },
+  "ignored": [
+    ".specify/feature.json"
+  ],
+  "feature": null,
+  "changeClass": {
+    "class": "behaviour",
+    "computed": "behaviour",
+    "policy": {
+      "base": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "manifest": null,
+      "preset": "interim"
+    },
+    "signals": [
+      {
+        "id": "interim.changed",
+        "raisesTo": "behaviour",
+        "strength": "heuristic",
+        "where": "src/Shop/Price.cs",
+        "detail": "paths outside ci.lowRiskPaths changed"
+      }
+    ],
+    "raises": [],
+    "engine": "0.3.0"
+  },
+  "redCommits": [
+    {
+      "commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "label": "1",
+      "forkPoint": null,
+      "superseded": true,
+      "malformed": null,
+      "subject": "test(012-checkout): red for US1"
+    },
+    {
+      "commit": "ffffffffffffffffffffffffffffffffffffffff",
+      "label": null,
+      "forkPoint": null,
+      "superseded": false,
+      "malformed": "'x' is not a cycle number (a positive whole number such as 2)",
+      "subject": "test: bad"
+    },
+    {
+      "commit": "dddddddddddddddddddddddddddddddddddddddd",
+      "label": "1",
+      "forkPoint": "cccccccccccccccccccccccccccccccccccccccc",
+      "superseded": false,
+      "malformed": null,
+      "subject": "test(012-checkout): red for US1 again"
+    }
+  ],
+  "cycles": [],
+  "testsWithoutRed": [],
+  "green": null,
+  "trace": null,
+  "gates": null,
+  "approvals": null,
+  "blocked": null,
+  "review": {
+    "state": "expected",
+    "artifact": "lockflight-review"
+  },
+  "checks": [
+    {
+      "id": "red",
+      "context": "lockflight/judge",
+      "verdict": "NOT-EARNED",
+      "requirement": "required",
+      "why": "not judged by this engine version yet"
+    },
+    {
+      "id": "tests.sinceRed",
+      "context": "lockflight/judge",
+      "verdict": "NOT-EARNED",
+      "requirement": "required",
+      "why": "not judged by this engine version yet"
+    },
+    {
+      "id": "tests.existingChanged",
+      "context": "lockflight/judge",
+      "verdict": "NOT-EARNED",
+      "requirement": "advisory",
+      "why": "not judged by this engine version yet"
+    },
+    {
+      "id": "tests.hostTampering",
+      "context": "lockflight/judge",
+      "verdict": "NOT-EARNED",
+      "requirement": "required",
+      "why": "not judged by this engine version yet"
+    },
+    {
+      "id": "green",
+      "context": "gates",
+      "verdict": "NOT-EARNED",
+      "requirement": "required",
+      "why": "not judged by this engine version yet"
+    },
+    {
+      "id": "trace",
+      "context": "lockflight/judge",
+      "verdict": "NOT-EARNED",
+      "requirement": "advisory",
+      "why": "not judged by this engine version yet"
+    },
+    {
+      "id": "gates",
+      "context": "gates",
+      "verdict": "NOT-EARNED",
+      "requirement": "required",
+      "why": "not judged by this engine version yet"
+    },
+    {
+      "id": "review",
+      "context": "lockflight/judge",
+      "verdict": "SKIPPED",
+      "requirement": "advisory",
+      "why": "the report joins the review job's result"
+    },
+    {
+      "id": "approvals",
+      "context": "lockflight/judge",
+      "verdict": "NOT-EARNED",
+      "requirement": "advisory",
+      "why": "not judged by this engine version yet"
+    }
+  ],
+  "contexts": {
+    "gates": "NOT-EARNED",
+    "lockflight/judge": "NOT-EARNED"
+  },
+  "verdict": "NOT-EARNED",
+  "budget": {
+    "limitSeconds": 2700,
+    "usedSeconds": 12,
+    "exhausted": false,
+    "notRun": []
+  },
+  "builds": [],
+  "startedAt": "2026-10-29T10:00:00Z",
+  "finishedAt": "2026-10-29T10:00:12Z"
+}

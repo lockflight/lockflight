@@ -407,6 +407,12 @@ CI
   gate run --profile pr [--base <ref>] [--result <file>]
                                                 stop steps plus policy, suppressions, references, EF
                                                 model changes, patch coverage, dependencies, secrets
+  ci [--head <sha>] [--base <sha>] [--branch <name>] [--platform github|bitbucket|gitlab|azure|local]
+     [--event pr|push|merge-group] [--evidence <dir>] [--shell <path>] [--no-review-expected] [--plan]
+                                                judge a pull request's commits with the target branch's
+                                                policy: the red commits (Lockflight-Red trailer), the change
+                                                class and each check, into evidence.json; --plan prints the
+                                                steps without building (local: HEAD against the target)
 
 Exit codes
   0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)
