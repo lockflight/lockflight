@@ -12,7 +12,7 @@ baseline build: [--path]
 baseline tests: [--path]
 baseline deps: [--path]
 baseline suppressions: []
-gate run: [--profile --path --unit --base --result]
+gate run: [--profile --path --unit --base --result --full]
 phase check: [--feature] arguments
 redgreen start: [--feature]
 redgreen red: [--feature --verbose]

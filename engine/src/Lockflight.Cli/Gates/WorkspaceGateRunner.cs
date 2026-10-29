@@ -166,7 +166,7 @@ internal static class WorkspaceGateRunner
     {
         // The unit shares the run's deadline: its own context would start a fresh budget.
         string directory = Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar));
-        GateRunContext run = (root with { Target = directory }).ForUnit(unit, directory);
+        GateRunContext run = (root with { Target = directory, UnitDirectories = GateRunContext.UnitDirectoriesOf(manifest) }).ForUnit(unit, directory);
 
         List<GateStep> steps = [];
         GateRunFacts facts = GateRunFacts.None;

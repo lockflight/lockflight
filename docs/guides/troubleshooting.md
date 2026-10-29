@@ -217,6 +217,24 @@ The gate could not judge, and NOT-EARNED is never a pass. The line under the ste
 A step that says **N/A** did not apply (for example `coverage.patch` without `gates.coverage.collector`). It is neither a pass
 nor a failure.
 
+## The Stop gate is slow
+
+Read the `projects.affected` line of the last run (`.lockflight/bin/lockflight gate run`, or the `gate:stop` line in the
+ledger). It names the projects the gate built and why.
+
+- **"every project: …"** names the reason the gate built everything. A change to a shared build input
+  (`Directory.Build.props`, `global.json`, a `.props` file) or to a file outside every project does that on purpose. A
+  reference through an MSBuild property (`$(RepoRoot)/src/…`) makes the graph unknown: write it relative to the project
+  (`../Core/Core.csproj` or `$(MSBuildThisFileDirectory)../Core/Core.csproj`) and the gate can choose again. See
+  [how the projects are chosen](configuration.md#the-stop-profile-builds-what-the-change-affects).
+- **Many projects, each "affected by … via …":** a project most of the solution depends on changed; that is the work the
+  change needs.
+- **Few projects, but the tests take long:** keep the slow ones out of the Stop gate with `test.stopFilter` (for example
+  `Category!=Integration`); the `pr` profile still runs them.
+- **A workspace:** `doctor` names the units whose Stop time is above 2 minutes at the 95th percentile.
+
+Whatever the Stop gate leaves out, CI runs: `gate run --profile pr` builds and tests everything.
+
 ## The format gate fails
 
 The format gate judges only the lines the change touched (see the [configuration reference](configuration.md#the-format-step-judges-the-change-not-the-file)).

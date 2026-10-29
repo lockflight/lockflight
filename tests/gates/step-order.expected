@@ -10,6 +10,8 @@ exit: 0
 $ lockflight gate run --profile stop
 format: N/A (N ms)
   no changed C# lines
+projects.affected: N/A (N ms)
+  every project: the target has no single solution file
 build: PASS (N ms)
 test: PASS (N ms)
   total 1
@@ -21,6 +23,8 @@ exit: 0
 $ lockflight gate run --profile stop
 format: PASS (N ms)
   1 files checked
+projects.affected: N/A (N ms)
+  every project: the target has no single solution file
 build: PASS (N ms)
 test: PASS (N ms)
   total 1
@@ -40,6 +44,8 @@ exit: 3
 $ lockflight gate run --profile stop
 format: N/A (N ms)
   no changed C# lines
+projects.affected: N/A (N ms)
+  every project: the target has no single solution file
 build: FAIL (N ms)
   Program.cs(1,1): error CS1002: ; expected
 Scope: nothing judged
@@ -50,6 +56,8 @@ exit: 1
 $ lockflight gate run --profile stop
 format: N/A (N ms)
   no changed C# lines
+projects.affected: N/A (N ms)
+  every project: the target has no single solution file
 build: PASS (N ms)
 test: FAIL (N ms)
   1 failed: Shop.Tests.OrderTotal
@@ -166,6 +174,58 @@ Scope: 1 tests
 Result: PASS
 exit: 0
 
+## layered: stop builds and tests the projects a change affects
+$ lockflight gate run --profile stop
+format: PASS (N ms)
+  1 files checked
+projects.affected: N/A (N ms)
+  2 of 4 projects, by the uncommitted changes (--full runs every project): Api.csproj (changed: src/Api/Api.cs); Api.Tests.csproj (affected by src/Api/Api.cs via Api.csproj)
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+Scope: 1 tests
+Result: PASS
+exit: 0
+
+## layered: a test failure among the affected projects ends the run
+$ lockflight gate run --profile stop
+format: PASS (N ms)
+  1 files checked
+projects.affected: N/A (N ms)
+  2 of 4 projects, by the uncommitted changes (--full runs every project): Api.csproj (changed: src/Api/Api.cs); Api.Tests.csproj (affected by src/Api/Api.cs via Api.csproj)
+build: PASS (N ms)
+test: FAIL (N ms)
+  1 failed: Shop.Tests.OrderTotal
+Scope: 1 tests
+Result: FAIL
+exit: 1
+
+## layered: --full builds and tests every project
+$ lockflight gate run --profile stop --full
+format: PASS (N ms)
+  1 files checked
+projects.affected: N/A (N ms)
+  every project: --full
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+Scope: 1 tests
+Result: PASS
+exit: 0
+
+## layered: a shared build input runs every project
+$ lockflight gate run --profile stop
+format: N/A (N ms)
+  no changed C# lines
+projects.affected: N/A (N ms)
+  every project: Directory.Build.props changed, a build input every project may share
+build: PASS (N ms)
+test: PASS (N ms)
+  total 1
+Scope: 1 tests
+Result: PASS
+exit: 0
+
 ## workspace: edit
 $ lockflight gate run --profile edit
 missing: N/A (N ms)
@@ -182,9 +242,13 @@ missing: N/A (N ms)
   not present in this checkout: not built
 web: N/A (N ms)
   no changes, not run
+services/orders: projects.affected: N/A (N ms)
+  every project: the target builds a single project
 services/orders: build: PASS (N ms)
 services/orders: test: PASS (N ms)
   total 1
+services/billing: projects.affected: N/A (N ms)
+  every project: the target builds a single project
 services/billing: build: PASS (N ms)
 services/billing: test: PASS (N ms)
   total 1
@@ -198,8 +262,12 @@ missing: N/A (N ms)
   not present in this checkout: not built
 web: N/A (N ms)
   no changes, not run
+services/orders: projects.affected: N/A (N ms)
+  every project: the target builds a single project
 services/orders: build: FAIL (N ms)
   Program.cs(1,1): error CS1002: ; expected
+services/billing: projects.affected: N/A (N ms)
+  every project: the target builds a single project
 services/billing: build: PASS (N ms)
 services/billing: test: PASS (N ms)
   total 1
@@ -333,6 +401,8 @@ exit: 0
 
 ## workspace: --unit runs one unit
 $ lockflight gate run --profile stop --unit services/billing
+services/billing: projects.affected: N/A (N ms)
+  every project: the target builds a single project
 services/billing: build: PASS (N ms)
 services/billing: test: PASS (N ms)
   total 1

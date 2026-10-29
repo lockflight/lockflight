@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Gate step order and run policies, pinned with a stand-in for the .NET SDK and gitleaks, so no real build runs: which steps each
-# profile runs and in what order, where a single repository stops (the first step that does not pass), what a workspace runs once
-# at the root and per unit, the N/A rows of skipped units, secrets only when every earlier step passed, and the verdict.
+# profile runs and in what order, which projects the stop profile chooses in a solution, where a single repository stops (the first
+# step that does not pass), what a workspace runs once at the root and per unit, the N/A rows of skipped units, secrets only when
+# every earlier step passed, and the verdict.
 #   ENGINE=<path to lockflight> bash tests/gates/step-order.sh [--update]
 # Compares the gate output with tests/gates/step-order.expected (durations blanked); --update rewrites that file instead.
 # POSIX shells only: the stand-ins are shell scripts.
@@ -99,6 +100,24 @@ YAML
   echo "$root"
 }
 
+# A solution of four projects: Api.Tests -> Api -> Core <- Core.Tests, for the stop profile's choice of projects.
+layered() {
+  local root="$scratch/layered"
+  rm -rf "$root"
+  mkdir -p "$root/src/Core" "$root/src/Api" "$root/tests/Core.Tests" "$root/tests/Api.Tests"
+  printf 'version: 1\n' > "$root/lockflight.yaml"
+  printf '<Project Sdk="Microsoft.NET.Sdk" />\n' > "$root/src/Core/Core.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><ProjectReference Include="../Core/Core.csproj" /></ItemGroup></Project>\n' > "$root/src/Api/Api.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit" /><ProjectReference Include="../../src/Core/Core.csproj" /></ItemGroup></Project>\n' > "$root/tests/Core.Tests/Core.Tests.csproj"
+  printf '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit" /><ProjectReference Include="../../src/Api/Api.csproj" /></ItemGroup></Project>\n' > "$root/tests/Api.Tests/Api.Tests.csproj"
+  printf '<Solution>\n  <Project Path="src/Core/Core.csproj" />\n  <Project Path="src/Api/Api.csproj" />\n  <Project Path="tests/Core.Tests/Core.Tests.csproj" />\n  <Project Path="tests/Api.Tests/Api.Tests.csproj" />\n</Solution>\n' > "$root/Shop.slnx"
+  printf 'class Api {}\n' > "$root/src/Api/Api.cs"
+  printf '.lockflight/\n' > "$root/.gitignore"
+  git init -q "$root"
+  commit_all "$root"
+  echo "$root"
+}
+
 # One case: a fresh fixture, optional extra setup, then the gate run with its exit code; durations become "N ms".
 run_case() {
   local title="$1" fixture="$2" setup="$3"
@@ -127,6 +146,10 @@ render() {
   FAKE_FAIL=deps run_case "single: pr stops at a dependency error, before secrets" single : --profile pr --base HEAD
   GITLEAKS="$scratch/no-gitleaks" run_case "single: pr without gitleaks" single : --profile pr --base HEAD
   run_case "single: pr without a base" single : --profile pr
+  run_case "layered: stop builds and tests the projects a change affects" layered 'printf "class Api { }\n" > src/Api/Api.cs' --profile stop
+  FAKE_FAIL="test" run_case "layered: a test failure among the affected projects ends the run" layered 'printf "class Api { }\n" > src/Api/Api.cs' --profile stop
+  run_case "layered: --full builds and tests every project" layered 'printf "class Api { }\n" > src/Api/Api.cs' --profile stop --full
+  run_case "layered: a shared build input runs every project" layered 'printf "<Project />\n" > Directory.Build.props' --profile stop
   run_case "workspace: edit" workspace : --profile edit
   run_case "workspace: stop judges every unit never judged" workspace : --profile stop
   FAKE_FAIL=build FAKE_FAIL_IN=orders run_case "workspace: one unit's build failure, the other unit still runs" workspace : --profile stop
