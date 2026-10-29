@@ -47,6 +47,6 @@ public sealed class CiEvidenceTests
         IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.Shape, JudgeEvent.PullRequest);
         JudgePlan plan = new(inputs, policy, MergeBase, [], selection, classification, requirements, levels,
             [new PlanStep("P0", null, "inputs", "git only", 0), new PlanStep("P3", Red, "red 1", "build, list, run", 1)], ["src/Shop/Price.cs"], [".specify/feature.json"]);
-        return new JudgeRun(plan, JudgeChecks.FromPlan(plan), StartedAt, StartedAt.AddSeconds(12));
+        return new JudgeRun(plan, JudgeFindings.None, JudgeChecks.Decide(plan, JudgeFindings.None), StartedAt, StartedAt.AddSeconds(12));
     }
 }

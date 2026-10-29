@@ -1,0 +1,90 @@
+using Lockflight.Cli.Config;
+using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Testing;
+
+namespace Lockflight.Cli.Ci;
+
+/// <summary>
+/// Builds and lists the trees of a pull request one after the other in the judge's single worktree, each with the base policy laid
+/// over it. A build that fails incrementally is retried once from clean before it counts as failed. Every build is recorded.
+/// </summary>
+internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, string repositoryRoot, TimeProvider time)
+{
+    private const int DefaultTimeoutSeconds = 600;
+
+    private readonly List<BuildRecord> builds = [];
+    private readonly Dictionary<string, TreeListing> listed = new(StringComparer.Ordinal);
+
+    public IReadOnlyList<BuildRecord> Builds => builds;
+
+    /// <summary>The root of the tree being built: production projects are found under it.</summary>
+    public string Root => worktree.Root;
+
+    public TimeSpan ProcessLimit => TimeSpan.FromSeconds(policy.Manifest?.Gates.TimeoutSeconds ?? DefaultTimeoutSeconds);
+
+    /// <summary>
+    /// The tree at <paramref name="commit"/>, built and listed. A commit listed before is not built again: its inventory stands, but
+    /// its workspace may no longer hold that commit's build, so tests are run only on the listing just made.
+    /// </summary>
+    public async Task<TreeListing> ListAsync(string commit, string purpose, CancellationToken cancellationToken)
+    {
+        if (listed.TryGetValue(commit, out TreeListing? known))
+        {
+            return known;
+        }
+
+        TestWorkspace workspace = Workspace();
+        long started = time.GetTimestamp();
+        TreeListing listing = await BuildAndListAsync(commit, workspace, cancellationToken);
+        builds.Add(new BuildRecord(commit, purpose, time.GetElapsedTime(started).TotalSeconds, listing.Outcome));
+        listed[commit] = listing;
+        return listing;
+    }
+
+    private async Task<TreeListing> BuildAndListAsync(string commit, TestWorkspace workspace, CancellationToken cancellationToken)
+    {
+        string? buildOutput = null;
+        foreach (bool clean in new[] { false, true })
+        {
+            if (await worktree.MoveToAsync(commit, policy.Commit, clean, cancellationToken) is string notMoved)
+            {
+                return new TreeListing(commit, TreeOutcome.Broken, workspace, null, notMoved);
+            }
+
+            if (!Directory.EnumerateFiles(worktree.Root, "*.*proj", SearchOption.AllDirectories).Any())
+            {
+                return new TreeListing(commit, TreeOutcome.NoTestApps, workspace, null, "no .NET project in the tree; red/green needs an xUnit or NUnit test project");
+            }
+
+            buildOutput = await workspace.BuildAsync(cancellationToken);
+            if (buildOutput is null)
+            {
+                break;
+            }
+        }
+
+        if (buildOutput is not null)
+        {
+            return new TreeListing(commit, TreeOutcome.CompileFailed, workspace, null, RedGreenSession.Tail(buildOutput));
+        }
+
+        if (workspace.DiscoveryProblem is string incomplete)
+        {
+            return new TreeListing(commit, TreeOutcome.DiscoveryIncomplete, workspace, null, incomplete);
+        }
+
+        if (workspace.Apps.Count == 0)
+        {
+            return new TreeListing(commit, TreeOutcome.NoTestApps, workspace, null, "no xUnit test project (v3, or v2 on VSTest) found; other frameworks get the gates only");
+        }
+
+        return await workspace.ListAsync(cancellationToken) is IReadOnlyList<TestCase> inventory
+            ? new TreeListing(commit, TreeOutcome.Ok, workspace, inventory, null)
+            : new TreeListing(commit, TreeOutcome.Broken, workspace, null, $"the test runner could not list the tests of {workspace.FailedApp}");
+    }
+
+    /// <summary>The base manifest's build targets, rooted in the worktree; the repository root when the base has no manifest.</summary>
+    private TestWorkspace Workspace() => policy.Manifest is Manifest manifest
+        ? TestWorkspaces.For(manifest, feature: null, time).MovedTo(worktree.Root)
+        : new TestWorkspace(repositoryRoot, [new BuildTarget(repositoryRoot, BuildFile: null, PreferredFramework: null)], ProcessLimit, time).MovedTo(worktree.Root);
+}

@@ -7,15 +7,42 @@ namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// Violations planted in front of the CI judge's trust checks, each in a scripted history of its own with a harmless twin that must
-/// pass: a pull request that loosens the policy in its own <c>lockflight.yaml</c>, and a shallow clone that lacks the merge base.
+/// pass: a pull request that loosens the policy in its own <c>lockflight.yaml</c>, a shallow clone that lacks the merge base, and,
+/// on a real build, a red trailer on a commit that already holds the implementation.
 /// </summary>
 internal static class CiJudgeCanaries
 {
     public const string PolicyName = "ci: a pull request that loosens lockflight.yaml is judged by the target branch's policy";
     public const string ShallowName = "ci: a shallow clone without the merge base is refused, not judged on a narrower range";
+    public const string ImplementationName = "ci: a red trailer on a commit that holds the implementation is rejected (GREEN_BEFORE)";
+
+    private const string ShippingTest = "    [Fact]\n    public void ShippingIsTwiceTheWeight() => Assert.Equal(4m, new Price().Shipping(2m));";
 
     public static async Task<IReadOnlyList<CanaryReport>> RunAsync(CancellationToken cancellationToken) =>
-        [await PolicyFromBaseAsync(cancellationToken), await ShallowCloneAsync(cancellationToken)];
+        [await PolicyFromBaseAsync(cancellationToken), await ShallowCloneAsync(cancellationToken), await ImplementationInRedAsync(cancellationToken)];
+
+    private static async Task<CanaryReport> ImplementationInRedAsync(CancellationToken cancellationToken)
+    {
+        using GitHistoryFixture repository = await GitHistoryFixture.CreateAsync(cancellationToken);
+        using TemporaryEvidence evidence = new();
+        string main = await repository.WriteSolution(string.Empty, string.Empty).CommitAsync("init", cancellationToken);
+        await repository.CheckoutNewAsync("001-x", cancellationToken);
+        string stub = await repository.WriteCode("    public decimal Shipping(decimal kilograms) => throw new NotImplementedException();", ShippingTest)
+            .CommitAsync("test: red", cancellationToken, null, "Lockflight-Red: 1");
+        string twin = await CheckAsync(repository, stub, main, evidence.Folder, "red", cancellationToken);
+        if (!twin.StartsWith("PASS", StringComparison.Ordinal))
+        {
+            return new CanaryReport(ImplementationName, CanaryResult.Broken, $"a red commit with a stub was refused too ({twin}), so a refusal proves nothing");
+        }
+
+        await repository.ResetAsync(main, cancellationToken);
+        string planted = await repository.WriteCode("    public decimal Shipping(decimal kilograms) => kilograms * 2m;", ShippingTest)
+            .CommitAsync("test: red", cancellationToken, null, "Lockflight-Red: 1");
+        string red = await CheckAsync(repository, planted, main, evidence.Folder, "red", cancellationToken);
+        return red.StartsWith("FAIL", StringComparison.Ordinal) && red.Contains("GREEN_BEFORE", StringComparison.Ordinal)
+            ? new CanaryReport(ImplementationName, CanaryResult.Caught, red)
+            : new CanaryReport(ImplementationName, CanaryResult.Missed, red);
+    }
 
     private static async Task<CanaryReport> PolicyFromBaseAsync(CancellationToken cancellationToken)
     {
@@ -65,9 +92,18 @@ internal static class CiJudgeCanaries
 
     private static async Task<string> RedWhyAsync(GitHistoryFixture repository, string head, string main, string evidence, CancellationToken cancellationToken)
     {
-        await TestConsole.RunAsync(["ci", "--platform", "github", "--head", head, "--base", main, "--evidence", evidence], string.Empty, repository.Root);
+        string check = await CheckAsync(repository, head, main, evidence, "red", cancellationToken);
+        return check[(check.IndexOf(' ', StringComparison.Ordinal) + 1)..];
+    }
+
+    /// <summary>The verdict and why of one check after a judge run, as "VERDICT why".</summary>
+    private static async Task<string> CheckAsync(GitHistoryFixture repository, string head, string main, string evidence, string id, CancellationToken cancellationToken)
+    {
+        await TestConsole.RunAsync(
+            ["ci", "--platform", "github", "--head", head, "--base", main, "--evidence", evidence], string.Empty, repository.Root, new Dictionary<string, string> { [EnvironmentVariables.Temp] = evidence });
         JsonNode? document = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(evidence, "evidence.json"), cancellationToken));
-        return document?["checks"]?.AsArray().FirstOrDefault(check => check?["id"]?.GetValue<string>() == "red")?["why"]?.GetValue<string>() ?? "no red check in the evidence";
+        JsonNode? found = document?["checks"]?.AsArray().FirstOrDefault(node => node?["id"]?.GetValue<string>() == id);
+        return found is null ? $"ERROR no {id} check in the evidence" : $"{found["verdict"]?.GetValue<string>()} {found["why"]?.GetValue<string>()}";
     }
 
     private sealed class TemporaryEvidence : IDisposable
