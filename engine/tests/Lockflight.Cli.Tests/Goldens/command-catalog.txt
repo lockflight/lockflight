@@ -26,9 +26,9 @@ review dismiss: [--reason --feature] arguments
 ledger retro: [--days --min]
 propose: [--from --delete] arguments
 trace: [--feature]
-approve spec: [--feature --key --sign]
-approve tasks: [--feature --key --sign]
-approve verify: [--feature --base --allowed-signers --require]
+approve spec: [--feature]
+approve tasks: [--feature]
+approve verify: [--feature --base --require]
 workspace sync: [--check]
 adopt plan: []
 adopt apply: [--speckit-preset --skip-speckit --no-sandbox]

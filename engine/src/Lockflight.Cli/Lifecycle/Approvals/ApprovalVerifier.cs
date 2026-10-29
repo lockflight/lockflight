@@ -5,7 +5,7 @@ using Lockflight.Cli.Processes;
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
-/// <c>lockflight approve verify (--feature id | --base ref) [--allowed-signers file] [--require spec,tasks]</c>: prints a PASS or FAIL
+/// <c>lockflight approve verify (--feature id | --base ref) [--require spec,tasks]</c>: prints a PASS or FAIL
 /// line per required phase of each feature and exits 1 when any fails. The feature is never guessed (Spec Kit's active-feature pointer
 /// is agent-writable): it is named, or every feature the change since the base touches is verified.
 /// </summary>
@@ -39,7 +39,6 @@ internal sealed class ApprovalVerifier(CliContext context, string root)
             return ExitCode.Pass;
         }
 
-        string? signers = options.Value("--allowed-signers") is string path ? Path.GetFullPath(path, context.WorkingDirectory) : null;
         IReadOnlySet<string> adopted = new AdoptedFeatures(root).Load();
         bool allGood = true;
         foreach (string id in ids)
@@ -59,7 +58,7 @@ internal sealed class ApprovalVerifier(CliContext context, string root)
                 continue;
             }
 
-            allGood &= await VerifyFeatureAsync(id, required, signers, cancellationToken);
+            allGood &= await VerifyFeatureAsync(id, required);
         }
 
         return allGood ? ExitCode.Pass : ExitCode.Fail;
@@ -93,7 +92,7 @@ internal sealed class ApprovalVerifier(CliContext context, string root)
     }
 
     /// <summary>Prints a PASS or FAIL line per required phase of one feature; true when all pass.</summary>
-    private async Task<bool> VerifyFeatureAsync(string id, IReadOnlyList<ApprovalPhase> required, string? signers, CancellationToken cancellationToken)
+    private async Task<bool> VerifyFeatureAsync(string id, IReadOnlyList<ApprovalPhase> required)
     {
         FeatureLookup lookup = FeatureLocator.Resolve(root, id);
         if (lookup.Feature is not Feature feature)
@@ -108,16 +107,8 @@ internal sealed class ApprovalVerifier(CliContext context, string root)
         {
             ApprovalCheck check = store.Check(phase);
             bool valid = check.State == ApprovalState.Valid;
-            string detail = check.Describe();
-            if (valid && signers is not null)
-            {
-                SignatureCheck signature = await VerifySignatureAsync(store.RecordPath(phase), check.ApprovedBy ?? string.Empty, signers, cancellationToken);
-                valid = signature.State == SignatureState.Valid;
-                detail = signature.Detail;
-            }
-
             allGood &= valid;
-            await context.Output.WriteLineAsync($"{(valid ? "PASS" : "FAIL")} {feature.Id}: {detail}");
+            await context.Output.WriteLineAsync($"{(valid ? "PASS" : "FAIL")} {feature.Id}: {check.Describe()}");
         }
 
         return allGood;
@@ -137,25 +128,5 @@ internal sealed class ApprovalVerifier(CliContext context, string root)
                 .OfType<string>()
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)];
-    }
-
-    private async Task<SignatureCheck> VerifySignatureAsync(string record, string principal, string signers, CancellationToken cancellationToken)
-    {
-        string signature = record + ".sig";
-        if (!File.Exists(signature))
-        {
-            return new SignatureCheck(SignatureState.Unsigned, $"{Path.GetFileName(record)} is not signed (expected {Path.GetFileName(signature)})");
-        }
-
-        ProcessResult verify = await ProcessRunner.RunAsync(
-            "ssh-keygen",
-            ["-Y", "verify", "-f", signers, "-I", principal, "-n", ApprovalStore.SignatureNamespace, "-s", signature],
-            root,
-            Timeout.InfiniteTimeSpan,
-            record,
-            cancellationToken);
-        return verify.ExitCode == 0
-            ? new SignatureCheck(SignatureState.Valid, $"{Path.GetFileName(record)} signed by {principal} (allowed signer)")
-            : new SignatureCheck(SignatureState.Invalid, $"{Path.GetFileName(record)}: signature not valid for {principal}: {verify.Combined.Trim()}");
     }
 }

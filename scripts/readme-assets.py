@@ -269,7 +269,7 @@ def trust(dark):
     t = theme(dark)
     left = ["The guard on protected paths", "The Stop gate", "Red/green evidence and the trace", "The review of record",
             "Approvals recorded locally"]
-    right = ["CI with the base branch's policy, as a required check", "Presence-gated signed approvals, verified in CI",
+    right = ["CI with the base branch's policy, as a required check", "The spec approved in the pull request (CODEOWNERS)",
              "Merge, when the agent has its own identity"]
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="400" viewBox="0 0 1040 400" role="img">',
              '<title>Guardrails run on your machine, where the agent has your credentials; boundaries are decided outside the '

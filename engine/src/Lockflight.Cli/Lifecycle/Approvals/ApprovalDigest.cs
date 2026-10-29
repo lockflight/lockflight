@@ -13,9 +13,8 @@ internal static class ApprovalDigest
     private const int HashPrefixLength = 12;
     private const string ClarificationMarker = "[NEEDS CLARIFICATION";
 
-    /// <param name="typedOptions">Options to repeat on the line to type (<c>--sign</c>, <c>--key file</c>); empty for none.</param>
     /// <param name="artifacts">The phase's artifacts as read once (<see cref="ApprovalStore.Snapshot"/>), its main one first.</param>
-    public static string Render(Feature feature, ApprovalPhase phase, IReadOnlyList<ArtifactSnapshot> artifacts, ApprovalCheck current, string code, string typedOptions)
+    public static string Render(Feature feature, ApprovalPhase phase, IReadOnlyList<ArtifactSnapshot> artifacts, ApprovalCheck current, string code)
     {
         string phaseName = ApprovalPhaseNames.ToName(phase);
         StringBuilder digest = new();
@@ -34,7 +33,7 @@ internal static class ApprovalDigest
 
         digest.AppendLine($"  Open [NEEDS CLARIFICATION] markers: {Clarifications(artifacts)}");
         digest.AppendLine($"  Current approval: {Describe(current)}");
-        digest.Append(SessionCommandGate.Closing($"/lockflight:approve {phaseName} {code}{typedOptions}", "the files stay as shown"));
+        digest.Append(SessionCommandGate.Closing($"/lockflight:approve {phaseName} {code}", "the files stay as shown"));
         return digest.ToString();
     }
 

@@ -2,13 +2,13 @@ namespace Lockflight.Cli.Init;
 
 /// <summary>
 /// Adds the standard profile's <c>.gitattributes</c> rule: Lockflight's feature records are checked out byte-exact
-/// (<c>-text</c>), so an approval signed on one OS verifies on another despite <c>core.autocrlf</c>.
+/// (<c>-text</c>), so the evidence a person reviews and CI reads is the same bytes on every OS despite <c>core.autocrlf</c>.
 /// </summary>
 internal static class GitAttributesUpdater
 {
     public const string Rule = ".lockflight/features/** -text";
 
-    private const string BlockHeader = "# Lockflight evidence: byte-exact for signature checks";
+    private const string BlockHeader = "# Lockflight evidence: byte-exact on every OS";
 
     public static (string Content, bool Changed) Update(string? existing)
     {

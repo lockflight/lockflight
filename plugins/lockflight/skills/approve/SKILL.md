@@ -2,7 +2,7 @@
 name: approve
 description: Help the user approve a feature's spec or tasks — in this session by typing /lockflight:approve, or in a separate terminal window.
 disable-model-invocation: true
-argument-hint: spec | tasks [--feature <id>] [--sign]
+argument-hint: spec | tasks [--feature <id>]
 ---
 
 # Lockflight approve (human gate)
@@ -45,14 +45,11 @@ is the engine the hooks run, and it works whatever way Lockflight was installed.
      the user stories; for `tasks` the stories, their tests-first order and which requirements each covers. Mention anything
      that looks unclear or risky — the user approves the content, not your summary.
    - Tell the user to type `/lockflight:approve <spec|tasks>` themselves (add `--feature <id>` when it is not the active
-     feature, and `--sign` to sign it with their SSH key; in a session the key must be in an SSH agent or be a security key).
+     feature).
      The engine then shows them the content and the code to type. Or, in a separate terminal window, with the absolute
      project root:
 
      ```
      cd <project root> && .lockflight/bin/lockflight approve <spec|tasks>
      ```
-
-     `--sign` there signs the approval with their SSH signing key (a Touch ID / security-key backed key makes it a
-     presence-gated approval that CI can verify).
 4. Any later edit of an approved file makes the approval stale; the next phase check will ask for a new approval.
