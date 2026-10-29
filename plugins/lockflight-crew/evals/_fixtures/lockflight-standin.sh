@@ -17,7 +17,7 @@ case "${1:-} ${2:-}" in
   "approve verify")
     if [ -f "$root/.lockflight/standin-spec-approved" ]; then echo "PASS $feature spec: approved"; else echo "FAIL $feature spec: not approved"; exit 1; fi
     exit 0 ;;
-  "approve "*|"baseline "*|"redgreen reset"|"redgreen amend"|"review dismiss"|"adopt apply"|"adopt undo"|"update "*)
+  "approve "*|"baseline "*|"redgreen reset"|"redgreen amend"|"review dismiss"|"update "*)
     echo "lockflight: '$1 ${2:-}' records a human decision and is refused inside a Claude Code session; ask the user to type /lockflight:$1 in Claude Code, or to run it in a separate terminal window" >&2
     exit 2 ;;
   "phase specify")

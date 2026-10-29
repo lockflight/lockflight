@@ -28,8 +28,6 @@ internal static class HumanOnlyCanaries
             ["approve spec"] = ["--feature", NoFeature],
             ["approve tasks"] = ["--feature", NoFeature],
             ["approve"] = [NoFeature],
-            ["adopt apply"] = ["--skip-speckit"],
-            ["adopt undo"] = [],
         };
 
         List<CanaryReport> reports = [];

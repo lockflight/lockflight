@@ -65,7 +65,7 @@ Then set up your project: the [lite profile](#lite-profile-target-first-green-in
   `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
   root, as the skills do; `doctor` reports a pin that cannot be restored on this machine. No package feed has it either, so
   CI cannot install it until the project pins a release (`update`).
-- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo`, `update`) are yours: run them in a separate
+- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `update`) are yours: run them in a separate
   terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
   approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`), and a baseline, a reset or an
   amend by typing `/lockflight:baseline`, `/lockflight:reset` or `/lockflight:amend`. Each takes two steps: the engine shows
@@ -186,24 +186,27 @@ The lite profile gives you the guard and the gates, without the lifecycle.
 
 ## A repository with an existing Claude Code or Spec Kit setup
 
-`adopt` is only for a repository that already has its own Claude Code setup (hooks, skills, agents, a `CLAUDE.md`) or Spec
-Kit. A new user on a plain repository does not need it. After `init`:
+`init` adopts what the repository already has: its own Claude Code setup (hooks, skills, agents, a `CLAUDE.md`), Spec Kit
+and existing features. Commit or stash your own changes first, then look at the plan:
 
 ```sh
-.lockflight/bin/lockflight adopt plan     # read only: writes .lockflight/adopt/plan.md
+~/.lockflight/bin/lockflight init --dry-run --profile standard   # writes nothing: the files and the adoption plan
 ```
 
-The plan lists what is kept, what becomes protected, what is flagged, and ends with the exact `adopt apply` line to paste:
-`cd` to the project root, the engine, and — when the plan upgrades Spec Kit — `--speckit-preset` with the preset's absolute
-path on this machine, or `--skip-speckit` to leave Spec Kit as it is. Open a separate terminal window (not `!` in Claude
-Code) and run that line there yourself. It needs a clean working tree, backs up first, and `adopt undo` reverts it. Commit what it
-changed.
+The plan lists the files init would create or update, what is kept, what becomes protected (the paths your own write-guard
+hooks block go to `protected:`), what is flagged (a formatter after edits, a Stop hook that builds, a reviewer agent), the
+units it adds and the features it marks as predating Lockflight. Then run the same `init` without `--dry-run`. It keeps your
+hooks, skills and agents, protects them from the agent, adds a short Lockflight block to `CLAUDE.md` and merges into
+`.claude/settings.json`. It leaves Spec Kit as it is unless you run it yourself, in a separate terminal window, with `--speckit-preset <dir>` (the preset's directory:
+`plugins/lockflight/speckit-preset` in the installed plugin or a checkout); then it upgrades Spec Kit with the Lockflight
+preset and keeps and lists your customised files. Review `git diff` and commit init's changes as **one commit**: to undo
+init, `git revert` that commit. Only the init that creates `lockflight.yaml` marks existing features; a later init does not.
 
 Specs you wrote before adopting Lockflight may fail `phase check specify`. A common reason is a user story with no
 Given/When/Then acceptance scenario; others are stories not headed `### User Story N - Title`, requirements not listed as
 `- **FR-001**: …`, or template placeholders left in. `lockflight approve` and `/lockflight:approve` run that check
 themselves and refuse to approve such a spec, listing what fails. Such a feature needs no approval as long as it stays as it
-was adopted: `approve verify --base` accepts it until it gets Lockflight records of its own. To bring it under the lifecycle,
+was when init marked it: `approve verify --base` accepts it until it gets Lockflight records of its own. To bring it under the lifecycle,
 add the missing scenarios (or requirements), or rewrite the spec to [the spec contract](spec-contract.md) (Spec Kit's
 template, `.specify/templates/spec-template.md`, follows it).
 Then run the check until it passes, and approve. `lockflight review` does not need a spec approval: it needs the feature's `spec.md`,
@@ -246,7 +249,7 @@ cd /path/to/your/shell
 ```
 
 Commit in the shell, and in each service repository after `workspace sync`. Start Claude Code at the shell root. With an
-existing setup in the shell, run `adopt plan` and the `adopt apply` line it gives before `workspace sync` (see
+existing setup in the shell, run `init --dry-run` first (see
 [above](#a-repository-with-an-existing-claude-code-or-spec-kit-setup)). [CI hardening](ci-hardening.md#workspace-shells-unit-repositories)
 describes the unit repositories' CI.
 
@@ -284,7 +287,7 @@ project in this release; the lifecycle commands do not depend on either check.
    and the init skill fill it in for you. The preset replaces Spec Kit's tasks template and appends Lockflight's rules to
    `/speckit-tasks`; `doctor` checks that it is installed. Spec Kit 1.1.3 numbers features sequentially: `specs/001-<slug>/`.
    A repository that already has Spec Kit does not run `specify init` again (it would overwrite customised files): run
-   [`adopt plan`](#a-repository-with-an-existing-claude-code-or-spec-kit-setup) and the `adopt apply` line it gives, which
+   [`init --speckit-preset <dir>`](#a-repository-with-an-existing-claude-code-or-spec-kit-setup), which upgrades it and
    adds the preset. Then commit, and run `.lockflight/bin/lockflight doctor`.
    Before the first feature, accept the tests that already fail: type `/lockflight:baseline tests` in Claude Code, or, in a
    separate terminal window, run `.lockflight/bin/lockflight baseline tests` yourself; then merge

@@ -15,13 +15,19 @@ internal static class CliApplication
 
         Setup
           init [--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab]
-               [--quality] [--architecture-tests] [--no-link] [--no-sandbox]
-                                                        onboard: manifest, tool pin, settings, CI job, link; --ci:
+               [--quality] [--architecture-tests] [--dry-run] [--unit-of <shell url> --unit-path <path>]
+               [--speckit-preset <dir>] [--no-link] [--no-sandbox]
+                                                        onboard: manifest, tool pin, settings, CLAUDE.md block, CI
+                                                        job, link; adopts an existing Claude Code / Spec Kit setup
+                                                        (keeps and protects it, marks existing features); --ci:
                                                         the job runs on pull requests, only by hand, or is not written;
                                                         --ci-platform: the CI service the job is for (default github);
                                                         --quality: recommended analyzers and code metrics rules (an
                                                         existing file gets a proposal); --architecture-tests: a layer
-                                                        dependency test project
+                                                        dependency test project; --dry-run: print the plan, write
+                                                        nothing; --unit-of: this repository is a unit of that
+                                                        workspace shell; --speckit-preset: upgrade the existing Spec
+                                                        Kit with the Lockflight preset. Undo: git revert
           doctor [--self-test]                          readiness report with fixes; --self-test: plant a violation
                                                         before the guard, a human-only command, the linked engine
                                                         check, the test gate and red in a scratch project and
@@ -37,8 +43,6 @@ internal static class CliApplication
           statusline                                    Claude Code status line: Levi and the last verdict
           update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
                                                         package feed), re-pin this project
-          adopt plan                                    inventory an existing Claude Code / Spec Kit setup into
-                                                        .lockflight/adopt/plan.md (read only)
           workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
                                                         engine pin, baselines, workflow); --check reports drift
           link                                          copy the pinned engine to .lockflight/bin/ for the hooks
@@ -70,7 +74,7 @@ internal static class CliApplication
                                                         .lockflight/local/proposals/ for a person to review and
                                                         git apply; applies nothing itself
 
-        Human decisions (approve, redgreen reset|amend, review dismiss, baseline, adopt apply|undo and update refuse to run inside a
+        Human decisions (approve, redgreen reset|amend, review dismiss, baseline and update refuse to run inside a
         Claude Code session, a `!` command included: run them in a separate terminal window)
           approve spec|tasks [--feature <id>]           approve the feature's artifacts (a local record; the
                                                         approval of record is the pull request's review);
@@ -83,10 +87,6 @@ internal static class CliApplication
                                                         close an open review finding, recording who, when and why
           baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories
           baseline suppressions                         accept the suppressions the branch adds (file and rule)
-          adopt apply [--speckit-preset <dir>] [--skip-speckit] [--no-sandbox]
-                                                        apply the reviewed adoption plan (backs up first)
-          adopt undo [--backup <id>] [--force]          revert what apply changed; files changed since are kept
-                                                        unless --force
 
         CI
           approve verify (--feature <id> | --base <ref>) [--require spec,tasks]

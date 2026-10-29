@@ -1,4 +1,3 @@
-using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Docs;
 using Lockflight.Cli.Doctor;
@@ -29,7 +28,7 @@ internal static class CommandRegistry
     [
         new(["version"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new VersionCommand(context)),
         new(["link"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new LinkCommand(context)),
-        new(["init"], CommandAudience.Anyone, ["--profile", "--ci", "--ci-platform"], ["--quality", "--architecture-tests", "--no-link", "--no-sandbox"], CommandOperands.Options, OptionParsing.Own, context => new InitCommand(context)),
+        new(["init"], CommandAudience.Anyone, ["--profile", "--ci", "--ci-platform", "--unit-of", "--unit-path", "--speckit-preset"], ["--quality", "--architecture-tests", "--dry-run", "--no-link", "--no-sandbox"], CommandOperands.Options, OptionParsing.Own, context => new InitCommand(context)),
         new(["doctor"], CommandAudience.Anyone, [], [DoctorCommand.SelfTestFlag, DoctorCommand.CanariesFlag, DoctorCommand.FullCanariesFlag], CommandOperands.Options, OptionParsing.Shared, context => new DoctorCommand(context)),
         new(["statusline"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new StatusLineCommand(context)),
         new(["update"], CommandAudience.Human, ["--source"], ["--project"], CommandOperands.Options, OptionParsing.Own, context => new UpdateCommand(context)),
@@ -66,9 +65,6 @@ internal static class CommandRegistry
         },
         new(["ci"], CommandAudience.Anyone, [JudgeInputsReader.HeadOption, JudgeInputsReader.BaseOption, JudgeInputsReader.BranchOption, JudgeInputsReader.PlatformOption, JudgeInputsReader.EventOption, JudgeInputsReader.EvidenceOption, JudgeInputsReader.ShellOption], [JudgeInputsReader.NoReviewFlag, CiCommand.PlanFlag], CommandOperands.Options, OptionParsing.Shared, context => new CiCommand(context)),
         new(["workspace", "sync"], CommandAudience.Anyone, [], ["--check"], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceSyncCommand(context)),
-        new(["adopt", "plan"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
-        new(["adopt", "apply"], CommandAudience.Human, ["--speckit-preset"], ["--skip-speckit", "--no-sandbox"], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
-        new(["adopt", "undo"], CommandAudience.Human, ["--backup"], ["--force"], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
     ];
 
     /// <summary>Command groups reserved for a person even with a verb no descriptor names (<c>approve xyz</c>), except their agent verbs.</summary>

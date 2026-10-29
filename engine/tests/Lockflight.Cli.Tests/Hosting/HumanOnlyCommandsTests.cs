@@ -39,7 +39,7 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("dotnet lockflight baseline tests --help")]
     [InlineData("cd src && \"/opt/tools/lockflight\" review dismiss -h")]
     [InlineData("LOCKFLIGHT_DEBUG=1 lockflight update --help")]
-    [InlineData("bash -c 'lockflight adopt apply --help'")]
+    [InlineData("bash -c 'lockflight baseline deps --help'")]
     public void AskingAReservedCommandForHelpPasses(string command) => Assert.Null(HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 
     [Theory]
@@ -94,7 +94,6 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("baseline tests", "ask the user to type /lockflight:baseline tests in Claude Code, or open a separate terminal window")]
     [InlineData("redgreen reset", "ask the user to type /lockflight:reset in Claude Code, or open a separate terminal window")]
     [InlineData("redgreen amend <test> --reason \"<why>\"", "ask the user to type /lockflight:amend <test> --reason <why> in Claude Code, or open a separate terminal window")]
-    [InlineData("adopt apply", "ask the user to open a separate terminal window")]
     [InlineData("update", "ask the user to open a separate terminal window")]
     public void AHandOffPutsTheSessionCommandOrTheSeparateTerminalFirst(string command, string start)
     {
