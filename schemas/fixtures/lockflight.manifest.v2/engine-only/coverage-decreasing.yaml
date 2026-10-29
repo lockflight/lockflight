@@ -1,0 +1,4 @@
+version: 2
+routing:
+  preset: default
+  coverage: { fix: 90, behaviour: 80 }
