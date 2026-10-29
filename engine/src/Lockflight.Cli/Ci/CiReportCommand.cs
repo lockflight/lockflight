@@ -58,8 +58,23 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             options.Value(ReviewOption) is string review ? Read(Path.GetFullPath(Path.Combine(review, ReviewFileName), context.WorkingDirectory)) : null);
         string output = Path.GetFullPath(outDirectory, context.WorkingDirectory);
         JsonFiles.Write(Path.Combine(output, VerdictFileName), verdict);
-        await File.WriteAllTextAsync(Path.Combine(output, CommentFileName), CommentRenderer.Render(verdict, CommentRenderer.MaxCommentLength), cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(output, SummaryFileName), CommentRenderer.Summary(verdict), cancellationToken);
+        string comment;
+        string summary;
+        try
+        {
+            comment = CommentRenderer.Render(verdict, CommentRenderer.MaxCommentLength);
+            summary = CommentRenderer.Summary(verdict);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or FormatException)
+        {
+            verdict = Missing(head, $"the judge's evidence could not be shown ({exception.Message})", CheckVerdict.Error);
+            JsonFiles.Write(Path.Combine(output, VerdictFileName), verdict);
+            comment = CommentRenderer.Render(verdict, CommentRenderer.MaxCommentLength);
+            summary = CommentRenderer.Summary(verdict);
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(output, CommentFileName), comment, cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(output, SummaryFileName), summary, cancellationToken);
 
         string shown = only is StatusContext statusContext
             ? verdict["contexts"]?[StatusContextNames.ToName(statusContext)]?.GetValue<string>() ?? "ERROR"
@@ -73,8 +88,23 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         return CheckVerdictNames.ToExitCode(CheckVerdictNames.Parse(shown) ?? CheckVerdict.Error);
     }
 
-    /// <summary>The evidence with the review joined and the contexts and verdict recomputed from the checks.</summary>
+    /// <summary>
+    /// The evidence with the review joined and the contexts and verdict recomputed from the checks; an artifact of the wrong shape
+    /// is ERROR, never a crash that leaves no verdict.
+    /// </summary>
     public static JsonObject Join(JsonObject? evidence, string head, JsonObject? review)
+    {
+        try
+        {
+            return JoinChecked(evidence, head, review);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or FormatException or JsonException or KeyNotFoundException)
+        {
+            return Missing(head, $"the judge's evidence or the review's result does not have the expected shape ({exception.Message})", CheckVerdict.Error);
+        }
+    }
+
+    private static JsonObject JoinChecked(JsonObject? evidence, string head, JsonObject? review)
     {
         if (evidence is null || evidence["schema"]?.GetValue<string>() != CiEvidence.Schema)
         {
@@ -96,6 +126,11 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             }
 
             checks.Add(check.Id == CheckId.Review ? Review(check, review, head) : check);
+        }
+
+        if (Incomplete(checks, evidence["event"]?.GetValueKind() == JsonValueKind.String ? evidence["event"]!.GetValue<string>() : null) is string incomplete)
+        {
+            return Missing(head, $"the judge's evidence is not complete: {incomplete}", CheckVerdict.Error);
         }
 
         evidence["review"] = ReviewNode(review, head);
@@ -142,6 +177,28 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             ["verdict"] = review["verdict"]?.GetValue<string>() is string verdict ? CiEvidence.Cap(verdict) : null,
             ["why"] = review["why"]?.GetValue<string>() is string why ? CiEvidence.Cap(why) : null,
         };
+
+    /// <summary>
+    /// Why the checks cannot be what this engine's judge wrote: a check missing or listed twice, or green and the gates not
+    /// required (they are on every event). An artifact that says less must not read as a pass.
+    /// </summary>
+    private static string? Incomplete(IReadOnlyList<CheckResult> checks, string? judgeEvent)
+    {
+        CheckId[] missing = [.. Enum.GetValues<CheckId>().Where(id => checks.Count(check => check.Id == id) != 1)];
+        if (missing.Length > 0)
+        {
+            return $"checks missing or repeated: {string.Join(", ", missing.Select(CheckIdNames.ToName))}";
+        }
+
+        if (JudgeEventNames.Parse(judgeEvent ?? string.Empty) is null)
+        {
+            return "no known event";
+        }
+
+        return checks.Where(check => check.Id is CheckId.Green or CheckId.Gates).Any(check => check.Level != CheckLevel.Required)
+            ? "green and the gates are not both required"
+            : null;
+    }
 
     /// <summary>The review job's verdict as the review check, or SKIPPED: no review ran, or it reviewed another head.</summary>
     private static CheckResult Review(CheckResult check, JsonObject? review, string head)

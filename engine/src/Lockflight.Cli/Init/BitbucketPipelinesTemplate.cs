@@ -33,6 +33,14 @@ internal static class BitbucketPipelinesTemplate
         export EVENT
         """;
 
+    /// <summary>
+    /// The report steps' inputs: the same commits, then the destination's tip checked out, so nothing of the pull request's tree
+    /// is around while its evidence is read as data.
+    /// </summary>
+    private const string ReportInputs = FindInputs + "\n" + """
+        if [ -n "$PULL_REQUEST" ]; then git checkout --detach --quiet "$BASE"; fi
+        """;
+
     private const string PullRequestPipelines = """
         pipelines:
           pull-requests:
@@ -91,7 +99,7 @@ internal static class BitbucketPipelinesTemplate
                   - |
         {Script}
                 artifacts:
-                  - artifacts/**
+                  - artifacts/lockflight-evidence/**
             - step: &gates
                 name: gates
                 image: {SdkImage}
@@ -99,7 +107,7 @@ internal static class BitbucketPipelinesTemplate
                   - |
         {GatesScript}
                 artifacts:
-                  - artifacts/**
+                  - artifacts/lockflight-verdict/**
             - step: &lockflight-judge
                 name: lockflight/judge
                 image: {SdkImage}
@@ -107,7 +115,7 @@ internal static class BitbucketPipelinesTemplate
                   - |
         {JudgeScript}
                 artifacts:
-                  - artifacts/**
+                  - artifacts/lockflight-verdict/**
 
         {Pipelines}
 
@@ -118,8 +126,8 @@ internal static class BitbucketPipelinesTemplate
         Template
             .Replace("{SdkImage}", CiShellScripts.SdkImage, StringComparison.Ordinal)
             .Replace("{Script}", CiShellScripts.Indent(CiShellScripts.JudgeJob(FindInputs, dotnetChannels, "bitbucket", "BITBUCKET_BRANCH"), ScriptIndent), StringComparison.Ordinal)
-            .Replace("{GatesScript}", CiShellScripts.Indent(CiShellScripts.ReportJob(FindInputs, "gates"), ScriptIndent), StringComparison.Ordinal)
-            .Replace("{JudgeScript}", CiShellScripts.Indent(CiShellScripts.ReportJob(FindInputs, "lockflight/judge"), ScriptIndent), StringComparison.Ordinal)
+            .Replace("{GatesScript}", CiShellScripts.Indent(CiShellScripts.ReportJob(ReportInputs, "gates"), ScriptIndent), StringComparison.Ordinal)
+            .Replace("{JudgeScript}", CiShellScripts.Indent(CiShellScripts.ReportJob(ReportInputs, "lockflight/judge"), ScriptIndent), StringComparison.Ordinal)
             .Replace("{Pipelines}", Pipelines(trigger, developmentPin), StringComparison.Ordinal);
 
     private static string Pipelines(CiTrigger trigger, bool developmentPin) => trigger switch
