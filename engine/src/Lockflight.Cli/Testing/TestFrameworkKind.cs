@@ -8,4 +8,7 @@ internal enum TestFrameworkKind
 
     /// <summary>NUnit: <c>[Test]</c>, <c>[TestCase]</c>, <c>[TestCaseSource]</c>, <c>[Theory]</c>, <c>[Ignore]</c>, <c>[Explicit]</c>, <c>[Property("Requirement", …)]</c>.</summary>
     NUnit = 2,
+
+    /// <summary>MSTest: <c>[TestMethod]</c> (and <c>[DataTestMethod]</c>) in a <c>[TestClass]</c>, <c>[Ignore]</c>, <c>[TestProperty("Requirement", …)]</c>.</summary>
+    MSTest = 3,
 }

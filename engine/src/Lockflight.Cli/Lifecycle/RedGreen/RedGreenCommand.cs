@@ -151,7 +151,7 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
 
         if (workspace.Apps.Count == 0)
         {
-            await context.Output.WriteLineAsync("NOT-EARNED no test project found that red/green can drive; it needs xUnit v3, xUnit v2 on VSTest or NUnit (other test frameworks get the gates only)");
+            await context.Output.WriteLineAsync("NOT-EARNED no test project found that red/green can drive; it needs xUnit v3, xUnit v2 on VSTest, NUnit or MSTest (other test frameworks get the gates only)");
             return ExitCode.NotEarned;
         }
 

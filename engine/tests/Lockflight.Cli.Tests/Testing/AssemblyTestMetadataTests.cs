@@ -41,10 +41,31 @@ public sealed class AssemblyTestMetadataTests
     }
 
     [Fact]
+    public void MSTestTestsAreTheTestMethodsOfPublicTestClasses() =>
+        Assert.Equal(
+            ["MSTestFixture+Nested.Inner", "MSTestFixture.Ignored", "MSTestFixture.IgnoredWithoutReason", "MSTestFixture.Plain", "MSTestFixture.Rows", "MSTestIgnoredClass.InIgnoredClass"],
+            Methods(TestFrameworkKind.MSTest));
+
+    [Fact]
+    public void MSTestIgnoreAndTestPropertiesAreRead()
+    {
+        IReadOnlyList<TestCase> tests = Tests(TestFrameworkKind.MSTest);
+
+        Assert.Equal(["FR-001"], Single(tests, "MSTestFixture.Plain").Requirements);
+        Assert.Equal("later", Single(tests, "MSTestFixture.Ignored").SkipReason);
+        Assert.Equal(string.Empty, Single(tests, "MSTestFixture.IgnoredWithoutReason").SkipReason);
+        Assert.Equal("whole class", Single(tests, "MSTestIgnoredClass.InIgnoredClass").SkipReason);
+        Assert.Null(Single(tests, "MSTestFixture.Plain").SkipReason);
+        Assert.DoesNotContain(tests, test => test.IsExplicit);
+    }
+
+    [Fact]
     public void EachFrameworkReadsOnlyItsOwnAttributes()
     {
         // xUnit v2's attributes match by name in any namespace (custom ones derive from them), so NUnit's [Theory] reads as one.
         Assert.Equal(["NUnitFixture.Theory"], Methods(TestFrameworkKind.XunitV2));
+        Assert.DoesNotContain(Methods(TestFrameworkKind.NUnit), name => name.StartsWith("MSTest", StringComparison.Ordinal));
+        Assert.DoesNotContain(Methods(TestFrameworkKind.MSTest), name => name.StartsWith("NUnit", StringComparison.Ordinal));
     }
 
     private static IReadOnlyList<TestCase> Tests(TestFrameworkKind framework) =>

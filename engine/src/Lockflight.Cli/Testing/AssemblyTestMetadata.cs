@@ -5,12 +5,13 @@ using System.Reflection.PortableExecutable;
 namespace Lockflight.Cli.Testing;
 
 /// <summary>
-/// The tests of a built xUnit v2 or NUnit assembly, read from its metadata without loading it (AOT-safe): public methods, inherited
-/// ones from base classes in the same assembly too, carrying the framework's test attributes (<see cref="TestAttributes"/>), with
-/// their skip reason, explicit mark and <c>Requirement</c> values. The classes are those the framework runs: for xUnit v2
+/// The tests of a built xUnit v2, NUnit or MSTest assembly, read from its metadata without loading it (AOT-safe): public methods,
+/// inherited ones from base classes in the same assembly too, carrying the framework's test attributes (<see cref="TestAttributes"/>),
+/// with their skip reason, explicit mark and <c>Requirement</c> values. The classes are those the framework runs: for xUnit v2
 /// non-abstract classes visible outside the assembly; for NUnit non-abstract or static classes of any visibility, generic ones left
-/// out. VSTest's own listing has neither assembly nor traits. A test is one case per method: parameterized rows
-/// (<c>[TestCase]</c>) are not enumerated.
+/// out; for MSTest non-abstract <c>[TestClass]</c> classes visible outside the assembly (internal ones, which MSTest runs only
+/// under <c>[assembly: DiscoverInternals]</c>, are left out). VSTest's own listing has neither assembly nor traits. A test is one
+/// case per method: parameterized rows (<c>[TestCase]</c>, <c>[DataRow]</c>, <c>[DynamicData]</c>) are not enumerated.
 /// </summary>
 internal static class AssemblyTestMetadata
 {
@@ -77,6 +78,7 @@ internal static class AssemblyTestMetadata
         {
             // A static class is abstract and sealed in metadata; NUnit runs its static tests.
             TestFrameworkKind.NUnit => (!isAbstract || (type.Attributes & TypeAttributes.Sealed) != 0) && type.GetGenericParameters().Count == 0,
+            TestFrameworkKind.MSTest => !isAbstract && IsVisibleOutsideAssembly(reader, handle) && TestAttributes.IsMSTestClass(reader, type.GetCustomAttributes()),
             // xUnit v2 runs public, non-abstract classes only (its discovery reads the assembly's exported types).
             _ => !isAbstract && IsVisibleOutsideAssembly(reader, handle),
         };

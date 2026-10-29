@@ -16,6 +16,7 @@ public sealed class ProductionProjectsTests : IDisposable
         Project("tests/Shop.Tests/Shop.Tests.csproj", "<Project />");
         Project("tests/Shop.Testing/Shop.Testing.csproj", "<Project><ItemGroup><PackageReference Include=\"xunit.v3.assert\" /></ItemGroup></Project>");
         Project("tests/Shop.NUnitHelpers/Shop.NUnitHelpers.csproj", "<Project><ItemGroup><PackageReference Include=\"NUnit\" /></ItemGroup></Project>");
+        Project("tests/Shop.MSTestHelpers/Shop.MSTestHelpers.csproj", "<Project Sdk=\"MSTest.Sdk/4.0.0\" />");
         Project("src/Shop.Api/bin/Debug/Copy.csproj", "<Project />");
 
         ProductionCode production = ProductionProjects.Find(root.FullName, [App("tests/Shop.Tests", "tests/Shop.Tests/bin/Shop.Tests.dll")]);
