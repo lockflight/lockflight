@@ -25,7 +25,7 @@ public sealed class UpdateCommandTests : IDisposable
         Assert.Equal("0.2.0-alpha.5", UserInstall.InstalledVersion(home.FullName));
         (string fileName, IReadOnlyList<string> arguments, string workingDirectory) = feed.Calls[^1];
         Assert.Equal(UserInstall.Engine(home.FullName), fileName);
-        Assert.Equal(["update", "--project"], arguments);
+        Assert.Equal(["update", "--project", "--source", "/feeds/local"], arguments);
         Assert.Equal(root.FullName, workingDirectory);
     }
 

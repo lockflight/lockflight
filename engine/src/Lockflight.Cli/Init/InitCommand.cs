@@ -1,5 +1,7 @@
+using System.Text;
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
@@ -198,6 +200,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
             await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), write, cancellationToken),
             await TransformAsync(root, ClaudeMdBlock.FileName, existing => ClaudeMdBlock.IsCurrent(existing ?? string.Empty) ? (existing!, false) : (ClaudeMdBlock.Upsert(existing ?? string.Empty), true), write, cancellationToken),
         ];
+        steps.AddRange(await EngineLockStepsAsync(root, write, cancellationToken));
         IReadOnlyList<string> predating = firstInit ? InitAdoption.PredatingFeatures(plan) : [];
         if (predating.Count > 0)
         {
@@ -488,6 +491,35 @@ internal sealed class InitCommand(CliContext context) : ICommand
         }
 
         return new InitStep(relativePath, FileOutcome.Created);
+    }
+
+    /// <summary>
+    /// The engine lock for the running engine and, for a committed lock, the vendored install script; an existing lock is the
+    /// project's policy and is left alone (update moves it). Without hashes for this engine the project keeps its version pin.
+    /// </summary>
+    private async Task<IReadOnlyList<InitStep>> EngineLockStepsAsync(string root, bool write, CancellationToken cancellationToken)
+    {
+        if (File.Exists(EngineLockFiles.CommittedPath(root)))
+        {
+            return [new InitStep(EngineLock.RelativePath, FileOutcome.Unchanged)];
+        }
+
+        EngineLockPlan plan = await EngineLockPlanner.PlanAsync(
+            root, ToolPin.RunningVersion, context.Engine.Path, EnginePackageFeed.FromEnvironment(context.Environment), GitHubReleaseHashes.FetchAsync, context.Processes, cancellationToken);
+        if (plan.Lock is not EngineLock engineLock)
+        {
+            return [];
+        }
+
+        string lockRelative = Path.GetRelativePath(root, plan.LockPath!).Replace('\\', '/');
+        List<InitStep> steps = [await TransformAsync(root, lockRelative, existing => (EngineLockText.Write(engineLock), existing != EngineLockText.Write(engineLock)), write, cancellationToken)];
+        if (plan.Committed)
+        {
+            string script = Encoding.UTF8.GetString(InstallScript.Bytes);
+            steps.Add(await TransformAsync(root, InstallScript.RelativePath, existing => (script, existing != script), write, cancellationToken));
+        }
+
+        return steps;
     }
 
     private static async Task<InitStep> TransformAsync(

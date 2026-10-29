@@ -1,6 +1,7 @@
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Docs;
 using Lockflight.Cli.Doctor;
+using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Facts;
 using Lockflight.Cli.Gates;
@@ -28,7 +29,8 @@ internal static class CommandRegistry
     public static IReadOnlyList<CommandDescriptor> All { get; } =
     [
         new(["version"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new VersionCommand(context)),
-        new(["link"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new LinkCommand(context)),
+        new(["link"], CommandAudience.Anyone, [], [LinkCommand.InstalledFlag], CommandOperands.Options, OptionParsing.Shared, context => new LinkCommand(context)),
+        new(["engine", "install"], CommandAudience.Human, ["--source"], [], CommandOperands.Options, OptionParsing.Shared, context => new EngineInstallCommand(context)),
         new(["init"], CommandAudience.Anyone, ["--profile", "--preset", "--ci", "--ci-platform", "--unit-of", "--unit-path", "--speckit-preset"], ["--quality", "--architecture-tests", "--dry-run", "--no-link", "--no-sandbox"], CommandOperands.Options, OptionParsing.Own, context => new InitCommand(context)),
         new(["doctor"], CommandAudience.Anyone, [], [DoctorCommand.SelfTestFlag, DoctorCommand.CanariesFlag, DoctorCommand.FullCanariesFlag], CommandOperands.Options, OptionParsing.Shared, context => new DoctorCommand(context)),
         new(["statusline"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new StatusLineCommand(context)),
@@ -70,7 +72,7 @@ internal static class CommandRegistry
     ];
 
     /// <summary>Command groups reserved for a person even with a verb no descriptor names (<c>approve xyz</c>), except their agent verbs.</summary>
-    public static IReadOnlyList<ReservedGroup> ReservedGroups { get; } = [new("baseline", []), new("approve", ["verify"]), new("update", [])];
+    public static IReadOnlyList<ReservedGroup> ReservedGroups { get; } = [new("baseline", []), new("approve", ["verify"]), new("update", []), new("engine", [])];
 
     /// <summary>The descriptor whose words begin <paramref name="args"/>, the longest when several do; null when none does.</summary>
     public static CommandDescriptor? Match(IReadOnlyList<string> args)

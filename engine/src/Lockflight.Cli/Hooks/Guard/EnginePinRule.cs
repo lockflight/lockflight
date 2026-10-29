@@ -1,6 +1,8 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Linking;
 
 namespace Lockflight.Cli.Hooks.Guard;
 
@@ -20,10 +22,33 @@ internal sealed class EnginePinRule : IGuardRule
 
     private static GuardBlock? PinMismatch(HookRequest input, Manifest manifest)
     {
+        if (ReadOnlyTools.Allows(input) || RecoveryCommands.Allows(input))
+        {
+            return null;
+        }
+
+        // The engine lock pins by hash; a project without one still pins the version in dotnet-tools.json.
+        EngineLockReading lockReading = EngineLockFiles.ReadForClone(manifest.Root);
+        if (lockReading.Problem is string lockProblem)
+        {
+            return new GuardBlock("stale-engine", $"lockflight: the engine lock cannot be read: {lockProblem}. Fix it (a protected file: a human edit, or `{EngineCommand.UserInstall} update`).");
+        }
+
+        if (lockReading.Lock is EngineLock engineLock)
+        {
+            string? locked = EngineRids.Current is string rid ? engineLock.HashFor(rid) : null;
+            return locked is not null && EngineRecord.RecordedHash(manifest.Root) == locked
+                ? null
+                : new GuardBlock(
+                    "stale-engine",
+                    $"lockflight: the linked engine ({ToolPin.RunningVersion}) is not the one {EngineLock.RelativePath} pins ({engineLock.Version}). Run exactly: {RecoveryCommands.LinkInstalled} "
+                    + $"(it links that engine when it is installed); otherwise ask the user to {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} engine install")}.");
+        }
+
         ToolPinReading pin = ToolPin.ReadPin(manifest.Root);
         bool mismatch = pin.Status == ToolPinStatus.Unreadable
             || (pin.Status == ToolPinStatus.Pinned && !ToolPin.Matches(pin.Version!, ToolPin.RunningVersion));
-        if (!mismatch || ReadOnlyTools.Allows(input) || RecoveryCommands.Allows(input))
+        if (!mismatch)
         {
             return null;
         }
