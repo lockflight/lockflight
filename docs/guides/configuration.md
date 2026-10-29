@@ -42,10 +42,10 @@ gates:
     patchThreshold: 80          # % of changed coverable lines that tests must execute
     minChangedLines: 10         # below this many coverable changed lines, coverage is not judged (N/A)
   quality:
-    suppressions: report        # fail | report | off (default report): whether new suppressions fail the pr profile,
+    suppressions: report        # fail | report | off (default report; fail in version 2): whether new suppressions fail the pr profile,
                                 #   are only listed, or are not checked
   docs:
-    references: report          # fail | report | off (default report): whether references this change breaks in the
+    references: report          # fail | report | off (default report; fail in version 2): whether references this change breaks in the
                                 #   instruction files fail the pr profile, are only listed, or are not checked
   ef:
     pendingModelChanges: auto   # auto | fail | report | off (default auto): auto runs the check, and can fail, only
@@ -186,6 +186,86 @@ The **stop** profile's budget is `min(gates.timeoutSeconds, 540)`: the plugin's 
 (`plugins/lockflight/hooks/hooks.json`), and the gate must end — and report — before that. A step that runs out of the capped
 budget is ERROR and says so; a build and test run that needs longer belongs in CI (`gate run --profile pr`). Only the stop
 profile is capped; `baseline tests` and the `pr` profile use the full `gates.timeoutSeconds`.
+
+### Manifest version 2
+
+`version: 2` adds the sections below. A manifest without `version`, or with `version: 1`, is read as version 2 with
+**migration defaults**: the checks version 2 added (`gates.quality.suppressions`, `gates.docs.references`,
+`approvals.check`) only report, so a new
+engine never turns a green repository red by itself. In a version 2 manifest they default to `fail`. A version 1 manifest that
+holds a version 2 section is an error naming the version it needs.
+
+The published JSON Schema, [`lockflight.schema.json`](../../lockflight.schema.json) (a copy of
+[`schemas/lockflight.manifest.v2.json`](../../schemas/lockflight.manifest.v2.json)), gives an editor completion and checks.
+Add this first line for editors that use the YAML language server:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/lockflight/lockflight/main/lockflight.schema.json
+```
+
+The engine's reader is the authority. Rules a JSON Schema cannot express (globs that stay inside the project, a large change
+larger than a fix, coverage that never decreases with the class, layers that do not overlap, units that do not nest, a shell URL
+without credentials) are checked by the engine only, and the schema's descriptions name them.
+
+```yaml
+version: 2                      # required in this shape
+requiresEngine: "0.3.0"         # optional: the lowest engine this manifest needs; an older engine says so before any
+                                #   other error (an unknown key also names the engine version reading it)
+
+routing:                        # how a pull request's change class is computed, and what each class must prove
+  preset: default               # relaxed | default | strict; required. Keys left out take the preset's values, and
+                                #   doctor names them: write the numbers out, a later engine may change a preset
+  floor: fix                    # the lowest class any change is judged at: fix | behaviour | feature | critical
+  fix: { maxLines: 20, maxFiles: 2 }   # larger than this is at least behaviour
+  largeLines: 400               # larger than this is at least feature (must be above fix.maxLines)
+  structural: critical          # a new project, a build-wide file or a solution change: feature | critical
+  critical: ["src/Payments/**"] # globs of critical paths
+  dbPaths: []                   # extra globs that mean "database", besides migrations and SQL files
+  generatedPaths: []            # generated code: left out of size and shape
+  nonProduction: []             # vendored code, samples, tools: left out of size and shape
+  requiredWorkflows: []         # CI files a platform ruleset requires: changing one is critical
+  apiProjects: []               # project directories whose public surface is an API
+  layers:                       # optional, at least two, inner first, globs of different layers never overlap
+    - { name: domain, paths: ["src/*.Domain/**"] }
+    - { name: infrastructure, paths: ["src/*.Infrastructure/**"] }
+  coverage: { fix: 80, behaviour: 80, feature: 80, critical: 90 }   # patch coverage per class, never decreasing
+  require:
+    specFrom: feature           # a spec is required from this class: behaviour | feature | critical
+    reviewFrom: behaviour       # the review runs (with an API key) from this class
+    reviewKeyFrom: critical     # without a key, NOT-EARNED from this class (not below reviewFrom), or none
+    architectureFrom: feature   # declared architecture tests are required from this class
+    architectureDeclaredFrom: none   # critical | none: from this class, no declared architecture tests is NOT-EARNED
+
+approvals:                      # the approval of record is the platform's review of the pull request
+  check: fail                   # fail | report: whether a missing approval fails the CI check or is only listed
+  default: same-pr              # same-pr | spec-first: the spec arrives with the code, or is merged first
+  specFirstFrom: none           # none | feature | critical: from this class spec-first applies anyway
+  specFirstPaths: []            # a change touching these globs needs spec-first
+  specPaths: ["specs/**"]       # what counts as the spec, for the CODEOWNERS coverage check (never empty)
+
+autonomy:                       # reserved: validated, no effect in this version
+  maxClass: fix
+  budgetUsd: 5.00
+  timeMinutes: 60
+
+shell:                          # this repository is a unit of a workspace shell (not together with units:)
+  url: git@github.com:example/shell.git   # https:// or SSH; never with credentials (use a deploy key or a CI secret)
+  ref: main                     # optional: the shell's branch (default: its default branch)
+  unit: services/orders         # this repository's path among the shell's units
+```
+
+| Preset | `floor` | `fix` lines / files | `largeLines` | coverage fix / behaviour / feature / critical | `specFrom` | `reviewFrom` | `reviewKeyFrom` | `architectureFrom` | `architectureDeclaredFrom` | `approvals.specFirstFrom` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `relaxed` | fix | 40 / 3 | 800 | 70 / 70 / 70 / 80 | critical | feature | critical | critical | none | none |
+| `default` | fix | 20 / 2 | 400 | 80 / 80 / 80 / 90 | feature | behaviour | critical | feature | none | none |
+| `strict` | behaviour | 10 / 1 | 200 | 85 / 85 / 90 / 95 | behaviour | behaviour | feature | behaviour | critical | critical |
+
+Every preset sets `structural: critical`.
+
+> [!IMPORTANT]
+> In this version `routing:` and `approvals:` are read and validated, and `doctor` reports on them, but no command judges a
+> change by them yet. `autonomy:` is reserved and has no effect. None of them is a control today; the descriptions above say
+> what they will decide.
 
 ### Built-in protected paths
 

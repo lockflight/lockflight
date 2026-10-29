@@ -1,0 +1,6 @@
+version: 2
+units:
+  - path: a
+shell:
+  url: https://example.com/shell.git
+  unit: a

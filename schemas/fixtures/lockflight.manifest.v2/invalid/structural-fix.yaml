@@ -1,0 +1,4 @@
+version: 2
+routing:
+  preset: default
+  structural: fix
