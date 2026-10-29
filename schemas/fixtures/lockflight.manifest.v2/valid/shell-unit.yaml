@@ -1,0 +1,5 @@
+version: 2
+shell:
+  url: git@github.com:example/shell.git
+  ref: main
+  unit: services/orders

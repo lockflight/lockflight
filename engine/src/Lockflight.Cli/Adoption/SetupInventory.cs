@@ -20,7 +20,7 @@ internal static class SetupInventory
     /// <summary>Root <c>CLAUDE.md</c> budget in tokens: it is loaded into every session.</summary>
     public const int ClaudeMdTokenBudget = 8000;
 
-    private static readonly string[] LockflightSkills = ["approve", "doctor", "feature", "gate", "init", "retro", "review", "status"];
+    private static readonly string[] LockflightSkills = ["approve", "doctor", "feature", "gate", "init", "review", "status"];
 
     public static AdoptionPlan Build(string root, Manifest? manifest, string? userHome, DateTimeOffset at)
     {

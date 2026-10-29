@@ -87,6 +87,7 @@ The test is a starting point: edit the layers to match the solution, or add rule
 | The analyzer config itself (`.editorconfig`, `CodeMetricsConfig.txt`, `Directory.Build.props`) | deterministic | **G**: the guard; in CI, `.editorconfig` and `CodeMetricsConfig.txt` come from the base branch | `Directory.Build.props` is not restored from the base branch in CI: a pull request that edits it is judged with its own version, so it needs CODEOWNERS ([CI hardening](ci-hardening.md)) |
 | Architecture tests | deterministic | **G**; **B** in CI only with a required check and the test project and the solution file routed to a reviewer | The test gate runs them like any test. The agent can edit the test code unless you protect it, and a pull request can drop the project from the solution |
 | New suppressions (`#pragma warning disable`, `[SuppressMessage]`, `<NoWarn>`, `<WarningsNotAsErrors>`, a lowered `.editorconfig` severity, `#nullable disable`, `[ExcludeFromCodeCoverage]`) | deterministic | **G** with `gates.quality.suppressions: fail` (`gate run --profile pr`); **B** in CI only with a required check, since the manifest and the suppressions baseline then come from the base branch | A line scan of what the change adds, not a compiler: see [new suppressions](configuration.md#new-suppressions-fail-the-pr-profile) for what it reads and what it cannot see. In `report` mode (the default) it lists, it does not block |
+| An EF Core model changed without a migration (`ef.pendingModelChanges`) | deterministic | **G** with a `dotnet-ef` pin (`gate run --profile pr`); **B** in CI only with a required check and the manifest and tool pin from the base branch | It runs `dotnet ef migrations has-pending-model-changes`, so it judges the model EF Core builds, not a guess from the diff; it only runs for DbContexts whose projects the change touches ([configuration](configuration.md#ef-core-model-changes-need-a-migration)) |
 | The thresholds and the layer map | judgement | a person | They are a decision about your code base, made when the files are applied and reviewed |
 | Design quality beyond the rules (naming, cohesion, a good abstraction) | judgement | advisory | The [review of record](commands.md#lifecycle-standard-profile) reports it; only a blocking finding with a failing reproduction test changes a verdict |
 
@@ -94,13 +95,14 @@ The test is a starting point: edit the layers to match the solution, or add rule
 
 ## Rules audit
 
-`lockflight rules audit` recognises the pack as backing for written rules, by exact matches only:
+The crew plugin's `rules-audit` skill ("which of my rules are checked by anything?") reads `lockflight facts --json` and your
+instruction files, and labels each written rule by what backs it, by exact matches only. Its answer is advice, not a verdict:
 
 - A rule that names an analyzer id (`CA1502`, `IDE0005`), or the metric a code metrics rule measures ("cyclomatic complexity",
-  "maintainability index", "class coupling"), is **related** when a tracked `.editorconfig` or `.globalconfig` sets that id to
-  `warning` or `error`. Otherwise the audit suggests the `dotnet_diagnostic` line.
+  "maintainability index", "class coupling"), is **related** when the facts show a tracked `.editorconfig` or `.globalconfig`
+  setting that id to `warning` or `error`. Otherwise the skill suggests the `dotnet_diagnostic` line.
 - A rule that bans a dependency between two named layers (Domain, Application, Infrastructure, Api) is **related** when a test
-  file uses ArchUnitNET or NetArchTest. Otherwise the audit suggests `init --architecture-tests`.
+  file uses ArchUnitNET or NetArchTest. Otherwise the skill suggests `init --architecture-tests`.
 
 Related, never checked: a build warning fails only as a new warning against the baseline, and a test checks its own rules,
 not the sentence in your instructions.

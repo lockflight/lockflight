@@ -161,6 +161,8 @@ public sealed class ManifestParserTests
     [InlineData("gates:\n  quality:\n    analyzers: fail\n", "unknown key 'gates.quality.analyzers'")]
     [InlineData("gates:\n  docs:\n    references: yes\n", "'gates.docs.references' must be fail, report or off")]
     [InlineData("gates:\n  docs:\n    links: fail\n", "unknown key 'gates.docs.links'")]
+    [InlineData("gates:\n  quality:\n    suppressions: auto\n", "'gates.quality.suppressions' must be fail, report or off")]
+    [InlineData("gates:\n  ef:\n    pendingModelChanges: always\n", "'gates.ef.pendingModelChanges' must be auto, fail, report or off")]
     public void InvalidGateSettingsAreRejectedWithTheKey(string yaml, string expectedFragment)
     {
         ManifestLoadResult result = Parse(yaml);
@@ -183,6 +185,13 @@ public sealed class ManifestParserTests
     [InlineData("version: 1\ngates:\n  docs:\n    references: off\n", "off")]
     public void TheReferencesStepReportsUnlessTheManifestSaysOtherwise(string yaml, string expected) =>
         Assert.Equal(expected, GateModeNames.ToName(Parse(yaml).Manifest!.Gates.DocsReferences));
+
+    [Theory]
+    [InlineData("version: 1\n", "auto")]
+    [InlineData("version: 1\ngates:\n  ef:\n    pendingModelChanges: fail\n", "fail")]
+    [InlineData("version: 1\ngates:\n  ef:\n    pendingModelChanges: report\n", "report")]
+    public void TheEfModelStepIsAutomaticUnlessTheManifestSaysOtherwise(string yaml, string expected) =>
+        Assert.Equal(expected, GateModeNames.ToName(Parse(yaml).Manifest!.Gates.EfPendingModelChanges));
 
     [Theory]
     [InlineData("[a, b]: 1\n")]

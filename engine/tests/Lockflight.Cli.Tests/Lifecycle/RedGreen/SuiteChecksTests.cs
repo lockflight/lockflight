@@ -98,6 +98,43 @@ public sealed class SuiteChecksTests
     }
 
     // Baseline test Old and a closed cycle with Earlier; OpenCycle adds New.
+    [Fact]
+    public void AnExplicitTestReportedAsNotExecutedIsNoNewSkip()
+    {
+        RedGreenRecord record = Record(explicitAtBaseline: ["T:A.Old"]);
+        RedGreenCycle open = OpenCycle(record);
+
+        List<string> problems = SuiteChecks.GreenProblems(
+            record, open, [Test("Old", isExplicit: true), Test("Earlier"), Test("New")], [Skipped("Old"), Passed("Earlier"), Passed("New")], NoKnownFailures);
+
+        Assert.Empty(problems);
+    }
+
+    [Fact]
+    public void RowsSkippedAtRunTimeBeforeAnyChangeAreNoNewSkipAtAGreen()
+    {
+        RedGreenRecord withoutRun = Record(explicitAtBaseline: []);
+        RedGreenRecord started = Record(explicitAtBaseline: []);
+        RedGreenRecord record = started with { BaselineSkippedRows = SuiteChecks.SkippedRows([Skipped("Old"), Passed("Old"), Passed("Earlier")]) };
+        TestCase[] inventory = [Test("Old"), Test("Earlier"), Test("New")];
+        ExecutedTest[] results = [Skipped("Old"), Passed("Old"), Passed("Earlier"), Passed("New")];
+
+        Assert.Empty(SuiteChecks.GreenProblems(record, OpenCycle(record), inventory, results, NoKnownFailures));
+        Assert.Equal("new skipped tests: T:A.Old", Assert.Single(SuiteChecks.GreenProblems(withoutRun, OpenCycle(withoutRun), inventory, results, NoKnownFailures)));
+    }
+
+    [Fact]
+    public void MoreRowsSkippedThanAtTheBaselineAreANewSkip()
+    {
+        RedGreenRecord started = Record(explicitAtBaseline: []);
+        RedGreenRecord record = started with { BaselineSkippedRows = SuiteChecks.SkippedRows([Skipped("Old"), Passed("Old")]) };
+
+        List<string> problems = SuiteChecks.GreenProblems(
+            record, OpenCycle(record), [Test("Old"), Test("Earlier"), Test("New")], [Skipped("Old"), Skipped("Old"), Passed("Earlier"), Passed("New")], NoKnownFailures);
+
+        Assert.Equal("new skipped tests: T:A.Old", Assert.Single(problems));
+    }
+
     private static RedGreenRecord Record(string[] explicitAtBaseline)
     {
         RedGreenRecord record = new()

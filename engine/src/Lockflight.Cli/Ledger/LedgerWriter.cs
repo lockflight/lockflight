@@ -13,7 +13,10 @@ internal sealed class LedgerWriter(string projectRoot, TimeProvider time)
 {
     public const string RelativeDirectory = ".lockflight/ledger";
 
-    private const string Schema = "lockflight.ledger/v1";
+    public const string Schema = "lockflight.ledger/v1";
+
+    /// <summary>The ledger's monthly files (<c>events-2026-10.jsonl</c>) in <see cref="RelativeDirectory"/>.</summary>
+    public const string FilePattern = "events-*.jsonl";
     private const int MaxDetailLength = 500;
 
     public async Task AppendAsync(LedgerEvent ledgerEvent, CancellationToken cancellationToken)

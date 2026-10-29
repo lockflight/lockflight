@@ -22,7 +22,7 @@ public sealed class GateRunnerTests : IDisposable
     [Theory]
     [InlineData("edit", "format")]
     [InlineData("stop", "format,build,test")]
-    [InlineData("pr", "policy.protected,format,quality.suppressions,docs.references,build,test,coverage.patch,security.deps,security.secrets")]
+    [InlineData("pr", "policy.protected,format,quality.suppressions,docs.references,build,ef.pendingModelChanges,test,coverage.patch,security.deps,security.secrets")]
     public async Task EachProfileRunsItsStepsInTheTablesOrder(string profileName, string expected)
     {
         Assert.True(GateProfileNames.TryParse(profileName, out GateProfile profile));

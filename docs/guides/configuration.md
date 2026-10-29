@@ -42,11 +42,14 @@ gates:
     patchThreshold: 80          # % of changed coverable lines that tests must execute
     minChangedLines: 10         # below this many coverable changed lines, coverage is not judged (N/A)
   quality:
-    suppressions: report        # fail | report | off (default report): whether new suppressions fail the pr profile,
+    suppressions: report        # fail | report | off (default report; fail in version 2): whether new suppressions fail the pr profile,
                                 #   are only listed, or are not checked
   docs:
-    references: report          # fail | report | off (default report): whether references this change breaks in the
+    references: report          # fail | report | off (default report; fail in version 2): whether references this change breaks in the
                                 #   instruction files fail the pr profile, are only listed, or are not checked
+  ef:
+    pendingModelChanges: auto   # auto | fail | report | off (default auto): auto runs the check, and can fail, only
+                                #   when a tool manifest pins dotnet-ef; fail runs it with any dotnet ef on the machine
 
 units:                          # workspace shell or monorepo; omit for a single repository
   - path: services/orders       # relative to this file, no '..'; units cannot be nested
@@ -119,7 +122,8 @@ decides it: by the nearest `global.json`'s `test.runner`.
   leaves one test project with nothing to run, while others execute tests, is judged by the tests that ran; the detail names the
   project that ran none.
 
-Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform) and xUnit v2 on VSTest.
+Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform), xUnit v2 on VSTest, and NUnit on VSTest
+or Microsoft.Testing.Platform.
 
 - **xUnit v3 runs:** natively, through the in-process runner the test assembly references; its version picks the report switch
   (`-xml` up to 3.x, `-result-xml` from 4.0), so both lines work.
@@ -127,7 +131,19 @@ Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform
   listing has neither.
 - **xUnit v2 runs:** tests run with `dotnet test <dll> --filter`, and failures are read from the TRX. An assertion failure in a test
   that calls production code counts as RED_ASSERT, and a `NotImplementedException` thrown by production code as RED_STUB.
-- **Other frameworks** (NUnit, MSTest) get the gates only.
+- **NUnit listing:** tests (`[Test]`, `[TestCase]`, `[TestCaseSource]`, `[Theory]`), their `[Ignore]` and `[Explicit]` marks and
+  their `[Property("Requirement", "FR-001")]` values (on the method or its fixture) are read from the built assemblies'
+  metadata. A `[Category]` is not a requirement: it has no name to say what its value is. Generic fixtures are left out.
+- **NUnit runs:** a project that is a Microsoft.Testing.Platform application (`EnableNUnitRunner`) runs on it when it
+  references `Microsoft.Testing.Extensions.TrxReport`, else through VSTest when it references `Microsoft.NET.Test.Sdk`; with
+  neither, red/green says which to add. The tests are selected by an NUnit `Where` (class and method) in a run-settings file,
+  so a parameterized fixture's instances run too, and failures are read from the TRX. NUnit prints no exception type for an
+  assertion: its `Expected: … But was: …` lines (or `Multiple failures or warnings in test:`) count as an assertion, so a
+  failing `Assert.That` in a test that calls production code is RED_ASSERT; `Assert.Fail` is RED_IN_TEST, and `Assert.Ignore`,
+  `Assert.Inconclusive` or an ignored row is a test that did not run. Every `[TestCase]` row counts, the worst row deciding.
+- **Rows skipped at run time** (`Assert.Skip`, `Assert.Ignore`, an NUnit `[TestCase(…, Ignore = "…")]`) when `redgreen start`
+  ran the suite are recorded with the baseline; a green refuses only more of them.
+- **Other frameworks** (MSTest) get the gates only.
 
 **Units.** A workspace shell keeps `lockflight.yaml`, `.claude/`, Spec Kit and `specs/` at its root, and its service
 repositories (each with its own `.git`) beneath it. Each repository is listed as a unit. A monorepo lists its buildable
@@ -171,6 +187,86 @@ The **stop** profile's budget is `min(gates.timeoutSeconds, 540)`: the plugin's 
 budget is ERROR and says so; a build and test run that needs longer belongs in CI (`gate run --profile pr`). Only the stop
 profile is capped; `baseline tests` and the `pr` profile use the full `gates.timeoutSeconds`.
 
+### Manifest version 2
+
+`version: 2` adds the sections below. A manifest without `version`, or with `version: 1`, is read as version 2 with
+**migration defaults**: the checks version 2 added (`gates.quality.suppressions`, `gates.docs.references`,
+`approvals.check`) only report, so a new
+engine never turns a green repository red by itself. In a version 2 manifest they default to `fail`. A version 1 manifest that
+holds a version 2 section is an error naming the version it needs.
+
+The published JSON Schema, [`lockflight.schema.json`](../../lockflight.schema.json) (a copy of
+[`schemas/lockflight.manifest.v2.json`](../../schemas/lockflight.manifest.v2.json)), gives an editor completion and checks.
+Add this first line for editors that use the YAML language server:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/lockflight/lockflight/main/lockflight.schema.json
+```
+
+The engine's reader is the authority. Rules a JSON Schema cannot express (globs that stay inside the project, a large change
+larger than a fix, coverage that never decreases with the class, layers that do not overlap, units that do not nest, a shell URL
+without credentials) are checked by the engine only, and the schema's descriptions name them.
+
+```yaml
+version: 2                      # required in this shape
+requiresEngine: "0.3.0"         # optional: the lowest engine this manifest needs; an older engine says so before any
+                                #   other error (an unknown key also names the engine version reading it)
+
+routing:                        # how a pull request's change class is computed, and what each class must prove
+  preset: default               # relaxed | default | strict; required. Keys left out take the preset's values, and
+                                #   doctor names them: write the numbers out, a later engine may change a preset
+  floor: fix                    # the lowest class any change is judged at: fix | behaviour | feature | critical
+  fix: { maxLines: 20, maxFiles: 2 }   # larger than this is at least behaviour
+  largeLines: 400               # larger than this is at least feature (must be above fix.maxLines)
+  structural: critical          # a new project, a build-wide file or a solution change: feature | critical
+  critical: ["src/Payments/**"] # globs of critical paths
+  dbPaths: []                   # extra globs that mean "database", besides migrations and SQL files
+  generatedPaths: []            # generated code: left out of size and shape
+  nonProduction: []             # vendored code, samples, tools: left out of size and shape
+  requiredWorkflows: []         # CI files a platform ruleset requires: changing one is critical
+  apiProjects: []               # project directories whose public surface is an API
+  layers:                       # optional, at least two, inner first, globs of different layers never overlap
+    - { name: domain, paths: ["src/*.Domain/**"] }
+    - { name: infrastructure, paths: ["src/*.Infrastructure/**"] }
+  coverage: { fix: 80, behaviour: 80, feature: 80, critical: 90 }   # patch coverage per class, never decreasing
+  require:
+    specFrom: feature           # a spec is required from this class: behaviour | feature | critical
+    reviewFrom: behaviour       # the review runs (with an API key) from this class
+    reviewKeyFrom: critical     # without a key, NOT-EARNED from this class (not below reviewFrom), or none
+    architectureFrom: feature   # declared architecture tests are required from this class
+    architectureDeclaredFrom: none   # critical | none: from this class, no declared architecture tests is NOT-EARNED
+
+approvals:                      # the approval of record is the platform's review of the pull request
+  check: fail                   # fail | report: whether a missing approval fails the CI check or is only listed
+  default: same-pr              # same-pr | spec-first: the spec arrives with the code, or is merged first
+  specFirstFrom: none           # none | feature | critical: from this class spec-first applies anyway
+  specFirstPaths: []            # a change touching these globs needs spec-first
+  specPaths: ["specs/**"]       # what counts as the spec, for the CODEOWNERS coverage check (never empty)
+
+autonomy:                       # reserved: validated, no effect in this version
+  maxClass: fix
+  budgetUsd: 5.00
+  timeMinutes: 60
+
+shell:                          # this repository is a unit of a workspace shell (not together with units:)
+  url: git@github.com:example/shell.git   # https:// or SSH; never with credentials (use a deploy key or a CI secret)
+  ref: main                     # optional: the shell's branch (default: its default branch)
+  unit: services/orders         # this repository's path among the shell's units
+```
+
+| Preset | `floor` | `fix` lines / files | `largeLines` | coverage fix / behaviour / feature / critical | `specFrom` | `reviewFrom` | `reviewKeyFrom` | `architectureFrom` | `architectureDeclaredFrom` | `approvals.specFirstFrom` |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `relaxed` | fix | 40 / 3 | 800 | 70 / 70 / 70 / 80 | critical | feature | critical | critical | none | none |
+| `default` | fix | 20 / 2 | 400 | 80 / 80 / 80 / 90 | feature | behaviour | critical | feature | none | none |
+| `strict` | behaviour | 10 / 1 | 200 | 85 / 85 / 90 / 95 | behaviour | behaviour | feature | behaviour | critical | critical |
+
+Every preset sets `structural: critical`.
+
+> [!IMPORTANT]
+> In this version `routing:` and `approvals:` are read and validated, and `doctor` reports on them, but no command judges a
+> change by them yet. `autonomy:` is reserved and has no effect. None of them is a control today; the descriptions above say
+> what they will decide.
+
 ### Built-in protected paths
 
 These always apply; `protected:` can add paths but never remove these. The guard blocks the agent's edits to them and the
@@ -210,7 +306,7 @@ operating system enforces them for shell commands while the sandbox is on: see
 |---|---|---|
 | `edit` | format (changed lines) | quick feedback |
 | `stop` | format → build (no new warnings vs baseline) → test | end of an agent turn |
-| `pr` | policy.protected → format → quality.suppressions → docs.references → build → test (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
+| `pr` | policy.protected → format → quality.suppressions → docs.references → build → ef.pendingModelChanges → test (+ coverage instrumentation) → coverage.patch → security.deps → security.secrets | CI, before a PR |
 
 Verdicts and exit codes:
 
@@ -287,6 +383,22 @@ broken references new. `docs check` itself stays advisory and also reads `docs/`
 boundary only with `fail`, a required check and the manifest taken from the base branch. What it checks is what `docs check`
 checks: a path the repository never had is not reported, and a code-span path counts only with evidence from history.
 
+### EF Core model changes need a migration
+
+`ef.pendingModelChanges` runs per unit, after the build, for each DbContext with migrations: a `*ModelSnapshot.cs` in a
+`Migrations` folder names the context, and the nearest project file above it is its project. It checks a context only when
+the change touches its project or a project it references (since the merge base with `--base`, plus uncommitted and untracked
+files), and then runs `dotnet ef migrations has-pending-model-changes --project … --context …` (EF Core 8 or later), with the
+project itself as the startup project when it references `Microsoft.EntityFrameworkCore.Design`, else the first project of
+the unit that references both that package and this project. A model that changed without a migration fails, naming the
+project and context; `dotnet ef` failing for any other reason is an `ERROR`; the runs share the gate's time budget.
+
+With `auto` (the default) it runs only when a tool manifest (`dotnet-tools.json` or `.config/dotnet-tools.json`, in the
+unit or above it up to the project root) pins `dotnet-ef`, after `dotnet tool restore`; otherwise it is `N/A` and says so. A
+global `dotnet ef` is not the repository's choice, so it runs only with `fail`. `report` lists a pending change on a `PASS`,
+`off` skips the step. The project files are read as text, not evaluated by MSBuild: a reference added through an imported
+file is not seen.
+
 ## Baselines (brownfield adoption; human-only)
 
 | Command | Accepts | File |
@@ -311,7 +423,6 @@ checks: a path the repository never had is not reported, and a code-span path co
 | `review [--base ref] [--model name] [--budget usd]` | agent | review (`claude -p`, read-only, schema); of record with the `review:` settings against the merge base of HEAD and the target |
 | `review status [--feature id]` | agent | review runs, open, fixed and dismissed findings, and the pull request summary (read only) |
 | `review dismiss <finding-id> --reason "…"` | **human** | close an open finding, recording who, when and why |
-| `ledger retro [--days 30] [--min 2]` | anyone | recurring incidents and suggested remedies |
 
 Evidence lives in `.lockflight/features/<feature>/` (approvals, `redgreen.json`, `reviews/` with one file per review run and
 `reviews/dismissals/`) and is committed.

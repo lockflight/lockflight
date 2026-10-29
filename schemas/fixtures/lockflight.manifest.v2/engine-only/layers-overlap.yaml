@@ -1,0 +1,6 @@
+version: 2
+routing:
+  preset: default
+  layers:
+    - { name: a, paths: ["src/**"] }
+    - { name: b, paths: ["src/Api/**"] }

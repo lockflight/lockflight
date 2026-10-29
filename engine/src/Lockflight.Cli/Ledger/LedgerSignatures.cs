@@ -1,7 +1,8 @@
 namespace Lockflight.Cli.Ledger;
 
 /// <summary>
-/// Ledger signatures written by one command and read by the retro; a change here changes how existing ledgers are read.
+/// Ledger signatures written by one command and read by the status line and the crew's retro skill; a change here changes how
+/// existing ledgers are read.
 /// </summary>
 internal static class LedgerSignatures
 {

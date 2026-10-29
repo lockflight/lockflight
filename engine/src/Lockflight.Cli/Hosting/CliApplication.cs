@@ -31,9 +31,9 @@ internal static class CliApplication
                                                         and docs/ that no longer resolve (links, anchors, deleted or
                                                         moved paths, engine and plugin commands) and instruction
                                                         files over Claude Code's size targets (read only)
-          rules audit                                   each rule in CLAUDE.md, rules, skills and the constitution
-                                                        with what backs it: checked by a guardrail, related, or
-                                                        guidance only (read only)
+          facts [--json]                                deterministic facts for the crew's skills: protected paths,
+                                                        gate steps and modes, analyzer, banned-symbol and code
+                                                        metrics settings, architecture tests, the ledger (read only)
           statusline                                    Claude Code status line: Levi and the last verdict
           update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
                                                         package feed), re-pin this project
@@ -65,7 +65,6 @@ internal static class CliApplication
                                                         open findings carry forward until fixed or dismissed
           review status [--feature <id>]                review runs, open, fixed and dismissed findings, and
                                                         the summary for the pull request (read only)
-          ledger retro [--days 30] [--min 2]            recurring incidents → suggested remedies
           propose <path> (--from <file> | --delete) [<path> …]
                                                         a protected change as one patch per file in
                                                         .lockflight/local/proposals/ for a person to review and
@@ -94,8 +93,8 @@ internal static class CliApplication
                                                         check approval records and artifact hashes;
                                                         exactly one of --feature or --base (never the active feature)
           gate run --profile pr [--base <ref>] [--result <file>]
-                                                        stop steps plus policy, suppressions, references,
-                                                        patch coverage, dependencies, secrets
+                                                        stop steps plus policy, suppressions, references, EF
+                                                        model changes, patch coverage, dependencies, secrets
 
         Exit codes
           0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)

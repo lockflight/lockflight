@@ -100,6 +100,12 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/lifecycle-xunit2.sh "$RUNNER_TEMP/lifecycle-xunit2"
+      - name: Lifecycle end to end on NUnit (VSTest and Microsoft.Testing.Platform)
+        shell: bash
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/e2e/lifecycle-nunit.sh "$RUNNER_TEMP/lifecycle-nunit"
       - name: The spec contract's example passes the phase checks, without Spec Kit
         shell: bash
         run: |

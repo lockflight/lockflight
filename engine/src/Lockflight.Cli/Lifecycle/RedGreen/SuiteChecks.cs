@@ -3,8 +3,9 @@ using Lockflight.Cli.Testing;
 namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
-/// What the test suite may not lose between the baseline and a green: no test deleted, newly skipped (<c>Skip = "…"</c> or a runtime
-/// <c>Assert.Skip</c>) or newly marked <c>Explicit = true</c>. Explicit tests are read from the runner's listing (<c>"Explicit": true</c>
+/// What the test suite may not lose between the baseline and a green: no test deleted, newly skipped (<c>Skip = "…"</c>,
+/// <c>[Ignore]</c>, or at run time: <c>Assert.Skip</c>, <c>Assert.Ignore</c>, an ignored row) or newly marked explicit
+/// (<c>Explicit = true</c>, <c>[Explicit]</c>). Explicit tests are read from the runner's listing (<c>"Explicit": true</c>
 /// in <c>-list full/json</c>, <c>Explicit: true</c> in MTP's text listing) and compared with the explicit set recorded at <c>start</c>.
 /// Run outcomes cannot tell them apart: a normal run reports every explicit test as NotRun, whether it was always explicit or was
 /// marked explicit to dodge a failure. The listing is the runner's own view of the compiled tests, so it also sees an
@@ -25,9 +26,12 @@ internal static class SuiteChecks
             .Where(result => result.Outcome == TestOutcome.Fail && open.Tests.All(test => test.Key != result.Key) && !knownFailing.Contains(result.Name))
             .Select(result => result.Name)
             .Distinct()];
-        // NotRun is not counted as a skip: explicit tests are never run in a full run. They are caught from the listing instead.
+        // NotRun is not counted as a skip: explicit tests are never run in a full run. They are caught from the listing instead, and
+        // so are NUnit's, which its TRX reports as not executed, like a skipped test.
+        // A test with rows skipped at run time is a new skip when more of its rows are skipped than at the baseline.
+        HashSet<string> explicitNow = [.. inventory.Where(test => test.IsExplicit).Select(test => test.Key)];
         HashSet<string> skippedNow = [.. inventory.Where(test => test.SkipReason is not null).Select(test => test.Key),
-            .. results.Where(result => result.Outcome == TestOutcome.Skip).Select(result => result.Key)];
+            .. SkippedRows(results).Where(rows => !explicitNow.Contains(rows.Key) && rows.Value > record.BaselineSkippedRows.GetValueOrDefault(rows.Key)).Select(rows => rows.Key)];
         string[] newSkips = [.. skippedNow.Where(key => !record.BaselineSkipped.Contains(key)).Order(StringComparer.Ordinal)];
 
         List<string> problems = [];
@@ -54,6 +58,11 @@ internal static class SuiteChecks
         AddProblem(problems, "known tests newly marked Explicit", NewlyExplicit(record, knownNow));
         return problems;
     }
+
+    /// <summary>How many rows of each test a run skipped (<c>Assert.Skip</c>, <c>Assert.Ignore</c>, an ignored row); tests without any are left out.</summary>
+    public static IReadOnlyDictionary<string, int> SkippedRows(IReadOnlyList<ExecutedTest> results) =>
+        results.Where(result => result.Outcome == TestOutcome.Skip).GroupBy(result => result.Key, StringComparer.Ordinal)
+            .ToDictionary(rows => rows.Key, rows => rows.Count(), StringComparer.Ordinal);
 
     /// <summary>A test ran (every theory row) and passed; one that did not run at all has not passed.</summary>
     public static bool PassedEveryRow(IReadOnlyList<ExecutedTest> results, string key)

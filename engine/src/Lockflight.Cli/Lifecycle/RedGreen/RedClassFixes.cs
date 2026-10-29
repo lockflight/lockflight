@@ -10,7 +10,7 @@ internal static class RedClassFixes
         RedClass.RedInTest => "the test (or its fixture, constructor or Assert.Fail) fails by itself; make it call the production code and fail there",
         RedClass.RedNoProduction => "the assertion fails without the test calling production code; call the member under test and assert on its result",
         RedClass.GreenBefore => "the test passes before the implementation exists; it must describe behaviour that is still missing",
-        RedClass.Skipped => "the test is skipped or did not run; remove Skip or Explicit",
+        RedClass.Skipped => "the test is skipped or did not run; remove Skip, Explicit or Ignore (an Assert.Skip, Assert.Ignore or Assert.Inconclusive too)",
         RedClass.Flaky => "repeated runs disagree; make the test deterministic",
         _ => string.Empty,
     };
