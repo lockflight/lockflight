@@ -83,7 +83,7 @@ public sealed class HostTamperingTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await repository.CheckoutAsync("main", cancellationToken);
-        main = await repository.Write(".lockflight/baselines/host-tampering.json", """{ "schema": "lockflight.baseline.host-tampering/v1", "findings": ["Shop.Tests|exit|Shop.Tests.Guard::Stop"] }""")
+        main = await repository.Write(".lockflight/baselines/host-tampering.json", """{ "schema": "lockflight.baseline.host-tampering/v1", "findings": ["Shop.Tests|exit|Shop.Tests.Guard::Stop|System.Environment.Exit"] }""")
             .CommitAsync("accept the guard", cancellationToken);
         await repository.CheckoutAsync("001-shipping", cancellationToken);
         await repository.MergeAsync("main", cancellationToken);

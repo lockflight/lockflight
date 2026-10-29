@@ -7,5 +7,5 @@ namespace Lockflight.Cli.Ci;
 /// </summary>
 internal sealed record TamperingFinding(string Assembly, string Kind, string Location, string Member)
 {
-    public string Id => $"{Assembly}|{Kind}|{Location}";
+    public string Id => $"{Assembly}|{Kind}|{Location}|{Member}";
 }

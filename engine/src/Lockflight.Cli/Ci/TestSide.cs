@@ -14,6 +14,9 @@ internal sealed record TestSide(IReadOnlyDictionary<string, string> ProjectsByAs
 {
     private static readonly string[] RootInputs = ["xunit.runner.json", "*.runsettings"];
 
+    /// <summary>Attributes that declare a test in xUnit, NUnit or MSTest; a file with none of them is a helper.</summary>
+    private static readonly string[] TestMarkers = ["[Fact", "[Theory", "[Test", "[TestCase", "[TestMethod", "[DataTestMethod"];
+
     /// <param name="treeRoot">Where the head's tree was built: the test applications' directories are under it.</param>
     public static async Task<TestSide> ReadAsync(string repositoryRoot, string head, TreeListing headListing, string treeRoot, CiSettings ci, CancellationToken cancellationToken)
     {
@@ -49,6 +52,29 @@ internal sealed record TestSide(IReadOnlyDictionary<string, string> ProjectsByAs
         IsInput(path)
         || HelperProjects.Any(directory => Under(path, directory))
         || (ProjectsByAssembly.TryGetValue(assembly, out string? project) && Under(path, project) && !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && !IsBuildOutput(path, project));
+
+    /// <summary>
+    /// The C# files among <paramref name="paths"/> that are in a test project and declare no test at <paramref name="commit"/>:
+    /// helpers and fixtures, compared by content because a test can depend on them in ways its fingerprint walk cannot follow.
+    /// </summary>
+    public async Task<IReadOnlySet<string>> HelperSourcesAsync(string root, string commit, IEnumerable<string> paths, CancellationToken cancellationToken)
+    {
+        HashSet<string> helpers = new(StringComparer.Ordinal);
+        foreach (string path in paths.Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) && ProjectsByAssembly.Values.Any(directory => Under(path, directory))))
+        {
+            if (await JudgeGit.ShowFileAsync(root, commit, path, cancellationToken) is string text && !TestMarkers.Any(marker => text.Contains(marker, StringComparison.Ordinal)))
+            {
+                helpers.Add(path);
+            }
+        }
+
+        return helpers;
+    }
+
+    /// <summary>Whether a changed file can change what a test of <paramref name="assembly"/> does beyond its fingerprint.</summary>
+    public bool Affects(string path, string assembly, IReadOnlySet<string> helperSources) =>
+        AffectsBeyondCode(path, assembly)
+        || (helperSources.Contains(path) && ProjectsByAssembly.TryGetValue(assembly, out string? project) && Under(path, project));
 
     private bool IsInput(string path) => InputGlobs.Any(glob => PathRules.Matches(glob, path));
 

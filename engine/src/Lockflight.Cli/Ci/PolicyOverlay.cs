@@ -38,6 +38,12 @@ internal static partial class PolicyOverlay
             string target = Path.Combine(tree, path.Replace('/', Path.DirectorySeparatorChar));
             if (!atPolicy.Contains(path))
             {
+                // On a case-insensitive file system NuGet.config and nuget.config are one file: keep the base's under either name.
+                if (atPolicy.Any(present => present.Equals(path, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
                 if (File.Exists(target))
                 {
                     File.Delete(target);
