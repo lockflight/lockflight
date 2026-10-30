@@ -22,9 +22,11 @@ Code. It links no engine. Use it when the team's agents are not Claude Code, or 
 change to how people work. It needs a CI file, so `--ci none` is refused with it.
 
 `doctor` checks a developer's machine, so at this level its local lines (the linked engine, Claude settings, deny rules)
-report what CI only leaves out; they need no fix. A person or an agent can still run the engine by hand (`lockflight gate run`, `lockflight redgreen red`). The CI check is
-the boundary where it runs as a required check with policy, the lock and CODEOWNERS on the base branch
-([CI hardening](ci-hardening.md)).
+report what CI only leaves out; they need no fix. A person or an agent can still run the engine by hand (`lockflight gate run`, `lockflight redgreen red`). What CI
+reads from the base branch (the policy, the engine lock, CODEOWNERS) is a boundary, and so is the check itself where it runs as a
+required check ([CI hardening](ci-hardening.md)). The judge's red/green, tests-since-red and trace results are a strong
+guardrail, not a boundary, in 0.3.0: the pull request's own code runs in the judge's job ([guardrails and
+boundaries](guardrails-and-boundaries.md)).
 
 ## CI + native settings
 
@@ -81,5 +83,6 @@ Commit the change as one commit; `git revert` undoes it.
 ## What each level can promise
 
 The local controls are guardrails at every level, as described in [guardrails and boundaries](guardrails-and-boundaries.md):
-the guard catches accidents, and an agent with a shell can get around a check that runs on its own machine. The boundary is
-the CI check on the base branch's policy, and it is the same at all three levels.
+the guard catches accidents, and an agent with a shell can get around a check that runs on its own machine. What CI adds
+is the same at all three levels: the base branch's policy, engine lock and CODEOWNERS are a boundary, the check is one where it
+is required, and the judge's test results are a strong guardrail in 0.3.0.

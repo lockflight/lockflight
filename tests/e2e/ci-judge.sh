@@ -2,7 +2,8 @@
 # The CI judge end to end with the published engine, on a copy of samples/dotnet-single with a scripted pull request history: a
 # story whose red commit fails in production code and whose implementation passes is judged PASS on red, tests since red,
 # green and trace, and the report passes both status contexts (gates and lockflight/judge); a red commit that already holds the implementation FAILs red; a
-# test weakened after green FAILs tests since red; a missing judge artifact is NOT-EARNED.
+# test weakened after green FAILs tests since red; a missing judge artifact is NOT-EARNED. The same story on a copy of
+# samples/dotnet-mstest passes red, green and trace on MSTest.
 # Usage: ENGINE=<lockflight binary> ci-judge.sh <workdir>
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -60,6 +61,25 @@ perl -pi -e 's/Assert.Equal\(5m, new PriceCalculator\(\).ShippingCost\(1m\)\)/As
 git commit -qam "test: simpler"
 expect_exit 1 "a test weakened after green fails the judge" -- judge "$(git rev-parse HEAD)"
 check "$W/evidence/evidence.json" tests.sinceRed FAIL
+
+# MSTest: the judge drives red/green on MSTest as on xUnit.
+mkdir -p "$W/mstest"; cp -R "$ROOT/samples/dotnet-mstest/." "$W/mstest/"; rm -rf "$W"/mstest/*/*/bin "$W"/mstest/*/*/obj
+cd "$W/mstest" || exit 1
+git init -q -b main; git config commit.gpgsign false
+printf 'version: 1\n' > lockflight.yaml
+printf 'bin/\nobj/\n.lockflight/ledger/\n.lockflight/local/\n' > .gitignore
+git add -A; git commit -qm base; main=$(git rev-parse HEAD)
+git checkout -q -b 001-lending
+mkdir -p specs/001-lending
+printf '# Feature Specification: Lending\n\n## Requirements *(mandatory)*\n\n- **FR-003**: System MUST lend an available copy\n' > specs/001-lending/spec.md
+perl -0pi -e 's/\}\s*\z/\n    public bool Lend(string title) => throw new NotImplementedException();\n}\n/' src/Lending/Catalog.cs
+perl -0pi -e 's/\}\s*\z/\n    [TestMethod]\n    [TestProperty("Requirement", "FR-003")]\n    public void AnAvailableCopyIsLent()\n    {\n        Catalog catalog = new();\n        catalog.AddCopies("Dune", 1);\n\n        Assert.IsTrue(catalog.Lend("Dune"));\n    }\n}\n/' tests/Lending.Tests/CatalogTests.cs
+git add -A; git commit -qm "test(001-lending): red for US1" -m "Lockflight-Red: 1"
+perl -pi -e 's/=> throw new NotImplementedException\(\);/=> Copies(title) > 0;/' src/Lending/Catalog.cs
+git commit -qam "feat(001-lending): US1"
+rm -rf "$W/evidence"
+expect_exit 0 "the judge passes the story on MSTest" -- "$E" ci --platform github --head "$(git rev-parse HEAD)" --base "$main" --branch 001-lending --evidence "$W/evidence"
+for id in red tests.sinceRed green trace tests.hostTampering; do check "$W/evidence/evidence.json" "$id" PASS; done
 
 if [ "$failures" -gt 0 ]; then echo "$failures CI judge checks failed"; exit 1; fi
 echo "CI judge end to end: all checks passed"

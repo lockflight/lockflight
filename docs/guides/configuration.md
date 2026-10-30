@@ -135,8 +135,8 @@ decides it: by the nearest `global.json`'s `test.runner`.
   leaves one test project with nothing to run, while others execute tests, is judged by the tests that ran; the detail names the
   project that ran none.
 
-Red/green and trace run xUnit v3 (natively or through Microsoft.Testing.Platform), xUnit v2 on VSTest, and NUnit and MSTest
-on VSTest or Microsoft.Testing.Platform.
+Red/green and trace, locally and in the CI judge, run xUnit v3 (natively or through Microsoft.Testing.Platform), xUnit v2 on
+VSTest, and NUnit and MSTest on VSTest or Microsoft.Testing.Platform. Other test frameworks get the gates' test step only.
 
 - **xUnit v3 runs:** natively, through the in-process runner the test assembly references; its version picks the report switch
   (`-xml` up to 3.x, `-result-xml` from 4.0), so both lines work.
@@ -511,8 +511,9 @@ A reference is the same when its file, text and kind are, wherever its line move
 broken references new. `docs check` itself stays advisory and also reads `docs/` and `README.md`; this step does not.
 
 `gates.docs.references` takes `fail`, `report` (the default: findings listed on a `PASS`) or `off`, as
-`gates.quality.suppressions` does; an `ERROR` (an unknown base, a shallow checkout) stays an `ERROR`. Locally the step is a guardrail; in CI it is a
-boundary only with `fail`, a required check and the manifest taken from the base branch. What it checks is what `docs check`
+`gates.quality.suppressions` does; an `ERROR` (an unknown base, a shallow checkout) stays an `ERROR`. Locally the step is a guardrail; in CI, with `fail`, a
+required check and the manifest taken from the base branch, it is a strong guardrail in 0.3.0, as is all of the judge's
+evidence (written in the job that runs the pull request's code). What it checks is what `docs check`
 checks: a path the repository never had is not reported, and a code-span path counts only with evidence from history.
 
 ### EF Core model changes need a migration

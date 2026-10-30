@@ -336,6 +336,6 @@ agent safe on your machine. For that, run the agent in an isolated environment w
 
 ## Next
 
-- [CI hardening](ci-hardening.md): turn CI into the boundary with CODEOWNERS and required checks
+- [CI hardening](ci-hardening.md): make CI's policy and check a boundary with CODEOWNERS and required checks
 - [Troubleshooting](troubleshooting.md): when the guard blocks a command you expected to run
 - [Security policy](../../SECURITY.md): how to report a way around a control

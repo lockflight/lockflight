@@ -31,7 +31,7 @@ New here? Start with <a href="guides/getting-started.md">getting started</a>, th
 | Page | Read it when |
 |---|---|
 | [Configuration](guides/configuration.md) | You edit `lockflight.yaml`: gate profiles, protected paths, units, baselines, lifecycle commands, environment variables. |
-| [CI hardening](guides/ci-hardening.md) | You make CI the boundary: the generated workflow, CODEOWNERS, required checks, approvals in CI, workspace units. |
+| [CI hardening](guides/ci-hardening.md) | You make CI the check of record: the generated workflow, what is a boundary there and what is a strong guardrail, CODEOWNERS, required checks, approvals in CI, workspace units. |
 
 ## Understand
 

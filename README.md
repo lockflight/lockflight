@@ -148,8 +148,8 @@ Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-
 
 ## Status
 
-**Alpha, for .NET:** SDK-style .NET 8, 9 and 10 projects. In CI, the judge's red/green runs on xUnit (v3 and v2) and NUnit,
-and other test projects get the gates' test step; the local lifecycle also covers MSTest. The engine is a Native AOT
+**Alpha, for .NET:** SDK-style .NET 8, 9 and 10 projects. Red/green and trace run on xUnit (v3 and v2), NUnit and MSTest,
+in CI and locally; other test projects get the gates' test step. The engine is a Native AOT
 binary for macOS, Linux and Windows, with over 1,700 unit tests and end-to-end suites on all three. 0.3.0, the CI judge, is
 being finished on `main`; the formats freeze at its release.
 

@@ -309,5 +309,5 @@ move are in the diff, so no path in the pull request avoids them. Two limits hol
 ## Next
 
 - [Configuration](configuration.md): `lockflight.yaml`
-- [CI hardening](ci-hardening.md): making the CI check the boundary
+- [CI hardening](ci-hardening.md): making the CI check required, and what in it is a boundary
 - [Guardrails and boundaries](guardrails-and-boundaries.md): what each control can promise

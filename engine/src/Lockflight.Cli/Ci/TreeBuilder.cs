@@ -100,7 +100,7 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
 
             if (!Directory.EnumerateFiles(worktree.Root, "*.*proj", SearchOption.AllDirectories).Any())
             {
-                return new TreeListing(commit, TreeOutcome.NoTestApps, workspace, null, "no .NET project in the tree; red/green needs an xUnit or NUnit test project");
+                return new TreeListing(commit, TreeOutcome.NoTestApps, workspace, null, "no .NET project in the tree; red/green needs an xUnit, NUnit or MSTest test project");
             }
 
             buildOutput = await workspace.BuildAsync(cancellationToken);
@@ -128,7 +128,7 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
 
         if (workspace.Apps.Count == 0)
         {
-            return new TreeListing(commit, TreeOutcome.NoTestApps, workspace, null, "no xUnit test project (v3, or v2 on VSTest) found; other frameworks get the gates only");
+            return new TreeListing(commit, TreeOutcome.NoTestApps, workspace, null, "no xUnit, NUnit or MSTest test project found; other frameworks get the gates only");
         }
 
         return await workspace.ListAsync(cancellationToken) is IReadOnlyList<TestCase> inventory
