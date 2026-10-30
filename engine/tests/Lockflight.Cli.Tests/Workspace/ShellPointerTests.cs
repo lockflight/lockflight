@@ -253,11 +253,11 @@ public sealed class ShellPointerTests : IDisposable
     }
 
     [Theory]
-    [InlineData("github", "--shell \"$RUNNER_TEMP/lockflight-shell\"", "${{ secrets.LOCKFLIGHT_SHELL_TOKEN }}")]
-    [InlineData("azure", "--shell \"$AGENT_TEMPDIRECTORY/lockflight-shell\"", "LOCKFLIGHT_SHELL_TOKEN: $(LOCKFLIGHT_SHELL_TOKEN)")]
-    [InlineData("bitbucket", "--shell \"$LOCKFLIGHT_TEMP/lockflight-shell\"", "unset LOCKFLIGHT_SHELL_TOKEN")]
-    [InlineData("gitlab", "--shell \"$LOCKFLIGHT_TEMP/lockflight-shell\"", "unset LOCKFLIGHT_SHELL_TOKEN")]
-    public void AUnitsCiClonesTheShellBeforeTheGatesAndJudgesWithIt(string platformName, string shellArgument, string token)
+    [InlineData("github", "shell-clone: \"true\"", "mode: judge", "shell-clone: \"true\"", "${{ secrets.LOCKFLIGHT_SHELL_TOKEN }}")]
+    [InlineData("azure", "lockflight workspace clone --into", CiShellScripts.GateCommand, "--shell \"$AGENT_TEMPDIRECTORY/lockflight-shell\"", "LOCKFLIGHT_SHELL_TOKEN: $(LOCKFLIGHT_SHELL_TOKEN)")]
+    [InlineData("bitbucket", "lockflight workspace clone --into", "lockflight ci --shell", "lockflight ci --shell \"$LOCKFLIGHT_TEMP/lockflight-shell\" --platform bitbucket", "unset LOCKFLIGHT_SHELL_TOKEN")]
+    [InlineData("gitlab", "lockflight workspace clone --into", CiShellScripts.GateCommand, "--shell \"$LOCKFLIGHT_TEMP/lockflight-shell\"", "unset LOCKFLIGHT_SHELL_TOKEN")]
+    public void AUnitsCiClonesTheShellBeforeTheGatesAndJudgesWithIt(string platformName, string cloneLine, string judgeLine, string shellArgument, string token)
     {
         Assert.True(CiPlatformNames.TryParse(platformName, out CiPlatform platform));
         IReadOnlyList<CiFile> files = CiPipeline.Files(platform, temp.FullName, ["10.0"], CiTrigger.PullRequest, developmentPin: false);
@@ -265,8 +265,10 @@ public sealed class ShellPointerTests : IDisposable
         CiFile[] unitFiles = [.. files.Select(file => CiShellPointer.ForUnit(file, platform))];
 
         string job = unitFiles[0].Content;
-        int clone = job.IndexOf("lockflight workspace clone --into", StringComparison.Ordinal);
-        Assert.True(clone > 0 && clone < job.IndexOf(CiShellScripts.GateCommand, StringComparison.Ordinal));
+        int judge = job.IndexOf(judgeLine, StringComparison.Ordinal);
+        int clone = job.IndexOf(cloneLine, StringComparison.Ordinal);
+        Assert.True(judge > 0 && clone > 0);
+        Assert.True(platform == CiPlatform.GitHub ? clone > judge : clone < judge);
         Assert.Contains(shellArgument, job, StringComparison.Ordinal);
         Assert.Contains(token, job, StringComparison.Ordinal);
         Assert.Equal(files.Skip(1), unitFiles.Skip(1));

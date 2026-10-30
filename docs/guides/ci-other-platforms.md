@@ -28,13 +28,15 @@ The same steps as the GitHub workflow, in the same order:
   vendored install script checked against the lock (no .NET SDK needed for it; the SDK image reads the package with `perl`),
   else by the version in the tool pin with `dotnet tool install --tool-path`. The same step as the GitHub workflow's, from the
   same source in the engine.
-- **`lockflight gate run --profile pr --base <base sha>`**, with the result in `artifacts/lockflight/result.json`.
+- **`lockflight gate run --profile pr --base <base sha>`**, with the result in `artifacts/lockflight/result.json` (Azure and
+  GitLab); Bitbucket runs the [CI judge](#bitbucket-pipelines), which runs the same gates at head and adds the red/green
+  evidence. Azure and GitLab run the gates only for now.
 
 | | Azure Pipelines | Bitbucket Pipelines | GitLab CI/CD |
 |---|---|---|---|
 | File `init` writes | `.azure-pipelines/lockflight-gates.yml`, a pipeline of its own | `bitbucket-pipelines.yml` | `.gitlab/ci/lockflight-gates.yml`, and a `.gitlab-ci.yml` that includes it |
 | When the team already has a pipeline file | untouched: this is a separate pipeline | untouched: the job goes to `.lockflight/ci/bitbucket-pipelines.yml` to merge by hand | `.gitlab-ci.yml` untouched: `init` prints the `include` to add |
-| Base on a pull request | merge base of `HEAD` and `origin/<System.PullRequest.TargetBranch>` | merge base of `HEAD` and `origin/$BITBUCKET_PR_DESTINATION_BRANCH` | `$CI_MERGE_REQUEST_DIFF_BASE_SHA` |
+| Base on a pull request | merge base of `HEAD` and `origin/<System.PullRequest.TargetBranch>` | the tip of `origin/$BITBUCKET_PR_DESTINATION_BRANCH` (the judge works out the merge base) | `$CI_MERGE_REQUEST_DIFF_BASE_SHA` |
 | Base on a push to `main` | the previous commit | the previous commit | `$CI_COMMIT_BEFORE_SHA` |
 | .NET | `UseDotNet@2` for each channel the test projects need | the `mcr.microsoft.com/dotnet/sdk:10.0` image, older channels added with `dotnet-install.sh` | as Bitbucket |
 | `--ci manual` | `trigger: none`, `pr: none` | a `custom` pipeline | a rule for pipelines started from the web |
@@ -83,14 +85,31 @@ judges it. The required reviewer on `.azure-pipelines/lockflight-gates.yml` is w
 
 ## Bitbucket Pipelines
 
-`init --ci-platform bitbucket` writes `bitbucket-pipelines.yml` when the repository has none. It runs the step on every pull
-request and on pushes to `main`.
+`init --ci-platform bitbucket` writes `bitbucket-pipelines.yml` when the repository has none. It runs the CI judge on every
+pull request and on pushes to `main`, in three steps:
+
+- **`judge (runs the pull request's code)`** checks out the pull request's own commit (`$BITBUCKET_COMMIT`; the
+  pipeline's checkout has the destination merged in), fetches the destination's tip, restores its policy and runs
+  [`lockflight ci --platform bitbucket`](commands.md#ci): red at each red commit, green and the `pr` gates at head, trace.
+  The step passes on any verdict and holds no secret of Lockflight's (a unit repository's shell token is the exception: see
+  [the shell pointer](ci-hardening.md#the-shell-pointer-preferred)); it clears `artifacts/lockflight-evidence/` and hands its
+  evidence to the next steps there as an artifact.
+- **`gates`** and **`lockflight/judge`**, in parallel, read that evidence as data with `lockflight ci report`: `gates` is the
+  `pr` gates and green at head, `lockflight/judge` the red/green evidence, trace and host tampering. A pull request that
+  commits files under `artifacts/lockflight-evidence/` or `artifacts/lockflight-verdict/` is an ERROR in both. Bitbucket has
+  one build status for the whole pipeline, not one per step, so a failing step fails the build: `gates` fails with its
+  verdict, and `lockflight/judge` prints its verdict but fails the build only when the repository variable
+  `LOCKFLIGHT_JUDGE_REQUIRED` is `true` (turn it on when the team produces red commits). A push to `main` runs the judge and
+  `gates` only.
+
+No review step is generated: Bitbucket's secured repository variables reach every step, the judge's included, so an API key
+belongs only in a deployment environment bound to the review step; add such a step by hand from the GitHub workflow's review
+job if you want one. The branch name reaches the engine as a quoted variable, never as shell.
 
 **A repository that already has `bitbucket-pipelines.yml`:** Bitbucket reads that one file and cannot include another file of
 the same repository, so `init` leaves it as it is and writes the job to `.lockflight/ci/bitbucket-pipelines.yml`. Merge it by
-hand: copy `clone: depth: full` (the base commit must be in the clone), the `lockflight-gates` step under
-`definitions: steps:`, and add `- step: *lockflight-gates` to your `pull-requests` and `branches: main` pipelines. Commit the
-result; `init` then sees the job in `bitbucket-pipelines.yml` and writes no copy again.
+hand: copy `clone: depth: full` (the base commit must be in the clone), the three steps under `definitions: steps:`, and
+the `pull-requests` and `branches: main` pipelines that run them. Commit the result; `init` then sees the job in `bitbucket-pipelines.yml` and writes no copy again.
 
 1. **Turn on Pipelines:** Repository settings → Pipelines → Settings → Enable Pipelines.
 2. **Make it a merge check.** Repository settings → Branch restrictions → `main` → Merge settings (merge checks) → require a

@@ -43,28 +43,60 @@ public sealed class TemplatesTests
         Assert.Equal((GateMode.Fail, GateMode.Fail), (manifest.Gates.Suppressions, manifest.Gates.DocsReferences));
     }
 
-    [Theory]
-    [InlineData(".editorconfig")]
-    [InlineData("BannedSymbols")]
-    [InlineData("ruleset")]
-    public void TheWorkflowTakesCodeStyleConfigFromTheBase(string name)
-    {
-        string workflow = Templates.Workflow(["10.0.x"]);
-
-        Assert.Contains("git ls-tree -r --name-only \"$BASE\"", workflow, StringComparison.Ordinal);
-        Assert.Contains(name, workflow, StringComparison.Ordinal);
-    }
-
     [Fact]
-    public void TheWorkflowInstallsThePinnedEngineOutsideTheRepositorysGlobalJson()
+    public void TheWorkflowRunsTheCiJudgeActionPinnedByCommitInFourJobs()
     {
         string workflow = Templates.Workflow(["8.0.x", "10.0.x"]);
 
-        Assert.Contains("(cd \"$LOCKFLIGHT_TEMP\" && dotnet tool install Lockflight.Cli --tool-path", workflow, StringComparison.Ordinal);
-        Assert.Contains("LOCKFLIGHT_TEMP=\"$RUNNER_TEMP\"", workflow, StringComparison.Ordinal);
-        Assert.DoesNotContain("dotnet tool restore", workflow, StringComparison.Ordinal);
-        Assert.Contains("  lockflight gate run --profile pr", workflow, StringComparison.Ordinal);
-        Assert.DoesNotContain("dotnet lockflight", workflow, StringComparison.Ordinal);
+        Assert.Matches(@"uses: lockflight/lockflight/action@[0-9a-f]{40} # ", workflow);
+        Assert.Contains("  judge:\n", workflow, StringComparison.Ordinal);
+        Assert.Contains("  review:\n", workflow, StringComparison.Ordinal);
+        Assert.Contains("  gates:\n", workflow, StringComparison.Ordinal);
+        Assert.Contains("    name: lockflight/judge\n", workflow, StringComparison.Ordinal);
+        Assert.Contains("mode: judge", workflow, StringComparison.Ordinal);
+        Assert.Contains("context: gates", workflow, StringComparison.Ordinal);
+        Assert.Contains("context: lockflight/judge", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("pull_request_target", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NoPullRequestValueIsInterpolatedIntoAScriptAndOnlyTheReportPostsComments()
+    {
+        string[] lines = Templates.Workflow(["10.0.x"]).Split('\n');
+        List<string> interpolated = [];
+        int? scriptIndent = null;
+        foreach (string line in lines)
+        {
+            int indent = line.Length - line.TrimStart().Length;
+            if (scriptIndent is int block && line.Trim().Length > 0 && indent <= block)
+            {
+                scriptIndent = null;
+            }
+
+            if ((scriptIndent is not null || line.TrimStart().StartsWith("run:", StringComparison.Ordinal)) && line.Contains("${{", StringComparison.Ordinal))
+            {
+                interpolated.Add(line.Trim());
+            }
+
+            if (line.TrimStart().StartsWith("run: |", StringComparison.Ordinal))
+            {
+                scriptIndent = indent;
+            }
+        }
+
+        Assert.Empty(interpolated);
+        Assert.Equal(1, lines.Count(line => line.Trim() == "pull-requests: write"));
+        Assert.Equal(1, lines.Count(line => line.Contains("secrets.ANTHROPIC_API_KEY", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void TheReviewRunsOnlyForSameRepositoryPullRequestsWithTheVariableSetAndNotAfterAJudgeFail()
+    {
+        string workflow = Templates.Workflow(["10.0.x"]);
+
+        Assert.Contains("vars.LOCKFLIGHT_REVIEW == 'true'", workflow, StringComparison.Ordinal);
+        Assert.Contains("github.event.pull_request.head.repo.full_name == github.repository", workflow, StringComparison.Ordinal);
+        Assert.Contains("needs.judge.outputs.verdict != 'FAIL'", workflow, StringComparison.Ordinal);
     }
 
     [Fact]

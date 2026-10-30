@@ -9,7 +9,11 @@ namespace Lockflight.Cli.Tests.Init;
 /// </summary>
 public sealed class CiStepMigrationTests
 {
-    public static TheoryData<string> Platforms() => ["github", "azure", "bitbucket", "gitlab"];
+    /// <summary>The platforms whose current template still runs the gates in one job (GitHub's and Bitbucket's run the CI judge).</summary>
+    public static TheoryData<string> Platforms() => ["azure", "gitlab"];
+
+    /// <summary>The platforms whose current template runs the CI judge.</summary>
+    public static TheoryData<string> JudgePlatforms() => ["github", "bitbucket"];
 
     [Theory]
     [MemberData(nameof(Platforms))]
@@ -24,6 +28,28 @@ public sealed class CiStepMigrationTests
         Assert.Equal(migrated, CiStepMigration.Migrate(migrated!));
     }
 
+    [Theory]
+    [MemberData(nameof(JudgePlatforms))]
+    public void ALockflight02PipelineOfAJudgePlatformKeepsItsGatesJobAndMovesToTheEngineLock(string platform)
+    {
+        string? migrated = CiStepMigration.Migrate(File.ReadAllText(Path.Combine(CasesDirectory(), $"{platform}.yml")));
+
+        Assert.NotNull(migrated);
+        Assert.Contains(CiShellScripts.InstallBeginMarker, migrated, StringComparison.Ordinal);
+        Assert.Contains($"for file in {CiShellScripts.PolicyFiles}; do", migrated, StringComparison.Ordinal);
+        Assert.Equal(migrated, CiStepMigration.Migrate(migrated));
+    }
+
+    [Theory]
+    [MemberData(nameof(JudgePlatforms))]
+    public void TheCiJudgesPipelineIsCurrentAlready(string platform)
+    {
+        Assert.True(CiPlatformNames.TryParse(platform, out CiPlatform parsed));
+        string judge = CiPipeline.Files(parsed, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+
+        Assert.Equal(judge, CiStepMigration.Migrate(judge));
+    }
+
     [Fact]
     public void AHandEditedInstallStepIsLeftAlone()
     {
@@ -35,7 +61,7 @@ public sealed class CiStepMigrationTests
     [Fact]
     public void AStepWithOnlyOneMarkerIsLeftAlone()
     {
-        string current = CiPipeline.Files(CiPlatform.GitHub, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+        string current = CiPipeline.Files(CiPlatform.GitLab, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
 
         Assert.Null(CiStepMigration.Migrate(current.Replace(CiShellScripts.InstallEndMarker, "# removed", StringComparison.Ordinal)));
     }

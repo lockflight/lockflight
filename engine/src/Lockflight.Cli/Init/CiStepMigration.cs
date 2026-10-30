@@ -39,6 +39,12 @@ internal static class CiStepMigration
     /// <summary>The migrated text; null when the file must be left alone. The file's own text when it is current already.</summary>
     public static string? Migrate(string text)
     {
+        // The CI judge's pipelines install the engine from the base's lock already (GitHub's through its action): nothing to move.
+        if (text.Contains("mode: judge", StringComparison.Ordinal) || text.Contains(CiShellScripts.JudgeCommand, StringComparison.Ordinal))
+        {
+            return text;
+        }
+
         string newline = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         List<string> lines = [.. text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')];
         if (!ReplaceInstallStep(lines) || !ReplaceRestore(lines))

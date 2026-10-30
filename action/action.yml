@@ -1,0 +1,292 @@
+# Lockflight CI judge — a composite action with three modes, one per job of the generated workflow:
+#   judge   builds and runs the pull request's code with no secret: red at each red commit, green, trace, the pr gates
+#   review  runs the review of record (the only job with an API key); the key can be reached by the pull request's code
+#   report  joins the two artifacts as data (never runs pull request code), sets one status context, posts the comment
+# Reference it by commit SHA (uses: lockflight/lockflight/action@<40-hex> # vX.Y.Z), never by a branch or tag that moves.
+name: Lockflight CI judge
+description: Judges a pull request's red/green evidence, gates, trace and review with the target branch's policy.
+author: Lockflight
+branding:
+  icon: check-circle
+  color: gray-dark
+
+inputs:
+  mode:
+    description: "judge, review or report"
+    required: true
+  head:
+    description: "The pull request's head commit (github.event.pull_request.head.sha), not the merge commit"
+    required: true
+  base:
+    description: "The target branch's tip, fetched when the job runs; empty on a push without a previous commit"
+    required: false
+    default: ""
+  branch:
+    description: "The pull request's source branch name (github.head_ref); used only to find the feature"
+    required: false
+    default: ""
+  event:
+    description: "pr, push or merge-group"
+    required: false
+    default: pr
+  context:
+    description: "report: the status context this job decides (gates or lockflight/judge)"
+    required: false
+    default: gates
+  comment:
+    description: "report: whether this job posts the sticky pull request comment (exactly one report job should)"
+    required: false
+    default: "false"
+  review-expected:
+    description: "judge: whether a review job runs for this pull request"
+    required: false
+    default: "true"
+  engine:
+    description: "Path to an engine binary to use instead of installing the base branch's pinned one (this repository's own CI)"
+    required: false
+    default: ""
+  shell-clone:
+    description: "judge: 'true' in a unit repository of a workspace shell (init --unit-of): clone the shell read-only and judge with its policy too"
+    required: false
+    default: "false"
+  shell-token:
+    description: "judge with shell-clone: a read-only token for a private shell; only the clone step sees it"
+    required: false
+    default: ""
+  github-token:
+    description: "report: the token that posts the comment (needs pull-requests: write)"
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  verdict:
+    description: "The verdict of this job: PASS, FAIL, NOT-EARNED or ERROR"
+    value: ${{ steps.verdict.outputs.verdict || steps.judge.outputs.verdict }}
+  policy:
+    description: "The commit the engine pin and policy were read from; the report jobs install the same engine from it"
+    value: ${{ steps.install.outputs.policy }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the inputs
+      shell: bash
+      env:
+        LF_MODE: ${{ inputs.mode }}
+        LF_HEAD: ${{ inputs.head }}
+        LF_BASE: ${{ inputs.base }}
+      run: |
+        case "$LF_MODE" in judge|review|report) ;; *) echo "::error::mode must be judge, review or report"; exit 4 ;; esac
+        if ! printf '%s' "$LF_HEAD" | grep -Eq '^([0-9a-f]{40}|[0-9a-f]{64})$'; then echo "::error::head must be a full commit id"; exit 4; fi
+        if [ -n "$LF_BASE" ] && ! printf '%s' "$LF_BASE" | grep -Eq '^([0-9a-f]{40}|[0-9a-f]{64})$'; then echo "::error::base must be a full commit id"; exit 4; fi
+        echo "LOCKFLIGHT_TEMP=$RUNNER_TEMP" >> "$GITHUB_ENV"
+
+    - name: Install gitleaks (pinned, checksum-verified)
+      if: inputs.mode == 'judge'
+      shell: bash
+      env:
+        GITLEAKS_VERSION: 8.30.1
+        GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+      run: |
+        archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+        curl -fsSLo "$RUNNER_TEMP/$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+        echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+        tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+        echo "LOCKFLIGHT_GITLEAKS=$RUNNER_TEMP/gitleaks" >> "$GITHUB_ENV"
+
+    - name: Install the engine the target branch pins (outside the repository's global.json)
+      id: install
+      shell: bash
+      env:
+        LF_BASE: ${{ inputs.base }}
+        LF_HEAD: ${{ inputs.head }}
+        LF_ENGINE: ${{ inputs.engine }}
+        LF_EVENT: ${{ inputs.event }}
+      run: |
+        if [ -n "$LF_ENGINE" ]; then echo "LF_LOCKFLIGHT=$LF_ENGINE" >> "$GITHUB_ENV"; exit 0; fi
+        # A push's previous commit may be all zeros (a new branch) or gone (a force-push): the head's own pin then applies.
+        # A pull request is always judged by its target branch's pin: without that commit in the clone the run is an ERROR.
+        policy="$LF_HEAD"
+        if [ -n "$LF_BASE" ] && git cat-file -e "$LF_BASE^{commit}" 2>/dev/null; then policy="$LF_BASE"
+        elif [ "$LF_EVENT" = "pr" ]; then echo "::error::the target branch's commit '$LF_BASE' is not in the clone (checkout with fetch-depth: 0)"; exit 4; fi
+        echo "policy=$(git rev-parse "$policy^{commit}")" >> "$GITHUB_OUTPUT"
+        # The pin, the install script and the package sources are read from that commit, never from the pull request's tree.
+        work="$RUNNER_TEMP/lockflight-policy"
+        rm -rf "$work" && mkdir -p "$work/.lockflight/ci" "$work/.config"
+        for file in .lockflight/engine.lock .lockflight/ci/install.sh dotnet-tools.json .config/dotnet-tools.json nuget.config NuGet.config; do
+          if git cat-file -e "$policy:$file" 2>/dev/null; then git show "$policy:$file" > "$work/$file"; fi
+        done
+        cd "$work"
+        if [ -f .lockflight/engine.lock ]; then
+          expected=$(sed -n 's/.*"installScript"[^}]*"sha256"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{64\}\)".*/\1/p' .lockflight/engine.lock)
+          actual=$(sha256sum < .lockflight/ci/install.sh)
+          if [ -z "$expected" ] || [ "${actual%% *}" != "$expected" ]; then echo "::error::.lockflight/ci/install.sh is not the script .lockflight/engine.lock pins"; exit 4; fi
+          set --
+          for file in nuget.config NuGet.config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done
+          sh .lockflight/ci/install.sh --lock .lockflight/engine.lock --dir "$RUNNER_TEMP/lockflight" "$@"
+        else
+          if [ -f .config/dotnet-tools.json ]; then manifest=.config/dotnet-tools.json; else manifest=dotnet-tools.json; fi
+          version=$(tr -d '\r\n' < "$manifest" 2>/dev/null | grep -oiE '"lockflight\.cli"[[:space:]]*:[[:space:]]*\{[^}]*\}' | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]*)"$/\1/' || true)
+          if [ -z "$version" ]; then echo "::error::the target branch pins no engine (.lockflight/engine.lock or a lockflight.cli tool pin); run lockflight init there and commit the pin"; exit 4; fi
+          config=()
+          for file in nuget.config NuGet.config; do if [ -f "$file" ]; then config=(--configfile "$PWD/$file"); fi; done
+          dotnet tool install Lockflight.Cli --tool-path "$RUNNER_TEMP/lockflight" --version "$version" "${config[@]}"
+        fi
+        echo "LF_LOCKFLIGHT=$RUNNER_TEMP/lockflight/lockflight" >> "$GITHUB_ENV"
+
+    - name: A pull request that changes the engine lock must name a published release
+      if: inputs.mode == 'judge'
+      shell: bash
+      env:
+        LF_BASE: ${{ inputs.base }}
+        LF_HEAD: ${{ inputs.head }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        if [ -n "$LF_BASE" ] && git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null \
+          && ! git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then
+          git show "$LF_HEAD:.lockflight/engine.lock" > "$RUNNER_TEMP/proposed-engine.lock"
+          "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" ${GH_TOKEN:+--attestation}
+        fi
+
+    - name: Clone the workspace shell (read-only)
+      if: inputs.mode == 'judge' && inputs.shell-clone == 'true'
+      shell: bash
+      env:
+        LOCKFLIGHT_SHELL_TOKEN: ${{ inputs.shell-token }}
+      run: '"$LF_LOCKFLIGHT" workspace clone --into "$RUNNER_TEMP/lockflight-shell"'
+
+    - name: Judge the pull request
+      if: inputs.mode == 'judge'
+      id: judge
+      shell: bash
+      env:
+        LF_SHELL_CLONE: ${{ inputs.shell-clone }}
+        LF_HEAD: ${{ inputs.head }}
+        LF_BASE: ${{ inputs.base }}
+        LF_BRANCH: ${{ inputs.branch }}
+        LF_EVENT: ${{ inputs.event }}
+        LF_REVIEW: ${{ inputs.review-expected }}
+      run: |
+        args=(ci --platform github --event "$LF_EVENT" --head "$LF_HEAD" --evidence "$RUNNER_TEMP/lockflight-evidence")
+        if [ -n "$LF_BASE" ]; then args+=(--base "$LF_BASE"); fi
+        if [ -n "$LF_BRANCH" ]; then args+=(--branch "$LF_BRANCH"); fi
+        if [ "$LF_REVIEW" != "true" ]; then args+=(--no-review-expected); fi
+        if [ "$LF_SHELL_CLONE" = "true" ]; then args+=(--shell "$RUNNER_TEMP/lockflight-shell"); fi
+        set +e
+        # The output names pull request text (tests, build lines); it goes to the log only, and the report writes the summary.
+        "$LF_LOCKFLIGHT" "${args[@]}"
+        code=$?
+        set -e
+        mkdir -p artifacts/lockflight
+        if [ -f "$RUNNER_TEMP/lockflight-evidence/gates-result.json" ]; then cp "$RUNNER_TEMP/lockflight-evidence/gates-result.json" artifacts/lockflight/result.json; fi
+        case "$code" in 0) verdict=PASS ;; 1) verdict=FAIL ;; 5) verdict=NOT-EARNED ;; *) verdict=ERROR ;; esac
+        echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the judge's evidence
+      if: always() && inputs.mode == 'judge'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: lockflight-evidence
+        path: ${{ runner.temp }}/lockflight-evidence/
+        if-no-files-found: warn
+
+    - name: Upload the gates' result (kept for one release under its old name)
+      if: always() && inputs.mode == 'judge'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: lockflight-result
+        path: artifacts/lockflight/
+        if-no-files-found: ignore
+
+    - name: Review the pull request
+      if: inputs.mode == 'review'
+      shell: bash
+      env:
+        LF_HEAD: ${{ inputs.head }}
+        LF_BASE: ${{ inputs.base }}
+        LF_BRANCH: ${{ inputs.branch }}
+      run: |
+        args=(ci review --platform github --head "$LF_HEAD" --base "$LF_BASE" --out "$RUNNER_TEMP/lockflight-review")
+        if [ -n "$LF_BRANCH" ]; then args+=(--branch "$LF_BRANCH"); fi
+        "$LF_LOCKFLIGHT" "${args[@]}" || true
+
+    - name: Upload the review
+      if: always() && inputs.mode == 'review'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: lockflight-review
+        path: ${{ runner.temp }}/lockflight-review/
+        if-no-files-found: warn
+
+    - name: Download the judge's evidence
+      if: inputs.mode == 'report'
+      continue-on-error: true
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: lockflight-evidence
+        path: ${{ runner.temp }}/lockflight-evidence
+
+    - name: Download the review
+      if: inputs.mode == 'report'
+      continue-on-error: true
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: lockflight-review
+        path: ${{ runner.temp }}/lockflight-review
+
+    - name: Report
+      if: inputs.mode == 'report'
+      id: verdict
+      shell: bash
+      env:
+        LF_HEAD: ${{ inputs.head }}
+        LF_CONTEXT: ${{ inputs.context }}
+      run: |
+        out="$RUNNER_TEMP/lockflight-verdict"
+        set +e
+        "$LF_LOCKFLIGHT" ci report --evidence "$RUNNER_TEMP/lockflight-evidence" --review "$RUNNER_TEMP/lockflight-review" \
+          --head "$LF_HEAD" --context "$LF_CONTEXT" --out "$out"
+        code=$?
+        set -e
+        if [ -f "$out/summary.md" ]; then cat "$out/summary.md" >> "$GITHUB_STEP_SUMMARY"; fi
+        case "$code" in 0) verdict=PASS ;; 1) verdict=FAIL ;; 5) verdict=NOT-EARNED ;; *) verdict=ERROR ;; esac
+        echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+
+    - name: Upload the verdict of record
+      if: always() && inputs.mode == 'report' && inputs.comment == 'true'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: lockflight-verdict
+        path: ${{ runner.temp }}/lockflight-verdict/
+        if-no-files-found: warn
+
+    - name: Post the pull request comment
+      if: inputs.mode == 'report' && inputs.comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        LF_PR: ${{ github.event.pull_request.number }}
+        LF_REPO: ${{ github.repository }}
+      run: |
+        # A failed post (a fork's read-only token, an API outage) is a warning, never the verdict.
+        body="$RUNNER_TEMP/lockflight-verdict/comment.md"
+        if [ ! -f "$body" ]; then echo "::warning::no comment to post"; exit 0; fi
+        marker='<!-- lockflight:ci:v1'
+        # Only the workflow's own comment is replaced: a marker comment someone else posted is ignored.
+        existing=$(gh api "repos/$LF_REPO/issues/$LF_PR/comments" --paginate \
+          --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" 2>/dev/null | head -n 1 || true)
+        payload=$(jq -Rs '{body: .}' < "$body")
+        if [ -n "$existing" ]; then
+          printf '%s' "$payload" | gh api --method PATCH "repos/$LF_REPO/issues/comments/$existing" --input - >/dev/null || echo "::warning::the comment could not be updated"
+        else
+          printf '%s' "$payload" | gh api --method POST "repos/$LF_REPO/issues/$LF_PR/comments" --input - >/dev/null || echo "::warning::the comment could not be posted (a fork's token cannot comment; see the job summary)"
+        fi
+
+    - name: Exit with the verdict
+      if: inputs.mode == 'report' || inputs.mode == 'judge'
+      shell: bash
+      env:
+        LF_CODE: ${{ steps.verdict.outputs.code || steps.judge.outputs.code }}
+      run: exit "${LF_CODE:-3}"

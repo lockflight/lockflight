@@ -12,8 +12,8 @@ public sealed class CiPipelineTests
     public static TheoryData<string> OtherPlatforms() => ["azure", "bitbucket", "gitlab"];
 
     [Theory]
-    [MemberData(nameof(Platforms))]
-    public void EveryPlatformRestoresTheSamePolicyFromTheBaseAsTheGitHubWorkflow(string platform)
+    [MemberData(nameof(OtherPlatforms))]
+    public void EveryPlatformRestoresTheSamePolicyFromTheBase(string platform)
     {
         string pipeline = JobFile(platform, OneChannel, CiTrigger.PullRequest);
 
@@ -26,7 +26,7 @@ public sealed class CiPipelineTests
     }
 
     [Theory]
-    [MemberData(nameof(Platforms))]
+    [MemberData(nameof(OtherPlatforms))]
     public void EveryPlatformPinsGitleaksAndTheEngineAndRunsThePrGates(string platform)
     {
         string pipeline = JobFile(platform, OneChannel, CiTrigger.PullRequest);
@@ -39,16 +39,36 @@ public sealed class CiPipelineTests
         Assert.Contains(CiShellScripts.InstallBeginMarker, pipeline, StringComparison.Ordinal);
         Assert.Contains(CiShellScripts.InstallEndMarker, pipeline, StringComparison.Ordinal);
         Assert.DoesNotContain("dotnet tool restore", pipeline, StringComparison.Ordinal);
-        Assert.Contains(CiShellScripts.GateCommand, pipeline, StringComparison.Ordinal);
         Assert.Contains("--base \"$BASE\"", pipeline, StringComparison.Ordinal);
+        if (platform == "bitbucket")
+        {
+            Assert.Contains("lockflight ci --platform bitbucket", pipeline, StringComparison.Ordinal);
+            return;
+        }
+
+        Assert.Contains(CiShellScripts.GateCommand, pipeline, StringComparison.Ordinal);
         Assert.Contains("--result artifacts/lockflight/result.json", pipeline, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheBitbucketPipelineJudgesThenReportsEachStatusContextInParallelWithoutASecret()
+    {
+        string pipeline = JobFile("bitbucket", OneChannel, CiTrigger.PullRequest);
+
+        Assert.Contains("--head \"$HEAD_COMMIT\"", pipeline, StringComparison.Ordinal);
+        Assert.Contains("${BITBUCKET_BRANCH:+--branch \"$BITBUCKET_BRANCH\"}", pipeline, StringComparison.Ordinal);
+        Assert.Contains("lockflight ci report --evidence artifacts/lockflight-evidence --head \"$HEAD_COMMIT\" --context gates", pipeline, StringComparison.Ordinal);
+        Assert.Contains("--context lockflight/judge", pipeline, StringComparison.Ordinal);
+        Assert.Contains("- parallel:", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("ANTHROPIC_API_KEY", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("ci review", pipeline, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData("azure", "SYSTEM_PULLREQUEST_TARGETBRANCH")]
     [InlineData("azure", "git merge-base HEAD \"origin/$target\"")]
     [InlineData("bitbucket", "BITBUCKET_PR_DESTINATION_BRANCH")]
-    [InlineData("bitbucket", "git merge-base HEAD \"origin/$PULL_REQUEST\"")]
+    [InlineData("bitbucket", "BASE=$(git rev-parse \"origin/$PULL_REQUEST\")")]
     [InlineData("gitlab", "BASE=\"$CI_MERGE_REQUEST_DIFF_BASE_SHA\"")]
     public void EachPlatformFindsTheBaseFromItsOwnPullRequestVariables(string platform, string expected) =>
         Assert.Contains(expected, JobFile(platform, OneChannel, CiTrigger.PullRequest), StringComparison.Ordinal);
@@ -62,7 +82,7 @@ public sealed class CiPipelineTests
         int restore = scripts.IndexOf("for file in", StringComparison.Ordinal);
         int gitleaks = scripts.IndexOf("sha256sum -c -", StringComparison.Ordinal);
         int engine = scripts.IndexOf("dotnet tool install", StringComparison.Ordinal);
-        int gates = scripts.IndexOf(CiShellScripts.GateCommand, StringComparison.Ordinal);
+        int gates = scripts.IndexOf(platform == "bitbucket" ? "lockflight ci --platform" : CiShellScripts.GateCommand, StringComparison.Ordinal);
         Assert.True(restore >= 0 && restore < gitleaks && gitleaks < engine && engine < gates, scripts);
     }
 

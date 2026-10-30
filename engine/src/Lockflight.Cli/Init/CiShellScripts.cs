@@ -28,7 +28,19 @@ internal static class CiShellScripts
     /// <summary>The gate command every pipeline runs, before its base and result options.</summary>
     public const string GateCommand = "lockflight gate run --profile pr";
 
+    /// <summary>The CI judge's command in a single-script job; a unit repository's job adds <c>--shell</c> to it.</summary>
+    public const string JudgeCommand = "lockflight ci --platform";
+
+    /// <summary>The comment line before the CI judge in a single-script job; a unit repository's job clones the shell before it.</summary>
+    public const string JudgeComment = "# The CI judge.";
+
     public const string ResultDirectory = "artifacts/lockflight";
+
+    /// <summary>Where a container judge step leaves its evidence for the report steps (the service's artifacts).</summary>
+    public const string EvidenceDirectory = "artifacts/lockflight-evidence";
+
+    /// <summary>Where the report steps write the verdict, the comment and the summary.</summary>
+    public const string VerdictDirectory = "artifacts/lockflight-verdict";
 
     /// <summary>The .NET SDK container image the Bitbucket and GitLab jobs run in.</summary>
     public const string SdkImage = "mcr.microsoft.com/dotnet/sdk:10.0";
@@ -165,6 +177,74 @@ internal static class CiShellScripts
             "export PATH=\"$LOCKFLIGHT_TEMP/lockflight:$PATH\"",
             "# Gates.",
             Gates,
+        ];
+        return string.Join('\n', sections);
+    }
+
+    /// <summary>
+    /// The CI judge's step for a service that runs one shell in <see cref="SdkImage"/>: <paramref name="findInputs"/> sets
+    /// <c>$HEAD_COMMIT</c>, <c>$BASE</c> (the target branch's tip; empty on a push without a previous commit), <c>$EVENT</c>
+    /// and <c>$PULL_REQUEST</c>; the judge's exit code is kept so the report steps that follow decide each status context, and
+    /// its evidence is copied to <c>artifacts/lockflight-evidence/</c> for them.
+    /// </summary>
+    public static string JudgeJob(string findInputs, IReadOnlyList<string> dotnetChannels, string platform, string branchVariable) =>
+        Job(findInputs, dotnetChannels, gitleaks: true, $$"""
+            {{JudgeComment}}
+            set +e
+            {{JudgeCommand}} {{platform}} --event "$EVENT" --head "$HEAD_COMMIT" ${BASE:+--base "$BASE"} ${{{branchVariable}}:+--branch "${{branchVariable}}"} --no-review-expected --evidence "$LOCKFLIGHT_TEMP/evidence"
+            code=$?
+            set -e
+            rm -rf {{EvidenceDirectory}}
+            mkdir -p {{EvidenceDirectory}}
+            # No evidence (the judge did not finish) leaves the folder empty: the report says NOT-EARNED.
+            cp -R "$LOCKFLIGHT_TEMP/evidence/." {{EvidenceDirectory}}/ || true
+            echo "lockflight ci exited $code; the steps that follow report the gates and lockflight/judge verdicts"
+            """);
+
+    /// <summary>
+    /// A report step: installs the engine the base pins and runs <c>lockflight ci report</c> for <paramref name="statusContext"/>
+    /// over the judge step's evidence, as data. A pull request that commits files where the evidence goes is an ERROR (its files
+    /// could not be told from the judge's). The <c>gates</c> step fails with its verdict; the <c>lockflight/judge</c> step only when
+    /// the repository variable <c>LOCKFLIGHT_JUDGE_REQUIRED</c> is <c>true</c>, since the platform has one build status for the
+    /// whole pipeline, not one per step.
+    /// </summary>
+    public static string ReportJob(string findInputs, string statusContext) =>
+        Job(findInputs, [DotnetChannels.EngineChannel], gitleaks: false, $$"""
+            if [ -n "$(git ls-files -- {{EvidenceDirectory}} {{VerdictDirectory}})" ]; then
+              echo "ERROR: the pull request commits files under {{EvidenceDirectory}} or {{VerdictDirectory}}, where the judge's evidence goes"
+              exit 4
+            fi
+            code=0
+            lockflight ci report --evidence {{EvidenceDirectory}} --head "$HEAD_COMMIT" --context {{statusContext}} --out {{VerdictDirectory}}/{{statusContext.Replace('/', '-')}} || code=$?
+            {{(statusContext == "gates" ? "exit \"$code\"" : """
+            if [ "$code" -ne 0 ] && [ "${LOCKFLIGHT_JUDGE_REQUIRED:-}" != "true" ]; then
+              echo "lockflight/judge is advisory in this pipeline (exit $code); set the repository variable LOCKFLIGHT_JUDGE_REQUIRED to 'true' to make it fail the build"
+              exit 0
+            fi
+            exit "$code"
+            """)}}
+            """);
+
+    private static string Job(string findInputs, IReadOnlyList<string> dotnetChannels, bool gitleaks, string run)
+    {
+        string extraChannels = InstallExtraChannels(dotnetChannels);
+        string[] sections =
+        [
+            "set -e",
+            "LOCKFLIGHT_TEMP=$(mktemp -d)",
+            .. gitleaks ? ["GITLEAKS_VERSION=" + GitleaksVersion, "GITLEAKS_SHA256=" + GitleaksSha256] : Array.Empty<string>(),
+            "export LOCKFLIGHT_TEMP",
+            findInputs,
+            "# Use the base branch's engine pin and policy.",
+            "if [ -n \"$PULL_REQUEST\" ]; then",
+            Indent(RestorePolicy, 2),
+            "fi",
+            .. gitleaks ? ["# Install gitleaks (pinned, checksum-verified).", InstallGitleaks, "export LOCKFLIGHT_GITLEAKS=\"$LOCKFLIGHT_TEMP/gitleaks\""] : Array.Empty<string>(),
+            .. extraChannels.Length == 0 ? Array.Empty<string>() : ["# Install the .NET channels the test projects target.", extraChannels],
+            "# Install the pinned engine (outside the repository's global.json).",
+            InstallEngine,
+            "export PATH=\"$LOCKFLIGHT_TEMP/lockflight:$PATH\"",
+            run,
         ];
         return string.Join('\n', sections);
     }
