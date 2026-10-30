@@ -1,0 +1,3 @@
+class: feature
+computed: feature
+signal: db.model -> feature (heuristic) src/Shop.Data/ShopContext.cs:12: a database model line added, removed or changed

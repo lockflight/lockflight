@@ -1,0 +1,3 @@
+class: feature
+computed: feature
+signal: db.model -> feature (heuristic) src/Shop.Data/Order.cs:3: a database mapping attribute on Order added, removed or changed

@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: api.controllerAction -> feature (heuristic) src/Shop.Api/Orders.cs:6: public action Shop.Api.Orders.Purge added
+signal: api.controllerAction -> feature (heuristic) src/Shop.Api/Orders.cs:6: public action Shop.Api.Orders.Purge removed

@@ -1,0 +1,5 @@
+class: feature
+computed: feature
+signal: db.migration -> feature (heuristic) db/changes/0042-refunds.xml: database migration path (db/changes/**)
+signal: config.changed -> behaviour (heuristic) db/changes/0042-refunds.xml: non-project file changed
+signal: file.added -> behaviour (heuristic) db/changes/0042-refunds.xml: new non-project file

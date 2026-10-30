@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: api.controllerAdded -> feature (heuristic) src/Shop.Api/Pricing.cs:8: new endpoint type Shop.PriceHub
+signal: type.added -> behaviour (heuristic) src/Shop.Api/Pricing.cs:8: new type Shop.PriceHub
