@@ -96,6 +96,8 @@ if mode == "pin":
         ref, sha = source.get("ref", ""), source.get("sha", "")
         if not re.fullmatch(r"[0-9a-f]{40}", sha):
             die(f"{served}: {name} needs the tag's full commit sha")
+        if name in pins:
+            die(f"{served}: lists {name} more than once")
         pins[name] = (ref, sha)
     if "lockflight" not in pins:
         die(f"{served}: lists no lockflight plugin")
@@ -116,9 +118,13 @@ elif mode == "marketplace":
     # marketplace <served> <development marketplace at the judge's tag>: the served marketplace's own fields are the tag's.
     served, tagged = sys.argv[2], sys.argv[3]
     same = lambda m: (m["name"], m.get("description"), m.get("owner"))
+    names = lambda m: [e["name"] for e in m["plugins"]]
     if same(load(served)) != same(load(tagged)):
         die(f"{served}: must have the name, description and owner of plugins/.claude-plugin/marketplace.json at the judge's "
             "tag; `set` copies them")
+    if names(load(served)) != names(load(tagged)):
+        die(f"{served}: must list the plugins plugins/.claude-plugin/marketplace.json lists at the judge's tag, in its order "
+            f"({', '.join(names(load(tagged)))})")
 elif mode == "described":
     # described <served> <development marketplace at a tag> <name>: the plugin is listed with the tag's description.
     served, tagged, name = sys.argv[2], sys.argv[3], sys.argv[4]
@@ -136,6 +142,9 @@ elif mode == "rewrite":
             if field in development:
                 market[field] = development[field]
     descriptions = {e["name"]: e.get("description") for e in development["plugins"]}
+    missing = names - {e["name"] for e in market["plugins"] if isinstance(e.get("source"), dict)}
+    if missing:
+        die(f"{served}: has no git-subdir entry for {', '.join(sorted(missing))} to move")
     for entry in market["plugins"]:
         if entry["name"] not in names:
             continue
@@ -197,21 +206,25 @@ check() {
   remote=${LOCKFLIGHT_MARKETPLACE_REMOTE:-$repository_url}
   while read -r name ref sha; do
     check_ref "$remote" "$name" "$ref" "$sha"
+    at_tag "$ref" "plugins/$name/.claude-plugin/plugin.json" "$work/$name.json"
     if [ "$name" = "$judge" ]; then
       judge_ref=$ref
       python_check marketplace "$served" "$work/dev-at-tag.json" || fail "the marketplace's own fields are not the judge tag's"
       version=${ref#v}
-      at_tag "$ref" "plugins/$judge/.claude-plugin/plugin.json" "$work/$judge.json"
       python_check versions "$version" "$work/$judge.json" || fail "$ref is not a coherent release"
       minimum=$(minimum_at "$ref" "$judge")
       python_check minimum "$minimum" "$version" min-engine-version || fail "$ref is not a coherent release"
       engines+=("$version" "$minimum")
     elif [ "$name" = "$crew" ] && [ "${ref#crew/v}" != "$ref" ]; then
       crew_ref=$ref
-      at_tag "$ref" "plugins/$crew/.claude-plugin/plugin.json" "$work/$crew.json"
       python_check versions "${ref#crew/v}" "$work/$crew.json" || fail "$ref is not a coherent crew release"
       minimum=$(minimum_at "$ref" "$crew")
       python_check minimum "$minimum" - "the crew's min-engine-version" || fail "$ref is not a coherent crew release"
+      engines+=("$minimum")
+    elif [ "$name" = "$crew" ] && git -C "$work/repo" cat-file -e "FETCH_HEAD:plugins/$crew/min-engine-version" 2> /dev/null; then
+      # A crew still served from the judge's tag is never served before the engine it asks for either.
+      minimum=$(minimum_at "$ref" "$crew")
+      python_check minimum "$minimum" - "the crew's min-engine-version" || fail "$ref is not a coherent release"
       engines+=("$minimum")
     fi
   done <<< "$pins"
@@ -238,7 +251,9 @@ case "${1:-check}" in
   set)
     tag=${2:-}
     if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-      read -r -a names <<< "$(python_check follows "$served")"
+      follows=$(python_check follows "$served") || fail "cannot read $served"
+      [ -n "$follows" ] || fail "$served has no entry a judge tag moves"
+      read -r -a names <<< "$follows"
       set_pin "$tag" "${names[@]}"
     elif [[ "$tag" =~ ^crew/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
       set_pin "$tag" "$crew"

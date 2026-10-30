@@ -118,6 +118,13 @@ expect_fail "check refuses a crew on a judge tag other than the judge's" "or the
 expect_fail "set refuses a tag that is neither a judge nor a crew tag" "usage:" set crew-v2.0.0
 sed -i.bak "s#\"ref\": \"v1.1.0\"#\"ref\": \"crew/v2.0.0\"#" "$served"
 expect_ok "the crew on its own tag checks again" check
+cp "$served" "$WORK/served.json"
+python3 -I -c 'import json, sys; m = json.load(open(sys.argv[1])); m["plugins"].append(dict(m["plugins"][0])); open(sys.argv[1], "w").write(json.dumps(m, indent=2))' "$served"
+expect_fail "check refuses a plugin listed twice" "lists lockflight more than once" check
+python3 -I -c 'import json, sys; m = json.load(open(sys.argv[1])); m["plugins"] = m["plugins"][:1]; open(sys.argv[1], "w").write(json.dumps(m, indent=2))' "$served"
+expect_fail "check refuses a marketplace that drops a plugin the tag lists" "must list the plugins" check
+expect_fail "set crew/ refuses a marketplace without a crew entry" "has no git-subdir entry for lockflight-crew" set crew/v2.0.0
+cp "$WORK/served.json" "$served"
 sed -i.bak 's#"./lockflight-crew"#"./crew"#' "$checkout/plugins/.claude-plugin/marketplace.json"
 expect_fail "check refuses a development marketplace that does not serve the checkout" "must come from ./lockflight-crew" check
 
