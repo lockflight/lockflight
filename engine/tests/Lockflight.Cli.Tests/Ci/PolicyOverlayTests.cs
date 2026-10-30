@@ -36,4 +36,26 @@ public sealed class PolicyOverlayTests : IAsyncLifetime
         Assert.False(File.Exists(Path.Combine(worktree, "src", "loose.globalconfig")));
         Assert.False(File.Exists(Path.Combine(worktree, "nuget.config")));
     }
+
+    [Fact]
+    public async Task ACaseVariantOfTheBasesNuGetConfigNeverSurvives()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string policy = await repository.Write("NuGet.config", "<configuration><!-- base --></configuration>\n").CommitAsync("base policy", cancellationToken);
+        repository.Write("variant.tmp", "<configuration><!-- pull request --></configuration>\n");
+        string blob = (await repository.GitAsync(["hash-object", "-w", "variant.tmp"], cancellationToken)).Trim();
+        repository.Delete("variant.tmp");
+        await repository.GitAsync(["update-index", "--add", "--cacheinfo", $"100644,{blob},NuGet.Config"], cancellationToken);
+        await repository.GitAsync(["commit", "-q", "-m", "pull request adds a variant"], cancellationToken);
+        string tree = await repository.HeadAsync(cancellationToken);
+        using GitHistoryFixture target = await GitHistoryFixture.CreateAsync(cancellationToken);
+        await repository.GitAsync(["worktree", "add", "--detach", "-f", Path.Combine(target.Root, "w"), tree], cancellationToken);
+        string worktree = Path.Combine(target.Root, "w");
+
+        Assert.Null(await PolicyOverlay.ApplyAsync(repository.Root, worktree, tree, policy, TimeSpan.FromSeconds(60), cancellationToken));
+
+        string[] configs = [.. Directory.EnumerateFiles(worktree).Where(path => Path.GetFileName(path).Equals("nuget.config", StringComparison.OrdinalIgnoreCase))];
+        Assert.NotEmpty(configs);
+        Assert.All(configs, path => Assert.Contains("base", File.ReadAllText(path), StringComparison.Ordinal));
+    }
 }

@@ -91,6 +91,26 @@ public sealed class JudgeRoutingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ACSharpFileMarkedBinaryIsStillProductionCode()
+    {
+        await repository.Write(".gitattributes", "*.cs -diff\n")
+            .Write("src/Shop/Price.cs", "namespace Shop;\n\npublic sealed class Price\n{\n    public decimal Shipping() => 2m;\n}\n")
+            .CommitAsync("feat: shipping", TestContext.Current.CancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task AProductionProjectTurnedIntoATestProjectStaysProductionCode()
+    {
+        await repository.Write("src/Shop/Shop.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <IsTestProject>true</IsTestProject>\n  </PropertyGroup>\n</Project>\n")
+            .Write("src/Shop/Discount.cs", "namespace Shop;\n\npublic static class Discount\n{\n    public static decimal Off(decimal value) => value / 10m;\n}\n")
+            .CommitAsync("feat: discount", TestContext.Current.CancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
     public async Task ARaiseThatCannotBeReadIsAnErrorNotALowerClass()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;

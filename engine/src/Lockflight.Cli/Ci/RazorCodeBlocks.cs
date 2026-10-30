@@ -4,7 +4,8 @@ namespace Lockflight.Cli.Ci;
 /// The lines of a Razor file (<c>.razor</c>, <c>.cshtml</c>) that hold C# logic: those inside an <c>@code { … }</c> or
 /// <c>@functions { … }</c> block, or a <c>@{ … }</c> block spanning more than one line. Those lines are production code for
 /// red/green and spec/trace; the rest is markup, which gets the gates and the review only. Braces are matched without a Razor
-/// parser (strings, characters and comments skipped); an unclosed block runs to the end of the file, so doubt counts as code.
+/// parser (strings, characters and comments skipped); an unclosed block, or a literal left open at the end of its line, runs to
+/// the end of the file, so doubt counts as code.
 /// </summary>
 internal static class RazorCodeBlocks
 {
@@ -106,17 +107,45 @@ internal static class RazorCodeBlocks
         return Math.Max(text.Length - 1, open);
     }
 
+    /// <summary>
+    /// The position that ends the literal opening at <paramref name="start"/>: a raw (<c>"""</c>) or verbatim (<c>@"</c>) string runs
+    /// across lines; any other literal left open at the end of its line (markup text such as <c>Don't</c>, or a string this reader
+    /// does not know) runs to the end of the file, so the rest of the block counts as code rather than closing early.
+    /// </summary>
     private static int EndOfLiteral(string text, int start, char quote)
     {
+        if (quote == '"' && string.CompareOrdinal(text, start, "\"\"\"", 0, 3) == 0)
+        {
+            int raw = text.IndexOf("\"\"\"", start + 3, StringComparison.Ordinal);
+            return raw < 0 ? text.Length - 1 : raw + 2;
+        }
+
+        bool verbatim = quote == '"' && start > 0 && (text[start - 1] == '@' || (start > 1 && text[start - 1] == '$' && text[start - 2] == '@'));
         for (int position = start + 1; position < text.Length; position++)
         {
-            if (text[position] == '\\')
+            char current = text[position];
+            if (verbatim)
+            {
+                if (current == '"' && position + 1 < text.Length && text[position + 1] == '"')
+                {
+                    position++;
+                }
+                else if (current == '"')
+                {
+                    return position;
+                }
+            }
+            else if (current == '\\')
             {
                 position++;
             }
-            else if (text[position] == quote || text[position] == '\n')
+            else if (current == quote)
             {
                 return position;
+            }
+            else if (current == '\n')
+            {
+                return text.Length - 1;
             }
         }
 
