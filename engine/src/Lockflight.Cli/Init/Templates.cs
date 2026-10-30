@@ -108,6 +108,8 @@ internal static class Templates
                 with:
                   dotnet-version: {DotnetVersions}
               - name: Install the pinned engine (outside the repository's global.json)
+                env:
+                  GH_TOKEN: ${{ github.token }}
                 run: |
                   LOCKFLIGHT_TEMP="$RUNNER_TEMP"
         {InstallEngine}
