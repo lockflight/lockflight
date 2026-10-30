@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The CI judge end to end with the published engine, on a copy of samples/dotnet-single with a scripted pull request history: a
 # story whose red commit fails in production code and whose implementation passes is judged PASS on red, tests since red,
-# green and trace, and the report sets each status context; a red commit that already holds the implementation FAILs red; a
+# green and trace, and the report passes both status contexts (gates and lockflight/judge); a red commit that already holds the implementation FAILs red; a
 # test weakened after green FAILs tests since red; a missing judge artifact is NOT-EARNED.
 # Usage: ENGINE=<lockflight binary> ci-judge.sh <workdir>
 set -uo pipefail
@@ -39,10 +39,12 @@ git add -A; git commit -qm "test(001-shipping): red for US1" -m "Lockflight-Red:
 perl -pi -e 's/=> throw new NotImplementedException\(\);/=> 5m;/' "$calc"
 git commit -qam "feat(001-shipping): US1"; head=$(git rev-parse HEAD)
 
-judge() { "$E" ci --platform github --head "$1" --base "$main" --branch 001-shipping --evidence "$W/evidence"; }
-judge "$head" > "$W/judge.log" 2>&1; echo "     judge exit $? ($(head -n 1 "$W/judge.log"))"
+# Each run starts from an empty evidence folder, so a run that writes none is never judged on an earlier run's evidence.
+judge() { rm -rf "$W/evidence"; "$E" ci --platform github --head "$1" --base "$main" --branch 001-shipping --evidence "$W/evidence"; }
+expect_exit 0 "the judge passes the story" -- judge "$head"
 for id in red tests.sinceRed green trace tests.hostTampering; do check "$W/evidence/evidence.json" "$id" PASS; done
 expect_exit 0 "the lockflight/judge context passes" -- "$E" ci report --evidence "$W/evidence" --head "$head" --out "$W/verdict" --context lockflight/judge
+expect_exit 0 "the gates context passes" -- "$E" ci report --evidence "$W/evidence" --head "$head" --out "$W/verdict-gates" --context gates
 if grep -q '^<!-- lockflight:ci:v1 head=' "$W/verdict/comment.md"; then echo "ok   the comment starts with its marker"; else echo "FAIL the comment has no marker"; failures=$((failures + 1)); fi
 expect_exit 5 "a missing judge artifact is NOT-EARNED" -- "$E" ci report --evidence "$W/nothing" --head "$head" --out "$W/missing" --context gates
 
@@ -50,13 +52,13 @@ git checkout -q -b 002-cheat "$main"
 perl -0pi -e 's/\}\s*\z/\n    public decimal ShippingCost(decimal weightKg) => 5m;\n}\n/' "$calc"
 perl -0pi -e 's/\}\s*\z/\n    [Fact]\n    public void TheFirstKilogramCostsFive() => Assert.Equal(5m, new PriceCalculator().ShippingCost(1m));\n}\n/' "$tests"
 git add -A; git commit -qm "test: red" -m "Lockflight-Red: 1"
-judge "$(git rev-parse HEAD)" > "$W/cheat.log" 2>&1
+expect_exit 1 "a red commit holding the implementation fails the judge" -- judge "$(git rev-parse HEAD)"
 check "$W/evidence/evidence.json" red FAIL
 
 git checkout -q 001-shipping
 perl -pi -e 's/Assert.Equal\(5m, new PriceCalculator\(\).ShippingCost\(1m\)\)/Assert.Equal(5m, 5m)/' "$tests"
 git commit -qam "test: simpler"
-judge "$(git rev-parse HEAD)" > "$W/weakened.log" 2>&1
+expect_exit 1 "a test weakened after green fails the judge" -- judge "$(git rev-parse HEAD)"
 check "$W/evidence/evidence.json" tests.sinceRed FAIL
 
 if [ "$failures" -gt 0 ]; then echo "$failures CI judge checks failed"; exit 1; fi

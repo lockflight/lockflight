@@ -91,10 +91,16 @@ pull request and on pushes to `main`, in three steps:
 - **`judge (runs the pull request's code)`** checks out the pull request's own commit (`$BITBUCKET_COMMIT`; the
   pipeline's checkout has the destination merged in), fetches the destination's tip, restores its policy and runs
   [`lockflight ci --platform bitbucket`](commands.md#ci): red at each red commit, green and the `pr` gates at head, trace.
-  The step holds no secret and passes on any verdict; it hands its evidence to the next steps as an artifact.
-- **`gates`** and **`lockflight/judge`**, in parallel, read that evidence as data with `lockflight ci report` and fail with
-  their own status context's verdict: `gates` is the `pr` gates and green at head, `lockflight/judge` the red/green evidence,
-  trace and host tampering. A push to `main` runs the judge and `gates` only.
+  The step passes on any verdict and holds no secret of Lockflight's (a unit repository's shell token is the exception: see
+  [the shell pointer](ci-hardening.md#the-shell-pointer-preferred)); it clears `artifacts/lockflight-evidence/` and hands its
+  evidence to the next steps there as an artifact.
+- **`gates`** and **`lockflight/judge`**, in parallel, read that evidence as data with `lockflight ci report`: `gates` is the
+  `pr` gates and green at head, `lockflight/judge` the red/green evidence, trace and host tampering. A pull request that
+  commits files under `artifacts/lockflight-evidence/` or `artifacts/lockflight-verdict/` is an ERROR in both. Bitbucket has
+  one build status for the whole pipeline, not one per step, so a failing step fails the build: `gates` fails with its
+  verdict, and `lockflight/judge` prints its verdict but fails the build only when the repository variable
+  `LOCKFLIGHT_JUDGE_REQUIRED` is `true` (turn it on when the team produces red commits). A push to `main` runs the judge and
+  `gates` only.
 
 No review step is generated: Bitbucket's secured repository variables reach every step, the judge's included, so an API key
 belongs only in a deployment environment bound to the review step; add such a step by hand from the GitHub workflow's review

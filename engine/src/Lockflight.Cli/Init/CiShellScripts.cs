@@ -194,18 +194,35 @@ internal static class CiShellScripts
             {{JudgeCommand}} {{platform}} --event "$EVENT" --head "$HEAD_COMMIT" ${BASE:+--base "$BASE"} ${{{branchVariable}}:+--branch "${{branchVariable}}"} --no-review-expected --evidence "$LOCKFLIGHT_TEMP/evidence"
             code=$?
             set -e
+            rm -rf {{EvidenceDirectory}}
             mkdir -p {{EvidenceDirectory}}
+            # No evidence (the judge did not finish) leaves the folder empty: the report says NOT-EARNED.
             cp -R "$LOCKFLIGHT_TEMP/evidence/." {{EvidenceDirectory}}/ || true
             echo "lockflight ci exited $code; the steps that follow report the gates and lockflight/judge verdicts"
             """);
 
     /// <summary>
     /// A report step: installs the engine the base pins and runs <c>lockflight ci report</c> for <paramref name="statusContext"/>
-    /// over the judge step's evidence, as data; the step fails with that context's verdict.
+    /// over the judge step's evidence, as data. A pull request that commits files where the evidence goes is an ERROR (its files
+    /// could not be told from the judge's). The <c>gates</c> step fails with its verdict; the <c>lockflight/judge</c> step only when
+    /// the repository variable <c>LOCKFLIGHT_JUDGE_REQUIRED</c> is <c>true</c>, since the platform has one build status for the
+    /// whole pipeline, not one per step.
     /// </summary>
     public static string ReportJob(string findInputs, string statusContext) =>
-        Job(findInputs, [DotnetChannels.EngineChannel], gitleaks: false, $"""
-            lockflight ci report --evidence {EvidenceDirectory} --head "$HEAD_COMMIT" --context {statusContext} --out {VerdictDirectory}/{statusContext.Replace('/', '-')}
+        Job(findInputs, [DotnetChannels.EngineChannel], gitleaks: false, $$"""
+            if [ -n "$(git ls-files -- {{EvidenceDirectory}} {{VerdictDirectory}})" ]; then
+              echo "ERROR: the pull request commits files under {{EvidenceDirectory}} or {{VerdictDirectory}}, where the judge's evidence goes"
+              exit 4
+            fi
+            code=0
+            lockflight ci report --evidence {{EvidenceDirectory}} --head "$HEAD_COMMIT" --context {{statusContext}} --out {{VerdictDirectory}}/{{statusContext.Replace('/', '-')}} || code=$?
+            {{(statusContext == "gates" ? "exit \"$code\"" : """
+            if [ "$code" -ne 0 ] && [ "${LOCKFLIGHT_JUDGE_REQUIRED:-}" != "true" ]; then
+              echo "lockflight/judge is advisory in this pipeline (exit $code); set the repository variable LOCKFLIGHT_JUDGE_REQUIRED to 'true' to make it fail the build"
+              exit 0
+            fi
+            exit "$code"
+            """)}}
             """);
 
     private static string Job(string findInputs, IReadOnlyList<string> dotnetChannels, bool gitleaks, string run)
