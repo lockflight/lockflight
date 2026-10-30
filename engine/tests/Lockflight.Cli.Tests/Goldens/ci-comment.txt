@@ -1,5 +1,5 @@
 <!-- lockflight:ci:v1 head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->
-**Lockflight: PASS** · `001-shipping` · class **behaviour** (interim) · head `aaaaaaa` · base `bbbbbbb`
+![PASS](https://raw.githubusercontent.com/lockflight/lockflight/v0.3.0/docs/assets/badges/verdict-pass.png) **Lockflight: PASS** · `001-shipping` · class **behaviour** (interim) · head `aaaaaaa` · base `bbbbbbb`
 
 Status: `gates` PASS · `lockflight/judge` PASS
 

@@ -59,7 +59,7 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         string output = Path.GetFullPath(outDirectory, context.WorkingDirectory);
         JsonFiles.Write(Path.Combine(output, VerdictFileName), verdict);
         await File.WriteAllTextAsync(Path.Combine(output, CommentFileName), CommentRenderer.Render(verdict, CommentRenderer.MaxCommentLength), cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(output, SummaryFileName), CommentRenderer.Render(verdict, int.MaxValue), cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(output, SummaryFileName), CommentRenderer.Summary(verdict), cancellationToken);
 
         string shown = only is StatusContext statusContext
             ? verdict["contexts"]?[StatusContextNames.ToName(statusContext)]?.GetValue<string>() ?? "ERROR"

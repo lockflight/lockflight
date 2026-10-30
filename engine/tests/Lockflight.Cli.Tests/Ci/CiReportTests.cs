@@ -160,6 +160,31 @@ public sealed class CiReportTests : IDisposable
         Assert.NotNull(waiting["blocked"]);
     }
 
+    [Fact]
+    public void ThePeopleSeeTheVerdictsPictureAndItsTextIsTheVerdictAlone()
+    {
+        JsonObject verdict = CiReportCommand.Join(Evidence(redVerdict: "FAIL"), Head, null);
+
+        string comment = CommentRenderer.Render(verdict, CommentRenderer.MaxCommentLength);
+        string summary = CommentRenderer.Summary(verdict);
+
+        Assert.Contains("\n![FAIL](https://raw.githubusercontent.com/lockflight/lockflight/v0.3.0/docs/assets/badges/verdict-fail.png) **Lockflight: FAIL**", comment, StringComparison.Ordinal);
+        Assert.StartsWith("![FAIL](https://raw.githubusercontent.com/lockflight/lockflight/v0.3.0/docs/assets/badges/verdict-fail-large.png)\n", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("verdict-fail.png", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("levi", comment + summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ANotEarnedThatWaitsForAPersonShowsTheBarrier()
+    {
+        JsonObject evidence = Evidence(reviewLevel: "required");
+        evidence["blocked"] = new JsonObject { ["schema"] = "lockflight.blocked/v1" };
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("/verdict-blocked.png) **Lockflight: NOT-EARNED**", comment, StringComparison.Ordinal);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(directory);
 
     private static JsonObject Evidence(string reviewLevel = "advisory", string redVerdict = "PASS", string testName = "Shop.Tests:Shop.Tests.PriceTests.Shipping") => new()
