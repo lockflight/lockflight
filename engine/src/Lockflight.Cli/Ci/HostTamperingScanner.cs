@@ -138,8 +138,12 @@ internal static partial class HostTamperingScanner
             }
         }
 
-        bool usesTemp = calls.Any(call => TempMembers.Contains(call.Member, StringComparer.Ordinal));
-        foreach ((string type, string member) in calls.Where(call => !usesTemp && WriteTypes.Contains(call.Type, StringComparer.Ordinal)
+        // A write counts as visibly temporary only when the method asks for the temporary folder before it, reads no
+        // environment variable (the CI's own files are named by variables) and names no other folder of the run.
+        int firstTemp = calls.FindIndex(call => TempMembers.Contains(call.Member, StringComparer.Ordinal));
+        bool namesAnotherFolder = calls.Any(call => call is ("System.Environment", "GetEnvironmentVariable" or "GetEnvironmentVariables" or "ExpandEnvironmentVariables" or "get_CurrentDirectory")
+            or ("System.IO.Directory", "GetCurrentDirectory") or ("System.AppContext", "get_BaseDirectory") or ("System.AppDomain", "get_BaseDirectory"));
+        foreach ((string type, string member) in calls.Where((call, index) => (firstTemp < 0 || index < firstTemp || namesAnotherFolder) && WriteTypes.Contains(call.Type, StringComparer.Ordinal)
             && WriteMembers.Any(prefix => call.Member.StartsWith(prefix, StringComparison.Ordinal)) && !call.Member.Contains("Read", StringComparison.Ordinal)))
         {
             yield return new TamperingFinding(assembly, "file-write", location, $"{type}.{member}");

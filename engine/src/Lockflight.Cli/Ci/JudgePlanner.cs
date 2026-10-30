@@ -1,3 +1,4 @@
+using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Routing;
 
@@ -62,10 +63,56 @@ internal static class JudgePlanner
         }
 
         RequirementSet requirements = InterimRequirements.For(classification.Classification.Class, classification.Shape);
-        IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.Shape, inputs.Event);
+        if (inputs.Event == JudgeEvent.PullRequest && inputs.Base is not null)
+        {
+            JudgeRouting routing = await RouteAsync(inputs, policy, cancellationToken);
+            if (routing is not { Class: InterimClassification routed, Requirements: RequirementSet routedRequirements })
+            {
+                return JudgePlanning.Failed(ExitCode.Error, routing.Error!);
+            }
+
+            (classification, requirements) = (routed, routedRequirements);
+        }
+
+        IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.ProductionChanged, inputs.Event);
         IReadOnlyList<string> ignored = await IgnoredAsync(root, inputs.Head, environment, cancellationToken);
         JudgePlan plan = new(inputs, policy, mergeBase, others, reds, classification, requirements, levels, Steps(inputs, mergeBase, reds, levels), changed, ignored);
         return JudgePlanning.Planned(plan);
+    }
+
+    /// <summary>
+    /// The change's class from the base branch's routing policy (risk routing): the change set since the merge base, the raises
+    /// (a covering feature's class line, its class record), the classifier and the class's requirements. A git failure reading
+    /// the change set or the raises is an error: a raise that could not be read must not leave the class lower than it is.
+    /// The pull request's <c>lockflight:class/*</c> labels are not passed in yet: the action has no input for them, so CI does
+    /// not read labels (docs/guides/risk-routing.md says so).
+    /// </summary>
+    private static async Task<JudgeRouting> RouteAsync(JudgeInputs inputs, BasePolicy policy, CancellationToken cancellationToken)
+    {
+        string preset = RoutingPresetNames.ToName((policy.Manifest?.Routing ?? RoutingSettings.Default).Preset);
+        RoutingPolicy routing = RoutingPolicy.From(policy.Manifest, new PolicySource(inputs.Base!, policy.Commit, policy.ManifestBlob, preset));
+        ChangeSetReading reading = await ChangeSetReader.ReadAsync(inputs.Root, inputs.Base!, inputs.Head, cancellationToken);
+        if (reading.ChangeSet is not ChangeSet changeSet)
+        {
+            return JudgeRouting.Failed($"git could not read the change set {CommitIds.Short(inputs.Base!)}...{CommitIds.Short(inputs.Head)} for routing");
+        }
+
+        RaiseReading raises = await RaiseReader.ReadAsync(inputs.Root, changeSet, new RaiseInputs(inputs.Branch, Labels: [], Raise: null), cancellationToken);
+        return Route(changeSet, routing, raises);
+    }
+
+    /// <summary>The routing result for a change set that was read and its raises; an error when the raises could not be read.</summary>
+    internal static JudgeRouting Route(ChangeSet changeSet, RoutingPolicy routing, RaiseReading raises)
+    {
+        if (raises.Status != RaiseReadStatus.Read)
+        {
+            return JudgeRouting.Failed($"the change's raises could not be read, so its class cannot be computed: {string.Join("; ", raises.Notes)}");
+        }
+
+        ChangeAnalysis analysis = ChangeAnalyzer.Analyze(changeSet, routing.ExcludedGlobs);
+        Classification classification = ChangeClassifier.Classify(analysis, routing, raises.Raises);
+        InterimClassification routed = new(classification, InterimShape.Other) { Source = InterimClassification.RoutingSource, ProductionChanged = ProductionChange.Of(analysis) };
+        return JudgeRouting.Routed(routed, ClassRequirements.For(classification.Class, routing));
     }
 
     private static async Task<RedCommitSelection> WithForkPointsAsync(string root, RedCommitSelection selection, string baseCommit, CancellationToken cancellationToken)

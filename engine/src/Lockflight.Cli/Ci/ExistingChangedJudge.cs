@@ -23,11 +23,12 @@ internal sealed class ExistingChangedJudge(TreeBuilder trees, TimeProvider time)
         TestSide side = await TestSide.ReadAsync(root, plan.Inputs.Head, head, trees.Root, plan.Policy.Ci, cancellationToken);
         HashSet<string> atBase = [.. await JudgeGit.TreeFilesAsync(root, mergeBase, cancellationToken) ?? []];
         string[] changedInputs = [.. (await JudgeGit.ChangedFilesAsync(root, mergeBase, plan.Inputs.Head, cancellationToken) ?? []).Where(atBase.Contains).Where(side.IsTestSide)];
+        IReadOnlySet<string> helpers = await side.HelperSourcesAsync(root, mergeBase, changedInputs, cancellationToken);
         HashSet<string> atHead = [.. headInventory.Select(test => test.Key)];
         string[] changed = [.. baseInventory.Select(test => test.Key).Where(atHead.Contains).Where(key =>
             baseListing.Fingerprints.GetValueOrDefault(key) is not string before
             || head.Fingerprints.GetValueOrDefault(key) != before
-            || changedInputs.Any(path => side.AffectsBeyondCode(path, key[..key.IndexOf(':', StringComparison.Ordinal)])))];
+            || changedInputs.Any(path => side.Affects(path, key[..key.IndexOf(':', StringComparison.Ordinal)], helpers)))];
         if (changed.Length == 0)
         {
             return [];

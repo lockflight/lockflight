@@ -64,6 +64,83 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task DataMembersFixturesStaticValuesAndOverridesCountToo()
+    {
+        const string Theory = """
+                public static TheoryData<int> Cases => new() { 2 };
+
+                [Theory]
+                [MemberData(nameof(Cases))]
+                public void UsesFrameworkCode(int factor) => Assert.True(Clock.Now() + Seed.Value + factor > 0);
+
+                private static IClock Clock { get; } = new FakeClock();
+            """;
+        repository.WriteCode(Production, Theory, "IClassFixture<SeedFixture>")
+            .Write("tests/Shop.Tests/Support.cs", Support("1", "2", "3"));
+        string original = await FingerprintAsync("UsesFrameworkCode");
+
+        repository.WriteCode(Production, Theory.Replace("new() { 2 }", "new() { 0 }", StringComparison.Ordinal), "IClassFixture<SeedFixture>");
+        string data = await FingerprintAsync("UsesFrameworkCode");
+        Assert.NotEqual(original, data);
+
+        repository.Write("tests/Shop.Tests/Support.cs", Support("9", "2", "3"));
+        string fixture = await FingerprintAsync("UsesFrameworkCode");
+        Assert.NotEqual(data, fixture);
+
+        repository.Write("tests/Shop.Tests/Support.cs", Support("9", "8", "3"));
+        string value = await FingerprintAsync("UsesFrameworkCode");
+        Assert.NotEqual(fixture, value);
+
+        repository.Write("tests/Shop.Tests/Support.cs", Support("9", "8", "7"));
+        Assert.NotEqual(value, await FingerprintAsync("UsesFrameworkCode"));
+    }
+
+    [Fact]
+    public async Task ClassDataGenericInterfaceCallsAndOverridesOfFrameworkTypesCountToo()
+    {
+        const string Theory = """
+                [Theory]
+                [ClassData(typeof(Cases))]
+                public void UsesSupport(int factor)
+                {
+                    IConvert convert = new DoubleIt();
+                    Stream stream = new OneByte();
+                    Assert.True(convert.Run<int>(factor) + stream.ReadByte() > 0);
+                }
+            """;
+        repository.WriteCode(Production, Theory).Write("tests/Shop.Tests/Support.cs", ClassSupport("1", "2", "3"));
+        string original = await FingerprintAsync("UsesSupport");
+
+        repository.Write("tests/Shop.Tests/Support.cs", ClassSupport("4", "2", "3"));
+        string data = await FingerprintAsync("UsesSupport");
+        Assert.NotEqual(original, data);
+
+        repository.Write("tests/Shop.Tests/Support.cs", ClassSupport("4", "5", "3"));
+        string generic = await FingerprintAsync("UsesSupport");
+        Assert.NotEqual(data, generic);
+
+        repository.Write("tests/Shop.Tests/Support.cs", ClassSupport("4", "5", "6"));
+        Assert.NotEqual(generic, await FingerprintAsync("UsesSupport"));
+    }
+
+    [Fact]
+    public async Task WhatRunsAroundEveryTestCountsToo()
+    {
+        static string Tests(string cleanup) => $$"""
+                [Fact]
+                public void Simple() => Assert.True(new Price().Shipping(1m) > 0);
+
+                public void Dispose() => Console.WriteLine({{cleanup}});
+            """;
+        repository.WriteCode(Production, Tests("1"), "IDisposable");
+        string original = await FingerprintAsync("Simple");
+
+        repository.WriteCode(Production, Tests("2"), "IDisposable");
+
+        Assert.NotEqual(original, await FingerprintAsync("Simple"));
+    }
+
+    [Fact]
     public async Task ATestThatIsNotInTheAssemblyHasNoFingerprint()
     {
         await BuildAsync();
@@ -75,11 +152,73 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
 
     private string AssemblyPath => Path.Combine(repository.Root, "tests", "Shop.Tests", "bin", "Debug", "net10.0", "Shop.Tests.dll");
 
-    private async Task<string> FingerprintAsync()
+    private static string Support(string fixtureSeed, string staticValue, string clock) => $$"""
+        namespace Shop.Tests;
+
+        public sealed class SeedFixture
+        {
+            public SeedFixture() => Seeded = {{fixtureSeed}};
+
+            public int Seeded { get; }
+        }
+
+        internal static class Seed
+        {
+            public static readonly int Value = {{staticValue}};
+        }
+
+        public interface IClock
+        {
+            int Now();
+        }
+
+        internal sealed class FakeClock : IClock
+        {
+            public int Now() => {{clock}};
+        }
+
+        """;
+
+    private static string ClassSupport(string data, string factor, string value) => $$"""
+        namespace Shop.Tests;
+
+        public sealed class Cases : TheoryData<int>
+        {
+            public Cases() => Add({{data}});
+        }
+
+        public interface IConvert
+        {
+            int Run<T>(int value);
+        }
+
+        internal sealed class DoubleIt : IConvert
+        {
+            public int Run<T>(int value) => value * {{factor}};
+        }
+
+        internal sealed class OneByte : Stream
+        {
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => 1;
+            public override long Position { get; set; }
+            public override int ReadByte() => {{value}};
+            public override int Read(byte[] buffer, int offset, int count) => 0;
+            public override void Flush() { }
+            public override long Seek(long offset, SeekOrigin origin) => 0;
+            public override void SetLength(long value) { }
+            public override void Write(byte[] buffer, int offset, int count) { }
+        }
+
+        """;
+
+    private async Task<string> FingerprintAsync(string test = Test)
     {
         await BuildAsync();
         using TestFingerprinter fingerprinter = new(AssemblyPath, new HashSet<string> { "Shop", "Shop.Tests" });
-        string? fingerprint = fingerprinter.Fingerprint(TestClass, Test);
+        string? fingerprint = fingerprinter.Fingerprint(TestClass, test);
         Assert.NotNull(fingerprint);
         return fingerprint;
     }

@@ -33,19 +33,23 @@ internal static partial class PolicyOverlay
         }
 
         string[] baselineFiles = [.. policyFiles.Where(path => path.StartsWith(BaselinesDirectory + "/", StringComparison.Ordinal))];
-        foreach (string path in single.Concat(style).Concat(baselineFiles))
+        string[] overlaid = [.. single.Concat(style).Concat(baselineFiles).Distinct(StringComparer.Ordinal)];
+
+        // First every file the base does not have under that exact name goes, case variants included (NuGet reads NuGet.Config
+        // as well as nuget.config); then the base's files are written. On a case-insensitive file system a variant and the
+        // base's file are one file, which the second pass writes back with the base's content.
+        foreach (string path in treeFiles.Concat(overlaid).Distinct(StringComparer.Ordinal).Where(path => !atPolicy.Contains(path) && overlaid.Any(policy => policy.Equals(path, StringComparison.OrdinalIgnoreCase))))
         {
             string target = Path.Combine(tree, path.Replace('/', Path.DirectorySeparatorChar));
-            if (!atPolicy.Contains(path))
+            if (File.Exists(target))
             {
-                if (File.Exists(target))
-                {
-                    File.Delete(target);
-                }
-
-                continue;
+                File.Delete(target);
             }
+        }
 
+        foreach (string path in overlaid.Where(atPolicy.Contains))
+        {
+            string target = Path.Combine(tree, path.Replace('/', Path.DirectorySeparatorChar));
             ProcessResult blob = await ProcessRunner.RunAsync("git", ["cat-file", "blob", $"{policyCommit}:{path}"], repositoryRoot, timeLimit, cancellationToken);
             if (blob.ExitCode != 0)
             {

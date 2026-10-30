@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -11,7 +12,7 @@ namespace Lockflight.Cli.Ci;
 /// <summary>
 /// The per-method fingerprint of a test, read from a built test assembly without loading it (AOT-safe): a SHA-256 over the IL of
 /// the test method and of every method of the test assembly it reaches (helpers in any class, base classes, lambdas, local functions,
-/// async and iterator state machines), its class's constructors and the module initializer, with every metadata token written as the
+/// async and iterator state machines), its class's constructors, set-up and tear-down methods and the module initializer, with every metadata token written as the
 /// name it stands for, and the test's attributes (<c>InlineData</c> values, traits, <c>Skip</c>). Compiler-generated names are
 /// replaced by their order in the walk, because their ordinals shift when a test is added above; members of assemblies outside the
 /// repository carry their version, so a swapped or downgraded assertion library changes the fingerprint while a per-commit version
@@ -24,6 +25,7 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
     private const byte TwoBytePrefix = 0xFE;
     private const byte SwitchOpCode = 0x45;
     private const byte StringOpCode = 0x72;
+    private const byte CallVirtOpCode = 0x6F;
 
     private static readonly string[] CompilerAttributes = ["]System.Runtime.CompilerServices.", "]System.Diagnostics."];
     private static readonly HashSet<byte> MethodOps = [0x27, 0x28, 0x6F, 0x73];
@@ -31,7 +33,11 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
     private static readonly HashSet<byte> TwoByteMethodOps = [0x06, 0x07];
     private static readonly HashSet<byte> TwoByteTokenOps = [0x15, 0x16, 0x1C];
 
+    private static readonly string[] LifecycleAttributes = ["SetUp", "TearDown", "TestInitialize", "TestCleanup", "ClassInitialize", "ClassCleanup", "AssemblyInitialize", "AssemblyCleanup"];
+    private static readonly string[] LifecycleMethods = ["InitializeAsync", "DisposeAsync", "Dispose"];
+
     private readonly PEReader pe = new(File.OpenRead(assemblyPath));
+    private Dictionary<string, List<MethodDefinitionHandle>>? virtualsByName;
 
     /// <summary>The fingerprint of <paramref name="className"/>.<paramref name="method"/>; null when it cannot be computed (counts as changed).</summary>
     public string? Fingerprint(string className, string method) => CanonicalText(className, method) is string text
@@ -43,7 +49,7 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
     {
         try
         {
-            return new Walk(pe, repositoryAssemblies).Run(className, method);
+            return new Walk(pe, repositoryAssemblies, VirtualsByName()).Run(className, method);
         }
         catch (Exception exception) when (exception is BadImageFormatException or InvalidOperationException or ArgumentException)
         {
@@ -53,8 +59,43 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
 
     public void Dispose() => pe.Dispose();
 
+    /// <summary>
+    /// The assembly's virtual methods by name, built once for every test's walk; an explicit interface implementation
+    /// (<c>Ns.IClock.Now</c>) is listed under the member's own name too.
+    /// </summary>
+    private Dictionary<string, List<MethodDefinitionHandle>> VirtualsByName()
+    {
+        if (virtualsByName is null)
+        {
+            MetadataReader reader = pe.GetMetadataReader();
+            virtualsByName = new Dictionary<string, List<MethodDefinitionHandle>>(StringComparer.Ordinal);
+            foreach (MethodDefinitionHandle handle in reader.MethodDefinitions)
+            {
+                MethodDefinition method = reader.GetMethodDefinition(handle);
+                if ((method.Attributes & MethodAttributes.Virtual) == 0)
+                {
+                    continue;
+                }
+
+                string name = reader.GetString(method.Name);
+                foreach (string key in new[] { name, name[(name.LastIndexOf('.') + 1)..] }.Distinct(StringComparer.Ordinal))
+                {
+                    if (!virtualsByName.TryGetValue(key, out List<MethodDefinitionHandle>? methods))
+                    {
+                        methods = [];
+                        virtualsByName[key] = methods;
+                    }
+
+                    methods.Add(handle);
+                }
+            }
+        }
+
+        return virtualsByName;
+    }
+
     /// <summary>One fingerprint's walk: the canonical text it builds and the generated names it has seen, in order.</summary>
-    private sealed class Walk(PEReader pe, IReadOnlySet<string> repositoryAssemblies)
+    private sealed class Walk(PEReader pe, IReadOnlySet<string> repositoryAssemblies, Dictionary<string, List<MethodDefinitionHandle>> virtualsByName)
     {
         private readonly MetadataReader reader = pe.GetMetadataReader();
         private readonly StringBuilder text = new();
@@ -93,11 +134,18 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             }
 
             pending.Enqueue(roots[0]);
+            EnqueueFrameworkCode(type, test);
             for (TypeDefinitionHandle? current = type; current is TypeDefinitionHandle currentType; current = BaseInAssembly(currentType))
             {
                 foreach (MethodDefinitionHandle constructor in MethodsNamed(currentType, ".ctor").Concat(MethodsNamed(currentType, ".cctor")))
                 {
                     pending.Enqueue(constructor);
+                }
+
+                // What the framework runs around every test of the class: set-up and tear-down methods, IAsyncLifetime, IDisposable.
+                foreach (MethodDefinitionHandle handle in reader.GetTypeDefinition(currentType).GetMethods().Where(IsLifecycle))
+                {
+                    pending.Enqueue(handle);
                 }
             }
 
@@ -124,6 +172,15 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             }
 
             return text.ToString();
+        }
+
+        private bool IsLifecycle(MethodDefinitionHandle handle)
+        {
+            MethodDefinition method = reader.GetMethodDefinition(handle);
+            string name = reader.GetString(method.Name);
+            return LifecycleMethods.Any(lifecycle => name == lifecycle || name.EndsWith("." + lifecycle, StringComparison.Ordinal))
+                || method.GetCustomAttributes().Any(attribute => Token(reader.GetCustomAttribute(attribute).Constructor) is string constructor
+                    && LifecycleAttributes.Any(marker => constructor.Contains($"{marker}Attribute::", StringComparison.Ordinal)));
         }
 
         /// <summary>
@@ -216,7 +273,12 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
                 }
                 else if (MethodOps.Contains(code) || TokenOps.Contains(code))
                 {
-                    Operand(MetadataTokens.EntityHandle(il.ReadInt32()));
+                    EntityHandle token = MetadataTokens.EntityHandle(il.ReadInt32());
+                    Operand(token);
+                    if (code == CallVirtOpCode)
+                    {
+                        EnqueueOverrides(token);
+                    }
                 }
                 else if (code == StringOpCode)
                 {
@@ -246,6 +308,171 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             foreach (MethodDefinitionHandle own in OwnMethods(token))
             {
                 pending.Enqueue(own);
+            }
+
+            // A static field's value comes from its type's static constructor.
+            if (token.Kind == HandleKind.FieldDefinition)
+            {
+                EnqueueAll(reader.GetFieldDefinition((FieldDefinitionHandle)token).GetDeclaringType(), ".cctor");
+            }
+        }
+
+        /// <summary>
+        /// A virtual or interface call reaches whichever override runs: every virtual method of this assembly with the same name. A
+        /// generic method call is followed through to the method it instantiates. For a member of the base class library (or
+        /// another <c>Microsoft.</c> or <c>System.</c> assembly) only the overrides in types of this assembly that derive from or
+        /// implement the called type count, so a fake <c>Stream</c> or <c>HttpMessageHandler</c> is reached while every
+        /// <c>ToString</c> and <c>Equals</c> is not; members of <c>System.Object</c> are never followed.
+        /// </summary>
+        private void EnqueueOverrides(EntityHandle token)
+        {
+            if (token.Kind == HandleKind.MethodSpecification)
+            {
+                EnqueueOverrides(reader.GetMethodSpecification((MethodSpecificationHandle)token).Method);
+                return;
+            }
+
+            string? name = null;
+            string? framework = null;
+            if (token.Kind == HandleKind.MethodDefinition)
+            {
+                MethodDefinition method = reader.GetMethodDefinition((MethodDefinitionHandle)token);
+                name = (method.Attributes & MethodAttributes.Virtual) != 0 ? reader.GetString(method.Name) : null;
+            }
+            else if (token.Kind == HandleKind.MemberReference)
+            {
+                MemberReference member = reader.GetMemberReference((MemberReferenceHandle)token);
+                string parent = member.Parent.Kind switch
+                {
+                    HandleKind.TypeReference => ReferenceName((TypeReferenceHandle)member.Parent),
+                    HandleKind.TypeSpecification => reader.GetTypeSpecification((TypeSpecificationHandle)member.Parent).DecodeSignature(Names, null),
+                    _ => string.Empty,
+                };
+                name = reader.GetString(member.Name);
+                if (IsFramework(parent))
+                {
+                    framework = WithoutArguments(parent);
+                    if (framework.EndsWith("]System.Object", StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            if (name is null)
+            {
+                return;
+            }
+
+            foreach (MethodDefinitionHandle handle in virtualsByName.GetValueOrDefault(name) ?? [])
+            {
+                if (framework is null || DerivesFrom(reader.GetMethodDefinition(handle).GetDeclaringType(), framework))
+                {
+                    pending.Enqueue(handle);
+                }
+            }
+        }
+
+        private static bool IsFramework(string typeName) =>
+            typeName.Contains("]System.", StringComparison.Ordinal) || typeName.Contains("]Microsoft.", StringComparison.Ordinal);
+
+        private static string WithoutArguments(string typeName) => typeName.IndexOf('<', StringComparison.Ordinal) is int open and >= 0 ? typeName[..open] : typeName;
+
+        /// <summary>Whether a type of this assembly derives from or implements <paramref name="framework"/> (its name without type arguments).</summary>
+        private bool DerivesFrom(TypeDefinitionHandle type, string framework)
+        {
+            for (TypeDefinitionHandle? current = type; current is TypeDefinitionHandle currentType; current = BaseInAssembly(currentType))
+            {
+                TypeDefinition definition = reader.GetTypeDefinition(currentType);
+                if (!definition.BaseType.IsNil && definition.BaseType.Kind != HandleKind.TypeDefinition && WithoutArguments(Token(definition.BaseType)) == framework)
+                {
+                    return true;
+                }
+
+                if (definition.GetInterfaceImplementations().Any(implementation => WithoutArguments(Token(reader.GetInterfaceImplementation(implementation).Interface)) == framework))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// What the test framework calls around the test rather than the test itself: the members a data attribute names
+        /// (<c>MemberData</c>, <c>ClassData</c>, NUnit's <c>TestCaseSource</c>) and the fixtures the class takes
+        /// (<c>IClassFixture&lt;T&gt;</c> and the like), all of their code.
+        /// </summary>
+        private void EnqueueFrameworkCode(TypeDefinitionHandle type, MethodDefinition test)
+        {
+            foreach (CustomAttributeHandle handle in test.GetCustomAttributes())
+            {
+                CustomAttribute attribute = reader.GetCustomAttribute(handle);
+                string constructor = Token(attribute.Constructor);
+                if (!constructor.Contains("DataAttribute", StringComparison.Ordinal) && !constructor.Contains("SourceAttribute", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                CustomAttributeValue<string> value = attribute.DecodeValue(new AttributeTypes(Names));
+                foreach (object? argument in value.FixedArguments.Select(argument => argument.Value).Concat(value.NamedArguments.Select(argument => argument.Value)))
+                {
+                    if (argument is string named)
+                    {
+                        foreach (TypeDefinitionHandle candidate in reader.TypeDefinitions)
+                        {
+                            EnqueueAll(candidate, named);
+                            EnqueueAll(candidate, $"get_{named}");
+                            if (PlainName(candidate) == named || PlainName(candidate).EndsWith("." + named, StringComparison.Ordinal))
+                            {
+                                EnqueueAll(candidate, name: null);
+                            }
+                        }
+                    }
+                }
+
+                EnqueueAll(type, ".cctor");
+            }
+
+            for (TypeDefinitionHandle? current = type; current is TypeDefinitionHandle currentType; current = BaseInAssembly(currentType))
+            {
+                foreach (InterfaceImplementationHandle implementation in reader.GetTypeDefinition(currentType).GetInterfaceImplementations())
+                {
+                    EntityHandle contract = reader.GetInterfaceImplementation(implementation).Interface;
+                    if (contract.Kind != HandleKind.TypeSpecification)
+                    {
+                        continue;
+                    }
+
+                    BlobReader signature = reader.GetBlobReader(reader.GetTypeSpecification((TypeSpecificationHandle)contract).Signature);
+                    if (signature.ReadSignatureTypeCode() != SignatureTypeCode.GenericTypeInstance)
+                    {
+                        continue;
+                    }
+
+                    signature.ReadSignatureTypeCode();
+                    signature.ReadTypeHandle();
+                    int count = signature.ReadCompressedInteger();
+                    for (int index = 0; index < count; index++)
+                    {
+                        if (signature.ReadSignatureTypeCode() is SignatureTypeCode.TypeHandle && signature.ReadTypeHandle() is { Kind: HandleKind.TypeDefinition } fixture)
+                        {
+                            EnqueueAll((TypeDefinitionHandle)fixture, name: null);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>Every method of <paramref name="type"/> named <paramref name="name"/> (all of them when null).</summary>
+        private void EnqueueAll(TypeDefinitionHandle type, string? name)
+        {
+            foreach (MethodDefinitionHandle handle in reader.GetTypeDefinition(type).GetMethods())
+            {
+                if (name is null || reader.GetString(reader.GetMethodDefinition(handle).Name) == name)
+                {
+                    pending.Enqueue(handle);
+                }
             }
         }
 

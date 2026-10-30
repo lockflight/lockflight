@@ -66,6 +66,8 @@ public sealed class HostTamperingTests : IAsyncLifetime
             {
                 [ModuleInitializer]
                 internal static void Start() => AppDomain.CurrentDomain.ProcessExit += async (_, _) => await File.WriteAllTextAsync("results.xml", "<pass/>");
+
+                internal static void Rewrite() => File.WriteAllText(Path.Combine(Path.GetTempPath(), AppContext.BaseDirectory, "results.xml"), "<pass/>");
             }
 
             """).CommitAsync("feat: US1", cancellationToken);
@@ -76,6 +78,7 @@ public sealed class HostTamperingTests : IAsyncLifetime
         string[] kinds = [.. document["hostTampering"]!["new"]!.AsArray().Select(finding => finding!["kind"]!.GetValue<string>()).Distinct().Order()];
         Assert.Equal(["file-write", "module-initializer", "process-exit"], kinds);
         Assert.Contains("Shop.Tests.Setup::Start", Check(document)["why"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains(document["hostTampering"]!["new"]!.AsArray(), finding => finding!.ToJsonString().Contains("Setup::Rewrite", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -83,7 +86,7 @@ public sealed class HostTamperingTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await repository.CheckoutAsync("main", cancellationToken);
-        main = await repository.Write(".lockflight/baselines/host-tampering.json", """{ "schema": "lockflight.baseline.host-tampering/v1", "findings": ["Shop.Tests|exit|Shop.Tests.Guard::Stop"] }""")
+        main = await repository.Write(".lockflight/baselines/host-tampering.json", """{ "schema": "lockflight.baseline.host-tampering/v1", "findings": ["Shop.Tests|exit|Shop.Tests.Guard::Stop|System.Environment.Exit"] }""")
             .CommitAsync("accept the guard", cancellationToken);
         await repository.CheckoutAsync("001-shipping", cancellationToken);
         await repository.MergeAsync("main", cancellationToken);

@@ -26,6 +26,33 @@ public sealed class CiReportTests : IDisposable
         Assert.Equal("ERROR", CiReportCommand.Join(Evidence(), new string('b', 40), null)["verdict"]!.GetValue<string>());
 
     [Fact]
+    public void EvidenceWithoutEveryCheckIsAnErrorNotAPass()
+    {
+        JsonObject evidence = Evidence();
+        evidence["checks"] = new JsonArray();
+
+        Assert.Equal("ERROR", CiReportCommand.Join(evidence, Head, null)["contexts"]!["gates"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void EvidenceThatMakesTheGatesAdvisoryIsAnError()
+    {
+        JsonObject evidence = Evidence();
+        evidence["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == "gates")!["requirement"] = "advisory";
+
+        Assert.Equal("ERROR", CiReportCommand.Join(evidence, Head, null)["verdict"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void AFieldOfTheWrongTypeIsAnErrorNotACrash()
+    {
+        JsonObject evidence = Evidence();
+        evidence["checks"]![0]!["verdict"] = 3;
+
+        Assert.Equal("ERROR", CiReportCommand.Join(evidence, Head, null)["verdict"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void AFailingReviewFailsTheJudgeContextOnlyWhereTheClassRequiresIt()
     {
         JsonObject review = new() { ["schema"] = "lockflight.ci-review/v1", ["head"] = Head, ["verdict"] = "FAIL", ["why"] = "1 confirmed blocker" };
@@ -191,6 +218,7 @@ public sealed class CiReportTests : IDisposable
     {
         ["schema"] = "lockflight.ci-evidence/v1",
         ["engine"] = new JsonObject { ["version"] = "0.3.0" },
+        ["event"] = "pr",
         ["head"] = Head,
         ["base"] = new JsonObject { ["sha"] = new string('b', 40) },
         ["policy"] = new JsonObject { ["from"] = new string('b', 40) },
@@ -209,7 +237,12 @@ public sealed class CiReportTests : IDisposable
             Check("green", "gates", "PASS", "required", "2 tests, 2 test cases run, 0 failed"),
             Check("gates", "gates", "PASS", "required", "format PASS · build PASS · test PASS"),
             Check("review", "lockflight/judge", "SKIPPED", reviewLevel, "the report joins the review job's result"),
-            Check("approvals", "lockflight/judge", "N/A", "off", "off for this change class")),
+            Check("approvals", "lockflight/judge", "N/A", "off", "off for this change class"),
+            Check("tests.sinceRed", "lockflight/judge", "PASS", "required", "1 unchanged, 0 amends accepted"),
+            Check("tests.existingChanged", "lockflight/judge", "PASS", "advisory", "no existing test changed"),
+            Check("tests.hostTampering", "lockflight/judge", "PASS", "required", "no code in the test assemblies that could tamper with the test host"),
+            Check("trace", "lockflight/judge", "PASS", "required", "1/1 requirements of 001-shipping"),
+            Check("routing", "lockflight/judge", "PASS", "required", "class behaviour (routing)")),
     };
 
     private static JsonObject Check(string id, string context, string verdict, string level, string why) =>

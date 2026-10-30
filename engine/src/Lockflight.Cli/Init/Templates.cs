@@ -71,7 +71,7 @@ internal static class Templates
     /// </summary>
     public const string ActionReference = "lockflight/lockflight/action@{ActionCommit} # {ActionVersion}";
 
-    public const string ActionCommit = "0000000000000000000000000000000000000000";
+    public const string ActionCommit = "db0d2eb76a8066ca1f4402b2b1ee6b10794db077";
 
     public const string ActionVersion = "main";
 
