@@ -12,148 +12,149 @@
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-14808F)
 [![License: MIT](https://img.shields.io/badge/license-MIT-123A4F)](LICENSE)
 
-[Quick start](#quick-start) · [How it works](#how-a-change-rises) · [Why](#instructions-vs-checks) ·
-[What it guarantees](docs/guides/guardrails-and-boundaries.md) · [Docs](docs/README.md)
+[Quickstart](QUICKSTART.md) · [How it works](#how-it-works) · [What the judge checks](#what-the-judge-checks) ·
+[Install levels](#install-levels) · [Limits](#honest-about-its-limits) · [Docs](docs/README.md)
 
 </div>
 
-**Coding agents write code faster than anyone can review it.** The bottleneck moved from writing code to trusting it. Rules
-in `CLAUDE.md`, skills and reviewer agents are instructions, and an agent can talk its way past a paragraph.
-**It can't talk its way past an exit code.**
+**A CI check for .NET pull requests written by coding agents.** It re-runs the evidence behind "done" (tests that failed
+before the code existed and pass after it, unchanged or amended and still failing on the old code) under your base branch's
+policy, and gives one verdict.
+
+**Coding agents write code faster than anyone can review it.** An agent says the build is green and the tests came first.
+Instructions in `CLAUDE.md`, skills and reviewer agents ask it to work that way, but an agent can talk its way past a
+paragraph. It has a much harder time talking its way past an exit code it did not produce.
 
 | "Done" isn't evidence | Rules are optional | Tests come last |
 |---|---|---|
 | The agent says the build is green. Did anything actually run? | "Don't touch the config," says the skill. One `sed` later, it's touched. | Tests written after the code pass by construction and prove little. |
 
 > [!TIP]
-> **Lockflight turns your process into checks.** One pinned engine judges every step: in the Claude Code session, in your
-> terminal and in CI. Same input, same verdict.
-
-<p align="center">
-  <img src="docs/assets/demo-terminal-animated.svg" alt="The guard blocks an agent's edit to lockflight.yaml; the Stop gate keeps a turn with a failing test from ending." width="100%">
-</p>
-
-## How a change rises
-
-Like a boat in a canal lock flight, a change climbs stage by stage. Each gate opens only when its check passes, and you
-hold the keys to the two that need a person.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/lock-flight-dark.svg">
-  <img src="docs/assets/lock-flight-light.svg" alt="Spec and tasks, each approved by you; red, where new tests fail first; green, where they pass with nothing deleted; trace, where every requirement has a test; review, where findings need a failing test; and the pull request, with the same checks in CI." width="100%">
-</picture>
-
-## Instructions vs checks
-
-| | Skills, agents and Spec Kit alone | With Lockflight |
-|---|---|---|
-| **Protected config** | "Please don't edit" in `CLAUDE.md` | The guard blocks the edit and common shell writes; CI checks the rest |
-| **"Tests pass"** | The agent's word | The Stop gate builds and tests before the turn can end |
-| **Test-first** | A habit, when remembered | Red/green evidence: new tests fail first, then pass |
-| **Spec to code** | A sequence the agent may skip | Hash-bound approvals and phase checks between steps |
-| **Coverage of the spec** | Unknown | A trace: every requirement and the tests that prove it |
-| **Review** | A reviewer briefed by the coding agent | An independent reviewer; blocking findings need a failing test |
-| **CI** | Config a pull request can loosen | The same engine, with the base branch's policy |
-
-## What's in the box
-
-| | |
-|---|---|
-| **Deterministic gates**<br>Format, build with no new warnings, tests, patch coverage, vulnerable packages, secrets. `PASS`, `FAIL` or `NOT-EARNED`, never "probably". | **Protected paths**<br>The files that define the rules can't be changed by the agent, through edits or the shell ([full list](docs/guides/configuration.md#built-in-protected-paths)). |
-| **Spec-driven, [Spec Kit](https://github.com/github/spec-kit) optional**<br>A [documented spec format](docs/guides/spec-contract.md): requirement IDs, approvals you give, checks between phases. Written by the crew, by hand, or by Spec Kit with a preset. | **Red/green evidence**<br>New tests must fail before the code exists and pass after, locked while red. xUnit v3 and v2. |
-| **Requirement trace**<br>A matrix of every requirement and the tests that went red, then green, for it. | **Evidence-bound review**<br>An independent reviewer whose blocking findings count only with a failing reproduction test. |
-| **Adopts your setup**<br>Keeps your hooks, skills, agents and Spec Kit, protects them and flags conflicts. `init --dry-run` shows the plan first. | **One repo or twenty**<br>Workspace shells with service repositories beneath: only changed services are built, and each keeps its own CI policy. |
-
-<table>
-<tr>
-<td width="140" align="center"><img src="docs/assets/levi-on-duty.svg" alt="Levi, on duty" width="120"></td>
-<td><b>Meet Levi.</b> The lock-keeper shows each verdict in your terminal and, if you like, in Claude Code's status line:
-a green flag for <code>PASS</code>, a question for <code>NOT-EARNED</code>, a red flag for <code>FAIL</code>, and the barrier
-when the guard says no. Only you see him: he stays out of anything the agent reads, so he costs no tokens.</td>
-</tr>
-</table>
-
-<p align="center">
-  <img src="docs/assets/levi-pass.svg" alt="PASS" width="110">&nbsp;&nbsp;
-  <img src="docs/assets/levi-not-earned.svg" alt="NOT-EARNED" width="110">&nbsp;&nbsp;
-  <img src="docs/assets/levi-fail.svg" alt="FAIL" width="110">&nbsp;&nbsp;
-  <img src="docs/assets/levi-blocked.svg" alt="BLOCKED" width="110">
-</p>
+> **LLMs propose; checks decide.** The judge of record is a CI check: a GitHub Action, and a Bitbucket Pipelines template.
+> It builds and runs the pull request's commits itself and takes its policy and engine from the target branch, so with the
+> check required and the workflow under CODEOWNERS, the pull request cannot loosen what judges it. The Claude Code plugin is an optional assistant that runs the same checks on the
+> developer's machine, earlier; the crew agents give advice and decide nothing.
 
 ## Quick start
 
-**Requirements**
-
-- **macOS (Apple silicon or Intel), Linux (x64 or arm64), or Windows (x64) with Git for Windows** (Git Bash runs the hooks).
-  On Windows install with `scripts\dev-install.ps1`: see [Install on Windows](docs/guides/getting-started.md#install-on-windows).
-- **The .NET 10 SDK** for the engine, plus the SDK your project needs; git.
-- **An SDK-style .NET 8, 9 or 10 project.** xUnit v3 (Microsoft.Testing.Platform) gets everything; xUnit v2 (VSTest), NUnit
-  and MSTest (VSTest or Microsoft.Testing.Platform) get red/green and trace too. .NET Framework projects are not supported.
-- **Claude Code 2.1.295 or newer.**
-- **[gitleaks](https://github.com/gitleaks/gitleaks)** on `PATH` for the secrets step of the `pr` profile.
-- For CI: GitHub Actions; templates for Azure Pipelines, Bitbucket Pipelines and GitLab CI/CD are generated too but not yet
-  verified on those services ([CI on other platforms](docs/guides/ci-other-platforms.md)).
-- For the standard profile with Spec Kit (optional): `uv` and Python 3 with PyYAML.
-
-**1. Install the engine and the plugin**
-
-```sh
-cd ~                          # outside any project: a global.json there could pick an SDK older than 10
-dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin
-claude plugin marketplace add lockflight/lockflight
-claude plugin install lockflight@lockflight --scope user
-```
-
-The marketplace serves the plugins as of the latest release (the release tag), so they match the engine on nuget.org; changes
-on `main` reach you with the next release. To try `main`, run `scripts/dev-install.sh` in a clone of this repository instead:
-it builds the engine and installs the plugin from that checkout
-([install from source](docs/guides/getting-started.md#install-from-source)).
-
-**2. Set up your repository**
-
-```sh
-cd /path/to/your/repo
-~/.lockflight/bin/lockflight init       # or: init --profile standard
-.lockflight/bin/lockflight doctor       # the engine init linked into the project, as the agent runs it
-```
-
-Or ask Claude Code, started at the repository root: *"Set up Lockflight"*. `init` writes `lockflight.yaml`, the engine pin in
-`dotnet-tools.json`, `.gitignore` entries, the plugin in `.claude/settings.json`, a CI workflow
-(`.github/workflows/lockflight-gates.yml`) and the linked engine in `.lockflight/bin/` (git-ignored). It merges into files
-that exist and never overwrites them.
-
-**3. Commit, and start Claude Code at the root**
-
-The guard is on, and `.lockflight/bin/lockflight gate run` runs format → build → tests. You're gated. The
-[getting-started guide](docs/guides/getting-started.md) covers the profiles (`lite` for gates and guard, `standard` for the
-full lifecycle), monorepos, workspace shells and the status line.
-
-**Already have a Claude Code or Spec Kit setup?** `init` adopts it: `init --dry-run` prints what it keeps, protects and
-flags, and writes nothing. Commit init's changes as one commit; `git revert` undoes it.
-
 > [!NOTE]
-> **Preview.** `Lockflight.Cli` is published on nuget.org as a prerelease (`--prerelease` above); the design can still change
-> between releases. An engine built from source is a development build that no package feed has, so a project that pins one
-> gets a CI workflow that runs only when started by hand until it pins a release
-> ([CI with a development build](docs/guides/getting-started.md#ci-with-a-development-build)).
+> **The CI judge ships in 0.3.0, which is not released yet.** The prerelease on nuget.org (`0.2.0-alpha.9`) has the gates
+> workflow but not the judge or `init --ci-only`. To try the judge now, install the engine from source and run it on your
+> machine: **[QUICKSTART](QUICKSTART.md)** goes from `git clone` to a first `PASS` on a new solution, every command
+> included. We measured 1 min 17 s of machine time.
+
+From 0.3.0 on, the shortest path is the GitHub Action, with nothing installed for Claude Code (the CI-only level). With the
+engine installed, at your repository's root:
+
+```sh
+~/.lockflight/bin/lockflight init --ci-only      # lockflight.yaml, the engine pin, .github/workflows/lockflight-gates.yml
+git add -A && git commit -m "Set up Lockflight"   # on main: the judge reads the policy from the target branch
+```
+
+Then, in each pull request, commit the new tests with stubs first, with a trailer
+(`git commit --trailer "Lockflight-Red: 1"`), and the implementation after. The workflow sets two checks, `gates` and
+`lockflight/judge`, and posts a comment with the verdict. Make `gates` required, and `lockflight/judge` once the team makes
+red commits; put the policy and the workflow under CODEOWNERS ([CI hardening](docs/guides/ci-hardening.md)).
+
+## How it works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ci-judge-dark.svg">
+  <img src="docs/assets/ci-judge-light.svg" alt="The pull request, with its head commit and red commits, goes to three jobs under the target branch's policy, baselines and pinned engine. judge, with no secret, re-runs each red commit, checks green at head with the tests unchanged, the trace and the pr gates. review, optional and with an API key, counts findings only with a failing reproduction. two report jobs run no pull request code: they read both results as data, set the gates and lockflight/judge checks, and one posts the comment. The verdict is PASS, FAIL, NOT-EARNED or ERROR." width="100%">
+</picture>
+
+The workflow `init` writes runs the [CI judge action](docs/guides/ci-hardening.md#the-ci-judge-action) in four jobs: `judge`,
+`review`, and two report jobs that set `gates` and `lockflight/judge`. Only `review` holds an API key, and only when you turn
+it on. The report jobs never run the pull request's code.
+
+## What the judge checks
+
+| Check | What passes |
+|---|---|
+| **Red** | At each commit with a `Lockflight-Red` trailer, the new tests compile and fail because of production code: a stub that throws (RED_STUB), or an assertion on a result production code returned (RED_ASSERT), not a failure in the test's own setup. The trailer is never trusted: the judge re-runs that commit. |
+| **Green** | At head the same tests pass, nothing else fails beyond the accepted baseline, and no test was deleted or skipped. |
+| **Tests since red** | Each test that went red is the same test at head (compared by a fingerprint of its compiled code), or an amended one still fails on the red commit's code. |
+| **Trace** | With a spec (`specs/<id>/spec.md`, [the spec contract](docs/guides/spec-contract.md)), every requirement has a test that went red and then green. Spec Kit is optional. |
+| **Gates** | Format, build with no new warnings, tests, patch coverage, vulnerable packages and secrets; added suppressions and pending EF Core model changes where configured. |
+| **Host tampering** | No new code in the test assemblies of the plain kinds that could forge a result: a module initializer, a process exit, a file write outside the temporary folder, setting CI variables, among others. A new finding is NOT-EARNED. It is a static scan: an obfuscated call evades it. |
+| **Review** (optional) | With an API key, an independent reviewer's blocking findings count only when a failing reproduction test confirms them. Without a key it is skipped. |
+| **Existing tests changed** (advisory) | A changed old test still tells the old behaviour from the new. Reported for the person who merges; it blocks nothing yet. |
+
+Results land in two checks: **`gates`** (the gates and green at head, the meaning existing rulesets rely on) and
+**`lockflight/judge`** (red, tests since red, host tampering, trace, review, existing tests changed). Approvals are listed but not judged by this engine version yet.
+
+### Four verdicts
+
+<table>
+<tr>
+<td align="center" width="25%"><img src="docs/assets/levi-pass.svg" alt="Levi raising a green flag" width="88"><br><code>PASS</code></td>
+<td align="center" width="25%"><img src="docs/assets/levi-fail.svg" alt="Levi raising a red flag" width="88"><br><code>FAIL</code></td>
+<td align="center" width="25%"><img src="docs/assets/levi-not-earned.svg" alt="Levi with a question mark" width="88"><br><code>NOT-EARNED</code></td>
+<td align="center" width="25%"><img src="docs/assets/levi-fail.svg" alt="Levi raising a red flag" width="88"><br><code>ERROR</code></td>
+</tr>
+<tr>
+<td>Every required check passed.</td>
+<td>A check ran and the code did not pass it: a test that passed before the code existed, a deleted test, a failing gate.</td>
+<td>Nothing showed it, so it is never a pass: no red commit, no test for a requirement, a step that could not run.</td>
+<td>The engine or a tool it ran broke. Not a verdict about the code.</td>
+</tr>
+</table>
+
+### Risk routing
+
+How much evidence a pull request needs should follow what it changes, not who opened it. The engine computes a change class
+from the diff and the base branch's policy: **fix**, **behaviour**, **feature** (an API or the database) or **critical**
+(paths the policy marks critical, the policy itself, the build structure). A class can be raised, never lowered, and a
+higher class never needs less; a critical change, for example, would need a review with a key. `lockflight route show`
+prints a branch's class, but no check uses the classes yet: the judge in this version uses a simpler interim classifier.
+Paths in `ci.lowRiskPaths` (docs by default) need no red/green cycle, package versions only need no red, and anything else
+is a behaviour change. [Risk routing](docs/guides/risk-routing.md) says what is in force.
+
+## Install levels
+
+The CI check is the verdict of record at every level. What changes is how much runs on a developer's machine before the pull
+request ([install levels](docs/guides/install-levels.md)).
+
+| | CI only | CI + native settings | CI + plugin |
+|---|---|---|---|
+| Command | `init --ci-only` | `init --native` | `init` |
+| On the machine | nothing | Claude Code deny rules and sandbox settings for the policy files, a `CLAUDE.md` block, hooks that run a linked engine | the plugin: the guard, the Stop gate, skills, `/lockflight:*` commands, the status line |
+| For | any agent, or none | Claude Code without a plugin marketplace | Claude Code, with the full local loop |
+
+With the plugin, the guard blocks the agent's common edits to the policy and to tests while they are red, the Stop gate
+builds and tests before a turn can end, and `redgreen red` makes the red commits. The optional
+[crew](docs/guides/skills.md#the-crew-optional) writes specs and plans to the contract; what it writes is judged like any
+other code. Setup: [getting started](docs/guides/getting-started.md).
+
+<p align="center">
+  <img src="docs/assets/demo-terminal-animated.svg" alt="With the plugin: the guard blocks an agent's edit to lockflight.yaml; the Stop gate keeps a turn with a failing test from ending." width="100%">
+</p>
 
 ## Honest about its limits
 
-| Guardrail, on your machine | Boundary, where the agent can't reach |
+| Strong guardrail, not a boundary, in 0.3.0 | Boundary, where the platform enforces it |
 |---|---|
-| The agent runs with your credentials. The guard and the Stop gate prevent accidents and make the right path the easy one. | CI with the base branch's policy, as a required check. The spec approved in the pull request, with CODEOWNERS on `specs/**`. |
+| The judge computes its evidence in the same job that runs the pull request's code. Forging a result takes deliberate code in the diff; the host-tampering scan finds the plain forms, and an obfuscated one can evade it. Running the pull request's code isolated from the judge is planned after 0.3.0. | The policy, baselines and engine pin read from the target branch; the check itself, as a required check, with the workflow and policy under CODEOWNERS and required review; the spec approved through the platform's review, with CODEOWNERS on `specs/**`. |
 
-Every control is labelled one or the other: [guardrails and boundaries](docs/guides/guardrails-and-boundaries.md),
-[CI hardening](docs/guides/ci-hardening.md).
+- The judge makes faking test-first hard and visible. It does not prove that the agent worked test-first, or that a test
+  fully checks its requirement: a person still reads the test diff.
+- The review job's API key can be reached by the pull request's code, because the reviewer's reproductions run it. Use a
+  spend-limited key scoped to CI.
+- Everything on the developer's machine (the guard, local gates, local approvals) is a guardrail: the agent runs with your
+  credentials. The guard catches accidents and lets commands it does not parse through.
+- The Bitbucket template has not yet run on a live workspace; the GitLab and Azure Pipelines templates are experimental.
+
+Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-and-boundaries.md).
 
 ## Status
 
-**Alpha, in daily use on real projects.** The engine has over 900 unit tests; end-to-end suites cover the lifecycle and
-workspace shells on Linux, macOS and Windows, including attempts to get around the controls. Hooks run the linked engine
-directly, without `dotnet`, so a hook call costs milliseconds; [`tests/compat/run-windows.ps1`](tests/compat/run-windows.ps1)
-measures it (p50 and p95 over 200 calls).
+**Alpha, for .NET:** SDK-style .NET 8, 9 and 10 projects. In CI, the judge's red/green runs on xUnit (v3 and v2) and NUnit,
+and other test projects get the gates' test step; the local lifecycle also covers MSTest. The engine is a Native AOT
+binary for macOS, Linux and Windows, with over 1,700 unit tests and end-to-end suites on all three. 0.3.0, the CI judge, is
+being finished on `main`; the formats freeze at its release.
 
-**Docs:** [getting started](docs/guides/getting-started.md) · [commands](docs/guides/commands.md) ·
+**Docs:** [quickstart](QUICKSTART.md) · [getting started](docs/guides/getting-started.md) ·
+[CI hardening](docs/guides/ci-hardening.md) · [commands](docs/guides/commands.md) ·
 [configuration](docs/guides/configuration.md) · [how it works](docs/architecture.md)
 
 ## Contributing
