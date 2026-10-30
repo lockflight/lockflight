@@ -1,0 +1,6 @@
+class: critical
+computed: critical
+signal: critical.policy -> critical (boundary) .github/CODEOWNERS: policy file (.github/CODEOWNERS)
+signal: critical.policy -> critical (boundary) .github/workflows/lockflight-gates.yml: policy file (.github/workflows/lockflight-gates.yml)
+signal: config.changed -> behaviour (heuristic) .github/CODEOWNERS: non-project file changed
+signal: config.changed -> behaviour (heuristic) .github/workflows/lockflight-gates.yml: non-project file changed

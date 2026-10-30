@@ -17,13 +17,17 @@ internal sealed class BuildStep : IGateStep
 
     public string CacheKey => StepName;
 
+    /// <summary>The build of the projects the stop profile chose (<see cref="GateRunFacts.Selection"/>), else of everything.</summary>
     public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken) =>
-        new(await BuildAsync(run, cancellationToken), facts);
+        new(await BuildAsync(run, facts.Selection?.FilterFile is string filter ? [filter] : run.BuildFileArguments, cancellationToken), facts);
 
-    /// <summary>The build's verdict; <see cref="Baselines.BaselineRun"/> calls it directly before it takes a test baseline.</summary>
-    public static async Task<GateStep> BuildAsync(GateRunContext run, CancellationToken cancellationToken)
+    /// <summary>The build's verdict over everything; <see cref="Baselines.BaselineRun"/> calls it directly before it takes a test baseline.</summary>
+    public static Task<GateStep> BuildAsync(GateRunContext run, CancellationToken cancellationToken) =>
+        BuildAsync(run, run.BuildFileArguments, cancellationToken);
+
+    private static async Task<GateStep> BuildAsync(GateRunContext run, IReadOnlyList<string> projectArguments, CancellationToken cancellationToken)
     {
-        ProcessResult buildRun = await run.Processes("dotnet", ["build", .. run.BuildFileArguments, "--nologo", "--interactive", "false"], run.Target, run.TimeLeft(), cancellationToken);
+        ProcessResult buildRun = await run.Processes("dotnet", ["build", .. projectArguments, "--nologo", "--interactive", "false"], run.Target, run.TimeLeft(), cancellationToken);
         if (StepHealth.Unhealthy(StepName, buildRun, run) is GateStep unhealthy)
         {
             return unhealthy;

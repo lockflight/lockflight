@@ -1,0 +1,3 @@
+class: feature
+computed: feature
+signal: structure.referenceAdded -> feature (heuristic) src/Shop.Domain/Shop.Domain.csproj:6: references src/Tools/Tools.csproj; outside the declared layers

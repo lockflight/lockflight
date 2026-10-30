@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: size.large -> feature (heuristic) -: 401 counted lines, above routing.largeLines 400
+signal: size.lines -> behaviour (heuristic) -: 401 counted lines, above routing.fix.maxLines 20

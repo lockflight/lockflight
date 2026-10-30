@@ -1,0 +1,3 @@
+class: fix
+computed: fix
+signal: moved -> fix (heuristic) src/Shop/Pricing/Cart.cs: moved from src/Shop/Cart.cs unchanged

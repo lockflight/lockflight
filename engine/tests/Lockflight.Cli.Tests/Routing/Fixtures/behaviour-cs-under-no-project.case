@@ -1,0 +1,39 @@
+A .cs file under no project is production.
+=== base src/Shop/Shop.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop/Cart.cs
+namespace Shop;
+
+public sealed class Cart
+{
+    public int Total(int price, int count)
+    {
+        return price * count;
+    }
+
+    public int Discount(int total) => total / 10;
+}
+=== base tests/Shop.Tests/Shop.Tests.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.0.0" />
+    <ProjectReference Include="../../src/Shop/Shop.csproj" />
+  </ItemGroup>
+</Project>
+=== base tests/Shop.Tests/CartTests.cs
+namespace Shop.Tests;
+
+public sealed class CartTests
+{
+    [Fact]
+    public void TotalMultiplies() => Assert.Equal(6, new Cart().Total(2, 3));
+
+    [Fact]
+    public void DiscountIsATenth() => Assert.Equal(1, new Cart().Discount(10));
+}
+=== head tools/Generate.cs
+class Generate { }

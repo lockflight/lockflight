@@ -1,0 +1,5 @@
+class: critical
+computed: critical
+signal: critical.path -> critical (boundary) src/Shop/Cart.cs: matches routing.critical src/Shop/**
+signal: critical.policy -> critical (boundary) lockflight.yaml: policy file (lockflight.yaml)
+signal: config.changed -> behaviour (heuristic) lockflight.yaml: non-project file changed

@@ -1,0 +1,3 @@
+class: behaviour
+computed: behaviour
+signal: file.added -> behaviour (heuristic) src/Shop/Hidden/Evil.cs: new production file

@@ -1,5 +1,3 @@
-using Lockflight.Cli.Review;
-
 namespace Lockflight.Cli.Routing;
 
 /// <summary>
@@ -40,7 +38,7 @@ internal static class MoveDetector
     public static Dictionary<string, int> CodeLines(string path, string text)
     {
         string[] raw = text.Split('\n');
-        string[] code = ChangeAnalyzer.IsCSharp(path) ? CSharpMask.Mask(text).Split('\n') : raw;
+        string[] code = ChangeAnalyzer.IsCSharp(path) ? CommentMask.Of(text).Split('\n') : raw;
         Dictionary<string, int> lines = new(StringComparer.Ordinal);
         for (int index = 0; index < raw.Length; index++)
         {
