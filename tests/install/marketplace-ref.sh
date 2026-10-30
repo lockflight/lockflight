@@ -2,7 +2,9 @@
 # scripts/marketplace-ref.sh against a local repository and a local package index: `set` pins the marketplace to a release tag
 # that is coherent, and `check` refuses a tag that does not exist, a sha that is not the tag's, a plugin version that is not
 # the tag's, a minimum engine above the release, an engine not yet published, descriptions that are not the tag's and a
-# development marketplace that does not serve the checkout; and the descriptions on main may move ahead of the tag's.
+# development marketplace that does not serve the checkout; and the descriptions on main may move ahead of the tag's. The crew
+# is pinned to its own crew/v* tag by `set crew/vX.Y.Z`, a judge release leaves it there, and `check` refuses a crew tag whose
+# crew has another version or needs an unpublished engine, and a crew on a judge tag that is not the judge's.
 # Usage: bash tests/install/marketplace-ref.sh        (macOS, Linux; needs git, python3, curl)
 set -u
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
@@ -40,6 +42,15 @@ release v1.1.0 1.0.0 1.0.0      # tagged without raising the plugin versions
 release v1.2.0 1.2.0 1.3.0      # asks for an engine newer than itself
 release v1.4.0-alpha.2 1.4.0-alpha.2 1.4.0-alpha.10
 release v1.4.0-alpha.10 1.4.0-alpha.10 1.4.0-alpha.2
+crew_release() { # crew_release <tag> <crew version> <crew min-engine-version>: a crew release on top of the last commit.
+  printf '{ "name": "lockflight-crew", "version": "%s" }\n' "$2" > "$remote/plugins/lockflight-crew/.claude-plugin/plugin.json"
+  printf '%s\n' "$3" > "$remote/plugins/lockflight-crew/min-engine-version"
+  describe "$remote/plugins/.claude-plugin/marketplace.json" "at $1"
+  git_quiet -C "$remote" add -A && git_quiet -C "$remote" commit -q -m "$1" && git_quiet -C "$remote" tag -a "$1" -m "$1"
+}
+crew_release crew/v2.0.0 2.0.0 1.0.0
+crew_release crew/v2.1.0 2.0.0 1.0.0   # tagged without raising the crew version
+crew_release crew/v2.2.0 2.2.0 1.9.0   # needs an engine nuget.org does not list
 
 # The checkout: the script and both marketplace files from this repository.
 checkout="$WORK/checkout"
@@ -89,6 +100,31 @@ printf '{ "versions": ["1.1.0"] }\n' > "$WORK/index.json"
 expect_fail "check refuses a release nuget.org does not list" "nuget.org does not list Lockflight.Cli 1.0.0" set v1.0.0
 printf '{ "versions": ["1.0.0"] }\n' > "$WORK/index.json"
 expect_ok "the release is coherent again" set v1.0.0
+expect_ok "set crew/ pins the crew to its own tag" set crew/v2.0.0
+crew_sha=$(git -C "$remote" rev-parse 'crew/v2.0.0^{commit}')
+if [ "$(grep -c "\"ref\": \"crew/v2.0.0\"" "$served")" = 1 ] && grep -q "\"sha\": \"$crew_sha\"" "$served" \
+  && [ "$(grep -c "\"ref\": \"v1.0.0\"" "$served")" = 1 ] && grep -q "lockflight-crew at crew/v2.0.0" "$served"; then
+  ok "set crew/ moves only the crew entry, with the crew tag's description"
+else
+  bad "set crew/ wrote: $(cat "$served")"
+fi
+expect_ok "a judge release leaves a crew on its own tag where it is" set v1.0.0
+if grep -q "\"ref\": \"crew/v2.0.0\"" "$served"; then ok "the crew stays at crew/v2.0.0"; else bad "set v1.0.0 wrote: $(cat "$served")"; fi
+expect_fail "check refuses a crew tag whose crew has another version" "has version 2.0.0, not 2.1.0" set crew/v2.1.0
+expect_fail "check refuses a crew whose minimum engine nuget.org does not list" "does not list Lockflight.Cli 1.9.0" set crew/v2.2.0
+expect_ok "the crew pin is coherent again" set crew/v2.0.0
+sed -i.bak "s#\"ref\": \"crew/v2.0.0\"#\"ref\": \"v1.1.0\"#" "$served"
+expect_fail "check refuses a crew on a judge tag other than the judge's" "or the judge's tag and commit" check
+expect_fail "set refuses a tag that is neither a judge nor a crew tag" "usage:" set crew-v2.0.0
+sed -i.bak "s#\"ref\": \"v1.1.0\"#\"ref\": \"crew/v2.0.0\"#" "$served"
+expect_ok "the crew on its own tag checks again" check
+cp "$served" "$WORK/served.json"
+python3 -I -c 'import json, sys; m = json.load(open(sys.argv[1])); m["plugins"].append(dict(m["plugins"][0])); open(sys.argv[1], "w").write(json.dumps(m, indent=2))' "$served"
+expect_fail "check refuses a plugin listed twice" "lists lockflight more than once" check
+python3 -I -c 'import json, sys; m = json.load(open(sys.argv[1])); m["plugins"] = m["plugins"][:1]; open(sys.argv[1], "w").write(json.dumps(m, indent=2))' "$served"
+expect_fail "check refuses a marketplace that drops a plugin the tag lists" "must list the plugins" check
+expect_fail "set crew/ refuses a marketplace without a crew entry" "has no git-subdir entry for lockflight-crew" set crew/v2.0.0
+cp "$WORK/served.json" "$served"
 sed -i.bak 's#"./lockflight-crew"#"./crew"#' "$checkout/plugins/.claude-plugin/marketplace.json"
 expect_fail "check refuses a development marketplace that does not serve the checkout" "must come from ./lockflight-crew" check
 

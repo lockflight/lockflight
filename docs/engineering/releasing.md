@@ -90,12 +90,15 @@ tag that does not exist yet fails every install and update, and a plugin served 
 (`min-engine-version`) for an engine nobody can install. `scripts/marketplace-ref.sh` (run in CI on every pull request and
 push to `main`) fails unless:
 
-- every entry names the same tag and commit, and the tag exists on GitHub and points at that commit;
-- at that commit, both `plugin.json` files have the tag's version, and `min-engine-version` is at most that version;
-- nuget.org lists `Lockflight.Cli` at the tag's version and at `min-engine-version`;
-- the marketplace and plugin descriptions are those of the development marketplace,
-  [`plugins/.claude-plugin/marketplace.json`](../../plugins/.claude-plugin/marketplace.json), **at that tag**, not on `main`:
-  users get the tag's plugins, so they read what the tag says about them, and `main` may describe plugins not yet released;
+- the judge (`lockflight`) names a `vX.Y.Z` tag and its commit. The crew (`lockflight-crew`) names its own `crew/vX.Y.Z` tag,
+  or the judge's tag and commit until its first crew release. Each tag exists on GitHub and points at the commit named;
+- at the judge's tag, `plugins/lockflight/.claude-plugin/plugin.json` has the tag's version, and its `min-engine-version` is
+  at most that version. At a crew tag, the crew's `plugin.json` has the crew tag's version;
+- nuget.org lists `Lockflight.Cli` at the judge tag's version and at each plugin's `min-engine-version`;
+- the marketplace's own fields are those of the development marketplace,
+  [`plugins/.claude-plugin/marketplace.json`](../../plugins/.claude-plugin/marketplace.json), at the judge's tag, and each
+  plugin's description is the one there **at that plugin's tag**, not on `main`. Users get the tag's plugins, so they read
+  what the tag says about them, and `main` may describe plugins not yet released;
 - the development marketplace in the checkout serves each plugin from the checkout (`scripts/dev-install.sh` adds it, to try
   `main`).
 
@@ -111,8 +114,8 @@ throughout and users stay on the previous release until the last step below.
 3. Approve the `publish` job when the build and smoke tests are green.
 4. Edit the notes of the GitHub Release the workflow published.
 5. Once nuget.org lists the packages, move the marketplace to the release in a pull request of its own:
-   `scripts/marketplace-ref.sh set vX.Y.Z` writes the tag and its commit into both entries, copies the descriptions from the
-   development marketplace at the tag, and runs the check. Merge it; users
+   `scripts/marketplace-ref.sh set vX.Y.Z` writes the tag and its commit into the judge's entry (and the crew's, while the crew
+   has no release of its own), copies the descriptions from the development marketplace at the tag, and runs the check. Merge it; users
    then get the release from `claude plugin update` or auto-update. If the release is abandoned before this step, users never
    see it.
 
@@ -156,6 +159,9 @@ The `lockflight-crew` plugin is released on its own, from the same repository. I
    the crew since the previous crew tag. There is no NuGet package and no approval environment: pushing the tag is the
    maintainer's decision.
 
-A dispatch from a branch is a dry run, which checks and packs `0.0.0-ci.<run number>` and publishes nothing. Until the
-marketplace pins each plugin to its own tag, the published marketplace still serves the crew from the judge's tag
-(see [how the marketplace serves a release](#how-the-marketplace-serves-a-release)).
+A dispatch from a branch is a dry run, which checks and packs `0.0.0-ci.<run number>` and publishes nothing.
+
+After the crew release is published, move the crew's pin in a pull request of its own, as for the judge:
+`scripts/marketplace-ref.sh set crew/vX.Y.Z` points only the crew entry at the crew tag and its commit, copies the crew's
+description from that tag, and checks. From then on, `set vX.Y.Z` for a judge release moves only the judge. Until the
+first crew release, the crew is served from the judge's tag and moves with it.
