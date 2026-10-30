@@ -5,9 +5,8 @@ Risk routing reads the pull request's diff and computes its **change class**; th
 must pass. For the person who owns a project's policy and for reviewers who want to know why a pull request is in its class.
 
 > [!IMPORTANT]
-> Risk routing is being built. This version reads the diff and computes the class from the size, shape, project, test,
-> policy and structure signals below; the API and database signals and the per-class requirements come next, and no check
-> uses the class yet. Nothing on this page is in force until the release notes say so.
+> Risk routing is being built. This version reads the diff and computes the class from every signal below; the per-class
+> requirements come next, and no check uses the class yet. Nothing on this page is in force until the release notes say so.
 
 **On this page:** [The four classes](#the-four-classes) · [Which diff is read](#which-diff-is-read) ·
 [File roles](#file-roles) · [What counts toward size](#what-counts-toward-size) · [Moves](#moves) ·
@@ -136,6 +135,41 @@ change. `NoWarn` and other suppressions are the `quality.suppressions` gate step
 
 Adding tests to a test file fires nothing: a test-only change is a `fix`.
 
+### API surface
+
+Declarations are compared as **sets, not diff lines**. For every changed C# file of a project, the declarations at base and at
+head are read without their bodies (comments masked, string contents kept, attributes kept and sorted, both branches of an
+`#if` read), keyed by the types around them, and compared per project. A reflow, a reorder, a member moved to another file of
+the same project, or a `public` written in a comment or string fires nothing; an edited signature is one declaration removed
+and one added. A body edit in a controller is not a feature.
+
+| Signal | Fires when | Raises to |
+|---|---|---|
+| `type.added` | a production project's head declarations hold a type its base lacks | `behaviour` |
+| `api.endpointAttribute` | a declaration with `[HttpGet]`, `[HttpPost]`, … `[Route]`, `[ApiController]` or `[AcceptVerbs]` added, removed or changed (a route template edit included) | `feature` |
+| `api.controllerAction` | a public method of a controller or SignalR hub added, removed or changed, or the controller's own declaration (its attributes, its base) changed. A controller is named `…Controller`, marked `[ApiController]`, `[Controller]` or `[Route]`, or derives from a `…Controller` / `…ControllerBase` type | `feature` |
+| `api.controllerAdded` | a new `*Controller.cs` file, or a new type deriving from a controller base, `Hub` or a gRPC `…Base` service | `feature` |
+| `api.publicMember` | in an **API project**, a public or protected declaration added, removed or changed (a public constant's value included). A member of a type that is written non-public in every part is not API | `feature` |
+| `api.minimalEndpoint` | a `.Map…(` registration statement (`MapGet`, `MapGroup`, `MapHealthChecks`, `Map`, …; not `MapFrom`) or an endpoint convention (`.RequireAuthorization`, `.AllowAnonymous`, …) added, removed or changed. Whole statements are compared, so a template on the next line counts, and a changed comment does not | `feature` |
+| `api.pageDirective` | a Razor `@page`, `@rendermode`, `[Route(` or `@attribute [Authorize` line added or removed | `feature` |
+| `api.contractFile` | a `.proto`, `openapi*.json/yaml`, `swagger*.json/yaml` or `.graphql` file changed outside test projects | `feature` |
+
+An **API project** is a production project whose text, or a `Directory.Build.props` above it, sets `<IsPackable>true`, a
+`<PackageId>` or `<GeneratePackageOnBuild>true` (a property under a `Condition` counts), or that has a `PublicAPI.Shipped.txt`,
+or that matches `routing.apiProjects`, at base or at head. In an application project nearly every class is `public`, so its API
+is its endpoints, not its declarations: a new public method there is not a feature by itself.
+
+### Database
+
+| Signal | Fires when | Raises to |
+|---|---|---|
+| `db.migration` | a changed path under `**/Migrations/**` (generated files included) or `routing.dbPaths` | `feature` |
+| `db.sql` | a changed `*.sql` file outside test projects and `routing.nonProduction` | `feature` |
+| `db.model` | an EF Core or FluentMigrator model statement added, removed or changed (`DbSet<`, `OnModelCreating`, `modelBuilder.`, `builder.Property(…)`, `builder.Has…`, `.ToTable(`, `[Migration(`, `Create.Table(`, …), or a mapping attribute (`[Table]`, `[Column]`, `[Key]`, `[MaxLength]`, `[Required]`, …) added, removed or changed on a declaration | `feature` |
+
+An entity gaining a property is invisible to these: the `ef.pendingModelChanges` gate step is the interlock for that, where a
+repository pins `dotnet-ef`.
+
 ### Policy and critical paths
 
 | Signal | Fires when | Raises to | Strength |
@@ -200,6 +234,9 @@ move are in the diff, so no path in the pull request avoids them. Two limits hol
   version, but a split that avoids every signal is possible.
 - **Disabling a test by adding lines only**, such as an early `return;`: no code line is taken away and no marker is added.
   Mitigation: the review, and red→green on the tests the pull request needs.
+- **API not written as a declaration or a mapping:** a DTO property that changes an HTTP contract in an application project,
+  routes registered by libraries through their own base classes (FastEndpoints, Carter) or helper extension methods
+  (`app.MapMyRoutes()`). Mitigation: `routing.apiProjects`, and the review.
 - **A move with edits out of a critical path**, then edits at the new path in a later pull request: the move is `critical`
   through its old path; later edits are judged at the new path. Mitigation: broad directory globs and CODEOWNERS on them.
 

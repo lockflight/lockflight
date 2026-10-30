@@ -1,0 +1,5 @@
+class: feature
+computed: feature
+signal: db.model -> feature (heuristic) src/Shop.Data/Schema/AddRefunds.cs:3: a database model line added, removed or changed
+signal: file.added -> behaviour (heuristic) src/Shop.Data/Schema/AddRefunds.cs: new production file
+signal: type.added -> behaviour (heuristic) src/Shop.Data/Schema/AddRefunds.cs:3: new type AddRefunds

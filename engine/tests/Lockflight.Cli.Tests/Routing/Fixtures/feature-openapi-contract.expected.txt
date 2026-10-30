@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: api.contractFile -> feature (heuristic) api/openapi.yaml: API contract file changed (**/openapi*.yaml)
+signal: config.changed -> behaviour (heuristic) api/openapi.yaml: non-project file changed

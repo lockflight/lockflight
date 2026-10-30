@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: api.controllerAction -> feature (heuristic) src/Shop.Api/CartsController.cs:16: public action Shop.Api.CartsController.Remove added
+signal: api.endpointAttribute -> feature (heuristic) src/Shop.Api/CartsController.cs:16: [HttpDelete("{id}")] on Remove added

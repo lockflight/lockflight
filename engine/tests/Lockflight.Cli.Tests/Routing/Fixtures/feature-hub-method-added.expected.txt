@@ -1,0 +1,3 @@
+class: feature
+computed: feature
+signal: api.controllerAction -> feature (heuristic) src/Shop.Api/PriceHub.cs:5: public action Shop.Api.PriceHub.Purge added

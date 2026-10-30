@@ -1,0 +1,29 @@
+A path listed in routing.dbPaths is db.migration.
+=== base lockflight.yaml
+version: 2
+routing:
+  preset: default
+  dbPaths:
+    - "db/changes/**"
+=== base src/Shop.Data/Shop.Data.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Data/ShopContext.cs
+using Microsoft.EntityFrameworkCore;
+
+namespace Shop.Data;
+
+public sealed class ShopContext(DbContextOptions<ShopContext> options) : DbContext(options)
+{
+    public DbSet<Order> Orders => Set<Order>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Order>().ToTable("orders");
+    }
+}
+=== head db/changes/0042-refunds.xml
+<changeSet id="42" />
