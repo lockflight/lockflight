@@ -113,6 +113,12 @@ internal static class CliApplication
                                                         policy: the red commits (Lockflight-Red trailer), the change
                                                         class and each check, into evidence.json; --plan prints the
                                                         steps without building (local: HEAD against the target)
+          route show [--base <ref>] [--head <ref>] [--json]
+                                                        the change class of this branch and working tree against
+                                                        the target (default: origin/HEAD, else main), its signals
+                                                        and what it requires, as the pull request comment shows
+                                                        it; local policy, advice only (CI recomputes); --head reads
+                                                        a commit pair under the base commit's policy (read only)
 
         Exit codes
           0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)
