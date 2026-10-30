@@ -74,6 +74,7 @@
     }
   ],
   "cycles": [],
+  "existingChanged": null,
   "testsWithoutRed": [],
   "green": null,
   "trace": null,
