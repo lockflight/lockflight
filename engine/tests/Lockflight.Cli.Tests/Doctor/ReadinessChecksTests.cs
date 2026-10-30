@@ -26,6 +26,21 @@ public sealed class ReadinessChecksTests : IDisposable
     }
 
     [Fact]
+    public async Task AStandardProfileWithoutSpecKitReportsItAsInformationAndNoSpecKitChecks()
+    {
+        Write(".gitattributes", GitAttributesUpdater.Rule + "\n");
+
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
+
+        DoctorCheck preset = Assert.Single(checks, check => check.Name == "lockflight preset");
+        Assert.Equal(CheckStatus.Info, preset.Status);
+        Assert.Contains("optional", preset.Detail, StringComparison.Ordinal);
+        Assert.Null(preset.Fix);
+        Assert.DoesNotContain(checks, check => check.Name == "spec kit presets");
+        Assert.Contains(checks, check => check.Name == "claude cli");
+    }
+
+    [Fact]
     public async Task AnInstalledPresetInSpecKitsRegistryPasses()
     {
         Write(".gitattributes", GitAttributesUpdater.Rule + "\n");
