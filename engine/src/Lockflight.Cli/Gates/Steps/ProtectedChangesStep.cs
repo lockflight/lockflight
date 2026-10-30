@@ -42,7 +42,7 @@ internal sealed class ProtectedChangesStep : IGateStep
             return new GateStep(StepName, 0, Verdict.Error, stopwatch.ElapsedMilliseconds, $"git diff against '{run.BaseRef}' failed; is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
         }
 
-        Manifest? manifest = ManifestLocator.Discover(run.ProjectRoot).Manifest;
+        Manifest? manifest = run.Policy ?? ManifestLocator.Discover(run.ProjectRoot).Manifest;
         IReadOnlyList<string> globs = manifest is null ? DefaultProtectedPaths.Globs : DefaultProtectedPaths.For(manifest);
         string[] touched = [.. changed
             .Where(file => PathRules.FindMatch(run.ProjectRoot, Path.Combine(run.ProjectRoot, file), globs) is not null)

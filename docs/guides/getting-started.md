@@ -271,11 +271,16 @@ A workspace shell is a directory whose service repositories are cloned beneath i
 ```sh
 cd /path/to/your/shell
 ~/.lockflight/bin/lockflight init --profile standard   # lists the units, ignores the child repositories
-~/.lockflight/bin/lockflight workspace sync            # each service repository gets its CI policy
 ~/.lockflight/bin/lockflight doctor
+
+# in each service repository: its CI reads the shell's policy from a read-only clone
+cd services/orders
+~/.lockflight/bin/lockflight init --unit-of git@github.com:your-org/shell.git --unit-path services/orders
 ```
 
-Commit in the shell, and in each service repository after `workspace sync`. Start Claude Code at the shell root. With an
+Commit in the shell, and in each service repository. A private shell needs a read-only token or deploy key in each service's
+CI ([the shell pointer](ci-hardening.md#the-shell-pointer-preferred)); `workspace sync` in the shell, which vendors the policy
+into each service instead, still works. Start Claude Code at the shell root. With an
 existing setup in the shell, run `init --dry-run` first (see
 [above](#a-repository-with-an-existing-claude-code-or-spec-kit-setup)). [CI hardening](ci-hardening.md#workspace-shells-unit-repositories)
 describes the unit repositories' CI.

@@ -42,8 +42,9 @@ Where they differ from the GitHub workflow:
   same script). Pin the image by digest if your policy asks for it.
 - There is no step summary: the protected files a pull request changes are in the job log, and the result file is kept as an
   artifact where the service keeps artifacts of a failed job.
-- `lockflight workspace sync` vendors GitHub workflows only. A unit repository on another service needs its job written by
-  hand from these templates.
+- A unit repository of a workspace shell: `init --unit-of <shell url> --unit-path <path> --ci-platform <service>` writes the
+  job with the shell clone and `--shell`, on every service (see [the shell pointer](ci-hardening.md#the-shell-pointer-preferred)).
+  `lockflight workspace sync` vendors GitHub workflows only.
 
 A file `init` writes is never overwritten later, so a template fixed in a newer engine reaches an existing project only when
 you delete the file and run `init` again.

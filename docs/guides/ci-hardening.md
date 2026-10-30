@@ -178,8 +178,52 @@ and says so; without gitleaks on
 
 ## Workspace shells: unit repositories
 
-A workspace shell's CI cannot judge its child repositories: each child has its own pull requests. `lockflight workspace sync`,
-run in the shell, vendors into every .NET unit that is its own repository what its CI needs:
+A workspace shell's CI cannot judge its child repositories: each child has its own pull requests. A unit repository gets the
+shell's policy in one of two ways.
+
+### The shell pointer (preferred)
+
+Run `lockflight init --unit-of <shell url> --unit-path <path>` in the unit repository. It writes a `shell:` section into the
+unit's own `lockflight.yaml` (the shell's clone URL, optionally its branch, and the unit's path among the shell's `units:`), and
+its CI job gets two additions:
+
+1. after the engine install, `lockflight workspace clone --into <temporary dir>` clones the shell: one commit of its branch,
+   no checkout. It reads the URL from the unit's `lockflight.yaml`, which on pull requests is restored from the base branch,
+   so a pull request cannot point its own CI at another shell;
+2. the gates run with `--shell <that dir>`: the unit's own manifest is made at least as strict as the shell's policy for the
+   unit. The shell's protected paths that can match inside the unit are added (re-based as below), the build file and test
+   framework of the shell's `units:` entry win over the unit's own (which apply only where the shell names none), and of the
+   coverage threshold and the switchable steps (`quality.suppressions`, `docs.references`, `ef.pendingModelChanges`) the
+   stricter value wins. The run prints the shell commit it read. The shell's routing thresholds and its baselines are not
+   applied yet: the unit's own apply.
+
+The shell's policy is read with `git show` from the clone's commit, never from files a job could change. If the clone fails,
+the shell has no valid `lockflight.yaml`, or it does not list the unit, the run is an ERROR, and so is a `--shell` clone whose
+`origin` is another repository. A `pr` run in a unit without a shell to read refuses to run rather than judge without the
+shell's policy. On a developer's machine, a unit checked out inside its shell finds the shell by itself. The pull request that
+adds the pointer is judged by a base without it, as the repository it still is: the clone step then clones nothing.
+
+**Access.** The clone needs read access to the shell repository, and nothing else:
+
+| Shell URL | What to set up |
+|---|---|
+| `https://` | A read-only token in the `LOCKFLIGHT_SHELL_TOKEN` secret (GitHub: a fine-grained token with read access to the shell's contents; Bitbucket: a repository access token, with `LOCKFLIGHT_SHELL_TOKEN_USER=x-token-auth`; GitLab: a project or deploy token; Azure: a secret variable). It is sent as an HTTP header through git's environment, never on the command line or into the clone. |
+| SSH (`git@host:path`) | A read-only deploy key on the shell, loaded by the job's SSH setup (an SSH agent step on GitHub, the repository's SSH key on Bitbucket). |
+| Public shell | Nothing. |
+
+In the generated job only the clone step sees the token (GitHub, Azure), or the script unsets it right after the clone, before
+any code of the pull request runs (Bitbucket, GitLab). That holds only for the generated file: anyone who can push a branch
+to the unit repository can change the job on that branch and read the token, since CODEOWNERS gates the merge, not the run.
+Treat the token as readable by every writer of the unit repository, and give it read access to the shell only.
+
+**Boundary.** As for any repository: only where the unit's check is required and CODEOWNERS routes `lockflight.yaml` and the
+CI file to a person. The shell's own policy is a boundary for the unit only as far as the shell repository protects it.
+`workspace sync` skips a unit whose `lockflight.yaml` points at the shell, and `doctor` in the shell accepts such a manifest.
+
+### Vendored policy (`workspace sync`)
+
+`lockflight workspace sync`, run in the shell, vendors into every .NET unit that is its own repository (and has no pointer)
+what its CI needs:
 
 | File | What it is |
 |---|---|
@@ -198,7 +242,7 @@ single-repository workflow does. A pull request in the unit therefore cannot loo
 - **Policy lookup:** the engine reads `lockflight.unit.yaml` only when no `lockflight.yaml` is found above. Inside the shell,
   the shell's manifest always wins.
 - **Drift:** `workspace sync --check` and `doctor` report a unit whose vendored policy is behind the shell's. Commit the synced
-  files in each unit after a policy change.
+  files in each unit after a policy change. The pointer has no drift: CI reads the shell's current policy.
 - **Boundary:** it is a boundary only where the unit's `lockflight-gates` check is required, and `lockflight.unit.yaml`, the pin
   and the workflow are routed to a human by CODEOWNERS in the unit repository. The guard also protects them in sessions.
 

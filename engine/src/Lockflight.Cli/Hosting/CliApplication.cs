@@ -48,6 +48,9 @@ internal static class CliApplication
                                                         version 2; update --project --dry-run shows the change
           workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
                                                         engine pin, baselines, workflow); --check reports drift
+          workspace clone --into <dir>                  in a unit repository (shell: in lockflight.yaml): clone its
+                                                        workspace shell read-only for CI (token in
+                                                        LOCKFLIGHT_SHELL_TOKEN, or a deploy key)
           link [--installed]                            copy the pinned engine to .lockflight/bin/ for the hooks (only the
                                                         one the engine lock pins); --installed: the locked engine already
                                                         installed in ~/.lockflight/tools
@@ -57,12 +60,15 @@ internal static class CliApplication
 
         Gates
           gate run [--profile edit|stop|pr] [--path <dir>] [--unit <path>[,…]] [--base <ref>] [--result <file>] [--full]
+                   [--shell <dir>]
                                                         run the quality gates (default profile: stop, which builds
                                                         and tests the projects changed since its last PASS
                                                         and their dependents;
                                                         --full: every project; --base also scopes format and
                                                         coverage to the branch's changes; at a workspace root,
-                                                        every changed unit or the --unit ones)
+                                                        every changed unit or the --unit ones; --shell: a unit
+                                                        repository's workspace shell clone, whose policy for the
+                                                        unit applies too)
           hook <event>                                  Claude Code hook decision, hook JSON on stdin; events:
                                                         {string.Join(", ", HookEvents())}
 
