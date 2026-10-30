@@ -18,12 +18,18 @@ internal static class CiStepMigration
 
     private static readonly string[] LegacyBaselines =
     [
+        "# Accepted baselines (known-failing tests, warnings, advisories) are policy too: a PR cannot accept its own failures.",
         "rm -rf .lockflight/baselines",
         "if git cat-file -e \"$BASE:.lockflight/baselines\" 2>/dev/null; then git checkout \"$BASE\" -- .lockflight/baselines; fi",
     ];
 
+    private const string LegacyGitHubStyleLoop = "{ git ls-tree -r --name-only \"$BASE\"; git ls-files; } | grep -E \"$style\" | sort -u | while IFS= read -r file; do";
+    private const string StyleLoop = "{ git ls-tree -r --name-only \"$BASE\"; git ls-files; } | { grep -E \"$style\" || true; } | sort -u | while IFS= read -r file; do";
+
     private static readonly string[] Directories =
     [
+        "# Accepted baselines (known-failing tests, warnings, advisories) are policy too: a PR cannot accept its own failures. So is",
+        "# the vendored engine install script: CI runs the base commit's copy, checked against the base commit's lock.",
         $"for directory in {CiShellScripts.PolicyDirectories}; do",
         "  rm -rf \"$directory\"",
         "  if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then git checkout \"$BASE\" -- \"$directory\"; fi",
@@ -89,6 +95,13 @@ internal static class CiStepMigration
         }
 
         lines[legacy[0]] = Indent(lines[legacy[0]]) + $"for file in {CiShellScripts.PolicyFiles}; do";
+        // The GitHub workflow's style loop failed under bash -e on a base without style files; it now tolerates none, as the others do.
+        int[] styleLoop = [.. Indexes(lines, line => line.Trim() == LegacyGitHubStyleLoop)];
+        if (styleLoop.Length == 1)
+        {
+            lines[styleLoop[0]] = Indent(lines[styleLoop[0]]) + StyleLoop;
+        }
+
         lines.RemoveRange(start, LegacyBaselines.Length);
         lines.InsertRange(start, Directories.Select(line => indent + line));
         return true;
