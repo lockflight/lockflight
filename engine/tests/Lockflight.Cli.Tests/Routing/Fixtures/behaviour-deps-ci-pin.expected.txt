@@ -1,0 +1,4 @@
+class: behaviour
+computed: behaviour
+signal: config.changed -> behaviour (heuristic) .github/workflows/build.yml: non-project file changed
+signal: deps.changed -> behaviour (heuristic) .github/workflows/build.yml:6: version-only pin edit

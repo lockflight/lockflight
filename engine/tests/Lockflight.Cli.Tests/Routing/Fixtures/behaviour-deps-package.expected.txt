@@ -1,0 +1,3 @@
+class: behaviour
+computed: behaviour
+signal: deps.changed -> behaviour (heuristic) src/Api/Api.csproj:6: package reference or version changed

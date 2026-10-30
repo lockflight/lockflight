@@ -303,7 +303,8 @@ shell:                          # this repository is a unit of a workspace shell
 | `default` | fix | 20 / 2 | 400 | 80 / 80 / 80 / 90 | feature | behaviour | critical | feature | none | none |
 | `strict` | behaviour | 10 / 1 | 200 | 85 / 85 / 90 / 95 | behaviour | behaviour | feature | behaviour | critical | critical |
 
-Every preset sets `structural: critical`.
+Every preset sets `structural: critical`. How each `routing:` key is used, signal by signal, is in
+[risk routing](risk-routing.md#signals).
 
 > [!IMPORTANT]
 > In this version `routing:` and `approvals:` are read and validated, and `doctor` reports on them, but no command judges a

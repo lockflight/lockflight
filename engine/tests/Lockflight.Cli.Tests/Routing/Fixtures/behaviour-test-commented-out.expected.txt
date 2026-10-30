@@ -1,0 +1,3 @@
+class: behaviour
+computed: behaviour
+signal: tests.changed -> behaviour (heuristic) tests/Shop.Tests/CartTests.cs:6: a line of an existing test file removed, edited or commented out

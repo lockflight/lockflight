@@ -1,0 +1,3 @@
+class: critical
+computed: critical
+signal: structure.referenceAdded -> critical (heuristic) src/Shop/Shop.csproj:6: references $(RepoRoot)/tests/Shop.Tests/Shop.Tests.csproj, which does not resolve to a project at head (an MSBuild property or a missing file)

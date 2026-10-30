@@ -1,0 +1,5 @@
+class: critical
+computed: critical
+signal: critical.path -> critical (boundary) src/Shop/Payments/Refund.cs: matches routing.critical src/Shop/Payments/**
+signal: moved -> fix (heuristic) src/Shop/Refund.cs: moved from src/Shop/Payments/Refund.cs unchanged
+failure: routing.criticalMove: src/Shop/Payments/Refund.cs moved to src/Shop/Refund.cs, outside routing.critical; add its new path to routing.critical on the base branch first, then move it
