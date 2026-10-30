@@ -5,8 +5,8 @@ Risk routing reads the pull request's diff and computes its **change class**; th
 must pass. For the person who owns a project's policy and for reviewers who want to know why a pull request is in its class.
 
 > [!IMPORTANT]
-> Risk routing is being built. This version reads the diff and computes the class from every signal below; the per-class
-> requirements come next, and no check uses the class yet. Nothing on this page is in force until the release notes say so.
+> Risk routing is being built. This version computes the class and what it requires, and `lockflight route show` prints both;
+> no check uses the class yet. Nothing on this page is in force until the release notes say so.
 
 **On this page:** [The four classes](#the-four-classes) · [Which diff is read](#which-diff-is-read) ·
 [File roles](#file-roles) · [What counts toward size](#what-counts-toward-size) · [Moves](#moves) ·
@@ -212,6 +212,40 @@ class    = max(computed, every raise)
 There is no other precedence: signals never cancel each other and nothing subtracts. A raise (a spec's class line, a label)
 comes from outside the diff and can only raise. The classification is sorted (highest class first, then id and place), so the
 same change and policy always give the same list.
+
+## What each class requires
+
+The class decides which checks a pull request must pass. Every requirement switches on at a class and stays on above it
+(`routing.require.*From`, `approvals.specFirstFrom`), and the coverage thresholds never decrease, so a higher class never needs
+less. The `default` preset:
+
+| Requirement | `fix` | `behaviour` | `feature` | `critical` |
+|---|---|---|---|---|
+| Gates (`pr` profile), suppressions, docs references | required | required | required | required |
+| Patch coverage | 80 % with a collector | 80 % with a collector | 80 %, required (NOT-EARNED without a collector) | 90 %, required |
+| EF Core pending model changes | when an EF project changed | when an EF project changed | required | required |
+| Red→green | when production code changed | same | per story, same | per story, same |
+| Spec and trace | trace when a spec covers it | same | spec required (`specFrom`) | spec required |
+| Review (with an API key) | — | advisory (`reviewFrom`) | advisory | required; NOT-EARNED without a key (`reviewKeyFrom`) |
+| Declared architecture tests | — | — | when declared (`architectureFrom`) | when declared |
+| Spec first (merged before the code) | — | — | — | when `approvals.specFirstFrom` says so |
+
+Red→green, and spec and trace, apply only when production code lines changed: a docs-only or test-only pull request needs
+neither. The [configuration reference](configuration.md#lockflightyaml) lists the other presets' values.
+
+## See the class: `route show`
+
+`lockflight route show` prints the class of the current branch the way the pull request comment will show it:
+
+```text
+**Class: feature** · computed feature (floor fix, preset default) · db.migration `src/Infra/Migrations/20261029_AddRefunds.cs` · +1 more
+Needs: gates · coverage 80 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key)
+```
+
+then every signal with its place. It reads the working tree under the working tree's manifest and says so; it is advice,
+and CI recomputes the class from the base branch. `--head <ref>` reads a commit pair under the base commit's policy, as CI
+does, and `--json` prints the evidence block (`changeClass`: class, computed class, policy commit and manifest blob, every
+signal, raises, failures, engine version; same inputs give the same bytes). See [commands](commands.md#ci).
 
 ## Guardrail or boundary
 

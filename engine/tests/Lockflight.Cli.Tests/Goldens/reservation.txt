@@ -30,6 +30,7 @@ approve spec: reserved=True words=approve spec shell=approve spec powershell=app
 approve tasks: reserved=True words=approve tasks shell=approve tasks powershell=approve tasks
 approve verify: reserved=False words=- shell=- powershell=-
 ci: reserved=False words=- shell=- powershell=-
+route show: reserved=False words=- shell=- powershell=-
 workspace sync: reserved=False words=- shell=- powershell=-
 workspace clone: reserved=False words=- shell=- powershell=-
 (nothing): reserved=False words=- shell=- powershell=-
