@@ -1,6 +1,6 @@
 namespace Lockflight.Cli.Adoption;
 
-/// <summary>What <c>adopt apply</c> does with a plan item (keep and flag by default).</summary>
+/// <summary>What <c>init</c> does with a plan item (keep and flag by default).</summary>
 internal enum AdoptionAction
 {
     /// <summary>Left as it is; the team's own control, now protected from the agent.</summary>

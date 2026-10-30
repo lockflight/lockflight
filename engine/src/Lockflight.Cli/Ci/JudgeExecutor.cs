@@ -6,8 +6,8 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// Runs the steps of a plan that build: opens the judge's worktree (in <c>LOCKFLIGHT_TEMP</c> when the template sets it, else
-/// locally in the repository's git directory, else the system's temporary folder), builds and runs what the plan needs, and
-/// removes the worktree again whatever happened.
+/// locally in the repository's git directory, else the system's temporary folder), runs the head's suite (P1), lists the base (P2)
+/// and re-runs the red commits (P3), then judges green over what they found, and removes the worktree again whatever happened.
 /// </summary>
 internal static class JudgeExecutor
 {
@@ -16,7 +16,7 @@ internal static class JudgeExecutor
     public static async Task<JudgeFindings> RunAsync(JudgePlan plan, EnvironmentReader environment, TimeProvider time, CancellationToken cancellationToken)
     {
         bool judgesReds = plan.Levels[CheckId.Red] != CheckLevel.Off && !plan.Reds.OverCap && plan.Reds.Cycles.Count > 0 && plan.MergeBase is not null;
-        if (!judgesReds)
+        if (plan.Levels[CheckId.Green] == CheckLevel.Off)
         {
             return JudgeFindings.None;
         }
@@ -24,16 +24,23 @@ internal static class JudgeExecutor
         string root = plan.Inputs.Root;
         TimeSpan gitLimit = TimeSpan.FromMinutes(5);
         string parent = await ParentAsync(plan.Inputs, environment, cancellationToken);
-        if (await JudgeWorktree.OpenAsync(root, parent, plan.MergeBase!, gitLimit, cancellationToken) is not JudgeWorktree worktree)
+        if (await JudgeWorktree.OpenAsync(root, parent, plan.Inputs.Head, gitLimit, cancellationToken) is not JudgeWorktree worktree)
         {
-            return new JudgeFindings([.. plan.Reds.Cycles.Select(red => new CycleJudgement(red, TreeOutcome.Broken, [], new Dictionary<string, RedVerdict>(), CheckVerdict.Error, $"git could not add a worktree under {parent}"))], []);
+            string why = $"git could not add a worktree under {parent}";
+            GreenJudgement green = new(CheckVerdict.Error, why, 0, 0, [why], [], new Dictionary<string, string>(), []);
+            return new JudgeFindings(green, judgesReds ? [.. plan.Reds.Cycles.Select(red => new CycleJudgement(red, TreeOutcome.Broken, [], new Dictionary<string, RedVerdict>(), CheckVerdict.Error, why))] : null, []);
         }
 
         try
         {
             TreeBuilder trees = new(worktree, plan.Policy, root, time);
-            IReadOnlyList<CycleJudgement> cycles = await new RedCommitJudge(trees, time).JudgeAsync(plan, cancellationToken);
-            return new JudgeFindings(cycles, trees.Builds);
+            HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);
+            TreeListing? baseListing = plan.MergeBase is string mergeBase ? await trees.ListAsync(mergeBase, "base", fresh: false, cancellationToken) : null;
+            IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, cancellationToken) : null;
+            GreenJudgement greenAtHead = baseListing is { AsBaseline: null }
+                ? new GreenJudgement(CheckVerdict.NotEarned, $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
+                : GreenJudge.Decide(head, baseListing?.AsBaseline, cycles ?? []);
+            return new JudgeFindings(greenAtHead, cycles, trees.Builds) { HeadFingerprints = head.Listing.Fingerprints };
         }
         finally
         {

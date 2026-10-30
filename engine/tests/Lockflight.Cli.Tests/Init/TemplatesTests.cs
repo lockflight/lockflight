@@ -8,9 +8,9 @@ public sealed class TemplatesTests
     [Fact]
     public void TheManifestCommentNamesTheProfileThatWroteIt()
     {
-        Assert.Contains("lite profile", Templates.Manifest(InitProfile.Lite), StringComparison.Ordinal);
-        Assert.Contains("standard profile", Templates.Manifest(InitProfile.Standard), StringComparison.Ordinal);
-        Assert.DoesNotContain("lite profile", Templates.Manifest(InitProfile.Standard), StringComparison.Ordinal);
+        Assert.Contains("lite profile", Templates.Manifest(InitProfile.Lite, RoutingPreset.Default), StringComparison.Ordinal);
+        Assert.Contains("standard profile", Templates.Manifest(InitProfile.Standard, RoutingPreset.Default), StringComparison.Ordinal);
+        Assert.DoesNotContain("lite profile", Templates.Manifest(InitProfile.Standard, RoutingPreset.Default), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -20,10 +20,27 @@ public sealed class TemplatesTests
     {
         Assert.True(InitProfileNames.TryParse(profileName, out InitProfile profile));
 
-        ManifestLoadResult loaded = new ManifestParser("/project", "/project/lockflight.yaml").Parse(Templates.Manifest(profile));
+        ManifestLoadResult loaded = new ManifestParser("/project", "/project/lockflight.yaml").Parse(Templates.Manifest(profile, RoutingPreset.Default));
 
         Assert.NotNull(loaded.Manifest);
         Assert.False(loaded.Manifest.StopGate);
+    }
+
+    [Theory]
+    [InlineData("relaxed")]
+    [InlineData("default")]
+    [InlineData("strict")]
+    public void EachPresetsManifestIsVersionTwoWithEveryRoutingValueWrittenDown(string presetName)
+    {
+        Assert.True(RoutingPresetNames.TryParse(presetName, out RoutingPreset preset));
+
+        Manifest manifest = new ManifestParser("/project", "/project/lockflight.yaml").Parse(Templates.Manifest(InitProfile.Lite, preset)).Manifest!;
+
+        Assert.Equal(2, manifest.Version);
+        Assert.Equal(RoutingPresets.For(preset) with { FromManifest = true, FilledFromPreset = [] }, manifest.Routing with { Critical = [], FilledFromPreset = [] });
+        Assert.Empty(manifest.Routing.FilledFromPreset);
+        Assert.Equal((ApprovalCheckMode.Fail, RoutingPresets.SpecFirstFrom(preset)), (manifest.Approvals.Check, manifest.Approvals.SpecFirstFrom));
+        Assert.Equal((GateMode.Fail, GateMode.Fail), (manifest.Gates.Suppressions, manifest.Gates.DocsReferences));
     }
 
     [Theory]

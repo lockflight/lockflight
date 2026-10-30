@@ -6,7 +6,7 @@ internal enum SpecKitSetup
     /// <summary>No Spec Kit (<c>.specify/</c> is missing): set it up with the Lockflight preset.</summary>
     None = 0,
 
-    /// <summary>Spec Kit without the Lockflight preset: the team's Spec Kit, adopted with <c>adopt plan</c> and <c>adopt apply</c>.</summary>
+    /// <summary>Spec Kit without the Lockflight preset: the team's Spec Kit, which <c>init --speckit-preset</c> upgrades.</summary>
     WithoutPreset = 1,
 
     /// <summary>Spec Kit with the Lockflight preset installed and enabled, as the init skill sets it up before <c>init</c>.</summary>

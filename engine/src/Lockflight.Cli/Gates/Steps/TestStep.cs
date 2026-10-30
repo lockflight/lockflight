@@ -26,21 +26,42 @@ internal sealed partial class TestStep : IGateStep
 
     public string CacheKey => StepName;
 
-    /// <summary>The test verdict; the facts gain the test count and where and when the tests ran, for the coverage step.</summary>
+    /// <summary>
+    /// The test verdict over the projects the stop profile chose (<see cref="GateRunFacts.Selection"/>), else over everything; N/A
+    /// when none of the chosen projects is a test project. The facts gain the test count and where and when the tests ran, for the
+    /// coverage step.
+    /// </summary>
     public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken)
     {
+        if (facts.Selection is { RunsTests: false })
+        {
+            return new(new GateStep(StepName, 0, Verdict.NotApplicable, 0, "no affected project is a test project, so no test ran (the pr profile runs every test)"), facts);
+        }
+
         DateTimeOffset started = run.Time.GetUtcNow();
-        TestStepOutcome tests = await RunTestsAsync(run, cancellationToken);
+        TestStepOutcome tests = await RunTestsAsync(run, facts.Selection?.FilterFile, cancellationToken);
         return new(tests.Step, facts with { TestsTotal = tests.TestsTotal, TestResultsDirectory = tests.ResultsDirectory, TestsStarted = started });
     }
 
-    /// <summary>The test run with the failures it named, which <see cref="Baselines.BaselineRun"/> records as a baseline.</summary>
+    /// <summary>The test run over everything with the failures it named, which <see cref="Baselines.BaselineRun"/> records as a baseline.</summary>
     public static Task<TestStepOutcome> RunTestsAsync(GateRunContext run, CancellationToken cancellationToken) =>
-        TestRunnerDetection.For(run.Target) == TestRunnerKind.MicrosoftTestingPlatform
-            ? RunOnTestingPlatformAsync(run, cancellationToken)
-            : RunOnVSTestAsync(run, cancellationToken);
+        RunTestsAsync(run, filterFile: null, cancellationToken);
 
-    private static async Task<TestStepOutcome> RunOnVSTestAsync(GateRunContext run, CancellationToken cancellationToken)
+    /// <param name="filterFile">The solution filter of the chosen projects; null for the target's solution or <c>build:</c> file.</param>
+    private static Task<TestStepOutcome> RunTestsAsync(GateRunContext run, string? filterFile, CancellationToken cancellationToken) =>
+        TestRunnerDetection.For(run.Target) == TestRunnerKind.MicrosoftTestingPlatform
+            ? RunOnTestingPlatformAsync(run, filterFile ?? run.BuildFile, cancellationToken)
+            : RunOnVSTestAsync(run, filterFile is null ? run.BuildFileArguments : [filterFile], cancellationToken);
+
+    /// <summary>
+    /// How Microsoft.Testing.Platform's <c>dotnet test</c> takes a solution, filter or project: by option, never as a bare argument
+    /// (which it hands to the test applications).
+    /// </summary>
+    public static IReadOnlyList<string> TestingPlatformTarget(string? file) => file is null ? []
+        : Path.GetExtension(file).ToLowerInvariant() is ".sln" or ".slnx" or ".slnf" ? ["--solution", file]
+        : ["--project", file];
+
+    private static async Task<TestStepOutcome> RunOnVSTestAsync(GateRunContext run, IReadOnlyList<string> projectArguments, CancellationToken cancellationToken)
     {
         // Per unit: units of a workspace run in parallel and must not empty each other's results.
         string results = Path.Combine(run.ProjectRoot, ResultsRelativePath, run.UnitPath ?? string.Empty);
@@ -49,7 +70,7 @@ internal sealed partial class TestStep : IGateStep
             Directory.Delete(results, recursive: true);
         }
 
-        List<string> arguments = ["test", .. run.BuildFileArguments, "--no-build", "--logger", "trx;LogFilePrefix=lockflight", "--results-directory", results];
+        List<string> arguments = ["test", .. projectArguments, "--no-build", "--logger", "trx;LogFilePrefix=lockflight", "--results-directory", results];
         if (run.Settings.TestFramework is string framework)
         {
             arguments.AddRange(["--framework", framework]);
@@ -130,9 +151,9 @@ internal sealed partial class TestStep : IGateStep
             : new GateStep(StepName, testRun.ExitCode, Verdict.Pass, testRun.DurationMs, $"total {summary.Total}");
     }
 
-    private static async Task<TestStepOutcome> RunOnTestingPlatformAsync(GateRunContext run, CancellationToken cancellationToken)
+    private static async Task<TestStepOutcome> RunOnTestingPlatformAsync(GateRunContext run, string? projectFile, CancellationToken cancellationToken)
     {
-        List<string> arguments = ["test", .. run.BuildFileArguments, "--no-build"];
+        List<string> arguments = ["test", .. TestingPlatformTarget(projectFile), "--no-build"];
         if (run.Profile != GateProfile.PullRequest && run.StopFilter is string filter)
         {
             if (TraitFilter(filter) is not string[] traitArguments)

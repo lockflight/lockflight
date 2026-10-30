@@ -58,7 +58,7 @@ public sealed class ManifestRequirementTests : IDisposable
     [Fact]
     public async Task ApproveVerifyNeedsAFeatureOrABase()
     {
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), Templates.Manifest(InitProfile.Lite));
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), Templates.Manifest(InitProfile.Lite, RoutingPreset.Default));
 
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["approve", "verify"], "", projectRoot.FullName);
 

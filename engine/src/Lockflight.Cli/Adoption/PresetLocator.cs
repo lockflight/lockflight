@@ -3,7 +3,7 @@ using Lockflight.Cli.Updating;
 
 namespace Lockflight.Cli.Adoption;
 
-/// <summary>Where the Lockflight Spec Kit preset is on this machine, for the <c>adopt apply</c> line the plan prints.</summary>
+/// <summary>Where the Lockflight Spec Kit preset is on this machine, for the <c>init --speckit-preset</c> line init prints.</summary>
 internal static class PresetLocator
 {
     private const string PresetDirectory = "speckit-preset";

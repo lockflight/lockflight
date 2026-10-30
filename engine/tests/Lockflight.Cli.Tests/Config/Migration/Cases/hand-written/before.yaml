@@ -1,0 +1,11 @@
+# Our policy. Ask the platform team before changing it.
+review:
+  model: opus      # we review with Opus
+stop: { gate: true }
+version: 1   # keep
+gates:
+    timeoutSeconds: 900
+    quality:
+        suppressions: fail
+protected:
+  - "src/Payments/**"

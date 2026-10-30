@@ -30,6 +30,8 @@ internal sealed class EfPendingModelChangesStep : IGateStep
 
     public string CacheKey => StepName;
 
+    public GateMode ModeUnder(GateSettings settings) => settings.EfPendingModelChanges;
+
     public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken)
     {
         GateMode mode = run.Settings.EfPendingModelChanges;

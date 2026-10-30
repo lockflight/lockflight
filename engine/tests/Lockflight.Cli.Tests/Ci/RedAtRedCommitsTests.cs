@@ -58,7 +58,14 @@ public sealed class RedAtRedCommitsTests : IAsyncLifetime
         JsonArray cycles = document["cycles"]!.AsArray();
         Assert.Equal(["RED_STUB", "RED_STUB"], cycles.SelectMany(cycle => cycle!["tests"]!.AsArray()).Select(test => test!["red"]!.GetValue<string>()));
         Assert.Equal(["FR-001"], cycles[0]!["tests"]![0]!["requirements"]!.AsArray().Select(requirement => requirement!.GetValue<string>()));
-        Assert.Equal(["base", "red 1", "red 2"], document["builds"]!.AsArray().Select(build => build!["purpose"]!.GetValue<string>()));
+        Assert.Equal(["head", "base", "red 1", "red 2"], document["builds"]!.AsArray().Select(build => build!["purpose"]!.GetValue<string>()));
+        Assert.Equal("PASS", Check(document, "green")["verdict"]!.GetValue<string>());
+        Assert.Equal(["pass", "pass"], cycles.SelectMany(cycle => cycle!["tests"]!.AsArray()).Select(test => test!["atHead"]!.GetValue<string>()));
+
+        // Cycle 2 added a test to cycle 1's class: cycle 1's test is still the one that went red.
+        JsonNode first = cycles[0]!["tests"]![0]!;
+        Assert.NotNull(first["fingerprintAtRed"]);
+        Assert.Equal(first["fingerprintAtRed"]!.GetValue<string>(), first["fingerprintAtHead"]!.GetValue<string>());
     }
 
     [Fact]
@@ -126,6 +133,35 @@ public sealed class RedAtRedCommitsTests : IAsyncLifetime
 
         JsonNode document = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(repository.Root, ".lockflight", "local", "ci", "last.json"), cancellationToken))!;
         Assert.True(Check(document, "red")["verdict"]!.GetValue<string>() == "PASS", $"exit {(int)exitCode}: {output}\n{error}");
+    }
+
+    [Fact]
+    public async Task ATestThatFailsAtHeadFailsGreenAndOneThatPassesOnARetryIsAWarning()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string marker = Path.Combine(evidence.FullName, "flaked-once").Replace("\\", "/", StringComparison.Ordinal);
+        string flaky = $$"""
+                [Fact]
+                public void FailsOnce()
+                {
+                    if (!File.Exists("{{marker}}")) { File.WriteAllText("{{marker}}", "x"); Assert.Fail("first run"); }
+                }
+            """;
+        await repository.WriteCode(Stub, ShippingTest).CommitAsync("test: red for US1", cancellationToken, null, "Lockflight-Red: 1");
+        string head = await repository.WriteCode(Implementation, ShippingTest + "\n" + flaky).CommitAsync("feat: US1", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head);
+
+        Assert.Equal("PASS", Check(document, "green")["verdict"]!.GetValue<string>());
+        Assert.Contains("passed only when run again: Shop.Tests:Shop.Tests.PriceTests.FailsOnce", Check(document, "green")["why"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal(["Shop.Tests:Shop.Tests.PriceTests.FailsOnce"], document["testsWithoutRed"]!.AsArray().Select(test => test!.GetValue<string>()));
+
+        string broken = await repository.WriteCode("    public decimal Shipping(decimal kilograms) => kilograms * 3m;", ShippingTest).CommitAsync("fix: wrong", cancellationToken);
+        document = await JudgeAsync(broken);
+
+        Assert.Equal("FAIL", Check(document, "green")["verdict"]!.GetValue<string>());
+        Assert.Contains("cycle tests not passing", Check(document, "green")["why"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Equal("FAIL", document["contexts"]!["gates"]!.GetValue<string>());
     }
 
     private async Task<JsonNode> JudgeAsync(string head)

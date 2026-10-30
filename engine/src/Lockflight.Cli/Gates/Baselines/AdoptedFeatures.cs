@@ -1,8 +1,8 @@
 namespace Lockflight.Cli.Gates.Baselines;
 
 /// <summary>
-/// Features that predate Lockflight (<c>.lockflight/baselines/adopted-features.json</c>, protected; written by
-/// <c>lockflight adopt apply</c>). Until such a feature gets Lockflight records of its own, <c>approve verify --base</c> does not
+/// Features that predate Lockflight (<c>.lockflight/baselines/adopted-features.json</c>, protected; written by the
+/// <c>lockflight init</c> that creates the manifest). Until such a feature gets Lockflight records of its own, <c>approve verify --base</c> does not
 /// require approvals when a change touches it, and <c>trace</c> expects no red/green evidence. CI reads baselines from the base
 /// branch, so a feature added to the list in the same pull request is not exempt.
 /// </summary>

@@ -1,6 +1,6 @@
 namespace Lockflight.Cli.Adoption;
 
-/// <summary>Whether a path under a root goes through a symbolic link, so adoption never writes outside what it backed up.</summary>
+/// <summary>Whether a path under a root goes through a symbolic link, so adoption never writes through one to outside the project.</summary>
 internal static class SymbolicLinks
 {
     /// <summary>The first symbolic link on <paramref name="relative"/> ('/'-separated, under <paramref name="root"/>) — a folder on the way or the file itself — or null.</summary>
