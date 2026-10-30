@@ -1,0 +1,12 @@
+A SQL file in a test project is not db.sql.
+=== base tests/Shop.Tests/Shop.Tests.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.0.0" />
+  </ItemGroup>
+</Project>
+=== base tests/Shop.Tests/seed.sql
+insert into orders values (1);
+=== head tests/Shop.Tests/seed.sql
+insert into orders values (1);
+insert into orders values (2);

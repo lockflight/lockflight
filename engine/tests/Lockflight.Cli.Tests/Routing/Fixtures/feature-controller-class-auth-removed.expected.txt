@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: api.controllerAction -> feature (heuristic) src/Shop.Api/AdminController.cs:3: endpoint type Shop.Api.AdminController declaration added (its attributes or base)
+signal: api.controllerAction -> feature (heuristic) src/Shop.Api/AdminController.cs:3: endpoint type Shop.Api.AdminController declaration removed (its attributes or base)

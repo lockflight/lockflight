@@ -19,6 +19,17 @@ internal static class SignalIds
     public const string TestsRemoved = "tests.removed";
     public const string TestsChanged = "tests.changed";
     public const string TestsSkipped = "tests.skipped";
+    public const string TypeAdded = "type.added";
+    public const string ApiEndpointAttribute = "api.endpointAttribute";
+    public const string ApiMinimalEndpoint = "api.minimalEndpoint";
+    public const string ApiControllerAction = "api.controllerAction";
+    public const string ApiControllerAdded = "api.controllerAdded";
+    public const string ApiPageDirective = "api.pageDirective";
+    public const string ApiContractFile = "api.contractFile";
+    public const string ApiPublicMember = "api.publicMember";
+    public const string DbMigration = "db.migration";
+    public const string DbSql = "db.sql";
+    public const string DbModel = "db.model";
     public const string CriticalPath = "critical.path";
     public const string CriticalPolicy = "critical.policy";
     public const string CiWorkflowChanged = "ci.workflowChanged";

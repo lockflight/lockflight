@@ -1,0 +1,25 @@
+A changed mapping attribute on an entity is db.model.
+=== base src/Shop.Data/Shop.Data.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Data/Order.cs
+namespace Shop.Data;
+
+[Table("orders")]
+public sealed class Order
+{
+    [MaxLength(20)]
+    public string Number { get; set; } = "";
+}
+=== head src/Shop.Data/Order.cs
+namespace Shop.Data;
+
+[Table("purchase_orders")]
+public sealed class Order
+{
+    [MaxLength(20)]
+    public string Number { get; set; } = "";
+}

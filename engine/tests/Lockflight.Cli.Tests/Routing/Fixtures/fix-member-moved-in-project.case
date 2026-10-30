@@ -1,0 +1,41 @@
+A public member moved to another file of the same API project is no API change.
+=== base src/Shop.Client/Shop.Client.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Client/CartClient.cs
+namespace Shop.Client;
+
+public sealed class CartClient
+{
+    public int Count() => 0;
+}
+=== base src/Shop.Client/CartClient.Extra.cs
+namespace Shop.Client;
+
+public sealed partial class Holder
+{
+}
+=== base src/Shop.Client/Holder.cs
+namespace Shop.Client;
+
+public sealed partial class Holder
+{
+    public int Size() => 1;
+}
+=== head src/Shop.Client/Holder.cs
+namespace Shop.Client;
+
+public sealed partial class Holder
+{
+}
+=== head src/Shop.Client/CartClient.Extra.cs
+namespace Shop.Client;
+
+public sealed partial class Holder
+{
+    public int Size() => 1;
+}

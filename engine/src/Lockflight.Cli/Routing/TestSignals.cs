@@ -60,7 +60,7 @@ internal sealed partial class TestSignals : IChangeSignalSource
             yield return Signal(SignalIds.TestsChanged, $"{basePath}:{line}", "a line of an existing test file removed, edited or commented out");
         }
 
-        if (source && added.FirstOrDefault(line => SkipMarker().IsMatch(line.Code) || RawSkipMarker().IsMatch(line.Text)) is RoutedLine skip)
+        if (source && added.FirstOrDefault(line => SkipMarker().IsMatch(CSharpMask.Mask(line.Code)) || RawSkipMarker().IsMatch(line.Text)) is RoutedLine skip)
         {
             yield return Signal(SignalIds.TestsSkipped, $"{file.Path}:{skip.Line}", "a test skip, ignore or conditional-compilation marker added");
         }
