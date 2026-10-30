@@ -301,8 +301,8 @@ Every preset sets `structural: critical`. How each `routing:` key is used, signa
 [risk routing](risk-routing.md#signals).
 
 > [!IMPORTANT]
-> In this version `routing:` and `approvals:` are read and validated, and `doctor` reports on them, but no command judges a
-> change by them yet. `autonomy:` is reserved and has no effect. None of them is a control today; the descriptions above say
+> In this version `routing:` and `approvals:` are read and validated, `doctor` reports on them, and `route show` computes a
+> change's class and requirements from `routing:`, but no check judges a change by them yet. `autonomy:` is reserved and has no effect. None of them is a control today; the descriptions above say
 > what they will decide.
 
 ### Built-in protected paths
