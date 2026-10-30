@@ -43,7 +43,7 @@ internal static class CommandRegistry
         new(["baseline", "tests"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
         new(["baseline", "deps"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
         new(["baseline", "suppressions"], CommandAudience.Human, [], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
-        new(["gate", "run"], CommandAudience.Anyone, ["--profile", "--path", "--unit", "--base", "--result"], ["--full"], CommandOperands.Options, OptionParsing.Shared, context => new GateCommand(context)),
+        new(["gate", "run"], CommandAudience.Anyone, ["--profile", "--path", "--unit", "--base", "--result", GateCommand.ShellOption], ["--full"], CommandOperands.Options, OptionParsing.Shared, context => new GateCommand(context)),
         new(["phase", "check"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.AtLeastOne, OptionParsing.Shared, context => new PhaseCommand(context)),
         new(["redgreen", "start"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),
         new(["redgreen", "red"], CommandAudience.Anyone, ["--feature"], ["--verbose"], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),
@@ -72,6 +72,7 @@ internal static class CommandRegistry
         new(["route", "show"], CommandAudience.Anyone, [RouteShowCommand.BaseOption, RouteShowCommand.HeadOption], [RouteShowCommand.JsonFlag], CommandOperands.Options, OptionParsing.Shared, context => new RouteShowCommand(context)),
         new(["route", "record"], CommandAudience.Anyone, [RouteRecordCommand.FeatureOption, RouteRecordCommand.BaseOption], [], CommandOperands.Options, OptionParsing.Shared, context => new RouteRecordCommand(context)),
         new(["workspace", "sync"], CommandAudience.Anyone, [], ["--check"], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceSyncCommand(context)),
+        new(["workspace", "clone"], CommandAudience.Anyone, [WorkspaceCloneCommand.IntoOption], [], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceCloneCommand(context)),
     ];
 
     /// <summary>Command groups reserved for a person even with a verb no descriptor names (<c>approve xyz</c>), except their agent verbs.</summary>

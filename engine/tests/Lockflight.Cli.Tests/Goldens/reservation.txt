@@ -33,6 +33,7 @@ ci: reserved=False words=- shell=- powershell=-
 route show: reserved=False words=- shell=- powershell=-
 route record: reserved=False words=- shell=- powershell=-
 workspace sync: reserved=False words=- shell=- powershell=-
+workspace clone: reserved=False words=- shell=- powershell=-
 (nothing): reserved=False words=- shell=- powershell=-
 approve: reserved=True words=approve shell=approve powershell=approve
 approve xyz: reserved=True words=approve xyz shell=approve xyz powershell=approve xyz

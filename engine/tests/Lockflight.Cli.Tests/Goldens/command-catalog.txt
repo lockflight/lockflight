@@ -13,7 +13,7 @@ baseline build: [--path]
 baseline tests: [--path]
 baseline deps: [--path]
 baseline suppressions: []
-gate run: [--profile --path --unit --base --result --full]
+gate run: [--profile --path --unit --base --result --shell --full]
 phase check: [--feature] arguments
 redgreen start: [--feature]
 redgreen red: [--feature --verbose]
@@ -34,3 +34,4 @@ ci: [--head --base --branch --platform --event --evidence --shell --no-review-ex
 route show: [--base --head --json]
 route record: [--feature --base]
 workspace sync: [--check]
+workspace clone: [--into]

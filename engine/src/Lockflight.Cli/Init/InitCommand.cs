@@ -210,8 +210,9 @@ internal sealed class InitCommand(CliContext context) : ICommand
         List<InitStep> ciSteps = [];
         if (ci != CiTrigger.None)
         {
-            foreach (CiFile file in CiPipeline.Files(init.Platform, root, dotnetChannels, ci, developmentPin))
+            foreach (CiFile pipelineFile in CiPipeline.Files(init.Platform, root, dotnetChannels, ci, developmentPin))
             {
+                CiFile file = init.Shell is null ? pipelineFile : CiShellPointer.ForUnit(pipelineFile, init.Platform);
                 ciSteps.Add(await WriteIfMissingAsync(root, file.RelativePath, file.Content, write, cancellationToken));
             }
         }
