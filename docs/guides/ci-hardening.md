@@ -45,6 +45,10 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
   - **Without a lock** (a project pinned the way Lockflight 0.2 pins, as the base of the pull request that moves it to the
     lock is): the version in the tool pin, with `dotnet tool install --tool-path`. That pull request is judged by the old engine
     and the old policy, and lists the lock, the manifest and the CI files as protected changes for review.
+  - **A pull request that changes the lock** (once the base has one): the step runs `lockflight engine verify-lock` on the
+    proposed lock with the base's engine; it fails unless every hash is the one the release of that version published, and on
+    GitHub (the workflow's token) unless the release's attestation verifies. The CODEOWNERS reviewer reads "matches the
+    published hashes of release vX". **Provenance** on GitHub (attested); integrity against the feed elsewhere.
   - The step sits between `# lockflight:install-engine:begin` and `:end`, which `lockflight update` replaces as a whole.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass

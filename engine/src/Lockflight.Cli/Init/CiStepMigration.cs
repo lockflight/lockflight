@@ -73,11 +73,29 @@ internal static class CiStepMigration
             {
                 lines.RemoveRange(start, legacy.Split('\n').Length);
                 lines.InsertRange(start, prefix.Concat(install).Select(line => line.Length == 0 ? line : indent + line));
+                if (prefix.Length > 0)
+                {
+                    GiveTheGitHubStepAToken(lines, start);
+                }
+
                 return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>The GitHub step gets the workflow's token, so the changed-lock check can verify the release's attestation with gh.</summary>
+    private static void GiveTheGitHubStepAToken(List<string> lines, int scriptStart)
+    {
+        int run = scriptStart - 1;
+        if (run < 1 || lines[run].Trim() != "run: |" || !lines[run - 1].TrimStart().StartsWith("- name: Install the pinned engine", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string indent = Indent(lines[run]);
+        lines.InsertRange(run, [$"{indent}env:", $"{indent}  GH_TOKEN: ${{{{ github.token }}}}"]);
     }
 
     private static bool ReplaceRestore(List<string> lines)

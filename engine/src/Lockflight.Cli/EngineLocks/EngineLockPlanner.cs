@@ -74,7 +74,7 @@ internal static class EngineLockPlanner
     }
 
     /// <summary>Verifies the release workflow's attestation of the file with <c>gh attestation verify</c>; a note either way.</summary>
-    private static async Task<string> AttestationAsync(
+    public static async Task<string> AttestationAsync(
         byte[] content, string version, RunProcess processes, CancellationToken cancellationToken)
     {
         if (Executables.Find("gh", explicitPath: null) is not string gh)
