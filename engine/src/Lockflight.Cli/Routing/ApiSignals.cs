@@ -75,7 +75,8 @@ internal sealed partial class ApiSignals : IChangeSignalSource
         IEnumerable<(PlacedDeclaration Placed, string Change)> changed = project.Added.Select(placed => (placed, "added"))
             .Concat(project.Removed.Select(placed => (placed, "removed")));
         HashSet<string> controllers = Controllers(project);
-        bool apiProject = project.Project is string projectFile && ApiProjects.IsApiProject(analysis, policy, projectFile);
+        bool apiProject = project.Project is string projectFile && ApiProjects.IsApiProject(analysis, policy, projectFile)
+            && !PublicApiFiles.Enforced(analysis, projectFile);
         HashSet<string> baseTypes = new(project.AtBase.Where(IsType).Select(placed => placed.Declaration.TypePath), StringComparer.Ordinal);
         HashSet<string> types = new(project.AtBase.Concat(project.AtHead).Where(IsType).Select(placed => placed.Declaration.TypePath), StringComparer.Ordinal);
         HashSet<string> publicTypes = new(

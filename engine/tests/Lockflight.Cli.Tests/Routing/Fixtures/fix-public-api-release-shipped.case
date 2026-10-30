@@ -1,0 +1,32 @@
+Moving entries from Unshipped to Shipped at a release is no API change.
+=== base src/Shop.Client/Shop.Client.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
+=== base src/Shop.Client/CartClient.cs
+namespace Shop.Client;
+
+public sealed class CartClient
+{
+    public int Count() => 0;
+}
+=== base src/Shop.Client/PublicAPI.Shipped.txt
+#nullable enable
+Shop.Client.CartClient
+Shop.Client.CartClient.CartClient() -> void
+=== base src/Shop.Client/PublicAPI.Unshipped.txt
+#nullable enable
+Shop.Client.CartClient.Count() -> int
+=== head src/Shop.Client/PublicAPI.Shipped.txt
+#nullable enable
+Shop.Client.CartClient
+Shop.Client.CartClient.CartClient() -> void
+Shop.Client.CartClient.Count() -> int
+=== head src/Shop.Client/PublicAPI.Unshipped.txt
+#nullable enable
