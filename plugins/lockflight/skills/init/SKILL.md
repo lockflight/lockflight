@@ -28,7 +28,7 @@ Lockflight's own repository: say so and stop.
 ## 1. Prerequisites
 
 Check each, and stop with the exact install command if one is missing: `dotnet --list-sdks` lists a 10.x SDK; `git`; on
-Windows, Git Bash; for the standard profile, `uv` and a working `python3 -c "import yaml"`.
+Windows, Git Bash; for the standard profile with Spec Kit, `uv` and a working `python3 -c "import yaml"`.
 
 ## 2. Engine
 
@@ -50,8 +50,8 @@ Windows, Git Bash; for the standard profile, `uv` and a working `python3 -c "imp
 - **Spec Kit** (standard profile only, in a project without `.specify/`): **without** (recommended unless the team uses
   Spec Kit) — the `lockflight-crew` plugin's spec writer and planner, or the session with the user, write the spec and tasks
   in the contract, with no Python needed; **with** — Spec Kit's `/speckit-*` commands and the Lockflight preset (step 4),
-  which need `uv` and Python 3 with PyYAML. Say that without Spec Kit, `doctor` still reports its Lockflight preset check
-  as failing in this release, and that the lifecycle commands do not depend on it. For the crew, they run
+  which need `uv` and Python 3 with PyYAML. Without Spec Kit, `doctor` reports its Lockflight preset check as `info`
+  (Spec Kit not used), which does not count against readiness. For the crew, they run
   `/plugin install lockflight-crew@lockflight`.
 - **CI trigger** for `.github/workflows/lockflight-gates.yml`, which runs the `pr` gates: **pr** (every pull request and push
   to `main`), **manual** (only when started by hand) or **none** (no workflow). Recommend **pr**: the project pins a release
