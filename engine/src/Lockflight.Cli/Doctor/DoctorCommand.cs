@@ -62,6 +62,7 @@ internal sealed class DoctorCommand(CliContext context) : ICommand
     {
         CheckStatus.Pass => "ok",
         CheckStatus.Warn => "warn",
+        CheckStatus.Info => "info",
         _ => "FAIL",
     };
 }
