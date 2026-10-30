@@ -96,6 +96,34 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ClassDataGenericInterfaceCallsAndOverridesOfFrameworkTypesCountToo()
+    {
+        const string Theory = """
+                [Theory]
+                [ClassData(typeof(Cases))]
+                public void UsesSupport(int factor)
+                {
+                    IConvert convert = new DoubleIt();
+                    Stream stream = new OneByte();
+                    Assert.True(convert.Run<int>(factor) + stream.ReadByte() > 0);
+                }
+            """;
+        repository.WriteCode(Production, Theory).Write("tests/Shop.Tests/Support.cs", ClassSupport("1", "2", "3"));
+        string original = await FingerprintAsync("UsesSupport");
+
+        repository.Write("tests/Shop.Tests/Support.cs", ClassSupport("4", "2", "3"));
+        string data = await FingerprintAsync("UsesSupport");
+        Assert.NotEqual(original, data);
+
+        repository.Write("tests/Shop.Tests/Support.cs", ClassSupport("4", "5", "3"));
+        string generic = await FingerprintAsync("UsesSupport");
+        Assert.NotEqual(data, generic);
+
+        repository.Write("tests/Shop.Tests/Support.cs", ClassSupport("4", "5", "6"));
+        Assert.NotEqual(generic, await FingerprintAsync("UsesSupport"));
+    }
+
+    [Fact]
     public async Task ATestThatIsNotInTheAssemblyHasNoFingerprint()
     {
         await BuildAsync();
@@ -130,6 +158,41 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
         internal sealed class FakeClock : IClock
         {
             public int Now() => {{clock}};
+        }
+
+        """;
+
+    private static string ClassSupport(string data, string factor, string value) => $$"""
+        namespace Shop.Tests;
+
+        public sealed class Cases : TheoryData<int>
+        {
+            public Cases() => Add({{data}});
+        }
+
+        public interface IConvert
+        {
+            int Run<T>(int value);
+        }
+
+        internal sealed class DoubleIt : IConvert
+        {
+            public int Run<T>(int value) => value * {{factor}};
+        }
+
+        internal sealed class OneByte : Stream
+        {
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => 1;
+            public override long Position { get; set; }
+            public override int ReadByte() => {{value}};
+            public override int Read(byte[] buffer, int offset, int count) => 0;
+            public override void Flush() { }
+            public override long Seek(long offset, SeekOrigin origin) => 0;
+            public override void SetLength(long value) { }
+            public override void Write(byte[] buffer, int offset, int count) { }
         }
 
         """;

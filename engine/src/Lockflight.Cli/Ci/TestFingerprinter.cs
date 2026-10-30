@@ -264,12 +264,22 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
         }
 
         /// <summary>
-        /// A virtual or interface call reaches whichever override runs: every virtual method of this assembly with the same name,
-        /// unless the called member belongs to the base class library, whose overrides (ToString, Equals, Dispose) are everywhere.
+        /// A virtual or interface call reaches whichever override runs: every virtual method of this assembly with the same name. A
+        /// generic method call is followed through to the method it instantiates. For a member of the base class library (or
+        /// another <c>Microsoft.</c> or <c>System.</c> assembly) only the overrides in types of this assembly that derive from or
+        /// implement the called type count, so a fake <c>Stream</c> or <c>HttpMessageHandler</c> is reached while every
+        /// <c>ToString</c> and <c>Equals</c> is not; members of <c>System.Object</c> are never followed.
         /// </summary>
         private void EnqueueOverrides(EntityHandle token)
         {
+            if (token.Kind == HandleKind.MethodSpecification)
+            {
+                EnqueueOverrides(reader.GetMethodSpecification((MethodSpecificationHandle)token).Method);
+                return;
+            }
+
             string? name = null;
+            string? framework = null;
             if (token.Kind == HandleKind.MethodDefinition)
             {
                 MethodDefinition method = reader.GetMethodDefinition((MethodDefinitionHandle)token);
@@ -278,8 +288,21 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             else if (token.Kind == HandleKind.MemberReference)
             {
                 MemberReference member = reader.GetMemberReference((MemberReferenceHandle)token);
-                string parent = member.Parent.Kind == HandleKind.TypeReference ? ReferenceName((TypeReferenceHandle)member.Parent) : string.Empty;
-                name = parent.Contains("]System.", StringComparison.Ordinal) || parent.Contains("]Microsoft.", StringComparison.Ordinal) ? null : reader.GetString(member.Name);
+                string parent = member.Parent.Kind switch
+                {
+                    HandleKind.TypeReference => ReferenceName((TypeReferenceHandle)member.Parent),
+                    HandleKind.TypeSpecification => reader.GetTypeSpecification((TypeSpecificationHandle)member.Parent).DecodeSignature(Names, null),
+                    _ => string.Empty,
+                };
+                name = reader.GetString(member.Name);
+                if (IsFramework(parent))
+                {
+                    framework = WithoutArguments(parent);
+                    if (framework.EndsWith("]System.Object", StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+                }
             }
 
             if (name is null)
@@ -290,11 +313,37 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             foreach (MethodDefinitionHandle handle in reader.MethodDefinitions)
             {
                 MethodDefinition candidate = reader.GetMethodDefinition(handle);
-                if ((candidate.Attributes & MethodAttributes.Virtual) != 0 && reader.GetString(candidate.Name) == name)
+                if ((candidate.Attributes & MethodAttributes.Virtual) != 0 && reader.GetString(candidate.Name) == name
+                    && (framework is null || DerivesFrom(candidate.GetDeclaringType(), framework)))
                 {
                     pending.Enqueue(handle);
                 }
             }
+        }
+
+        private static bool IsFramework(string typeName) =>
+            typeName.Contains("]System.", StringComparison.Ordinal) || typeName.Contains("]Microsoft.", StringComparison.Ordinal);
+
+        private static string WithoutArguments(string typeName) => typeName.IndexOf('<', StringComparison.Ordinal) is int open and >= 0 ? typeName[..open] : typeName;
+
+        /// <summary>Whether a type of this assembly derives from or implements <paramref name="framework"/> (its name without type arguments).</summary>
+        private bool DerivesFrom(TypeDefinitionHandle type, string framework)
+        {
+            for (TypeDefinitionHandle? current = type; current is TypeDefinitionHandle currentType; current = BaseInAssembly(currentType))
+            {
+                TypeDefinition definition = reader.GetTypeDefinition(currentType);
+                if (!definition.BaseType.IsNil && definition.BaseType.Kind != HandleKind.TypeDefinition && WithoutArguments(Token(definition.BaseType)) == framework)
+                {
+                    return true;
+                }
+
+                if (definition.GetInterfaceImplementations().Any(implementation => WithoutArguments(Token(reader.GetInterfaceImplementation(implementation).Interface)) == framework))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
