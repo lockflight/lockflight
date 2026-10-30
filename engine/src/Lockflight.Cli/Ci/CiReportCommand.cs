@@ -65,7 +65,7 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         await context.Output.WriteLineAsync($"{shown} {(only is StatusContext named ? StatusContextNames.ToName(named) : "lockflight ci")} for head {CommitIds.Short(head)}");
         if (CommentRenderer.Next(verdict) is string next)
         {
-            await context.Output.WriteLineAsync($"Next: {next}");
+            await context.Output.WriteLineAsync($"Next: {TerminalText.Clean(next.ReplaceLineEndings(" "))}");
         }
 
         return CheckVerdictNames.ToExitCode(CheckVerdictNames.Parse(shown) ?? CheckVerdict.Error);

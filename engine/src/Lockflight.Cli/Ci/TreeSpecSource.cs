@@ -36,6 +36,11 @@ internal sealed partial class TreeSpecSource : ISpecSource
                 : null);
         }
 
+        if (source == "branch" && ChangedFeature(plan.ChangedFiles, features) is string changedFeature && changedFeature != id)
+        {
+            return new SpecResolution(id, source, null, null, null, SpecOrigin.Head, $"the branch and the pull request's spec disagree on the feature: {id} by the branch, {changedFeature} by the spec it changes");
+        }
+
         if (named.FirstOrDefault(other => other != id) is string disagreeing)
         {
             return new SpecResolution(id, source, null, null, null, SpecOrigin.Head, $"the branch and the tests disagree on the feature: {id} by the {source}, {disagreeing} by a red commit's subject");

@@ -42,7 +42,17 @@ internal sealed class CiReviewCommand(CliContext context) : ICommand
         }
 
         string output = Path.GetFullPath(outDirectory, context.WorkingDirectory);
-        (ExitCode exitCode, string why) = await ReviewAsync(inputs, baseCommit, output, cancellationToken);
+        (ExitCode exitCode, string why) = (ExitCode.Error, "the review broke");
+        try
+        {
+            (exitCode, why) = await ReviewAsync(inputs, baseCommit, output, cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            // The report must learn that the review broke, not that none ran.
+            why = $"the review broke: {exception.Message}";
+        }
+
         CheckVerdict verdict = exitCode switch
         {
             ExitCode.Pass => CheckVerdict.Pass,
@@ -82,13 +92,20 @@ internal sealed class CiReviewCommand(CliContext context) : ICommand
             return (ExitCode.NotEarned, "no spec found for this pull request to review against");
         }
 
+        if (await JudgeGit.ShowFileAsync(inputs.Root, inputs.Head, $"{FeatureLocator.SpecsDirectory}/{featureId}/spec.md", cancellationToken) is null)
+        {
+            return (ExitCode.NotEarned, $"{FeatureLocator.SpecsDirectory}/{featureId}/spec.md does not exist at head; there is no spec to review against");
+        }
+
         Manifest manifest = (basePolicy.Manifest ?? new Manifest(inputs.Root, [], StopGate: false, StopTarget: null, GateSettings.Default));
         Feature feature = new(featureId, Path.Combine(inputs.Root, FeatureLocator.SpecsDirectory, featureId), Path.Combine(output, featureId));
         using StringWriter printed = new();
         CliContext review = context with { Output = new TeeWriter(context.Output, printed) };
         ExitCode exitCode = await new ReviewCommand(review).ReviewForCiAsync(manifest, feature, new ReviewBase(mergeBase, mergeBase, baseCommit, mergeBase), cancellationToken);
         string line = printed.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .LastOrDefault(text => text.StartsWith("Open blocker/major", StringComparison.Ordinal) || text.StartsWith("NOT-EARNED", StringComparison.Ordinal) || text.StartsWith("ERROR", StringComparison.Ordinal))
+            .LastOrDefault(text => text.StartsWith("This run is recorded but is not the review of record", StringComparison.Ordinal))
+            ?? printed.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .LastOrDefault(text => text.StartsWith("Open blocker/major", StringComparison.Ordinal) || text.StartsWith("NOT-EARNED", StringComparison.Ordinal) || text.StartsWith("ERROR", StringComparison.Ordinal))
             ?? $"{source}: review exited {(int)exitCode}";
         return (exitCode, line);
     }
