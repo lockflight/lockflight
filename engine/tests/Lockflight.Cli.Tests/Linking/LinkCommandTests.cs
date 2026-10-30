@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Linking;
 
@@ -36,7 +37,7 @@ public sealed class LinkCommandTests : IDisposable
         await LinkAsync(new RunningEngine(EngineFile("native engine"), IsSingleFile: true));
 
         string expected = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("native engine")));
-        Assert.Equal(expected + "\n", File.ReadAllText(EngineRecord.PathOf(root.FullName)));
+        Assert.Equal(EngineRids.Current is string rid ? $"{expected} {rid}\n" : expected + "\n", File.ReadAllText(EngineRecord.PathOf(root.FullName)));
         Assert.Equal(EngineRecordStatus.Matches, EngineRecord.Check(root.FullName, LinkCommand.BinaryPath(root.FullName)));
     }
 

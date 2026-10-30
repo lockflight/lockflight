@@ -46,7 +46,7 @@ internal static class ReadinessChecks
     public static async Task<IReadOnlyList<DoctorCheck>> RunAsync(
         string root, string? userHome, string? nugetPackages, string? gitleaks, EnvironmentReader environment, TimeProvider time, CancellationToken cancellationToken)
     {
-        List<DoctorCheck> checks = [CheckManifest(root), .. ManifestSettingsChecks.Check(root), CheckPin(root)];
+        List<DoctorCheck> checks = [CheckManifest(root), .. ManifestSettingsChecks.Check(root), CheckPin(root), .. EngineLockCheck.Check(root)];
         if (CheckDevelopmentPin(root, userHome, nugetPackages) is DoctorCheck developmentPin)
         {
             checks.Add(developmentPin);

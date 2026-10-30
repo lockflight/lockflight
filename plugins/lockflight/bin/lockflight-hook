@@ -113,15 +113,29 @@ engine="$root/.lockflight/bin/lockflight"
 # the engine is still that file (-ef) and not writable. So a file moved into place keeping an older modification time, or
 # one copied over the engine with cp -p (which cannot write into a read-only file), is checked again. Where no hard link
 # can be made nothing is remembered and every call checks: the modification time alone cannot tell such a replacement.
-untrusted=""; untrusted_fix=""; unrecorded=""
+untrusted=""; untrusted_fix=""; unrecorded=""; unlocked=""
 record="$root/.lockflight/bin/lockflight.sha256"
+# The engine lock pins the engine by hash per platform: the git-ignored local lock of a development build first, else the
+# committed one. Kept in sync with EngineLocks/EngineLock.cs by ShimSyncTests.
+lockfile="$root/.lockflight/local/engine.lock"
+[ -f "$lockfile" ] || lockfile="$root/.lockflight/engine.lock"
 # engine_recorded: whether the record holds a hash, which it sets in $recorded (a missing or empty record holds none).
 engine_recorded() {
-  recorded=""
+  recorded=""; recorded_rid=""
   [ -f "$record" ] || return 1
   IFS= read -r recorded < "$record" || [ -n "$recorded" ] || return 1
+  case "$recorded" in *" "*) recorded_rid="${recorded#* }"; recorded_rid="${recorded_rid%% *}" ;; esac
   recorded="${recorded%% *}"
   [ -n "$recorded" ]
+}
+# engine_unlocked: whether a lock exists and does not name the recorded engine for the recorded platform (no hashing: the
+# record was compared with the engine already). The lock is read into its own variable; $input holds the hook payload.
+engine_unlocked() {
+  [ -f "$lockfile" ] || return 1
+  payload="$input"; input=$(cat "$lockfile" 2>/dev/null)
+  locked=""; [ -z "$recorded_rid" ] || locked=$(json_string "binaries.$recorded_rid.sha256")
+  input="$payload"
+  [ -z "$locked" ] || [ "$locked" != "$recorded" ]
 }
 # engine_differs: whether the engine's SHA-256 is not the recorded one; a missing hash tool counts as different.
 engine_differs() {
@@ -146,7 +160,8 @@ if [ -x "$engine" ]; then
   fi
   # shellcheck disable=SC3013
   if [ -z "$untrusted" ] && ! { [ -n "$checked" ] && [ "$checked" -nt "$engine" ] && [ "$engine" -ef "$checked.engine" ] \
-      && { [ -n "$windows" ] || ! [ -w "$engine" ]; } && [ -s "$record" ] && [ "$checked" -nt "$record" ]; }; then
+      && { [ -n "$windows" ] || ! [ -w "$engine" ]; } && [ -s "$record" ] && [ "$checked" -nt "$record" ] \
+      && { ! [ -f "$lockfile" ] || [ "$checked" -nt "$lockfile" ]; }; }; then
     # The new marker and hard link are made before the checks and moved into place only when they pass, so no hook reads them
     # early, and the link is to the file that was hashed: one renamed over the engine meanwhile is not that file.
     pending=""; held=""
@@ -163,6 +178,8 @@ if [ -x "$engine" ]; then
         [ -n "$untrusted" ] || { untrusted="it has no hash record (.lockflight/bin/lockflight.sha256): it was linked by a Lockflight older than 0.2.0-alpha.7, or copied in by hand"; unrecorded=1; }
       elif engine_differs; then
         [ -n "$untrusted" ] || { untrusted="its SHA-256 is not the one lockflight link recorded in .lockflight/bin/lockflight.sha256: it was replaced after linking"; untrusted_fix="check what replaced it"; }
+      elif engine_unlocked; then
+        [ -n "$untrusted" ] || { untrusted="it is not the engine ${lockfile#"$root"/} pins for this platform"; unlocked=1; }
       elif [ -n "$held" ] && mv -f "$held" "$checked.engine" 2>/dev/null && mv -f "$pending" "$checked" 2>/dev/null; then
         pending=""
       fi
@@ -174,6 +191,9 @@ untrusted_message="lockflight: the engine at $engine was not run because $untrus
 # An engine without a record may be older than the plugin's min-engine-version too, and an older engine writes no record when
 # linked again, so the fix is update: it installs the newest engine, re-pins the project to it and links it.
 update_in_terminal="open a separate terminal window (not with \`!\` in Claude Code: that runs inside the session and is refused) and run \`~/.lockflight/bin/lockflight update\` in the project: it links the engine again and records its hash"
+if [ -n "$unlocked" ]; then
+  untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Run exactly: ~/.lockflight/bin/lockflight link --installed (it links the locked engine when it is installed); otherwise ask the user to open a separate terminal window (not with \`!\` in Claude Code) and run \`~/.lockflight/bin/lockflight engine install\` in the project"
+fi
 if [ -n "$unrecorded" ]; then
   untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Ask the user to $update_in_terminal"
   # The engine that would tell the person at session start is not run, so the shim does: the same fix, before any refusal.
@@ -234,8 +254,10 @@ if [ -f "$root/.lockflight/lockdown" ]; then
 fi
 if [ "$tool" = "Bash" ]; then
   command=$(json_string tool_input.command)
+  # The ~ is compared as typed, not expanded: the agent's command line is what is matched.
+  # shellcheck disable=SC2088
   case "$command" in
-    "dotnet tool restore"|"dotnet tool restore && dotnet lockflight link"|"dotnet lockflight link") exit 0 ;;
+    "dotnet tool restore"|"dotnet tool restore && dotnet lockflight link"|"dotnet lockflight link"|"~/.lockflight/bin/lockflight link --installed"|".lockflight/bin/lockflight link --installed") exit 0 ;;
   esac
 fi
 if [ -n "$untrusted" ]; then

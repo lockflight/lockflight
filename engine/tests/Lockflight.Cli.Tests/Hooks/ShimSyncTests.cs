@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hooks.Adapters;
 using Lockflight.Cli.Hooks.Requests;
@@ -48,6 +49,26 @@ public sealed partial class ShimSyncTests
     }
 
     [Fact]
+    public void TheShimReadsTheEngineLocksTheEngineReads()
+    {
+        Assert.Contains($"lockfile=\"$root/{EngineLock.LocalRelativePath}\"", Shim.Value, StringComparison.Ordinal);
+        Assert.Contains($"lockfile=\"$root/{EngineLock.RelativePath}\"", Shim.Value, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheInstallScriptReadsJsonWithTheShimsReader()
+    {
+        string script = File.ReadAllText(Path.Combine(Path.GetDirectoryName(ShimLocation.Path)!, "..", "..", "..", "scripts", "install.sh"));
+
+        Assert.Equal(JsonStringFunction().Match(Shim.Value).Value, JsonStringFunction().Match(script).Value);
+        Assert.True(JsonStringFunction().IsMatch(script), "install.sh has no json_string function");
+    }
+
+    [Fact]
+    public void TheShimTakesThePlatformFromTheRecordAndReadsItsHashFromTheLock() =>
+        Assert.Contains("json_string \"binaries.$recorded_rid.sha256\"", Shim.Value, StringComparison.Ordinal);
+
+    [Fact]
     public void TheShimChecksTheRecordLinkWrites() =>
         Assert.Contains($"record=\"$root/{LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName}\"", Shim.Value, StringComparison.Ordinal);
 
@@ -92,6 +113,9 @@ public sealed partial class ShimSyncTests
 
         Assert.Equal(EngineVersion.IsDevelopmentBuild(version), Regex.IsMatch(pinLine, grep.Groups["pattern"].Value, options));
     }
+
+    [GeneratedRegex(@"(?ms)^json_string\(\) \{.*?^\}$")]
+    private static partial Regex JsonStringFunction();
 
     [GeneratedRegex(@"case ""\$tool"" in\s+(?<tools>[A-Za-z|]+)\)")]
     private static partial Regex ReadOnlyToolsCase();

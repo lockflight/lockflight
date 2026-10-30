@@ -311,6 +311,41 @@ Every preset sets `structural: critical`. How each `routing:` key is used, signa
 > change by them yet. `autonomy:` is reserved and has no effect. None of them is a control today; the descriptions above say
 > what they will decide.
 
+### The engine lock
+
+`.lockflight/engine.lock` (`lockflight.engine-lock/v1`, protected under `.lockflight/**`) pins the engine by the SHA-256 of
+each platform's executable, the file `link` copies, and of the vendored install script `.lockflight/ci/install.sh`:
+
+```json
+{
+  "schema": "lockflight.engine-lock/v1",
+  "package": "Lockflight.Cli",
+  "version": "0.3.0",
+  "channel": "release",
+  "installScript": { "sha256": "…" },
+  "binaries": {
+    "linux-arm64": { "sha256": "…" },
+    "linux-x64": { "sha256": "…" },
+    "osx-arm64": { "sha256": "…" },
+    "osx-x64": { "sha256": "…" },
+    "win-x64": { "sha256": "…" }
+  }
+}
+```
+
+- **Written by** `init` (a new project) and `update`, from the release's `engine-hashes.json` (see [`update`](commands.md)). A
+  release that published no hashes gets no lock; the project stays pinned by version in `dotnet-tools.json`, as before.
+- **Read by** `link` (links only the locked engine), the hook shim and the guard (an engine that is not the locked one for this
+  platform runs only reads and the recovery `~/.lockflight/bin/lockflight link --installed`), and `doctor` (the linked engine,
+  the `dotnet-tools.json` mirror of its version, the vendored script).
+- **Strict:** an unknown key, a hash that is not 64 lower-case hex or a release lock without every platform is an error; a
+  platform a later engine adds is ignored by this one.
+- **Development builds** (`scripts/dev-install.sh`) pin themselves in the git-ignored `.lockflight/local/engine.lock`, which the
+  shim and the guard read first; CI never reads it, so a development build cannot become a repository's pin by accident.
+- **Honest label:** the shim's and the guard's check is a guardrail (the agent can change the working tree in ways the guard
+  misses); it catches a stale or swapped engine. The first lock trusts the feed and, when verified, the release's attestation;
+  a person reviewing the lock change is what makes it policy.
+
 ### Built-in protected paths
 
 These always apply; `protected:` can add paths but never remove these. The guard blocks the agent's edits to them and the

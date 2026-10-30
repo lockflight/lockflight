@@ -164,6 +164,9 @@ or add `~/.lockflight/bin` to `PATH` yourself.
   lists. An engine installed as a prerelease follows prereleases. `--source <feed>` replaces the NuGet sources (a mirror, or a
   folder of packages). The plugin updates from its marketplace when a release moves it to a new version: by itself with
   auto-update on for the marketplace (in `/plugin`), or now with `claude plugin update lockflight@lockflight`.
+- **A teammate, a fresh clone or a branch switch:** when the project has an engine lock (`.lockflight/engine.lock`), run
+  `~/.lockflight/bin/lockflight engine install` in the project, in a separate terminal: it installs exactly the locked engine
+  and links it, and changes nothing committed. `update` moves the project to the newest engine instead.
 - **Plugin and engine versions:** the plugin names the oldest engine it works with (`min-engine-version` in the plugin). When
   the plugin has updated past the engine a project pins, Claude Code tells you at session start and `doctor` reports
   **plugin engine** as FAIL; `update` fixes both.
