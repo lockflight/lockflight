@@ -18,11 +18,12 @@
 </div>
 
 **A CI check for .NET pull requests written by coding agents.** It re-runs the evidence behind "done" (tests that failed
-before the code existed and pass after it, unchanged) under your base branch's policy, and gives one verdict.
+before the code existed and pass after it, unchanged or amended and still failing on the old code) under your base branch's
+policy, and gives one verdict.
 
 **Coding agents write code faster than anyone can review it.** An agent says the build is green and the tests came first.
 Instructions in `CLAUDE.md`, skills and reviewer agents ask it to work that way, but an agent can talk its way past a
-paragraph. **It can't talk its way past an exit code.**
+paragraph. It has a much harder time talking its way past an exit code it did not produce.
 
 | "Done" isn't evidence | Rules are optional | Tests come last |
 |---|---|---|
@@ -30,14 +31,20 @@ paragraph. **It can't talk its way past an exit code.**
 
 > [!TIP]
 > **LLMs propose; checks decide.** The judge of record is a CI check: a GitHub Action, and a Bitbucket Pipelines template.
-> It builds and runs the pull request's commits itself and takes its policy and engine from the target branch, so the pull
-> request cannot loosen what judges it. The Claude Code plugin is an optional assistant that runs the same checks on the
+> It builds and runs the pull request's commits itself and takes its policy and engine from the target branch, so with the
+> check required and the workflow under CODEOWNERS, the pull request cannot loosen what judges it. The Claude Code plugin is an optional assistant that runs the same checks on the
 > developer's machine, earlier; the crew agents give advice and decide nothing.
 
 ## Quick start
 
-The shortest path is the GitHub Action, with nothing installed for Claude Code (the CI-only level). With the engine
-installed ([QUICKSTART, step 1](QUICKSTART.md#1-install-the-engine)), at your repository's root:
+> [!NOTE]
+> **The CI judge ships in 0.3.0, which is not released yet.** The prerelease on nuget.org (`0.2.0-alpha.9`) has the gates
+> workflow but not the judge or `init --ci-only`. To try the judge now, install the engine from source and run it on your
+> machine: **[QUICKSTART](QUICKSTART.md)** goes from `git clone` to a first `PASS` on a new solution, every command
+> included. We measured 1 min 17 s of machine time.
+
+From 0.3.0 on, the shortest path is the GitHub Action, with nothing installed for Claude Code (the CI-only level). With the
+engine installed, at your repository's root:
 
 ```sh
 ~/.lockflight/bin/lockflight init --ci-only      # lockflight.yaml, the engine pin, .github/workflows/lockflight-gates.yml
@@ -46,40 +53,35 @@ git add -A && git commit -m "Set up Lockflight"   # on main: the judge reads the
 
 Then, in each pull request, commit the new tests with stubs first, with a trailer
 (`git commit --trailer "Lockflight-Red: 1"`), and the implementation after. The workflow sets two checks, `gates` and
-`lockflight/judge`, and posts a comment with the verdict. Make them required and put the policy and the workflow under
-CODEOWNERS ([CI hardening](docs/guides/ci-hardening.md)).
-
-> [!NOTE]
-> **The CI judge ships in 0.3.0, which is not released yet.** The prerelease on nuget.org (`0.2.0-alpha.9`) has the gates
-> workflow but not the judge. To try the judge now, install the engine from source and run it on your machine:
-> **[QUICKSTART](QUICKSTART.md)** goes from `git clone` to a first `PASS` on a new solution, every command included. We
-> measured 1 min 17 s of machine time.
+`lockflight/judge`, and posts a comment with the verdict. Make `gates` required, and `lockflight/judge` once the team makes
+red commits; put the policy and the workflow under CODEOWNERS ([CI hardening](docs/guides/ci-hardening.md)).
 
 ## How it works
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ci-judge-dark.svg">
-  <img src="docs/assets/ci-judge-light.svg" alt="The pull request, with its head commit and red commits, goes to three jobs under the target branch's policy, baselines and pinned engine. judge, with no secret, re-runs each red commit, checks green at head with the tests unchanged, the trace and the pr gates. review, optional and with an API key, counts findings only with a failing reproduction. report runs no pull request code: it reads both results as data, sets the gates and lockflight/judge checks and posts the comment. The verdict is PASS, FAIL, NOT-EARNED or ERROR." width="100%">
+  <img src="docs/assets/ci-judge-light.svg" alt="The pull request, with its head commit and red commits, goes to three jobs under the target branch's policy, baselines and pinned engine. judge, with no secret, re-runs each red commit, checks green at head with the tests unchanged, the trace and the pr gates. review, optional and with an API key, counts findings only with a failing reproduction. two report jobs run no pull request code: they read both results as data, set the gates and lockflight/judge checks, and one posts the comment. The verdict is PASS, FAIL, NOT-EARNED or ERROR." width="100%">
 </picture>
 
-The workflow `init` writes runs the [CI judge action](docs/guides/ci-hardening.md#the-ci-judge-action) in three jobs. Only
-`review` holds an API key, and only when you turn it on. `report` never runs the pull request's code.
+The workflow `init` writes runs the [CI judge action](docs/guides/ci-hardening.md#the-ci-judge-action) in four jobs: `judge`,
+`review`, and two report jobs that set `gates` and `lockflight/judge`. Only `review` holds an API key, and only when you turn
+it on. The report jobs never run the pull request's code.
 
 ## What the judge checks
 
 | Check | What passes |
 |---|---|
-| **Red** | At each commit with a `Lockflight-Red` trailer, the new tests compile and fail inside production code (a stub that throws, or a wrong result), not in the test itself. The trailer is never trusted: the judge re-runs that commit. |
+| **Red** | At each commit with a `Lockflight-Red` trailer, the new tests compile and fail because of production code: a stub that throws (RED_STUB), or an assertion on a result production code returned (RED_ASSERT), not a failure in the test's own setup. The trailer is never trusted: the judge re-runs that commit. |
 | **Green** | At head the same tests pass, nothing else fails beyond the accepted baseline, and no test was deleted or skipped. |
-| **Tests since red** | Each test that went red is the same test at head (compared by a fingerprint of its compiled code), or a changed one still fails on the red commit's code. |
+| **Tests since red** | Each test that went red is the same test at head (compared by a fingerprint of its compiled code), or an amended one still fails on the red commit's code. |
 | **Trace** | With a spec (`specs/<id>/spec.md`, [the spec contract](docs/guides/spec-contract.md)), every requirement has a test that went red and then green. Spec Kit is optional. |
 | **Gates** | Format, build with no new warnings, tests, patch coverage, vulnerable packages and secrets; added suppressions and pending EF Core model changes where configured. |
-| **Host tampering** | No new code in the test assemblies of the plain kinds that could forge a result: a module initializer, a process exit, a file write outside the temporary folder, setting CI variables. |
+| **Host tampering** | No new code in the test assemblies of the plain kinds that could forge a result: a module initializer, a process exit, a file write outside the temporary folder, setting CI variables, among others. A new finding is NOT-EARNED. It is a static scan: an obfuscated call evades it. |
 | **Review** (optional) | With an API key, an independent reviewer's blocking findings count only when a failing reproduction test confirms them. Without a key it is skipped. |
 | **Existing tests changed** (advisory) | A changed old test still tells the old behaviour from the new. Reported for the person who merges; it blocks nothing yet. |
 
 Results land in two checks: **`gates`** (the gates and green at head, the meaning existing rulesets rely on) and
-**`lockflight/judge`** (everything above). Approvals are listed but not judged by this engine version yet.
+**`lockflight/judge`** (red, tests since red, host tampering, trace, review, existing tests changed). Approvals are listed but not judged by this engine version yet.
 
 ### Four verdicts
 
@@ -103,9 +105,10 @@ Results land in two checks: **`gates`** (the gates and green at head, the meanin
 How much evidence a pull request needs should follow what it changes, not who opened it. The engine computes a change class
 from the diff and the base branch's policy: **fix**, **behaviour**, **feature** (an API or the database) or **critical**
 (paths the policy marks critical, the policy itself, the build structure). A class can be raised, never lowered, and a
-higher class never needs less; a critical change, for example, needs a review with a key. `lockflight route show` prints a
-branch's class. The judge in this version still uses a simpler interim classifier: docs only, or package versions only, need
-no red; anything else is a behaviour change. [Risk routing](docs/guides/risk-routing.md) says what is in force.
+higher class never needs less; a critical change, for example, would need a review with a key. `lockflight route show`
+prints a branch's class, but no check uses the classes yet: the judge in this version uses a simpler interim classifier.
+Paths in `ci.lowRiskPaths` (docs by default) need no red/green cycle, package versions only need no red, and anything else
+is a behaviour change. [Risk routing](docs/guides/risk-routing.md) says what is in force.
 
 ## Install levels
 
@@ -118,7 +121,7 @@ request ([install levels](docs/guides/install-levels.md)).
 | On the machine | nothing | Claude Code deny rules and sandbox settings for the policy files, a `CLAUDE.md` block, hooks that run a linked engine | the plugin: the guard, the Stop gate, skills, `/lockflight:*` commands, the status line |
 | For | any agent, or none | Claude Code without a plugin marketplace | Claude Code, with the full local loop |
 
-With the plugin, the guard keeps the agent from editing the policy and from changing tests while they are red, the Stop gate
+With the plugin, the guard blocks the agent's common edits to the policy and to tests while they are red, the Stop gate
 builds and tests before a turn can end, and `redgreen red` makes the red commits. The optional
 [crew](docs/guides/skills.md#the-crew-optional) writes specs and plans to the contract; what it writes is judged like any
 other code. Setup: [getting started](docs/guides/getting-started.md).
@@ -145,7 +148,8 @@ Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-
 
 ## Status
 
-**Alpha, for .NET:** SDK-style .NET 8, 9 and 10 projects, with xUnit v3 or v2, NUnit or MSTest. The engine is a Native AOT
+**Alpha, for .NET:** SDK-style .NET 8, 9 and 10 projects. In CI, the judge's red/green runs on xUnit (v3 and v2) and NUnit,
+and other test projects get the gates' test step; the local lifecycle also covers MSTest. The engine is a Native AOT
 binary for macOS, Linux and Windows, with over 1,700 unit tests and end-to-end suites on all three. 0.3.0, the CI judge, is
 being finished on `main`; the formats freeze at its release.
 

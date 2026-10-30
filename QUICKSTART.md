@@ -124,7 +124,7 @@ PASS head d1e623b, class behaviour (interim), 1 red commits, policy from c2b10dc
 ```
 
 That is the first green: the judge checked out the red commit, saw the new test fail inside production code (the stub's
-`NotImplementedException`), then saw the same, unchanged test pass at head, with the gates passing under `main`'s policy.
+`NotImplementedException`), then saw the same test, unchanged, pass at head, with the gates passing under `main`'s policy.
 `lockflight ci` refuses uncommitted changes, and it writes its evidence to `.lockflight/local/ci/last.json`.
 
 **See it say no.** Put the test and the implementation in the same red commit and run the judge again:
@@ -144,7 +144,8 @@ From 0.3.0 on, with a project set up from the released engine:
 
 1. Push `main` with the commit `init` made, then push the feature branch and open a pull request. The workflow's `judge` job
    runs the same `lockflight ci` with the engine and the policy of the target branch, and two checks appear: `gates` (the
-   gates and green at head) and `lockflight/judge` (red, tests since red, trace, review, approvals). A comment on the pull
+   gates and green at head) and `lockflight/judge` (red, tests since red, host tampering, trace, review, existing tests
+   changed; approvals are listed, not judged yet). A comment on the pull
    request shows the verdict and the table above.
 2. Make `gates` a required check, and `lockflight/judge` too once the team makes red commits.
 3. Route the policy and the workflow to a code owner. Without that, a pull request can change the workflow GitHub runs for
