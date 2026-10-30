@@ -8,6 +8,9 @@ public sealed class JudgeBlockedTests
 {
     private static readonly string Head = new('a', 40);
 
+    /// <summary>The checks that are off in the evidence of a required review no key ran: a report joins only complete evidence.</summary>
+    private static readonly string[] OffChecks = ["red", "tests.sinceRed", "tests.existingChanged", "tests.hostTampering", "trace", "approvals", "routing"];
+
     [Fact]
     public void ARunOutOfTimeWaitsForAMaintainerToRaiseTheLimit()
     {
@@ -46,11 +49,16 @@ public sealed class JudgeBlockedTests
         JsonObject evidence = new()
         {
             ["schema"] = "lockflight.ci-evidence/v1",
+            ["event"] = "pr",
             ["head"] = Head,
             ["feature"] = new JsonObject { ["id"] = "001-shipping" },
             ["checks"] = new JsonArray(
+            [
                 new JsonObject { ["id"] = "green", ["context"] = "gates", ["verdict"] = "PASS", ["requirement"] = "required", ["why"] = "green" },
-                new JsonObject { ["id"] = "review", ["context"] = "lockflight/judge", ["verdict"] = "SKIPPED", ["requirement"] = "required", ["why"] = "expected" }),
+                new JsonObject { ["id"] = "gates", ["context"] = "gates", ["verdict"] = "PASS", ["requirement"] = "required", ["why"] = "gates" },
+                new JsonObject { ["id"] = "review", ["context"] = "lockflight/judge", ["verdict"] = "SKIPPED", ["requirement"] = "required", ["why"] = "expected" },
+                .. OffChecks.Select(id => new JsonObject { ["id"] = id, ["context"] = "lockflight/judge", ["verdict"] = "N/A", ["requirement"] = "off", ["why"] = "off" }),
+            ]),
             ["blocked"] = null,
             ["finishedAt"] = "2026-11-02T10:15:00Z",
         };
@@ -62,7 +70,9 @@ public sealed class JudgeBlockedTests
         Assert.Equal("grant-access", verdict["blocked"]!["needs"]![0]!["action"]!.GetValue<string>());
         Assert.Equal("001-shipping", verdict["blocked"]!["feature"]!.GetValue<string>());
 
-        evidence["checks"]!.AsArray().Add(new JsonObject { ["id"] = "red", ["context"] = "lockflight/judge", ["verdict"] = "NOT-EARNED", ["requirement"] = "required", ["why"] = "no red commit" });
+        JsonArray checks = evidence["checks"]!.AsArray();
+        checks.Remove(checks.Single(check => check!["id"]!.GetValue<string>() == "red"));
+        checks.Add(new JsonObject { ["id"] = "red", ["context"] = "lockflight/judge", ["verdict"] = "NOT-EARNED", ["requirement"] = "required", ["why"] = "no red commit" });
         evidence["blocked"] = null;
         Assert.Null(CiReportCommand.Join(evidence, Head, null)["blocked"]);
     }
