@@ -117,7 +117,7 @@ public sealed class RedCommitterTests : IAsyncLifetime
         RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
 
         Assert.Null(outcome.Commit);
-        Assert.Contains($"git read-tree {snapshot.Commit} && git commit --no-verify", outcome.Message, StringComparison.Ordinal);
+        Assert.Contains($"git read-tree {snapshot.Commit} && git commit --allow-empty --no-verify", outcome.Message, StringComparison.Ordinal);
         await repository.GitAsync(["read-tree", snapshot.Commit!], cancellationToken);
         await repository.GitAsync(["commit", "-q", "--no-verify", "-m", "red"], cancellationToken);
         Assert.Equal(await repository.CommitOfAsync($"{snapshot.Commit}^{{tree}}", cancellationToken), await repository.CommitOfAsync("HEAD^{tree}", cancellationToken));
@@ -135,5 +135,53 @@ public sealed class RedCommitterTests : IAsyncLifetime
 
         Assert.NotNull(outcome.Commit);
         Assert.Equal(string.Empty, (await empty.GitAsync(["diff", "--cached", "--name-only"], cancellationToken)).Trim());
+    }
+
+    [Fact]
+    public async Task AnUntrackedFileInAProjectThatIsNotSourceIsRefused()
+    {
+        repository.Write("tests/Shop.Tests/PriceTests.cs", "class PriceTests {}\n").Write("src/Shop/appsettings.Local.json", "{ \"key\": \"secret\" }\n");
+
+        string? refusal = await RedCommitter.RefusalAsync(repository.Root, TimeLimit, TestContext.Current.CancellationToken);
+
+        Assert.NotNull(refusal);
+        Assert.Contains("src/Shop/appsettings.Local.json", refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain("PriceTests.cs", refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TestsCommittedBeforeTheRedStillGetARedCommit()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string tests = await repository.Write("tests/Shop.Tests/PriceTests.cs", "class PriceTests {}\n").CommitAsync("test: prices", cancellationToken);
+        RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
+
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+
+        Assert.NotNull(outcome.Commit);
+        Assert.Equal(tests, await repository.CommitOfAsync("HEAD^", cancellationToken));
+        Assert.Equal(await repository.CommitOfAsync($"{tests}^{{tree}}", cancellationToken), await repository.CommitOfAsync("HEAD^{tree}", cancellationToken));
+    }
+
+    [Fact]
+    public async Task AnIndexGitCannotResetIsReported()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        repository.Write("tests/Shop.Tests/PriceTests.cs", "class PriceTests {}\n");
+        RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
+        repository.Write(".git/index.lock", string.Empty);
+
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+
+        Assert.NotNull(outcome.Commit);
+        Assert.Contains("git reset -q", outcome.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ACherryPickOfSeveralCommitsInProgressIsRefused()
+    {
+        repository.Write(".git/sequencer/todo", "pick 0000000 x\n");
+
+        Assert.Contains("cherry-pick or revert is in progress", await RedCommitter.RefusalAsync(repository.Root, TimeLimit, TestContext.Current.CancellationToken), StringComparison.Ordinal);
     }
 }

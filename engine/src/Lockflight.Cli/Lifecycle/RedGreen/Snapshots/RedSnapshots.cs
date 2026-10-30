@@ -177,6 +177,6 @@ internal static class RedSnapshots
         return await SnapshotGit.OutputAsync(["commit-tree", "--no-gpg-sign", tree, .. parent, "-m", "lockflight: red-time snapshot"], top, timeLimit, identity, cancellationToken);
     }
 
-    private static bool IsNotSource(string path) =>
+    internal static bool IsNotSource(string path) =>
         !path.StartsWith(EngineDirectory, StringComparison.Ordinal) && !SourceExtensions.Contains(Path.GetExtension(path));
 }

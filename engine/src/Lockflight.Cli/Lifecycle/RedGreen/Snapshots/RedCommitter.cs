@@ -16,7 +16,8 @@ internal static class RedCommitter
 
     /// <summary>
     /// Why a red with red commits on cannot be committed, said before its build: a detached HEAD, a merge, rebase or cherry-pick in
-    /// progress, or untracked files outside the project directories (which the snapshot, and so the commit, would hold). Null when
+    /// progress, or untracked files outside the project directories or that do not look like source (which the snapshot, and so
+    /// the pushed commit, would hold). Null when
     /// it can, or outside a git repository (no snapshot, nothing to commit).
     /// </summary>
     public static async Task<string?> RefusalAsync(string root, TimeSpan timeLimit, CancellationToken cancellationToken)
@@ -32,12 +33,18 @@ internal static class RedCommitter
             return "HEAD is detached; check out the feature branch, then run the red again (the accepted red is committed on it)";
         }
 
-        foreach (string state in new[] { "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply" })
+        foreach (string state in new[] { "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply", "sequencer" })
         {
             ProcessResult path = await SnapshotGit.RunAsync(["rev-parse", "--git-path", state], root, timeLimit, cancellationToken);
             if (path.ExitCode == 0 && Path.Exists(Path.GetFullPath(path.Output.Trim(), root)))
             {
-                return $"a {(state.StartsWith("rebase", StringComparison.Ordinal) ? "rebase" : state[..state.IndexOf('_', StringComparison.Ordinal)].ToLowerInvariant())} is in progress; finish or abort it, then run the red again";
+                string operation = state switch
+                {
+                    "sequencer" => "cherry-pick or revert",
+                    _ when state.StartsWith("rebase", StringComparison.Ordinal) => "rebase",
+                    _ => state[..state.IndexOf('_', StringComparison.Ordinal)].ToLowerInvariant(),
+                };
+                return $"a {operation} is in progress; finish or abort it, then run the red again";
             }
         }
 
@@ -58,15 +65,18 @@ internal static class RedCommitter
         string[] allowed = [
             prefix + "specs/",
             prefix + ".lockflight/features/",
-            .. Directory.EnumerateFiles(root, "*.*proj", SearchOption.AllDirectories)
+            .. Directory.EnumerateFiles(root, "*.*proj", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint })
                 .Select(path => Path.GetRelativePath(root, Path.GetDirectoryName(path)!).Replace('\\', '/'))
                 .Where(directory => !directory.Split('/').Any(segment => segment is "bin" or "obj"))
                 .Select(directory => directory == "." ? prefix : $"{prefix}{directory}/"),
         ];
-        string[] stray = [.. listing.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries).Where(path => !allowed.Any(start => path.StartsWith(start, StringComparison.Ordinal)))];
+        // A file in a project directory goes in too, and the red commit is pushed with the branch: one that does not look like
+        // source (a local settings file, a certificate, a dump) is refused as well.
+        string[] stray = [.. listing.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries)
+            .Where(path => !allowed.Any(start => path.StartsWith(start, StringComparison.Ordinal)) || RedSnapshots.IsNotSource(path.StartsWith(prefix, StringComparison.Ordinal) ? path[prefix.Length..] : path))];
         return stray.Length == 0
             ? null
-            : $"untracked files outside the project directories would go into the red commit: {string.Join(", ", stray.Take(RedGreenSession.MaxTestsListed))}"
+            : $"untracked files outside the project directories, or that do not look like source, would go into the red commit: {string.Join(", ", stray.Take(RedGreenSession.MaxTestsListed))}"
               + $"{(stray.Length > RedGreenSession.MaxTestsListed ? $" and {stray.Length - RedGreenSession.MaxTestsListed} more" : string.Empty)}; add them to .gitignore, or commit them yourself, then run the red again";
     }
 
@@ -82,7 +92,7 @@ internal static class RedCommitter
         string? started = await SnapshotGit.OutputAsync(["rev-parse", "--verify", "--quiet", $"{snapshot}^1"], root, timeLimit, cancellationToken);
         string? branch = await SnapshotGit.OutputAsync(["symbolic-ref", "-q", "HEAD"], root, timeLimit, cancellationToken);
         string? head = await SnapshotGit.OutputAsync(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], root, timeLimit, cancellationToken);
-        string byHand = $"git read-tree {snapshot} && git commit --no-verify -m \"{subject}\" -m \"{trailer}\"";
+        string byHand = $"git read-tree {snapshot} && git commit --allow-empty --no-verify -m \"{subject}\" -m \"{trailer}\"";
         if (branch is null || head != started)
         {
             return new RedCommitOutcome(null,
@@ -99,7 +109,7 @@ internal static class RedCommitter
                 return new RedCommitOutcome(null, "git could not read the red-time tree into an index; commit the red yourself: " + byHand);
             }
 
-            ProcessResult commit = await SnapshotGit.RunAsync(["commit", "-q", "-m", subject, "-m", trailer], root, timeLimit, privateIndex, cancellationToken);
+            ProcessResult commit = await SnapshotGit.RunAsync(["commit", "-q", "--allow-empty", "-m", subject, "-m", trailer], root, timeLimit, privateIndex, cancellationToken);
             if (commit.ExitCode != 0)
             {
                 return new RedCommitOutcome(null,
@@ -115,13 +125,15 @@ internal static class RedCommitter
                     $"Red commit {RedGreenSession.Short(committed)} was made, but HEAD moved while it was made: its parent is {Describe(parent)}, not {Describe(started)}. Check it before you push.");
             }
 
-            await KeepIndexAsync(root, timeLimit, cancellationToken);
+            string indexNote = await KeepIndexAsync(root, timeLimit, cancellationToken)
+                ? string.Empty
+                : " git could not reset your index to the red commit for its paths, so they show as staged changes against it: run git reset -q before you commit again.";
             ProcessResult committedTree = await SnapshotGit.RunAsync(["rev-parse", "HEAD^{tree}"], root, timeLimit, cancellationToken);
             ProcessResult judgedTree = await SnapshotGit.RunAsync(["rev-parse", $"{snapshot}^{{tree}}"], root, timeLimit, cancellationToken);
             string note = committedTree.Output.Trim() == judgedTree.Output.Trim()
                 ? $"Red commit {RedGreenSession.Short(committed)} ({subject}, {trailer}): the tree this red judged; CI re-runs the red there."
                 : $"Red commit {RedGreenSession.Short(committed)} differs from the tree this red judged (a hook changed it); CI judges the commit as it is.";
-            return new RedCommitOutcome(committed, note);
+            return new RedCommitOutcome(committed, note + indexNote);
         }
         finally
         {
@@ -130,17 +142,27 @@ internal static class RedCommitter
     }
 
     /// <summary>
-    /// Resets the person's index to the new commit for the paths the red commit holds, keeping everything else staged. The paths
+    /// Resets the person's index to the new commit for the paths the red commit holds, keeping everything else staged; false when git fails. The paths
     /// are the repository's (<c>top</c> magic), so a project root below the top level resets the right ones; a first commit has
     /// no parent to compare with (<c>--root</c>).
     /// </summary>
-    private static async Task KeepIndexAsync(string root, TimeSpan timeLimit, CancellationToken cancellationToken)
+    private static async Task<bool> KeepIndexAsync(string root, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         ProcessResult changed = await SnapshotGit.RunAsync(["diff-tree", "--no-commit-id", "--root", "-r", "--name-only", "-z", "--no-renames", "HEAD"], root, timeLimit, cancellationToken);
+        if (changed.ExitCode != 0)
+        {
+            return false;
+        }
+
         foreach (string[] chunk in changed.Output.Split('\0', StringSplitOptions.RemoveEmptyEntries).Chunk(PathsPerCall))
         {
-            await SnapshotGit.RunAsync(["reset", "-q", "HEAD", "--", .. chunk.Select(path => $":(top,literal){path}")], root, timeLimit, cancellationToken);
+            if ((await SnapshotGit.RunAsync(["reset", "-q", "HEAD", "--", .. chunk.Select(path => $":(top,literal){path}")], root, timeLimit, cancellationToken)).ExitCode != 0)
+            {
+                return false;
+            }
         }
+
+        return true;
     }
 
     private static string Describe(string? commit) => commit is null ? "no commit yet" : RedGreenSession.Short(commit);
