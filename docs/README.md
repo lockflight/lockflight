@@ -13,6 +13,7 @@ New here? Start with <a href="guides/getting-started.md">getting started</a>, th
 
 | Page | Read it when |
 |---|---|
+| [Quickstart](../QUICKSTART.md) | You want a first green verdict from the CI judge on a new solution, with every command, before you set up your own repository. |
 | [Getting started](guides/getting-started.md) | You are installing Lockflight and setting up a repository: the lite and standard profiles, step by step, and the status line. |
 | [Install levels](guides/install-levels.md) | You choose how much runs on developers' machines: CI only, CI + native Claude Code settings (`init --native`), or CI + plugin. |
 
