@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Routing;
@@ -65,7 +66,14 @@ internal sealed class RouteShowCommand(CliContext context) : ICommand
             policy = basePolicy;
             manifest = null;
         }
-        Classification classification = ChangeClassifier.Classify(changeSet, policy, []);
+        RaiseReading raises = await RaiseReader.ReadAsync(root, changeSet, new RaiseInputs(CurrentBranch(root, headRef), [], Raise: null), cancellationToken);
+        if (raises.Status != RaiseReadStatus.Read)
+        {
+            await context.Error.WriteLineAsync($"lockflight route show: {string.Join("; ", raises.Notes)}");
+            return ExitCode.Error;
+        }
+
+        Classification classification = ChangeClassifier.Classify(changeSet, policy, raises.Raises);
         RequirementSet requirements = ClassRequirements.For(classification.Class, policy);
         if (options.Flag(JsonFlag))
         {
@@ -74,7 +82,10 @@ internal sealed class RouteShowCommand(CliContext context) : ICommand
         else
         {
             await WriteTextAsync(classification, requirements, policy, manifest, baseRef, headRef);
-
+            foreach (string note in raises.Notes)
+            {
+                await context.Output.WriteLineAsync($"note: {note}");
+            }
         }
 
         return classification.Failures.Count == 0 ? ExitCode.Pass : ExitCode.Fail;
@@ -116,6 +127,9 @@ internal sealed class RouteShowCommand(CliContext context) : ICommand
             await context.Output.WriteLineAsync($"FAIL {failure}");
         }
     }
+
+    /// <summary>The branch that names the covering feature: checked out locally; none for a commit pair (CI passes its own).</summary>
+    private static string? CurrentBranch(string root, string? headRef) => headRef is null ? GitBranch.Current(root) : null;
 
     /// <summary>The evidence's <c>changeClass</c> block and the requirement set, as <c>{ "changeClass": …, "requirements": […] }</c>.</summary>
     private async Task WriteJsonAsync(Classification classification, RequirementSet requirements, CancellationToken cancellationToken)
