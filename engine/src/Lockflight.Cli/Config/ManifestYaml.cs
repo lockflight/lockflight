@@ -34,7 +34,7 @@ internal static class ManifestYaml
     /// <summary>The <c>approvals:</c> section with <paramref name="check"/> and the preset's <c>specFirstFrom</c>.</summary>
     public static string Approvals(ApprovalCheckMode check, RoutingPreset preset) => $"""
         approvals:                      # the approval of record is the platform's review of the pull request
-          check: {(check == ApprovalCheckMode.Fail ? "fail" : "report")}
+          check: {ApprovalNames.ToName(check)}
           default: same-pr
           specFirstFrom: {ChangeClassNames.ToName(RoutingPresets.SpecFirstFrom(preset))}
           specFirstPaths: []

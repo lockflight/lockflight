@@ -15,4 +15,7 @@ internal sealed record CodeownersPlatform(IReadOnlyList<string> Locations, bool 
     public static CodeownersPlatform Bitbucket { get; } = new([".bitbucket/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"], Sections: false);
 
     public static CodeownersPlatform None { get; } = new([], Sections: false);
+
+    /// <summary>A local run, which does not know the platform: the first file present at any platform's location, without sections.</summary>
+    public static CodeownersPlatform Local { get; } = new([".github/CODEOWNERS", ".gitlab/CODEOWNERS", ".bitbucket/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"], Sections: false);
 }

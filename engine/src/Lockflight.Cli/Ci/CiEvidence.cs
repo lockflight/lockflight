@@ -1,8 +1,10 @@
-using Lockflight.Cli.Config;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Lockflight.Cli.ApprovalsOfRecord;
+using Lockflight.Cli.Config;
+using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Routing;
 
@@ -58,6 +60,7 @@ internal static class CiEvidence
                         ["path"] = Cap(spec.SpecPath),
                         ["sha256"] = spec.SpecText is string specText ? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(specText))) : null,
                         ["origin"] = spec.Origin switch { SpecOrigin.Base => "base", SpecOrigin.Shell => "shell", _ => "head" },
+                        ["shell"] = spec.ShellCommit is string shellCommit ? new JsonObject { ["url"] = spec.ShellUrl, ["commit"] = shellCommit } : null,
                     },
                 }
                 : null,
@@ -90,8 +93,17 @@ internal static class CiEvidence
                 }
                 : null,
             ["gates"] = run.Findings.Gates?.Result?.DeepClone(),
-            ["approvals"] = null,
-            ["blocked"] = null,
+            ["specDiff"] = run.Findings.SpecDiff is SpecDiff specDiff
+                ? new JsonObject
+                {
+                    ["paths"] = Strings(specDiff.Paths.Select(Cap)),
+                    ["lines"] = specDiff.Lines,
+                    ["truncated"] = specDiff.Truncated,
+                    ["text"] = specDiff.Text,
+                }
+                : null,
+            ["approvals"] = run.Findings.Approvals is ApprovalsJudgement approvals ? ApprovalsNode(approvals, plan) : null,
+            ["blocked"] = JudgeBlocked.For(run) is BlockedReport blocked ? BlockedReportJson.Render(blocked) : null,
             ["review"] = new JsonObject { ["state"] = inputs.ReviewExpected ? "expected" : "not-expected", ["artifact"] = inputs.ReviewExpected ? "lockflight-review" : null },
             ["checks"] = new JsonArray([.. run.Checks.Select(CheckNode)]),
             ["contexts"] = new JsonObject
@@ -165,6 +177,54 @@ internal static class CiEvidence
         })]),
         ["raises"] = new JsonArray([.. classification.Raises.Select(raise => new JsonObject { ["source"] = raise.Source, ["to"] = ChangeClassNames.ToName(raise.To) })]),
         ["engine"] = engineVersion,
+    };
+
+    /// <summary>
+    /// The approvals section (contracts-0.3.md §4.3): the policy's check and mode, the spec-first facts, each phase's state as git can
+    /// show it, and the CODEOWNERS coverage. <c>platform</c> says what Lockflight checked, not that someone approved; CI never reports
+    /// <c>person</c>, because a local approval record is a file the agent's session could have written.
+    /// </summary>
+    private static JsonObject ApprovalsNode(ApprovalsJudgement approvals, JudgePlan plan)
+    {
+        ApprovalsFacts facts = approvals.Facts;
+        string where = plan.Shell is null ? "on base" : "in the workspace shell";
+        string rule = $"approvals.default={ApprovalNames.ToName(facts.Mode)}";
+        string covered = $"CODEOWNERS {where} covers {string.Join(", ", facts.Codeowners.Covers)}";
+        string? problem = facts.Problems.Count > 0 ? Cap(facts.Problems[0]) : null;
+        return new JsonObject
+        {
+            ["check"] = ApprovalNames.ToName(facts.Check),
+            ["mode"] = ApprovalNames.ToName(facts.Mode),
+            ["verdict"] = CheckVerdictNames.ToName(approvals.Verdict),
+            ["specFirst"] = new JsonObject
+            {
+                ["applies"] = facts.SpecFirst.Applies,
+                ["because"] = Strings(facts.SpecFirst.Because.Select(Cap)),
+                ["spec"] = facts.SpecFirst.SpecPath is string specPath ? Cap(specPath) : null,
+                ["specOnBase"] = facts.SpecFirst.Applies ? facts.SpecFirst.SpecOnBase : null,
+                ["changedSpecs"] = Strings(facts.SpecFirst.ChangedSpecs.Select(Cap)),
+            },
+            ["phases"] = new JsonArray(
+                Phase("spec", facts.Codeowners.Complete && facts.SpecFirst.Satisfied, facts.SpecFirst.Applies ? $"{covered}; the spec was merged first and is unchanged" : covered, problem, facts.SpecFirst.Applies ? string.Join("; ", facts.SpecFirst.Because) : rule),
+                Phase("tasks", facts.Codeowners.Complete, covered, problem, rule)),
+            ["codeowners"] = new JsonObject
+            {
+                ["file"] = facts.Codeowners.File,
+                ["from"] = facts.Codeowners.From,
+                ["covers"] = Strings(facts.Codeowners.Covers.Select(Cap)),
+                ["missing"] = Strings(facts.Codeowners.Missing.Select(Cap)),
+            },
+            ["problems"] = Strings(facts.Problems.Select(Cap)),
+        };
+    }
+
+    private static JsonObject Phase(string phase, bool delegated, string detail, string? problem, string rule) => new()
+    {
+        ["phase"] = phase,
+        ["state"] = delegated ? "platform" : "missing",
+        ["detail"] = Cap(delegated ? detail : problem ?? detail),
+        ["rule"] = Cap(rule),
+        ["record"] = null,
     };
 
     private static JsonObject TamperingNode(TamperingFinding finding) => new()
