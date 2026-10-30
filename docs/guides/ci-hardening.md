@@ -100,8 +100,9 @@ trailer it builds that commit and requires its new tests to fail inside producti
 be the same test at head (or to fail again on the red commit's code when it changed) and to pass there, the spec's
 requirements to be traced to those tests, and the `pr` gates to pass, all with the target branch's policy.
 
-- **Unforgeable from the pull request** (with a required check and CODEOWNERS on the workflow files): which commits and
-  tests are examined, the policy, baselines and engine version, and that the check runs at all.
+- **Unforgeable from the pull request** (with the judge a required check, and a required code-owner review covering the
+  workflow files): the policy, baselines and engine the judge runs with, and that the check runs at all. Which commits and
+  tests it examined reaches the report jobs through the evidence file, which the next points limit.
 - **A strong guardrail, not a boundary:** the test results. The tests are the pull request's code and run in the judge job,
   so a determined pull request can forge their outcome. Doing so needs deliberate code in the test assemblies that tampers
   with the test host, which is visible in the test diff; the host-tampering check lists the plain forms of it and is
