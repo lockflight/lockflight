@@ -10,6 +10,7 @@ contributors who run or extend them.
 
 | Suite | What it checks | Runs in |
 |---|---|---|
+| [`compat/cross-version.sh`](compat/cross-version.sh) | A Lockflight 0.2 engine (installed from nuget.org) on a version 2 manifest: doctor names the version, a read passes, a write and the 0.2 recovery command are blocked | by hand before a release (needs the network) |
 | [`compat/probe-suite.sh`](compat/probe-suite.sh) | LLM-free hook compatibility: Claude Code-shaped hook JSON through `plugins/lockflight/bin/lockflight-hook` into the engine, exit codes for every protected-path, recovery and lockdown case, and an engine replaced after linking (refused for writes; the engine as linked is allowed) | locally; CI on Linux, macOS, Windows (Git Bash) before a release |
 | [`compat/run-windows.ps1`](compat/run-windows.ps1) | The Windows kit: build and unit tests, the compatibility suite, hook latency, and real Claude Code hook forms | manually on a Windows machine |
 | [`gates/step-order.sh`](gates/step-order.sh) | Which gate steps each profile runs and in what order, with stand-ins for the .NET SDK and gitleaks: the projects the stop profile chooses in a solution (a change, `--full`, a shared build input); a single repository stops at the first step that does not pass; a workspace runs policy and format once at the root, build, test, coverage and dependencies per unit, secrets only when everything before passed, with N/A rows for skipped units; output compared with [`gates/step-order.expected`](gates/step-order.expected) | locally; CI on Linux and macOS |

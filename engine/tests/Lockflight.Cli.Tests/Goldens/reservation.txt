@@ -1,5 +1,6 @@
 version: reserved=False words=- shell=- powershell=-
 link: reserved=False words=- shell=- powershell=-
+engine verify-lock: reserved=False words=- shell=- powershell=-
 engine install: reserved=True words=engine install shell=engine install powershell=engine install
 init: reserved=False words=- shell=- powershell=-
 doctor: reserved=False words=- shell=- powershell=-

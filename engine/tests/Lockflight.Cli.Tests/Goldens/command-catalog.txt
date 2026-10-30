@@ -1,6 +1,7 @@
 global: --help -h --version
 version: []
 link: [--installed]
+engine verify-lock: [--source --attestation] arguments
 engine install: [--source]
 init: [--profile --preset --ci --ci-platform --unit-of --unit-path --speckit-preset --quality --architecture-tests --dry-run --no-link --no-sandbox]
 doctor: [--self-test --canaries --canaries=full]
