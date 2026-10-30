@@ -18,6 +18,12 @@ internal sealed record GateRunContext(
     /// </summary>
     public string? UnitPath { get; init; }
 
+    /// <summary>
+    /// The policy the run judges with when it is not the manifest on disk: a unit repository's manifest made at least as strict as its
+    /// workspace shell's policy (<c>gate run --shell</c>). Null when the manifest on disk is the policy.
+    /// </summary>
+    public Manifest? Policy { get; init; }
+
     /// <summary>The unit's <c>build:</c> solution or project file, passed to build, test and package listing; null for the one in the target.</summary>
     public string? BuildFile { get; init; }
 

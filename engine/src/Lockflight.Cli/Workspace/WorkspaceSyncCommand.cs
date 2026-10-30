@@ -53,9 +53,13 @@ internal sealed class WorkspaceSyncCommand(CliContext context) : ICommand
         return check && drift.Count > 0 ? ExitCode.Fail : ExitCode.Pass;
     }
 
-    /// <summary>Units that get vendored policy: .NET units that are their own repository (a unit without a .NET build has no gates for its CI yet).</summary>
+    /// <summary>
+    /// Units that get vendored policy: .NET units that are their own repository (a unit without a .NET build has no gates for its CI
+    /// yet), except those whose own manifest points at the shell (<c>init --unit-of</c>): their CI reads the shell's policy itself.
+    /// </summary>
     public static IEnumerable<Unit> Vendored(Manifest manifest) =>
-        manifest.Units.Where(unit => UnitDiscovery.IsRepository(DirectoryOf(manifest, unit)) && Gates.WorkspaceGateRunner.BuildsWithDotnet(manifest, unit));
+        manifest.Units.Where(unit => UnitDiscovery.IsRepository(DirectoryOf(manifest, unit)) && Gates.WorkspaceGateRunner.BuildsWithDotnet(manifest, unit)
+            && !UnitPointer.PointsToShell(DirectoryOf(manifest, unit), unit));
 
     /// <summary>What differs between each vendored unit and the shell's policy, without changing anything.</summary>
     public static IReadOnlyList<string> Drift(Manifest manifest) =>

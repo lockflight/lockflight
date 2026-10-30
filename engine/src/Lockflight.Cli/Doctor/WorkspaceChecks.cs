@@ -30,9 +30,9 @@ internal static class WorkspaceChecks
                 ? new("units", CheckStatus.Pass, $"{units.Count} units present", null)
                 : new("units", CheckStatus.Warn, $"not cloned yet: {List(missing)}; the guard protects their paths, the gates skip them", "clone each repository into its unit path"));
 
-            string[] policies = [.. units.Where(unit => File.Exists(Path.Combine(UnitDirectory(root, unit), Manifest.FileName))).Select(unit => unit.Path)];
+            string[] policies = [.. units.Where(unit => File.Exists(Path.Combine(UnitDirectory(root, unit), Manifest.FileName)) && !Workspace.UnitPointer.PointsToShell(UnitDirectory(root, unit), unit)).Select(unit => unit.Path)];
             checks.Add(policies.Length == 0
-                ? new("unit manifests", CheckStatus.Pass, "one policy for the workspace (no lockflight.yaml inside a unit)", null)
+                ? new("unit manifests", CheckStatus.Pass, "one policy for the workspace (no lockflight.yaml inside a unit but a shell: pointer naming that unit)", null)
                 : new("unit manifests", CheckStatus.Fail, $"units with their own {Manifest.FileName}: {List(policies)}; a session started there would follow that file instead of the workspace's", $"remove {Manifest.FileName} from those units (one policy per workspace)"));
 
             checks.Add(await IgnoredChildrenAsync(root, units, cancellationToken));
