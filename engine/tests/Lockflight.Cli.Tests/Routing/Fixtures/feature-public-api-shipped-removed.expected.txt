@@ -1,0 +1,3 @@
+class: feature
+computed: feature
+signal: api.publicApiFile -> feature (heuristic) src/Shop.Client/PublicAPI.Shipped.txt:4: public API entry removed: Shop.Client.CartClient.Count() -> int

@@ -1,0 +1,37 @@
+A public member recorded in PublicAPI.Unshipped.txt is api.publicApiFile; with the analyzer enforcing the files, no api.publicMember.
+=== base src/Shop.Client/Shop.Client.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
+=== base src/Shop.Client/CartClient.cs
+namespace Shop.Client;
+
+public sealed class CartClient
+{
+    public int Count() => 0;
+}
+=== base src/Shop.Client/PublicAPI.Shipped.txt
+#nullable enable
+Shop.Client.CartClient
+Shop.Client.CartClient.CartClient() -> void
+Shop.Client.CartClient.Count() -> int
+=== base src/Shop.Client/PublicAPI.Unshipped.txt
+#nullable enable
+=== head src/Shop.Client/CartClient.cs
+namespace Shop.Client;
+
+public sealed class CartClient
+{
+    public int Count() => 0;
+
+    public int Total() => 0;
+}
+=== head src/Shop.Client/PublicAPI.Unshipped.txt
+#nullable enable
+Shop.Client.CartClient.Total() -> int

@@ -59,7 +59,7 @@ Each changed path gets one role, first match wins. Every name test ignores case 
 | `test` | the nearest project is a test project — its text, or a `Directory.Build.props` above it, references `Microsoft.NET.Test.Sdk`, `xunit`, `xunit.core`, `xunit.v3`, `NUnit`, `MSTest` or `MSTest.TestFramework`, uses `MSTest.Sdk`, or sets `<IsTestProject>true` — and no production project in a directory above it would compile the file too | no |
 | `production` | a `.cs`, `.fs`, `.fsi` or `.vb` file under a production project, **or a `.cs` file under no project** | yes |
 | `markup` | `*.razor`, `*.cshtml` in a production project | yes |
-| `docs` | `*.md` anywhere; `*.txt`, images and `docs/**` outside projects; Lockflight's own feature records under `.lockflight/features/` | no |
+| `docs` | `*.md` anywhere; `*.txt`, images and `docs/**` outside projects; Lockflight's own feature records under `.lockflight/features/`; `PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt` (judged by `api.publicApiFile`) | no |
 | `production-config` | any other file inside a production project (`appsettings*.json`, resources) | yes |
 | `other` | anything else: scripts, Dockerfiles, CI files, SQL outside projects | yes |
 
@@ -150,13 +150,16 @@ and one added. A body edit in a controller is not a feature.
 | `api.controllerAction` | a public method of a controller or SignalR hub added, removed or changed, or the controller's own declaration (its attributes, its base) changed. A controller is named `…Controller`, marked `[ApiController]`, `[Controller]` or `[Route]`, or derives from a `…Controller` / `…ControllerBase` type | `feature` |
 | `api.controllerAdded` | a new `*Controller.cs` file, or a new type deriving from a controller base, `Hub` or a gRPC `…Base` service | `feature` |
 | `api.publicMember` | in an **API project**, a public or protected declaration added, removed or changed (a public constant's value included). A member of a type that is written non-public in every part is not API | `feature` |
+| `api.publicApiFile` | in a project with a `PublicAPI.Shipped.txt` at base, a line added to `PublicAPI.Unshipped.txt` or removed from either file (also in per-framework folders); entries moved from Unshipped to Shipped at a release are no change | `feature` |
 | `api.minimalEndpoint` | a `.Map…(` registration statement (`MapGet`, `MapGroup`, `MapHealthChecks`, `Map`, …; not `MapFrom`) or an endpoint convention (`.RequireAuthorization`, `.AllowAnonymous`, …) added, removed or changed. Whole statements are compared, so a template on the next line counts, and a changed comment does not | `feature` |
 | `api.pageDirective` | a Razor `@page`, `@rendermode`, `[Route(` or `@attribute [Authorize` line added or removed | `feature` |
 | `api.contractFile` | a `.proto`, `openapi*.json/yaml`, `swagger*.json/yaml` or `.graphql` file changed outside test projects | `feature` |
 
 An **API project** is a production project whose text, or a `Directory.Build.props` above it, sets `<IsPackable>true`, a
 `<PackageId>` or `<GeneratePackageOnBuild>true` (a property under a `Condition` counts), or that has a `PublicAPI.Shipped.txt`,
-or that matches `routing.apiProjects`, at base or at head. In an application project nearly every class is `public`, so its API
+or that matches `routing.apiProjects`, at base or at head. Where the project also references `Microsoft.CodeAnalysis.PublicApiAnalyzers` at base, its public API
+files are exact (the build gate's "no new warnings" fails a public change they do not record), so `api.publicMember` is left out
+for it and `api.publicApiFile` speaks instead; without the analyzer both fire. In an application project nearly every class is `public`, so its API
 is its endpoints, not its declarations: a new public method there is not a feature by itself.
 
 ### Database

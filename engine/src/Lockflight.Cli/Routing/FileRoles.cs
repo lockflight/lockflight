@@ -108,7 +108,8 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
             return FileRole.Markup;
         }
 
-        if (path.StartsWith(FeatureRecords, StringComparison.OrdinalIgnoreCase) || EndsWithAny(name, DocsSuffixes))
+        if (path.StartsWith(FeatureRecords, StringComparison.OrdinalIgnoreCase) || EndsWithAny(name, DocsSuffixes)
+            || PublicApiFiles.IsShipped(path) || PublicApiFiles.IsUnshipped(path))
         {
             return FileRole.Docs;
         }
