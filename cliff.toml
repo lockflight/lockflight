@@ -19,7 +19,7 @@ trim = true
 conventional_commits = true
 filter_unconventional = true
 protect_breaking_commits = true
-tag_pattern = "v[0-9].*"
+tag_pattern = "^v[0-9].*"
 commit_parsers = [
   { message = "^feat", group = "<!-- 0 -->Added" },
   { message = "^fix", group = "<!-- 1 -->Fixed" },
