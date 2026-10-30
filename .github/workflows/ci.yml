@@ -5,6 +5,8 @@ name: ci
 
 on:
   pull_request:
+  # The merge queue tests each queued pull request on top of main and the entries ahead of it.
+  merge_group:
   push:
     branches: [main]
   workflow_dispatch:
