@@ -125,6 +125,10 @@ internal static class CliApplication
                                                         and what it requires, as the pull request comment shows
                                                         it; local policy, advice only (CI recomputes); --head reads
                                                         a commit pair under the base commit's policy (read only)
+          route record [--feature <id>] [--base <ref>]
+                                                        record this branch's class in the feature's class.json
+                                                        (never lower than recorded); committed with the feature's
+                                                        records, it raises the feature's later pull requests
 
         Exit codes
           0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)

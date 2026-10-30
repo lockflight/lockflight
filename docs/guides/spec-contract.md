@@ -60,6 +60,11 @@ testable: it is what the tests are traced to with `[Trait("Requirement", "FR-001
 Markdown links (`[spec.md](spec.md)`) and checkboxes are fine. The check names the first placeholder of each line, so
 fix a line and run it again.
 
+**Class (optional).** A line `**Class**: <class>` in the header, before the first `##` heading (next to `**Status**:`),
+asks for at least that change class for every pull request of the feature: `fix`, `behaviour`, `feature` or `critical`. It can
+only raise the class [risk routing](risk-routing.md) computes from the diff, never lower it; a lower value is shown as ignored,
+and a value that is no class is reported and ignored. No phase check reads it.
+
 Other sections (an overview, edge cases, key entities, success criteria, assumptions) are free-form: the check does not read
 them, and the review of record reads the whole spec.
 
