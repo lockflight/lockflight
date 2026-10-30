@@ -62,6 +62,9 @@ outputs:
   verdict:
     description: "The verdict of this job: PASS, FAIL, NOT-EARNED or ERROR"
     value: ${{ steps.verdict.outputs.verdict || steps.judge.outputs.verdict }}
+  policy:
+    description: "The commit the engine pin and policy were read from; the report jobs install the same engine from it"
+    value: ${{ steps.install.outputs.policy }}
 
 runs:
   using: composite
@@ -92,16 +95,21 @@ runs:
         echo "LOCKFLIGHT_GITLEAKS=$RUNNER_TEMP/gitleaks" >> "$GITHUB_ENV"
 
     - name: Install the engine the target branch pins (outside the repository's global.json)
+      id: install
       shell: bash
       env:
         LF_BASE: ${{ inputs.base }}
         LF_HEAD: ${{ inputs.head }}
         LF_ENGINE: ${{ inputs.engine }}
+        LF_EVENT: ${{ inputs.event }}
       run: |
         if [ -n "$LF_ENGINE" ]; then echo "LF_LOCKFLIGHT=$LF_ENGINE" >> "$GITHUB_ENV"; exit 0; fi
         # A push's previous commit may be all zeros (a new branch) or gone (a force-push): the head's own pin then applies.
+        # A pull request is always judged by its target branch's pin: without that commit in the clone the run is an ERROR.
         policy="$LF_HEAD"
-        if [ -n "$LF_BASE" ] && git cat-file -e "$LF_BASE^{commit}" 2>/dev/null; then policy="$LF_BASE"; fi
+        if [ -n "$LF_BASE" ] && git cat-file -e "$LF_BASE^{commit}" 2>/dev/null; then policy="$LF_BASE"
+        elif [ "$LF_EVENT" = "pr" ]; then echo "::error::the target branch's commit '$LF_BASE' is not in the clone (checkout with fetch-depth: 0)"; exit 4; fi
+        echo "policy=$(git rev-parse "$policy^{commit}")" >> "$GITHUB_OUTPUT"
         # The pin, the install script and the package sources are read from that commit, never from the pull request's tree.
         work="$RUNNER_TEMP/lockflight-policy"
         rm -rf "$work" && mkdir -p "$work/.lockflight/ci" "$work/.config"

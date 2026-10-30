@@ -248,7 +248,9 @@ adds the pointer is judged by a base without it, as the repository it still is: 
 | Public shell | Nothing. |
 
 In the generated job only the clone step sees the token (GitHub, Azure), or the script unsets it right after the clone, before
-any code of the pull request runs (Bitbucket, GitLab). That holds only for the generated file: anyone who can push a branch
+any code of the pull request runs (Bitbucket, GitLab). Unsetting is a guardrail: the script's own process still holds the
+variable it started with, and code of the pull request running as the same user can read it there (on Linux, from
+`/proc/<pid>/environ`). That holds only for the generated file: anyone who can push a branch
 to the unit repository can change the job on that branch and read the token, since CODEOWNERS gates the merge, not the run.
 Treat the token as readable by every writer of the unit repository, and give it read access to the shell only.
 

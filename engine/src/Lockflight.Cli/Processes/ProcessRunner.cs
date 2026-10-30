@@ -11,6 +11,12 @@ internal static class ProcessRunner
 
     private static readonly IReadOnlyDictionary<string, string?> NoVariables = new Dictionary<string, string?>(StringComparer.Ordinal);
 
+    private static readonly string[] RunnerVariables =
+    [
+        "GITHUB_ENV", "GITHUB_OUTPUT", "GITHUB_PATH", "GITHUB_STATE", "GITHUB_STEP_SUMMARY",
+        "ACTIONS_RUNTIME_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_URL",
+    ];
+
     public static Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, string workingDirectory, CancellationToken cancellationToken) =>
         RunAsync(fileName, arguments, workingDirectory, Timeout.InfiniteTimeSpan, cancellationToken);
 
@@ -150,6 +156,14 @@ internal static class ProcessRunner
         // Snapshot libraries (Verify and others built on DiffEngine) open the developer's diff tool on a failed comparison; a test run
         // the engine starts (gates, red/green, reviews) must never pop windows on the person's screen.
         startInfo.Environment["DiffEngine_Disabled"] = "true";
+        // The CI runner's file commands and tokens: a build or test the engine starts (the pull request's code, in the CI judge's
+        // job) must not set the next steps' environment or outputs. A guardrail: the files stay on disk under the runner's
+        // temporary folder.
+        foreach (string name in RunnerVariables)
+        {
+            startInfo.Environment.Remove(name);
+        }
+
         return startInfo;
     }
 

@@ -32,6 +32,24 @@ public sealed class ProcessRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task AChildProcessCannotReachTheCiRunnersFileCommands()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Uses the POSIX sh command.");
+        string? saved = Environment.GetEnvironmentVariable("GITHUB_STATE");
+        Environment.SetEnvironmentVariable("GITHUB_STATE", Path.Combine(directory.FullName, "state"));
+        try
+        {
+            ProcessResult result = await ProcessRunner.RunAsync("sh", ["-c", "echo \"${GITHUB_STATE:-unset} ${GITHUB_ENV:-unset} ${GITHUB_OUTPUT:-unset}\""], directory.FullName, TestContext.Current.CancellationToken);
+
+            Assert.Equal("unset unset unset", result.Output.Trim());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GITHUB_STATE", saved);
+        }
+    }
+
+    [Fact]
     public async Task ALargeInputIsWrittenWhileTheOutputIsDrained()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Uses the POSIX cat command.");
