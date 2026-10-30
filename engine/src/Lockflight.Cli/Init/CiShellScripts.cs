@@ -88,7 +88,7 @@ internal static class CiShellScripts
           # A pull request that changes the lock: the proposed lock must match the hashes its release published, and where the
           # gh CLI has a token (GitHub) the release's attestation must verify. The reviewer reads "matches release vX".
           base="${BASE:-${LOCKFLIGHT_BASE:-}}"
-          if [ -z "$base" ] && [ "${GITHUB_EVENT_NAME:-}" = pull_request ]; then base=$(git rev-parse HEAD^1); fi
+          if [ -z "$base" ] && [ "${GITHUB_EVENT_NAME:-}" = pull_request ]; then base=$(git rev-parse --verify --quiet 'HEAD^1' || true); fi
           if [ -n "$base" ] && git cat-file -e "$base:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "HEAD:.lockflight/engine.lock" 2>/dev/null \
             && ! git diff --quiet "$base" HEAD -- .lockflight/engine.lock; then
             git show HEAD:.lockflight/engine.lock > "$LOCKFLIGHT_TEMP/proposed-engine.lock"
