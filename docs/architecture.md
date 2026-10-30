@@ -1,11 +1,12 @@
 # How Lockflight works
 
-Lockflight turns a delivery process into checks with exit codes. This page explains the parts and how they fit together, for
-anyone who wants to understand the design or change it. For what each command and setting does, see
+Lockflight turns a delivery process into checks with exit codes: LLMs propose, checks decide. The verdict of record is a CI
+check on the pull request, run under the base branch's policy; what runs on a developer's machine is an assistant on the same
+contract. This page explains the parts and how they fit together, for anyone who wants to understand the design or change it. For what each command and setting does, see
 [commands](guides/commands.md) and [configuration](guides/configuration.md); for what each control can and cannot guarantee,
 see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
 
-**On this page:** [Principles](#principles) · [The parts](#the-parts) ·
+**On this page:** [Principles](#principles) · [The parts](#the-parts) · [The CI judge](#the-ci-judge) ·
 [The engine on every hook call](#the-engine-on-every-hook-call) · [The guard](#the-guard) · [Gates](#gates) ·
 [The lifecycle](#the-lifecycle-standard-profile) · [Topologies](#topologies) · [Adoption](#adoption) ·
 [The ledger](#the-ledger) · [Where the trust comes from](#where-the-trust-comes-from) ·
@@ -25,15 +26,18 @@ see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
    between is judged by checks, without per-command prompts.
 6. **Honest labels.** Every control is a guardrail (prevents accidents, on your machine) or a boundary (holds against a
    determined agent). Nothing is called enforced unless something outside the agent's reach enforces it.
+7. **The judge gives facts and verdicts; the crew gives advice.** Anything that decides a verdict or records a fact lives in
+   the engine. Anything that suggests, authors or summarises is an optional crew agent or skill.
 
 ## The parts
 
 ```text
  Claude Code session                 Your terminal                     CI (pull request)
- plugin: skills + hooks              human-only commands               generated workflow
+ the local assistant: plugin or      human-only commands               the judge of record:
+ native hooks (or nothing)                                             lockflight ci, base policy
         │                                   │                                 │
-        └─────────────── lockflight engine (pinned by the repository) ────────┘
-                         gates · guard · lifecycle · trace · review · ledger
+        └─────────── lockflight engine (pinned by the repository) ────────────┘
+             CI judge · risk routing · gates · guard · lifecycle · trace · review · ledger
                                             │
                        project: lockflight.yaml · .lockflight/ · specs/ · .claude/
 ```
@@ -41,10 +45,39 @@ see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
 | Part | What it is | Where |
 |---|---|---|
 | **Engine** | A C# Native AOT command-line tool, `lockflight`. All decisions are made here. | [`engine/`](../engine/) |
-| **Plugin** | Claude Code skills (`/lockflight:*`) and hooks that call the engine. It holds no policy of its own. | [`plugins/lockflight/`](../plugins/lockflight/) |
+| **Plugin** | The local assistant: Claude Code skills (`/lockflight:*`) and hooks that call the engine. It holds no policy of its own and is never of record. It is one of three [install levels](guides/install-levels.md); the others are CI only and CI with Claude Code's native settings. | [`plugins/lockflight/`](../plugins/lockflight/) |
 | **Crew (optional)** | A second plugin with agents briefed for the lifecycle: a spec writer, a planner and a test author. Each runs an engine check as its verdict; none is a judge. | [`plugins/lockflight-crew/`](../plugins/lockflight-crew/) |
 | **Spec Kit preset (optional)** | Templates and commands layered over [Spec Kit](https://github.com/github/spec-kit) so that its output follows the [spec contract](guides/spec-contract.md): requirement IDs, test-first tasks. A preset, not a fork. | [`plugins/lockflight/speckit-preset/`](../plugins/lockflight/speckit-preset/) |
-| **Project files** | `lockflight.yaml` (the policy), the tool pin, `.lockflight/` (approvals, evidence, baselines, ledger), the CI workflow. | your repository |
+| **Project files** | `lockflight.yaml` (the policy, version 2, with a published [JSON Schema](../lockflight.schema.json)), the engine pin (`.lockflight/engine.lock`, the version and SHA-256 per platform, with the version also in `dotnet-tools.json` during 0.3), `.lockflight/` (approvals, evidence, baselines, ledger), the CI workflow. | your repository |
+
+## The CI judge
+
+`lockflight ci` is the judge of record. It reads the policy from the target branch with `git show`, never from the pull
+request's `lockflight.yaml`, and judges the pull request's commits:
+
+- **Red commits.** Each commit with a `Lockflight-Red: <cycle>` trailer is re-run in a worktree outside the checkout. The
+  trailer is never trusted: the tests new at that commit must compile and fail inside production code (`RED_STUB` or
+  `RED_ASSERT`), as `redgreen red` classifies them locally.
+- **Green at head.** The same tests pass at head, with no other failures beyond the base's known-failing baseline, and a
+  per-method fingerprint shows whether each cycle test changed since its red.
+- **Changed tests and host tampering.** Existing tests the pull request changed are re-checked (advisory for now), and code
+  in test assemblies that could tamper with the test host is listed.
+- **Change class.** Today the judge uses an interim classification from git (low-risk paths, dependency-only changes,
+  everything else a behaviour change). In 0.3.0 it moves to [risk routing](guides/risk-routing.md), which computes a class
+  from the diff (`fix`, `behaviour`, `feature`, `critical`) under the base branch's thresholds (`lockflight route show`);
+  the class then sets what the pull request must prove. A class can be raised, never lowered.
+
+Trace, the gates, the report and a review in a separate job with an API key, the GitHub Action and the CI templates that run
+the judge are being added in 0.3.0; until they land, the generated workflow runs the `pr` gates. The judge reports under two
+status contexts: `gates` (the `pr` gates and green at head) and `lockflight/judge` (the rest), so a team can make the full
+verdict required when it is ready. Every step is listed in [commands](guides/commands.md).
+
+The judge runs the pull request's code in its own job. That code (a test, production code, a build file) could therefore
+forge the results, with deliberate code in the pull request's diff; the host-tampering check lists the plain forms, and an
+obfuscated one evades it. So the red/green verdict is a **strong guardrail, not a boundary**. What a pull request cannot
+change is the policy, the engine lock and CODEOWNERS, read from the base branch. The check itself is a boundary only where the
+platform enforces it: a required check whose workflow files are under CODEOWNERS with required review, or a workflow a
+ruleset requires ([CI hardening](guides/ci-hardening.md)).
 
 ## The engine on every hook call
 
@@ -170,8 +203,10 @@ Commands that record a human decision (`approve`, `baseline`, `redgreen reset`, 
 
 One model, the **unit**, covers a single repository, a monorepo and a workspace shell (a root repository with its own
 `.claude/`, Spec Kit and specs, and service repositories cloned beneath it). `units:` in `lockflight.yaml` lists them. Gates run
-per changed unit, each unit keeps its own baselines, and `workspace sync` gives each unit repository the policy and CI workflow
-it needs to be judged on its own.
+per changed unit and each unit keeps its own baselines. A unit repository is judged on its own with the shell's policy through
+a pointer, not a copy: `init --unit-of <shell url>` writes a `shell:` section, and the unit's CI clones the shell read-only and
+applies the stricter of the shell's policy and the unit's own ([CI hardening](guides/ci-hardening.md#workspace-shells-unit-repositories)).
+The older `workspace sync`, which copies the policy into each unit, still works.
 
 ## Adoption
 
@@ -215,7 +250,8 @@ keeps the summary and SHA-256 of each amend's diff since the red.
 | The guard, the Stop gate, red/green evidence, trace, the review of record, local approvals | CI running the pinned engine with the base branch's policy as a required check; the spec approved in the pull request (CODEOWNERS on `specs/**`, enforced by the platform); merge by a person, when the agent has its own identity (otherwise it can merge with your token) |
 
 The in-session controls make the right path the easy one and catch accidents early. The pull request is where the verdict
-counts.
+counts. Within CI, the judge's red/green results are a strong guardrail, not a boundary, because the pull request's test code
+runs in the judge's job ([the CI judge](#the-ci-judge)).
 
 ## Extending the engine
 
