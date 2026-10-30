@@ -209,6 +209,10 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             root, ToolPin.RunningVersion, context.Engine.Path, feed is null ? EnginePackageFeed.FromEnvironment(context.Environment) : new EnginePackageFeed(feed, context.Environment),
             GitHubReleaseHashes.FetchAsync, context.Processes, cancellationToken);
         await PlanLockAsync(root, lockPlan, writes, cancellationToken);
+        if (lockPlan.Committed)
+        {
+            await PlanCiFilesAsync(root, writes, dryRun, cancellationToken);
+        }
 
         string claudeMd = Path.Combine(root, "CLAUDE.md");
         if (File.Exists(claudeMd) && await File.ReadAllTextAsync(claudeMd, cancellationToken) is string text
@@ -291,6 +295,45 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         if (existingScript != scriptText)
         {
             writes.Add(new PlannedWrite(InstallScript.RelativePath, scriptPath, existingScript, scriptText));
+        }
+    }
+
+    /// <summary>
+    /// Each generated CI file with its engine install step and policy restore moved to the lock. A file where those lines cannot
+    /// be found exactly as Lockflight wrote them is left alone, and the new step is written to
+    /// <c>.lockflight/local/migration/&lt;path&gt;</c> for a person to merge.
+    /// </summary>
+    private async Task PlanCiFilesAsync(string root, List<PlannedWrite> writes, bool dryRun, CancellationToken cancellationToken)
+    {
+        foreach (string relative in CiStepMigration.KnownFiles)
+        {
+            string path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            string text = await File.ReadAllTextAsync(path, cancellationToken);
+            if (CiStepMigration.Migrate(text) is string migrated)
+            {
+                if (migrated != text)
+                {
+                    writes.Add(new PlannedWrite(relative, path, text, migrated));
+                }
+
+                continue;
+            }
+
+            string fallback = Path.Combine(root, ".lockflight", "local", "migration", relative.Replace('/', Path.DirectorySeparatorChar));
+            if (dryRun)
+            {
+                await context.Output.WriteLineAsync($"note: {relative} does not hold the engine install step as Lockflight wrote it; update would leave it alone and write the new step for you to merge");
+                continue;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(fallback)!);
+            await File.WriteAllTextAsync(fallback, $"# Replace the engine install step of {relative} with this, and add .lockflight/engine.lock and .lockflight/ci to its policy restore:\n{CiShellScripts.InstallEngine}\n", cancellationToken);
+            await context.Output.WriteLineAsync($"note: {relative} does not hold the engine install step as Lockflight wrote it, so it was left alone; merge {Path.GetRelativePath(root, fallback).Replace('\\', '/')} into it by hand");
         }
     }
 

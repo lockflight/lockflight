@@ -96,18 +96,7 @@ internal static class Templates
                 env:
                   BASE: ${{ github.event.pull_request.base.sha }}
                 run: |
-                  for file in dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .gitleaks.toml .gitleaksignore nuget.config NuGet.config; do
-                    if git cat-file -e "$BASE:$file" 2>/dev/null; then git checkout "$BASE" -- "$file"; else rm -f "$file"; fi
-                  done
-                  # Accepted baselines (known-failing tests, warnings, advisories) are policy too: a PR cannot accept its own failures.
-                  rm -rf .lockflight/baselines
-                  if git cat-file -e "$BASE:.lockflight/baselines" 2>/dev/null; then git checkout "$BASE" -- .lockflight/baselines; fi
-                  # Code-style and analyzer config (nested files too) decides what the build and format gates enforce: a PR is
-                  # judged by the base's rules, and its own rule changes apply after the merge.
-                  style='(^|/)(\.editorconfig|\.globalconfig|[^/]*\.globalconfig|[^/]*\.ruleset|stylecop\.json|BannedSymbols\.txt|CodeMetricsConfig\.txt)$'
-                  { git ls-tree -r --name-only "$BASE"; git ls-files; } | grep -E "$style" | sort -u | while IFS= read -r file; do
-                    if git cat-file -e "$BASE:$file" 2>/dev/null; then git checkout "$BASE" -- "$file"; else rm -f "$file"; fi
-                  done
+        {RestorePolicy}
               - name: Install gitleaks (pinned, checksum-verified)
                 run: |
                   archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
@@ -120,11 +109,8 @@ internal static class Templates
                   dotnet-version: {DotnetVersions}
               - name: Install the pinned engine (outside the repository's global.json)
                 run: |
-                  manifest=$(ls dotnet-tools.json .config/dotnet-tools.json 2>/dev/null | head -n 1)
-                  version=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["tools"]["lockflight.cli"]["version"])' "$manifest")
-                  config=()
-                  for file in nuget.config NuGet.config; do [ -f "$file" ] && config=(--configfile "$PWD/$file"); done
-                  (cd "$RUNNER_TEMP" && dotnet tool install Lockflight.Cli --tool-path "$RUNNER_TEMP/lockflight" --version "$version" "${config[@]}")
+                  LOCKFLIGHT_TEMP="$RUNNER_TEMP"
+        {InstallEngine}
                   echo "$RUNNER_TEMP/lockflight" >> "$GITHUB_PATH"
               - name: Gates
                 env:
@@ -248,8 +234,23 @@ internal static class Templates
     /// <summary>The unit repository workflow; setup-dotnet installs every channel given.</summary>
     public static string UnitWorkflow(IReadOnlyList<string> dotnetChannels) => WithChannels(UnitWorkflowTemplate, dotnetChannels);
 
+    /// <summary>The engine install step of the GitHub workflow as Lockflight 0.2 wrote it, which <c>update</c> replaces.</summary>
+    public const string LegacyGitHubInstallEngine = """
+        manifest=$(ls dotnet-tools.json .config/dotnet-tools.json 2>/dev/null | head -n 1)
+        version=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["tools"]["lockflight.cli"]["version"])' "$manifest")
+        config=()
+        for file in nuget.config NuGet.config; do [ -f "$file" ] && config=(--configfile "$PWD/$file"); done
+        (cd "$RUNNER_TEMP" && dotnet tool install Lockflight.Cli --tool-path "$RUNNER_TEMP/lockflight" --version "$version" "${config[@]}")
+        """;
+
+    /// <summary>The indentation of a <c>run: |</c> body in the GitHub workflow.</summary>
+    public const int WorkflowScriptIndent = 10;
+
     private static string WithChannels(string template, IReadOnlyList<string> dotnetChannels) =>
-        template.Replace(
+        template
+            .Replace("{RestorePolicy}", CiShellScripts.Indent(CiShellScripts.RestorePolicy, WorkflowScriptIndent), StringComparison.Ordinal)
+            .Replace("{InstallEngine}", CiShellScripts.Indent(CiShellScripts.InstallEngine, WorkflowScriptIndent), StringComparison.Ordinal)
+            .Replace(
             DotnetVersionsPlaceholder,
             dotnetChannels.Count == 1 ? dotnetChannels[0] : "|\n" + string.Join('\n', dotnetChannels.Select(channel => DotnetVersionIndent + channel)),
             StringComparison.Ordinal);

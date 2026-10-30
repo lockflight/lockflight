@@ -19,11 +19,15 @@ file goes, how to make the job a required check, and what stands in for CODEOWNE
 
 The same steps as the GitHub workflow, in the same order:
 
-- **Policy from the base commit** on a pull request: the engine pin, `lockflight.yaml`, the gitleaks policy, the root
-  `nuget.config`, `.lockflight/baselines/` and the code-style and analyzer config anywhere in the tree. The list is the GitHub
+- **Policy from the base commit** on a pull request: the engine lock and the version pin, `lockflight.yaml`, the gitleaks
+  policy, the root `nuget.config`, `.lockflight/baselines/`, `.lockflight/ci/` and the code-style and analyzer config anywhere
+  in the tree. The list is the GitHub
   workflow's, from the same source in the engine, and a test checks that they match.
-- **Pinned tools:** gitleaks at a fixed version, checked against its SHA-256; the engine version from the tool pin, installed
-  with `dotnet tool install --tool-path` outside the repository, so a `global.json` that pins SDK 8 or 9 does not matter.
+- **Pinned tools:** gitleaks at a fixed version, checked against its SHA-256; the engine the base commit pins, installed
+  outside the repository, so a `global.json` that pins SDK 8 or 9 does not matter: with `.lockflight/engine.lock`, by the
+  vendored install script checked against the lock (no .NET SDK needed for it; the SDK image reads the package with `perl`),
+  else by the version in the tool pin with `dotnet tool install --tool-path`. The same step as the GitHub workflow's, from the
+  same source in the engine.
 - **`lockflight gate run --profile pr --base <base sha>`**, with the result in `artifacts/lockflight/result.json`.
 
 | | Azure Pipelines | Bitbucket Pipelines | GitLab CI/CD |
@@ -37,7 +41,11 @@ The same steps as the GitHub workflow, in the same order:
 
 Where they differ from the GitHub workflow:
 
-- The engine pin is read with `grep` and `sed`, not Python, because the SDK image has no Python.
+- The engine pin and the lock are read with `grep` and `sed`, not Python, because the SDK image has no Python.
+- **Boundary, per platform:** every platform runs a pipeline definition the pull request can edit (GitHub from the merge
+  ref, Bitbucket and GitLab from the source branch), so the CI files, `.lockflight/**` and CODEOWNERS need code-owner review
+  for the lock check to be a boundary. On GitLab code-owner approval is a paid-tier feature; without it the check is a
+  guardrail. Bitbucket and Azure need their own required-reviewer settings on those paths.
 - The SDK image is a tag, not a digest, and `dotnet-install.sh` is not checksum-pinned (GitHub's `setup-dotnet` downloads the
   same script). Pin the image by digest if your policy asks for it.
 - There is no step summary: the protected files a pull request changes are in the job log, and the result file is kept as an
