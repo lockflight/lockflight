@@ -4,10 +4,10 @@ namespace Lockflight.Cli.Updating;
 
 /// <summary>
 /// A file <c>update</c> will write, computed before anything is written: its old text (null when it does not exist) and its new
-/// text. All are written together, each through a temporary file and a rename; when one fails, the ones already written are put
+/// text (null to delete the file). All are written together, each through a temporary file and a rename; when one fails, the ones already written are put
 /// back.
 /// </summary>
-internal sealed record PlannedWrite(string RelativePath, string Path, string? OldText, string NewText)
+internal sealed record PlannedWrite(string RelativePath, string Path, string? OldText, string? NewText)
 {
     public static async Task ApplyAllAsync(IReadOnlyList<PlannedWrite> writes, CancellationToken cancellationToken)
     {
@@ -16,7 +16,15 @@ internal sealed record PlannedWrite(string RelativePath, string Path, string? Ol
         {
             foreach (PlannedWrite write in writes)
             {
-                await ReplaceAsync(write.Path, write.NewText, cancellationToken);
+                if (write.NewText is string text)
+                {
+                    await ReplaceAsync(write.Path, text, cancellationToken);
+                }
+                else
+                {
+                    File.Delete(write.Path);
+                }
+
                 written.Add(write);
             }
         }
@@ -47,9 +55,9 @@ internal sealed record PlannedWrite(string RelativePath, string Path, string? Ol
             string before = System.IO.Path.Combine(directory, "before");
             string after = System.IO.Path.Combine(directory, "after");
             await File.WriteAllTextAsync(before, OldText ?? string.Empty, cancellationToken);
-            await File.WriteAllTextAsync(after, NewText, cancellationToken);
+            await File.WriteAllTextAsync(after, NewText ?? string.Empty, cancellationToken);
             ProcessResult diff = await ProcessRunner.RunAsync("git", ["diff", "--no-index", "--no-color", "--no-ext-diff", "--", "before", "after"], directory, cancellationToken);
-            return diff.ExitCode == 1 ? diff.Output.TrimEnd() : NewText;
+            return diff.ExitCode == 1 ? diff.Output.TrimEnd() : NewText ?? "(deleted)";
         }
         finally
         {

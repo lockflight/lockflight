@@ -48,7 +48,11 @@ internal static class CliApplication
                                                         version 2; update --project --dry-run shows the change
           workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
                                                         engine pin, baselines, workflow); --check reports drift
-          link                                          copy the pinned engine to .lockflight/bin/ for the hooks
+          link [--installed]                            copy the pinned engine to .lockflight/bin/ for the hooks (only the
+                                                        one the engine lock pins); --installed: the locked engine already
+                                                        installed in ~/.lockflight/tools
+          engine install [--source <feed>]              you: install exactly the engine .lockflight/engine.lock pins and
+                                                        link it (after a branch switch or a fresh clone)
           version                                       print the engine version
 
         Gates

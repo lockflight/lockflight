@@ -46,7 +46,7 @@ stderr: lockflight: unknown command '--version x'. Run 'lockflight --help'.
 $ lockflight link x
 exit: 4 Config
 stdout: 
-stderr: lockflight: unknown command 'link x'. Run 'lockflight --help'.
+stderr: lockflight link: unexpected argument 'x'; use --installed. Run 'lockflight --help' for its options.
 
 $ lockflight statusline x
 exit: 4 Config
@@ -358,7 +358,11 @@ Setup
                                                 version 2; update --project --dry-run shows the change
   workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
                                                 engine pin, baselines, workflow); --check reports drift
-  link                                          copy the pinned engine to .lockflight/bin/ for the hooks
+  link [--installed]                            copy the pinned engine to .lockflight/bin/ for the hooks (only the
+                                                one the engine lock pins); --installed: the locked engine already
+                                                installed in ~/.lockflight/tools
+  engine install [--source <feed>]              you: install exactly the engine .lockflight/engine.lock pins and
+                                                link it (after a branch switch or a fresh clone)
   version                                       print the engine version
 
 Gates
@@ -425,10 +429,6 @@ CI
                                                 and what it requires, as the pull request comment shows
                                                 it; local policy, advice only (CI recomputes); --head reads
                                                 a commit pair under the base commit's policy (read only)
-  route record [--feature <id>] [--base <ref>]
-                                                record this branch's class in the feature's class.json
-                                                (never lower than recorded); committed with the feature's
-                                                records, it raises the feature's later pull requests
 
 Exit codes
   0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)

@@ -10,7 +10,10 @@ internal static class RecoveryCommands
 {
     public const string RestoreAndLink = "dotnet tool restore && dotnet lockflight link";
 
-    public static IReadOnlySet<string> Commands { get; } = new HashSet<string>(["dotnet tool restore", RestoreAndLink, "dotnet lockflight link"]);
+    /// <summary>Links the locked engine already installed for the user, after a branch switch moved the lock; it installs nothing.</summary>
+    public const string LinkInstalled = "~/.lockflight/bin/lockflight link --installed";
+
+    public static IReadOnlySet<string> Commands { get; } = new HashSet<string>(["dotnet tool restore", RestoreAndLink, "dotnet lockflight link", LinkInstalled, ".lockflight/bin/lockflight link --installed"]);
 
     public static bool Allows(HookRequest input) =>
         input.Tool is { Kind: ToolKind.Shell, Shell: ShellDialect.Posix } && input.Command is string command && Commands.Contains(command.Trim());

@@ -129,6 +129,14 @@ call is blocked with that command. For a development pin, use the commands for a
 If the message says **"the engine pin cannot be read"**, `dotnet-tools.json` is malformed. It is protected, so fix it yourself,
 then run the restore command.
 
+## Every write is blocked: "not the engine .lockflight/engine.lock pins"
+
+The linked engine is not the one the project's engine lock pins for this platform: the lock moved (a branch switch, a pull,
+a teammate's upgrade) or the engine did. The agent may run `~/.lockflight/bin/lockflight link --installed`, which links the
+locked engine when it is already installed in `~/.lockflight/tools/<version>`. Otherwise, in a separate terminal, run
+`~/.lockflight/bin/lockflight engine install` in the project: it installs exactly the locked engine (checked against its hash)
+and links it, and changes nothing committed.
+
 ## `doctor` warns about gitleaks or the Claude Code version
 
 - **gitleaks:** the `pr` profile's secrets step runs gitleaks from `PATH`, or from `LOCKFLIGHT_GITLEAKS`. Without it the step is

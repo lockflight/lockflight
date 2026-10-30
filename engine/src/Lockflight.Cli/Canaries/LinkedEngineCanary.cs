@@ -1,4 +1,5 @@
 using Lockflight.Cli.Doctor;
+using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Linking;
 
 namespace Lockflight.Cli.Canaries;
@@ -17,7 +18,7 @@ internal static class LinkedEngineCanary
         string binary = LinkCommand.BinaryPath(scratch.Project);
         Directory.CreateDirectory(Path.GetDirectoryName(binary)!);
         File.WriteAllText(binary, "lockflight canary engine\n");
-        EngineRecord.Write(scratch.Project, EngineRecord.HashOf(binary));
+        EngineRecord.Write(scratch.Project, EngineRecord.HashOf(binary), EngineRids.Current);
         if (ReadinessChecks.UntrustedLink(scratch.Project, binary) is DoctorCheck twin)
         {
             return new CanaryReport(Name, CanaryResult.Broken, $"an engine that matches its record fails too ({twin.Detail}), so a failure proves nothing");
