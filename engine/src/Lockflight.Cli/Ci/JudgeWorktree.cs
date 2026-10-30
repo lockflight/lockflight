@@ -15,6 +15,8 @@ internal sealed class JudgeWorktree
     private const string EmptyProject = "<Project>\n</Project>\n";
     private const string EmptyGlobalJson = "{\n}\n";
 
+    private const int PathsPerCall = 200;
+
     private static readonly TimeSpan CleanupTimeLimit = TimeSpan.FromSeconds(60);
     private static readonly string[] Sentinels = ["Directory.Build.props", "Directory.Build.targets", "global.json"];
     private static readonly string[] KeptOutputs = ["-e", "bin/", "-e", "obj/"];
@@ -78,6 +80,34 @@ internal sealed class JudgeWorktree
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Lays <paramref name="paths"/> as they are at <paramref name="fromCommit"/> over the tree the worktree holds, removes
+    /// <paramref name="deleted"/>, then the base policy again (a test project's own style file must not override it). Null on
+    /// success, else why.
+    /// </summary>
+    public async Task<string?> OverlayAsync(string fromCommit, IReadOnlyList<string> paths, IReadOnlyList<string> deleted, string policyCommit, CancellationToken cancellationToken)
+    {
+        foreach (string[] chunk in paths.Chunk(PathsPerCall))
+        {
+            ProcessResult checkout = await SnapshotGit.RunAsync(["checkout", fromCommit, "--", .. chunk], Root, timeLimit, cancellationToken);
+            if (checkout.ExitCode != 0)
+            {
+                return $"git could not lay {CommitIds.Short(fromCommit)}'s test files over {CommitIds.Short(Commit ?? fromCommit)}: {checkout.Combined.Trim()}";
+            }
+        }
+
+        foreach (string path in deleted)
+        {
+            string file = Path.Combine(Root, path.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(file))
+            {
+                File.Delete(file);
+            }
+        }
+
+        return await PolicyOverlay.ApplyAsync(repositoryRoot, Root, Commit ?? fromCommit, policyCommit, timeLimit, cancellationToken);
     }
 
     /// <summary>Removes the worktree and git's record of it; runs after a cancelled run too, each git call bounded on its own.</summary>

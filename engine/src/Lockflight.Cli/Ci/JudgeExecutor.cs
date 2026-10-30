@@ -40,7 +40,10 @@ internal static class JudgeExecutor
             GreenJudgement greenAtHead = baseListing is { AsBaseline: null }
                 ? new GreenJudgement(CheckVerdict.NotEarned, $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
                 : GreenJudge.Decide(head, baseListing?.AsBaseline, cycles ?? []);
-            return new JudgeFindings(greenAtHead, cycles, trees.Builds) { HeadFingerprints = head.Listing.Fingerprints };
+            IReadOnlyList<SinceRedTest>? sinceRed = cycles is not null && plan.Levels[CheckId.TestsSinceRed] != CheckLevel.Off
+                ? await new SinceRedJudge(trees, time).JudgeAsync(plan, head.Listing, cycles, cancellationToken)
+                : null;
+            return new JudgeFindings(greenAtHead, cycles, trees.Builds) { HeadFingerprints = head.Listing.Fingerprints, SinceRed = sinceRed, HeadCommit = plan.Inputs.Head };
         }
         finally
         {
