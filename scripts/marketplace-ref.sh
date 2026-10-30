@@ -6,7 +6,8 @@
 # The pin is coherent when:
 #   - every entry is a git-subdir source on the repository's URL, at plugins/<name>, and all name the same ref and sha;
 #   - the ref is a release tag that exists on that repository and points at the sha (so a ref is never served before its tag);
-#   - at that commit each plugin's plugin.json has the tag's version, and plugins/lockflight/min-engine-version is at most it;
+#   - at that commit the judge plugin's plugin.json (plugins/lockflight) has the tag's version, and
+#     plugins/lockflight/min-engine-version is at most it (the crew has its own version and crew/v* releases);
 #   - nuget.org lists the tag's engine and the minimum engine (so a plugin is never served before the engine it asks for);
 #   - the marketplace's name, description and owner and each plugin's name and description are those of the development
 #     marketplace (plugins/.claude-plugin/marketplace.json) at the tag, not on main: users get the tag's plugins, so they
@@ -153,12 +154,12 @@ check() {
   dev_at_tag "$ref"
   python_check described "$served" "$work/dev-at-tag.json" || fail "the descriptions are not the tag's"
   version=${ref#v}
-  local manifests=()
   for name in $names; do
     git -C "$work/repo" show "FETCH_HEAD:plugins/$name/.claude-plugin/plugin.json" > "$work/$name.json" 2> /dev/null \
       || fail "$ref has no plugins/$name/.claude-plugin/plugin.json"
-    manifests+=("$work/$name.json")
   done
+  # Only the judge plugin follows the judge's version; the crew is versioned by its own crew/v* tags.
+  local manifests=("$work/lockflight.json")
   minimum=$(git -C "$work/repo" show "FETCH_HEAD:plugins/lockflight/min-engine-version" 2> /dev/null | tr -d '[:space:]') \
     || fail "$ref has no plugins/lockflight/min-engine-version"
   python_check versions "$version" "$minimum" "${manifests[@]}" || fail "$ref is not a coherent release"

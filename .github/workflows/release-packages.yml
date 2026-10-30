@@ -67,12 +67,12 @@ jobs:
           if [ "$TAG" = "$version" ] || ! printf '%s\n' "$version" | grep -Eq "$semver"; then
             echo "::error::tag $TAG is not v<SemVer>"; exit 1
           fi
-          for plugin in plugins/*/.claude-plugin/plugin.json; do
-            declared=$(jq -r .version "$plugin")
-            if [ "$declared" != "$version" ]; then
-              echo "::error::$plugin declares $declared, the tag is $TAG"; exit 1
-            fi
-          done
+          # The judge plugin follows the engine's version; the crew has its own (crew/v* tags, release-crew.yml).
+          plugin=plugins/lockflight/.claude-plugin/plugin.json
+          declared=$(jq -r .version "$plugin")
+          if [ "$declared" != "$version" ]; then
+            echo "::error::$plugin declares $declared, the tag is $TAG"; exit 1
+          fi
           preset=plugins/lockflight/speckit-preset/preset.yml
           declared=$(sed -n 's/^  version: *"\([^"]*\)".*/\1/p' "$preset" | head -n 1)
           if [ "$declared" != "$version" ]; then

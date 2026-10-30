@@ -6,7 +6,7 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
 ## What the workflow does
 
 1. **Checks the version.** The workflow runs only from a tag `vX.Y.Z[-pre]`. The version is the tag without the `v`, must be
-   SemVer 2.0 without build metadata, and must equal the `version` of every `plugins/*/.claude-plugin/plugin.json` and of
+   SemVer 2.0 without build metadata, and must equal the `version` of `plugins/lockflight/.claude-plugin/plugin.json` and of
    the Spec Kit preset (`plugins/lockflight/speckit-preset/preset.yml`).
 2. **Builds and tests every platform** (osx-arm64, osx-x64, linux-x64, linux-arm64, win-x64), each on its own runner: build
    with warnings as errors, `dotnet test`, pack the Native AOT package, install it with `dotnet tool install` from a local
@@ -136,11 +136,15 @@ The `lockflight-crew` plugin is released on its own, from the same repository. I
 2. **Checks the trust boundary.** The judge gives facts and verdicts; the crew gives advice.
    [`scripts/crew-trust-boundary.sh`](../../scripts/crew-trust-boundary.sh) fails when the crew ships any of these:
    - hooks: a `hooks/` directory, a `hooks` key in `plugin.json`, or `hooks:` in an agent's or skill's frontmatter;
-   - executables, MCP or LSP servers, settings or output styles;
+   - a `bin/` directory or an executable file outside `evals/` (eval scaffolds run in the eval sandbox), MCP or LSP
+     servers, settings or output styles;
    - a guard or policy file: a manifest, `.lockflight/`, an engine lock, CODEOWNERS, a schema or the Spec Kit preset;
    - in an agent or skill, a verdict record (approvals, red/green evidence, review records, results, baselines), or a command
      that records a person's decision or the review of record (`approve` other than `approve verify`, `baseline`,
-     `redgreen reset`/`amend`, `review`, `update`, `engine install`).
+     `redgreen reset`/`amend`, `review` other than `review status`, `update`, `engine install`, global options before the
+     verb included). Naming a session command such as `/lockflight:approve spec` for the person to type is allowed. The
+     check reads the text; it is a guardrail for the crew's authors, and the engine's own refusals of human-only
+     commands still apply.
 
    The `plugin` job in CI runs the same check on every pull request. Then the workflow validates the plugin with
    `claude plugin validate --strict`.

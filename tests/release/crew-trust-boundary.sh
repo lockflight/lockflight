@@ -66,5 +66,20 @@ for command in "approve spec" "baseline tests" "redgreen reset" "redgreen amend"
   expect "an agent naming 'lockflight $command' fails" fail "$dir"
 done
 
+dir=$(crew global-option); printf 'Run `lockflight --verbose approve spec`.\n' >> "$dir/agents/planner.md"
+expect "a decision command after a global option fails" fail "$dir"
+
+dir=$(crew allowed); printf 'Check `lockflight review status`; lockflight updates the ledger; the person types `/lockflight:approve spec`.\n' >> "$dir/agents/planner.md"
+expect "review status, prose and a session command for the person pass" pass "$dir"
+
+dir=$(crew executable); touch "$dir/skills/retro/run.sh"; chmod +x "$dir/skills/retro/run.sh"; touch "$dir/evals/case/scaffold.sh"; chmod +x "$dir/evals/case/scaffold.sh"
+expect "an executable outside evals fails" fail "$dir"
+
+dir=$(crew eval-script); touch "$dir/evals/case/scaffold.sh"; chmod +x "$dir/evals/case/scaffold.sh"
+expect "an executable scaffold in evals passes" pass "$dir"
+
+dir=$(crew crlf); printf -- '---\r\nname: x\r\n"hooks":\r\n  Stop: []\r\n---\r\n' > "$dir/agents/x.md"
+expect "quoted hooks in a CRLF frontmatter fail" fail "$dir"
+
 [ "$failures" -eq 0 ] || { echo "$failures failure(s)"; exit 1; }
 echo "all crew trust-boundary cases pass"
