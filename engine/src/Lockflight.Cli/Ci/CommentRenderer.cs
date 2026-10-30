@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Mascot;
 
 namespace Lockflight.Cli.Ci;
 
@@ -25,7 +26,13 @@ internal static class CommentRenderer
     /// <summary>The order the Next line looks for the first required check that did not pass.</summary>
     private static readonly string[] NextOrder = ["red", "tests.sinceRed", "tests.existingChanged", "tests.hostTampering", "green", "gates", "trace", "review", "approvals"];
 
-    public static string Render(JsonNode verdict, int maxLength)
+    public static string Render(JsonNode verdict, int maxLength) => Render(verdict, maxLength, BadgeSize.Small);
+
+    /// <summary>The job summary: Levi's large verdict picture above the comment's content, uncut.</summary>
+    public static string Summary(JsonNode verdict) =>
+        $"{Badge(verdict, BadgeSize.Large)}\n\n{Render(verdict, int.MaxValue, badge: null)}";
+
+    private static string Render(JsonNode verdict, int maxLength, BadgeSize? badge)
     {
         string head = verdict["head"]?.GetValue<string>() ?? "unknown";
         StringBuilder top = new();
@@ -35,7 +42,7 @@ internal static class CommentRenderer
         string changeClass = verdict["changeClass"]?["class"]?.GetValue<string>() ?? "?";
         string preset = verdict["changeClass"]?["policy"]?["preset"]?.GetValue<string>() is "interim" ? " (interim)" : string.Empty;
         string baseSha = verdict["base"]?["sha"]?.GetValue<string>() ?? string.Empty;
-        top.Append($"**Lockflight: {overall}**{feature} · class **{CommentText.Plain(changeClass)}**{preset} · head `{Short(head)}`{(baseSha.Length > 0 ? $" · base `{Short(baseSha)}`" : string.Empty)}\n\n");
+        top.Append($"{(badge is BadgeSize size ? Badge(verdict, size) + " " : string.Empty)}**Lockflight: {overall}**{feature} · class **{CommentText.Plain(changeClass)}**{preset} · head `{Short(head)}`{(baseSha.Length > 0 ? $" · base `{Short(baseSha)}`" : string.Empty)}\n\n");
         top.Append(Contexts(verdict));
         if (Next(verdict) is string next)
         {
@@ -69,6 +76,14 @@ internal static class CommentRenderer
         }
 
         return body.Append(footer).ToString();
+    }
+
+    /// <summary>Levi's picture for the verdict, its alt text the verdict alone (a person sees Levi, a reader of the text sees the verdict).</summary>
+    private static string Badge(JsonNode verdict, BadgeSize size)
+    {
+        string overall = verdict["verdict"]?.GetValue<string>() ?? "ERROR";
+        MascotPose pose = VerdictBadge.PoseOf(overall, verdict["blocked"] is JsonObject);
+        return $"![{CommentText.Plain(overall)}]({VerdictBadge.Url(verdict["engine"]?["version"]?.GetValue<string>(), pose, size)})";
     }
 
     /// <summary>The first required check that did not pass, in <see cref="NextOrder"/>, as its why; null when every one passed.</summary>

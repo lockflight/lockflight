@@ -5,7 +5,7 @@ namespace Lockflight.Cli.Mascot;
 /// <summary>
 /// Levi as pixel art: a 16 × 14 body plus one overlay per <see cref="MascotPose"/> (eyes and a prop) on a 22 × 16 grid,
 /// drawn in a terminal with half-block characters and 24-bit colors, two pixel rows per text line. The same pixels as
-/// <c>docs/assets/levi-*.svg</c>.
+/// <c>docs/assets/levi-*.svg</c> and the CI judge's PNG badges (<c>docs/assets/badges/</c>).
 /// </summary>
 internal static class MascotArt
 {
@@ -86,6 +86,9 @@ internal static class MascotArt
 
     /// <summary>Levi's face in two lines, for a status line.</summary>
     public static IReadOnlyList<string> RenderFace() => HalfBlocks(Face);
+
+    /// <summary>The color of a palette key; null for a transparent pixel ('.') or a key the palette does not have.</summary>
+    public static (byte R, byte G, byte B)? ColorOf(char key) => Palette.TryGetValue(key, out (byte R, byte G, byte B) color) ? color : null;
 
     /// <summary>An ANSI 24-bit foreground color sequence for a palette key.</summary>
     public static string Foreground(char key) => Palette.TryGetValue(key, out (byte R, byte G, byte B) color) ? $"\u001b[38;2;{color.R};{color.G};{color.B}m" : string.Empty;
