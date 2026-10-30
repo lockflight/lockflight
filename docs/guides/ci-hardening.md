@@ -14,11 +14,13 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
 
 - **Policy from the base branch.** On pull requests it restores exactly these from the base commit (a file the PR adds is
   removed):
-  - `dotnet-tools.json` and `.config/dotnet-tools.json` (the engine pin);
+  - `.lockflight/engine.lock` (the engine pin by hash) and `dotnet-tools.json` / `.config/dotnet-tools.json` (its version
+    mirror, and the version pin of a project without a lock);
   - `lockflight.yaml`;
   - `.gitleaks.toml` and `.gitleaksignore`;
   - `nuget.config` / `NuGet.config` at the root (package sources: a PR cannot make CI install an engine of its own choosing);
-  - `.lockflight/baselines/` (accepted warnings, known-failing tests, advisories);
+  - `.lockflight/baselines/` (accepted warnings, known-failing tests, advisories) and `.lockflight/ci/` (the vendored engine
+    install script);
   - code-style and analyzer config anywhere in the tree: `.editorconfig`, `.globalconfig`/`*.globalconfig`, `*.ruleset`,
     `stylecop.json`, `BannedSymbols.txt`, `CodeMetricsConfig.txt`. A PR is judged by the base's style rules, and its own rule changes apply after the
     merge.
@@ -32,9 +34,18 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
   changed version. For example, a PR could set `<TreatWarningsAsErrors>false</TreatWarningsAsErrors>` in
   `Directory.Build.props`. `policy.protected` lists these files for review. **CODEOWNERS is what protects them.**
 - **Pinned tools.** gitleaks is downloaded at a fixed version and verified against its SHA-256 before use. The engine is the
-  version in the base branch's tool pin, installed with `dotnet tool install --tool-path` outside the repository and run as
-  `lockflight`: a `global.json` that pins SDK 8 or 9 cannot restore the engine package, so the workflow does not use
-  `dotnet tool restore`.
+  one the base branch pins, installed outside the repository (so a `global.json` that pins SDK 8 or 9 does not matter) and run
+  as `lockflight`:
+  - **With `.lockflight/engine.lock`:** the step checks the vendored `.lockflight/ci/install.sh` against the hash the lock
+    names, then runs it: it downloads this platform's package (nuget.org, `LOCKFLIGHT_NUGET_FEED`, or through `dotnet` with
+    the root `nuget.config` when that file exists and the variable is unset) and checks the executable against the lock before
+    anything runs it. The `dotnet-tools.json` mirror must name the lock's version. The script's hash comes from the lock, not
+    from the workflow file, so a pull request that upgrades the engine (script and lock together) is judged by the base's
+    script and the base's lock, which agree.
+  - **Without a lock** (a project pinned the way Lockflight 0.2 pins, as the base of the pull request that moves it to the
+    lock is): the version in the tool pin, with `dotnet tool install --tool-path`. That pull request is judged by the old engine
+    and the old policy, and lists the lock, the manifest and the CI files as protected changes for review.
+  - The step sits between `# lockflight:install-engine:begin` and `:end`, which `lockflight update` replaces as a whole.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass
   `--ci pr`; see [CI with a development build](getting-started.md#ci-with-a-development-build).
@@ -87,7 +98,7 @@ it should install.
 ```text
 # Lockflight policy: changes need a maintainer's review
 /lockflight.yaml                         @your-org/maintainers
-/.lockflight/                            @your-org/maintainers
+/.lockflight/                            @your-org/maintainers   # the engine lock and the vendored install script too
 /.config/dotnet-tools.json               @your-org/maintainers
 /dotnet-tools.json                       @your-org/maintainers
 /.claude/settings.json                   @your-org/maintainers

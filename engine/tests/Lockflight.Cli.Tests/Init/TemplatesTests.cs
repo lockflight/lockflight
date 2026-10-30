@@ -60,7 +60,8 @@ public sealed class TemplatesTests
     {
         string workflow = Templates.Workflow(["8.0.x", "10.0.x"]);
 
-        Assert.Contains("(cd \"$RUNNER_TEMP\" && dotnet tool install Lockflight.Cli --tool-path", workflow, StringComparison.Ordinal);
+        Assert.Contains("(cd \"$LOCKFLIGHT_TEMP\" && dotnet tool install Lockflight.Cli --tool-path", workflow, StringComparison.Ordinal);
+        Assert.Contains("LOCKFLIGHT_TEMP=\"$RUNNER_TEMP\"", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("dotnet tool restore", workflow, StringComparison.Ordinal);
         Assert.Contains("  lockflight gate run --profile pr", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("dotnet lockflight", workflow, StringComparison.Ordinal);

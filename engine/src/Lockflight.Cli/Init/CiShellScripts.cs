@@ -13,7 +13,14 @@ internal static class CiShellScripts
     public const string GitleaksSha256 = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb";
 
     /// <summary>The single policy files restored from the base commit, as the GitHub workflow's loop lists them.</summary>
-    public const string PolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .gitleaks.toml .gitleaksignore nuget.config NuGet.config";
+    public const string PolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .lockflight/engine.lock .gitleaks.toml .gitleaksignore nuget.config NuGet.config";
+
+    /// <summary>The policy directories restored from the base commit as a whole: accepted baselines and the vendored install script.</summary>
+    public const string PolicyDirectories = ".lockflight/baselines .lockflight/ci";
+
+    /// <summary>The first and last lines of the engine install step, which <c>update</c> replaces as a whole.</summary>
+    public const string InstallBeginMarker = "# lockflight:install-engine:begin";
+    public const string InstallEndMarker = "# lockflight:install-engine:end";
 
     /// <summary>Code-style and analyzer config, at any depth, restored from the base commit.</summary>
     public const string StylePattern = @"'(^|/)(\.editorconfig|\.globalconfig|[^/]*\.globalconfig|[^/]*\.ruleset|stylecop\.json|BannedSymbols\.txt|CodeMetricsConfig\.txt)$'";
@@ -34,9 +41,12 @@ internal static class CiShellScripts
         for file in {{PolicyFiles}}; do
           if git cat-file -e "$BASE:$file" 2>/dev/null; then git checkout "$BASE" -- "$file"; else rm -f "$file"; fi
         done
-        # Accepted baselines (known-failing tests, warnings, advisories) are policy too: a PR cannot accept its own failures.
-        rm -rf .lockflight/baselines
-        if git cat-file -e "$BASE:.lockflight/baselines" 2>/dev/null; then git checkout "$BASE" -- .lockflight/baselines; fi
+        # Accepted baselines (known-failing tests, warnings, advisories) are policy too: a PR cannot accept its own failures. So is
+        # the vendored engine install script: CI runs the base commit's copy, checked against the base commit's lock.
+        for directory in {{PolicyDirectories}}; do
+          rm -rf "$directory"
+          if git cat-file -e "$BASE:$directory" 2>/dev/null; then git checkout "$BASE" -- "$directory"; fi
+        done
         # Code-style and analyzer config (nested files too) decides what the build and format gates enforce: a PR is
         # judged by the base's rules, and its own rule changes apply after the merge.
         style={{StylePattern}}
@@ -54,11 +64,41 @@ internal static class CiShellScripts
         """;
 
     /// <summary>
-    /// Installs the engine version the tool manifest pins into <c>$LOCKFLIGHT_TEMP/lockflight</c>, outside the repository's
-    /// <c>global.json</c> (which may pin an SDK older than 10), from nuget.org or the sources in the repository's nuget.config.
-    /// The pin is read with grep and sed, which every image has, where the GitHub workflow uses python3.
+    /// Installs the engine the base commit pins into <c>$LOCKFLIGHT_TEMP/lockflight</c>, outside the repository's
+    /// <c>global.json</c>. With <c>.lockflight/engine.lock</c>: the vendored install script, after checking it against the hash the
+    /// lock names (both restored from the base commit), which downloads the platform's package and checks the executable
+    /// against the lock before anything runs it; through <c>dotnet</c> when the repository's nuget.config names the sources and
+    /// <c>LOCKFLIGHT_NUGET_FEED</c> is unset; and the <c>dotnet-tools.json</c> mirror must name the lock's version. Without a lock
+    /// (a project still pinned the way Lockflight 0.2 pins, as the base of the pull request that moves it to the lock is): the
+    /// pinned version with <c>dotnet tool install</c>. Between the markers, so <c>update</c> replaces only this step.
     /// </summary>
     public const string InstallEngine = """
+        # lockflight:install-engine:begin
+        if [ -f .config/dotnet-tools.json ]; then manifest=.config/dotnet-tools.json; else manifest=dotnet-tools.json; fi
+        pinned=$( { tr -d '\r\n' < "$manifest" 2>/dev/null || true; } | grep -oiE '"lockflight\.cli"[[:space:]]*:[[:space:]]*\{[^}]*\}' | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]*)"$/\1/' || true)
+        if [ -f .lockflight/engine.lock ]; then
+          expected=$(sed -n 's/.*"installScript"[^}]*"sha256"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{64\}\)".*/\1/p' .lockflight/engine.lock)
+          if command -v sha256sum >/dev/null 2>&1; then actual=$(sha256sum < .lockflight/ci/install.sh); else actual=$(shasum -a 256 < .lockflight/ci/install.sh); fi
+          if [ -z "$expected" ] || [ "${actual%% *}" != "$expected" ]; then echo "lockflight: .lockflight/ci/install.sh is not the script .lockflight/engine.lock pins" >&2; exit 1; fi
+          locked=$(sed -n 's/^  "version":[[:space:]]*"\([^"]*\)".*/\1/p' .lockflight/engine.lock)
+          if [ -n "$pinned" ] && [ "$pinned" != "$locked" ]; then echo "lockflight: $manifest pins $pinned but .lockflight/engine.lock pins $locked; they must agree" >&2; exit 1; fi
+          set --
+          if [ -z "${LOCKFLIGHT_NUGET_FEED:-}" ]; then for file in nuget.config NuGet.config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done; fi
+          sh .lockflight/ci/install.sh --lock .lockflight/engine.lock --dir "$LOCKFLIGHT_TEMP/lockflight" "$@"
+        else
+          if [ -z "$pinned" ]; then echo "lockflight: neither .lockflight/engine.lock nor $manifest pins the engine; run lockflight init and commit the pin" >&2; exit 1; fi
+          config=""
+          for file in nuget.config NuGet.config; do if [ -f "$file" ]; then config="$PWD/$file"; fi; done
+          (cd "$LOCKFLIGHT_TEMP" && dotnet tool install Lockflight.Cli --tool-path "$LOCKFLIGHT_TEMP/lockflight" --version "$pinned" ${config:+--configfile "$config"})
+        fi
+        # lockflight:install-engine:end
+        """;
+
+    /// <summary>
+    /// The engine install step as Lockflight 0.2's <c>init</c> wrote it (the container and Azure pipelines): what <c>update</c>
+    /// replaces when the step has no markers yet.
+    /// </summary>
+    public const string LegacyInstallEngine = """
         if [ -f .config/dotnet-tools.json ]; then manifest=.config/dotnet-tools.json; else manifest=dotnet-tools.json; fi
         version=$(tr -d '\r\n' < "$manifest" | grep -oiE '"lockflight\.cli"[[:space:]]*:[[:space:]]*\{[^}]*\}' | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]*)"$/\1/' || true)
         if [ -z "$version" ]; then echo "lockflight: $manifest pins no lockflight.cli version; run lockflight init and commit the pin" >&2; exit 1; fi
