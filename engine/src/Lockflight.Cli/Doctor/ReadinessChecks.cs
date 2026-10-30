@@ -293,7 +293,7 @@ internal static class ReadinessChecks
             return new(Name, CheckStatus.Fail, $"{ClaudeSettingsMerger.RelativePath} {problem}", $"fix it by hand, then {fix}");
         }
 
-        if (ClaudeSettingsMerger.PluginEnabled(settings) || ClaudeSettingsMerger.PluginEnabled(UserSettings(userHome)))
+        if (ClaudeUserSettings.PluginEnabledFor(root, userHome))
         {
             return new(Name, CheckStatus.Warn, "the native hooks and the Lockflight plugin are both enabled, so the guard and the Stop gates run twice",
                 $"choose one level: disable the plugin for this project (\"enabledPlugins\": {{ \"{Templates.PluginId}\": false }} in .claude/settings.local.json), or remove the hooks that run {NativeHookShim.RelativePath}");
@@ -306,20 +306,6 @@ internal static class ReadinessChecks
         }
 
         return new(Name, CheckStatus.Pass, "native level: the project's hooks run the engine without the plugin", null);
-    }
-
-    /// <summary>The user's Claude Code settings; null when there are none or they cannot be read.</summary>
-    private static JsonNode? UserSettings(string? userHome)
-    {
-        string path = Path.Combine(userHome ?? string.Empty, ".claude", "settings.json");
-        try
-        {
-            return userHome is not null && File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) : null;
-        }
-        catch (Exception exception) when (exception is JsonException or IOException)
-        {
-            return null;
-        }
     }
 
     /// <summary>Whether <paramref name="bash"/> runs; a missing executable is a FAIL with the fix, never a crash.</summary>

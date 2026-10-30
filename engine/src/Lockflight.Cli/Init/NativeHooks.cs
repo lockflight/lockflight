@@ -20,22 +20,27 @@ internal static class NativeHooks
     private const string EntriesKey = "hooks";
     private const string CommandKey = "command";
     private const string MatcherKey = "matcher";
+    private const string TypeKey = "type";
+    private const string CommandType = "command";
+    private const string TimeoutKey = "timeout";
+    private const string OnFailureKey = "onFailure";
+    private const string BlockOnFailure = "block";
     private const string LinkedEngine = ".lockflight/bin/lockflight";
     private const string Lockdown = LockdownPolicy.RelativeMarkerPath;
 
-    /// <summary>Each Claude Code event with the engine's name for it, its time limit in seconds, and whether a failure blocks.</summary>
-    private static readonly (string Event, string EngineEvent, string? Matcher, int Timeout, bool BlockOnFailure)[] Events =
+    private static readonly NativeHookEvent[] Events =
     [
-        ("SessionStart", "session-start", null, 10, false),
-        ("PreToolUse", "pre-tool-use", ".*", 10, true),
-        ("TaskCompleted", "task-completed", null, 30, false),
-        ("Stop", "stop", null, 600, false),
+        new("SessionStart", "session-start", Matcher: null, TimeoutSeconds: 10, BlockOnFailure: false),
+        new("PreToolUse", "pre-tool-use", Matcher: ".*", TimeoutSeconds: 10, BlockOnFailure: true),
+        new("TaskCompleted", "task-completed", Matcher: null, TimeoutSeconds: 30, BlockOnFailure: false),
+        new("Stop", "stop", Matcher: null, TimeoutSeconds: 600, BlockOnFailure: false),
     ];
 
     /// <summary>
     /// The command for one engine event, with paths from the project root Claude Code passes in <c>CLAUDE_PROJECT_DIR</c>. The
-    /// native level needs no engine on the machine: with neither a linked engine nor a lockdown it does nothing, and the deny
-    /// rules and the sandbox still hold. A teammate who links the engine gets the guard, as at the plugin level.
+    /// native level needs no engine on the machine: with neither a linked engine nor a lockdown it does nothing (it fails open),
+    /// and the deny rules and the sandbox still hold. Once a teammate links the engine, the shim runs it with the plugin's trust
+    /// checks.
     /// </summary>
     public static string Command(string engineEvent) =>
         $"[ -e \"{Project(LinkedEngine)}\" ] || [ -e \"{Project(LinkedEngine)}.exe\" ] || [ -e \"{Project(Lockdown)}\" ] || exit 0; "
@@ -44,13 +49,17 @@ internal static class NativeHooks
     /// <summary>Whether a hook command is one of Lockflight's native hooks (it runs the vendored shim).</summary>
     public static bool IsLockflights(string? command) => command?.Contains(NativeHookShim.RelativePath, StringComparison.Ordinal) == true;
 
-    /// <summary>Whether the settings hold Lockflight's native hook for every event it writes, as this engine writes them.</summary>
+    /// <summary>
+    /// Whether the settings hold exactly one Lockflight hook per event, in a group with the event's matcher, as this engine writes
+    /// it (command, time limit and failure mode).
+    /// </summary>
     public static bool AreCurrent(JsonNode? settings) =>
-        Events.All(entry => Find(settings?[HooksKey]?[entry.Event] as JsonArray)?[CommandKey]?.GetValue<string>() == Command(entry.EngineEvent));
+        Events.All(entry => Ours(Groups(settings, entry.Event)) is [(JsonObject group, JsonObject hook)]
+            && JsonNode.DeepEquals(hook, Hook(entry))
+            && MatcherOf(group) == entry.Matcher);
 
     /// <summary>Whether the settings hold any of Lockflight's native hooks.</summary>
-    public static bool AnyPresent(JsonNode? settings) =>
-        Events.Any(entry => Find(settings?[HooksKey]?[entry.Event] as JsonArray) is not null);
+    public static bool AnyPresent(JsonNode? settings) => Events.Any(entry => Ours(Groups(settings, entry.Event)).Count > 0);
 
     /// <summary>
     /// Why the hooks cannot be merged into: <c>hooks</c> is not an object, an event's entry is not a list of objects, or an object's
@@ -85,8 +94,9 @@ internal static class NativeHooks
     }
 
     /// <summary>
-    /// Adds the hook for each event that has none, and brings one Lockflight wrote earlier up to date in place; every other hook
-    /// is kept. True when something changed.
+    /// Adds the hook for each event that has none. One Lockflight wrote earlier is brought up to date in place, and moved to a group
+    /// of its own when its group's matcher is not the event's; any further copy is removed, so it runs once. Every other hook is
+    /// kept. True when something changed. Call only when <see cref="Problem"/> is null.
     /// </summary>
     public static bool Merge(JsonObject settings)
     {
@@ -97,44 +107,34 @@ internal static class NativeHooks
         }
 
         bool changed = false;
-        foreach ((string name, string engineEvent, string? matcher, int timeout, bool blockOnFailure) in Events)
+        foreach (NativeHookEvent entry in Events)
         {
-            if (hooks[name] is not JsonArray groups)
+            if (hooks[entry.Event] is not JsonArray groups)
             {
                 groups = [];
-                hooks[name] = groups;
+                hooks[entry.Event] = groups;
             }
 
-            JsonObject wanted = Hook(engineEvent, timeout, blockOnFailure);
-            if (Find(groups) is JsonObject existing)
+            List<(JsonObject Group, JsonObject Hook)> ours = Ours(groups);
+            if (ours.Count == 1 && JsonNode.DeepEquals(ours[0].Hook, Hook(entry)) && MatcherOf(ours[0].Group) == entry.Matcher)
             {
-                if (!JsonNode.DeepEquals(existing, wanted))
-                {
-                    foreach (string key in existing.Select(property => property.Key).ToArray())
-                    {
-                        existing.Remove(key);
-                    }
-
-                    foreach ((string key, JsonNode? value) in wanted.ToArray())
-                    {
-                        wanted.Remove(key);
-                        existing[key] = value;
-                    }
-
-                    changed = true;
-                }
-
                 continue;
             }
 
-            JsonObject group = [];
-            if (matcher is not null)
+            // Remove every copy (dropping a group it leaves empty) and add the current hook in a group of its own.
+            foreach ((JsonObject group, JsonObject hook) in ours)
             {
-                group[MatcherKey] = matcher;
+                JsonArray entries = group[EntriesKey]!.AsArray();
+                entries.Remove(hook);
+                if (entries.Count == 0)
+                {
+                    groups.Remove(group);
+                }
             }
 
-            group[EntriesKey] = new JsonArray(wanted);
-            groups.Add((JsonNode)group);
+            JsonObject own = entry.Matcher is null ? [] : new JsonObject { [MatcherKey] = entry.Matcher };
+            own[EntriesKey] = new JsonArray(Hook(entry));
+            groups.Add((JsonNode)own);
             changed = true;
         }
 
@@ -143,26 +143,32 @@ internal static class NativeHooks
 
     private static string Project(string relativePath) => $"$CLAUDE_PROJECT_DIR/{relativePath}";
 
-    private static JsonObject Hook(string engineEvent, int timeout, bool blockOnFailure)
+    private static string? MatcherOf(JsonObject group) =>
+        group[MatcherKey]?.GetValueKind() == JsonValueKind.String ? group[MatcherKey]!.GetValue<string>() : null;
+
+    private static JsonObject Hook(NativeHookEvent entry)
     {
         JsonObject hook = new()
         {
-            ["type"] = "command",
-            [CommandKey] = Command(engineEvent),
-            ["timeout"] = timeout,
+            [TypeKey] = CommandType,
+            [CommandKey] = Command(entry.EngineEvent),
+            [TimeoutKey] = entry.TimeoutSeconds,
         };
-        if (blockOnFailure)
+        if (entry.BlockOnFailure)
         {
-            hook["onFailure"] = "block";
+            hook[OnFailureKey] = BlockOnFailure;
         }
 
         return hook;
     }
 
-    /// <summary>Lockflight's hook among an event's groups; null when there is none.</summary>
-    private static JsonObject? Find(JsonArray? groups) =>
-        groups?.OfType<JsonObject>()
-            .SelectMany(group => group[EntriesKey] as JsonArray ?? [])
-            .OfType<JsonObject>()
-            .FirstOrDefault(hook => hook[CommandKey]?.GetValueKind() == JsonValueKind.String && IsLockflights(hook[CommandKey]!.GetValue<string>()));
+    /// <summary>An event's hook groups; null when the settings, their <c>hooks</c> or the event's entry has another shape.</summary>
+    private static JsonArray? Groups(JsonNode? settings, string hookEvent) =>
+        (settings as JsonObject)?[HooksKey] is JsonObject hooks ? hooks[hookEvent] as JsonArray : null;
+
+    /// <summary>Every Lockflight hook among an event's groups, with the group that holds it.</summary>
+    private static List<(JsonObject Group, JsonObject Hook)> Ours(JsonArray? groups) =>
+        [.. (groups ?? []).OfType<JsonObject>()
+            .SelectMany(group => (group[EntriesKey] as JsonArray ?? []).OfType<JsonObject>().Select(hook => (Group: group, Hook: hook)))
+            .Where(pair => pair.Hook[CommandKey]?.GetValueKind() == JsonValueKind.String && IsLockflights(pair.Hook[CommandKey]!.GetValue<string>()))];
 }

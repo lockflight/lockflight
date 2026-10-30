@@ -21,7 +21,8 @@ level is not a manifest key: it is what `init` writes for Claude Code.
 Code. It links no engine. Use it when the team's agents are not Claude Code, or when the team wants the judge without any
 change to how people work. It needs a CI file, so `--ci none` is refused with it.
 
-A person or an agent can still run the engine by hand (`lockflight gate run`, `lockflight redgreen red`). The CI check is
+`doctor` checks a developer's machine, so at this level its local lines (the linked engine, Claude settings, deny rules)
+report what CI only leaves out; they need no fix. A person or an agent can still run the engine by hand (`lockflight gate run`, `lockflight redgreen red`). The CI check is
 the boundary where it runs as a required check with policy, the lock and CODEOWNERS on the base branch
 ([CI hardening](ci-hardening.md)).
 
@@ -31,24 +32,29 @@ the boundary where it runs as a required check with policy, the lock and CODEOWN
 The deny rules, the sandbox write denials and the `CLAUDE.md` block are the same. In their place it writes the project's own
 Claude Code hooks: `SessionStart`, `PreToolUse` (every tool, blocking on a failure), `TaskCompleted` and `Stop`. Each hook runs
 `.claude/hooks/lockflight-hook`, a copy of the plugin's hook shim that the engine carries and `init --native` writes. The
-copy is a protected path, so the guard and the deny rules keep the agent from editing it. A `.gitattributes` rule keeps it LF
-on Windows checkouts.
+copy is a protected path: Claude Code's `Edit` deny rule and the sandbox write denial cover it, and so does the guard while an
+engine is linked. A `.gitattributes` rule keeps it LF on Windows checkouts.
 
 - **Adapter.** Each hook names its adapter in `LOCKFLIGHT_HOOK_ADAPTER=claude-code`, never as an argument (an older engine
   refuses an extra one).
-- **Same checks as the plugin.** The shim runs only the engine `lockflight link` linked for this user. It checks the hash
-  record `link` wrote and the hash `.lockflight/engine.lock` pins, so the native level guards exactly as the plugin level
-  does.
-- **No engine is fine.** With no linked engine and no lockdown, each hook does nothing, and the deny rules and the sandbox
-  still apply. A teammate who installs and links the engine (`dotnet tool restore && dotnet lockflight link`, or
+- **Same checks on a linked engine.** The shim runs only the engine `lockflight link` linked for this user. It checks the
+  hash record `link` wrote and the hash `.lockflight/engine.lock` pins, as the plugin's shim does.
+- **No engine: the hooks fail open.** With no linked engine and no lockdown, each hook does nothing. The deny rules and the
+  sandbox still apply to Claude Code's own tools, but there is no guard, no test lock and no Stop gate. This differs from the
+  plugin, whose shim blocks everything but reads and the restore command until the engine is there. Removing the linked
+  engine therefore turns the native guard off; the deny rules and the sandbox protect `.lockflight/bin/`, and CI judges either
+  way. A teammate who installs and links the engine (`dotnet tool restore && dotnet lockflight link`, or
   `~/.lockflight/bin/lockflight engine install`) gets the guard. In a lockdown with no engine, only reading is allowed.
 - **Merging is safe.** The team's own hooks and settings are kept. Lockflight finds its own hooks by the shim path in their
-  command, and running `init --native` again brings them up to date in place. When `.claude/settings.json` has a `hooks` key
+  command, and running `init --native` again brings them up to date: one hook per event, in a group with the event's
+  matcher. When `.claude/settings.json` has a `hooks` key
   that is not what Claude Code reads (not an object of lists of hook groups), init writes nothing and says why.
-- **Kept up to date.** `lockflight update` refreshes the shim with the engine. `doctor` checks that the hooks and the shim are
-  the ones the engine writes.
+- **Kept up to date.** `lockflight update` refreshes the shim and the hooks with the engine. `doctor` checks that the hooks
+  (command, matcher, time limit, failure mode) and the shim are the ones the engine writes.
 - **No slash commands.** There is no plugin at this level, so there are no `/lockflight:*` commands. A person gives approvals,
-  baselines, resets and amends in a separate terminal window (`lockflight approve`, `lockflight baseline`, and so on).
+  baselines, resets and amends in a separate terminal window (`lockflight approve`, `lockflight baseline`, and so on). Some
+  engine messages (the session banner, a refused human-only command) still name the `/lockflight:` command as well; at this
+  level, use the terminal command they name beside it.
 - **One level at a time.** When the plugin is also enabled, in the project or in the user's settings, the guard and the Stop
   gates run twice. `init --native` and `doctor` say so. Disable the plugin for the project in `.claude/settings.local.json`
   (`"enabledPlugins": { "lockflight@lockflight": false }`) or go back to the plugin level.

@@ -1,6 +1,4 @@
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.EngineLocks;
@@ -144,28 +142,6 @@ internal sealed class InitCommand(CliContext context) : ICommand
         return await InitializeAsync(shellUrl is null ? init : init with { Shell = new ShellSettings(shellUrl, Ref: null, unitPath!) }, cancellationToken);
     }
 
-    /// <summary>Whether the project's or the user's Claude Code settings enable the plugin; unreadable settings count as not.</summary>
-    private bool PluginAlsoEnabled(string root)
-    {
-        string? home = context.Environment.HomeDirectory();
-        foreach (string path in new[] { Path.Combine(root, ClaudeSettingsMerger.RelativePath), home is null ? null : Path.Combine(home, ".claude", "settings.json") }.OfType<string>())
-        {
-            try
-            {
-                if (File.Exists(path) && ClaudeSettingsMerger.PluginEnabled(JsonNode.Parse(File.ReadAllText(path))))
-                {
-                    return true;
-                }
-            }
-            catch (Exception exception) when (exception is JsonException or IOException)
-            {
-                // Unreadable settings enable nothing.
-            }
-        }
-
-        return false;
-    }
-
     private static InstallLevel LevelOf(string option) => option == "--native" ? InstallLevel.Native : InstallLevel.CiOnly;
 
     private async Task<ExitCode> InitializeAsync(InitOptions init, CancellationToken cancellationToken)
@@ -303,7 +279,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
             await context.Output.WriteLineAsync($"{Describe(step.Outcome),-10} {step.RelativePath}");
         }
 
-        if (init.Level == InstallLevel.Native && PluginAlsoEnabled(root))
+        if (init.Level == InstallLevel.Native && ClaudeUserSettings.PluginEnabledFor(root, context.Environment.HomeDirectory()))
         {
             await context.Output.WriteLineAsync(
                 $"note: the Lockflight plugin is enabled too (project or user settings), so the guard and the Stop gates would run twice; disable it for this project (\"enabledPlugins\": {{ \"{Templates.PluginId}\": false }} in .claude/settings.local.json)");

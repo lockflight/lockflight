@@ -49,7 +49,7 @@ public sealed class InitInstallLevelTests : IDisposable
     }
 
     [Fact]
-    public async Task NativeKeepsTheTeamsHooksAndBringsItsOwnUpToDateInPlace()
+    public async Task NativeKeepsTheTeamsHooksAndBringsItsOwnUpToDate()
     {
         string teamHook = """{ "type": "command", "command": "./scripts/format.sh" }""";
         string staleLockflightHook = """{ "type": "command", "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/lockflight-hook\" stop", "timeout": 5 }""";
@@ -63,10 +63,38 @@ public sealed class InitInstallLevelTests : IDisposable
         Assert.Equal(2, preToolUse.Count);
         Assert.Equal("./scripts/format.sh", preToolUse[0]!["hooks"]![0]!["command"]!.GetValue<string>());
         JsonArray stop = settings["hooks"]!["Stop"]!.AsArray();
-        Assert.Single(stop);
-        Assert.Equal(NativeHooks.Command("stop"), stop[0]!["hooks"]![0]!["command"]!.GetValue<string>());
-        Assert.Equal(600, stop[0]!["hooks"]![0]!["timeout"]!.GetValue<int>());
-        Assert.Equal("./scripts/format.sh", stop[0]!["hooks"]![1]!["command"]!.GetValue<string>());
+        Assert.Equal(2, stop.Count);
+        Assert.Equal("./scripts/format.sh", Assert.Single(stop[0]!["hooks"]!.AsArray())!["command"]!.GetValue<string>());
+        JsonNode lockflightHook = Assert.Single(stop[1]!["hooks"]!.AsArray())!;
+        Assert.Equal(NativeHooks.Command("stop"), lockflightHook["command"]!.GetValue<string>());
+        Assert.Equal(600, lockflightHook["timeout"]!.GetValue<int>());
+        Assert.True(NativeHooks.AreCurrent(settings));
+    }
+
+    [Fact]
+    public async Task NativeRestoresANarrowedMatcherAndRemovesADuplicate()
+    {
+        await TestConsole.RunAsync(["init", "--no-link", "--native"], "", projectRoot.FullName);
+        JsonNode settings = Settings();
+        settings["hooks"]!["PreToolUse"]![0]!["matcher"] = "Edit";
+        settings["hooks"]!["PreToolUse"]!.AsArray().Add((JsonNode)JsonNode.Parse(settings["hooks"]!["PreToolUse"]![0]!.ToJsonString())!);
+        WriteSettings(settings.ToJsonString());
+        Assert.False(NativeHooks.AreCurrent(Settings()));
+
+        await TestConsole.RunAsync(["init", "--no-link", "--native"], "", projectRoot.FullName);
+
+        JsonNode merged = Settings();
+        Assert.Equal(".*", Assert.Single(merged["hooks"]!["PreToolUse"]!.AsArray())!["matcher"]!.GetValue<string>());
+        Assert.True(NativeHooks.AreCurrent(merged));
+    }
+
+    [Fact]
+    public void SettingsOfAnotherShapeHoldNoNativeHooks()
+    {
+        Assert.False(NativeHooks.AnyPresent(JsonNode.Parse("""{ "hooks": [] }""")));
+        Assert.False(NativeHooks.AnyPresent(JsonNode.Parse("""{ "hooks": { "Stop": "x" } }""")));
+        Assert.False(NativeHooks.AnyPresent(JsonNode.Parse("[]")));
+        Assert.False(ClaudeSettingsMerger.PluginEnabled(JsonNode.Parse("""{ "enabledPlugins": [] }""")));
     }
 
     [Theory]

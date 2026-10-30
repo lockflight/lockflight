@@ -86,7 +86,7 @@ internal static class ClaudeSettingsMerger
 
     /// <summary>Whether the plugin is enabled in these settings (true, not only listed).</summary>
     public static bool PluginEnabled(JsonNode? settings) =>
-        settings?[EnabledPluginsKey]?[Templates.PluginId]?.GetValueKind() == JsonValueKind.True;
+        (settings as JsonObject)?[EnabledPluginsKey] is JsonObject plugins && plugins[Templates.PluginId]?.GetValueKind() == JsonValueKind.True;
 
     private static bool MergePlugin(JsonObject settings)
     {
