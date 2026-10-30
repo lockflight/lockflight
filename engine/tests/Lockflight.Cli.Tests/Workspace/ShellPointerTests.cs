@@ -71,6 +71,22 @@ public sealed class ShellPointerTests : IDisposable
         Assert.Equal("net8.0", effective.Gates.TestFramework);
     }
 
+    [Fact]
+    public void TheShellsRoutingReachesTheUnitRebasedAndOnlyStricter()
+    {
+        Manifest shellManifest = Parse(ShellManifest + "\nrouting:\n  preset: default\n  critical:\n    - \"services/orders/src/Payments/**\"\n    - \"services/billing/**\"\n");
+        Manifest unit = new(Orders, [], StopGate: false, StopTarget: null, GateSettings.Default)
+        {
+            Routing = RoutingPresets.For(RoutingPreset.Relaxed) with { Critical = ["src/Refunds/**"], FromManifest = true },
+        };
+
+        Manifest effective = ShellPolicyOverlay.Apply(unit, new ShellPolicy(Shell, "abc", shellManifest, shellManifest.Units[0]));
+
+        Assert.Equal(["src/Payments/**", "src/Refunds/**"], effective.Routing.Critical);
+        Assert.Equal(20, effective.Routing.FixMaxLines);
+        Assert.Equal(ChangeClass.Behaviour, effective.Routing.Require.ReviewFrom);
+    }
+
     [Theory]
     [InlineData("fail", "off", "fail")]
     [InlineData("report", "auto", "auto")]
