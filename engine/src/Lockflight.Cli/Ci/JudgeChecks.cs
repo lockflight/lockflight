@@ -26,6 +26,7 @@ internal static class JudgeChecks
             CheckId.Red when findings.Cycles is IReadOnlyList<CycleJudgement> cycles => Red(level, cycles),
             CheckId.TestsSinceRed when plan.Reds.OverCap || plan.Reds.Cycles.Count == 0 => new CheckResult(check, level, CheckVerdict.NotEarned, "no red commit to compare with"),
             CheckId.TestsSinceRed when findings.SinceRed is IReadOnlyList<SinceRedTest> sinceRed => SinceRedCheck(level, sinceRed),
+            CheckId.TestsExistingChanged when findings.ExistingChanged is IReadOnlyList<ExistingChangedTest> existing => ExistingChangedCheck(level, existing),
             CheckId.Green when findings.Green is GreenJudgement green => new CheckResult(check, level, green.Verdict, green.Why),
             CheckId.Review => new CheckResult(check, level, CheckVerdict.Skipped, plan.Inputs.ReviewExpected ? "the report joins the review job's result" : "no review job runs for this pull request"),
             _ => new CheckResult(check, level, CheckVerdict.NotEarned, NotJudgedYet),
@@ -61,6 +62,17 @@ internal static class JudgeChecks
         int unchanged = tests.Count(test => test.State == SinceRed.Unchanged);
         int amended = tests.Count - unchanged;
         return new CheckResult(CheckId.TestsSinceRed, level, CheckVerdict.Pass, $"{unchanged} unchanged, {amended} amend{(amended == 1 ? string.Empty : "s")} accepted");
+    }
+
+    private static CheckResult ExistingChangedCheck(CheckLevel level, IReadOnlyList<ExistingChangedTest> tests)
+    {
+        if ((tests.FirstOrDefault(test => test.State == ExistingChange.PassesOnBase) ?? tests.FirstOrDefault(test => test.State == ExistingChange.Uncheckable)) is ExistingChangedTest worst)
+        {
+            return new CheckResult(CheckId.TestsExistingChanged, level, worst.State == ExistingChange.PassesOnBase ? CheckVerdict.Fail : CheckVerdict.NotEarned, $"{worst.Key}: {worst.Why}");
+        }
+
+        return new CheckResult(CheckId.TestsExistingChanged, level, CheckVerdict.Pass,
+            tests.Count == 0 ? "no existing test changed" : $"{tests.Count} existing tests changed, each still failing on the base's code");
     }
 
     private static string NoRedWhy(JudgePlan plan)
