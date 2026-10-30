@@ -69,4 +69,71 @@ public sealed class RedCommitterTests : IAsyncLifetime
 
         Assert.Null(await RedCommitter.RefusalAsync(repository.Root, TimeLimit, TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task ARedIsNotCommittedOntoACommitMadeWhileItRan()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        repository.Write("tests/Shop.Tests/PriceTests.cs", "class PriceTests {}\n");
+        RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
+        string moved = await repository.Write("README.md", "# shop, moved on\n").CommitAsync("other work", cancellationToken);
+
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+
+        Assert.Null(outcome.Commit);
+        Assert.Contains("HEAD moved", outcome.Message, StringComparison.Ordinal);
+        Assert.Equal(moved, await repository.HeadAsync(cancellationToken));
+    }
+
+    [Fact]
+    public async Task UntrackedFilesAboveAProjectRootBelowTheTopLevelAreRefused()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await repository.Write("app/src/Shop/Shop.csproj", "<Project />\n").CommitAsync("app", cancellationToken);
+        repository.Write("app/src/Shop/Price.cs", "class Price {}\n").Write("app/specs/001-shipping/spec.md", "x").Write("scratch.txt", "secret\n");
+
+        string? refusal = await RedCommitter.RefusalAsync(Path.Combine(repository.Root, "app"), TimeLimit, cancellationToken);
+
+        Assert.NotNull(refusal);
+        Assert.Contains("scratch.txt", refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain("Price.cs", refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain("spec.md", refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheLineGivenWhenAHookRefusesCommitsTheJudgedTreeNotTheCurrentOne()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        repository.Write(".git/hooks/pre-commit", "#!/bin/sh\nexit 1\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(Path.Combine(repository.Root, ".git", "hooks", "pre-commit"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        repository.Write("tests/Shop.Tests/PriceTests.cs", "class PriceTests {}\n");
+        RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
+        repository.Write("src/Shop/Price.cs", "class Price { /* written after the red */ }\n");
+
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+
+        Assert.Null(outcome.Commit);
+        Assert.Contains($"git read-tree {snapshot.Commit} && git commit --no-verify", outcome.Message, StringComparison.Ordinal);
+        await repository.GitAsync(["read-tree", snapshot.Commit!], cancellationToken);
+        await repository.GitAsync(["commit", "-q", "--no-verify", "-m", "red"], cancellationToken);
+        Assert.Equal(await repository.CommitOfAsync($"{snapshot.Commit}^{{tree}}", cancellationToken), await repository.CommitOfAsync("HEAD^{tree}", cancellationToken));
+    }
+
+    [Fact]
+    public async Task AFirstCommitKeepsTheIndexInStep()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using GitHistoryFixture empty = await GitHistoryFixture.CreateAsync(cancellationToken);
+        empty.Write("src/Shop/Shop.csproj", "<Project />\n").Write("tests/Shop.Tests/PriceTests.cs", "class PriceTests {}\n");
+        RedSnapshot snapshot = await RedSnapshots.TakeAsync(empty.Root, [empty.Root], TimeLimit, cancellationToken);
+
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(empty.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+
+        Assert.NotNull(outcome.Commit);
+        Assert.Equal(string.Empty, (await empty.GitAsync(["diff", "--cached", "--name-only"], cancellationToken)).Trim());
+    }
 }
