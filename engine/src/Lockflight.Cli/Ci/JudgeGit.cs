@@ -97,6 +97,17 @@ internal static class JudgeGit
         return diff.ExitCode == 0 ? diff.Output : null;
     }
 
+    /// <summary>The diff of <paramref name="paths"/> between two commits with three lines of context, as a person reads it; null when git fails.</summary>
+    public static async Task<string?> DiffAsync(string root, string from, string to, IReadOnlyList<string> paths, CancellationToken cancellationToken)
+    {
+        ProcessResult diff = await ProcessRunner.RunAsync(
+            Executable,
+            [.. Pinned, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/", from, to, "--", .. paths],
+            root,
+            cancellationToken);
+        return diff.ExitCode == 0 ? diff.Output : null;
+    }
+
     private static string[] Lines(string text) => text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static string[] Split(string nulSeparated) => nulSeparated.Split('\0', StringSplitOptions.RemoveEmptyEntries);

@@ -1,3 +1,4 @@
+using Lockflight.Cli.Config;
 using Lockflight.Cli.Routing;
 
 namespace Lockflight.Cli.Ci;
@@ -15,6 +16,12 @@ internal static class JudgeChecks
 
     private static CheckResult Decide(JudgePlan plan, JudgeFindings findings, CheckId check, CheckLevel level)
     {
+        if (check == CheckId.Approvals && findings.Approvals is { Facts.SpecFirst.Applies: true })
+        {
+            // Spec-first applies by the manifest (its default, the class, a spec-first path), whatever the class's own level.
+            level = CheckLevel.Required;
+        }
+
         if (level == CheckLevel.Off)
         {
             return new CheckResult(check, level, CheckVerdict.NotApplicable, plan.Inputs.Event == JudgeEvent.PullRequest ? "off for this change class" : "judged on the pull request");
@@ -33,6 +40,7 @@ internal static class JudgeChecks
             CheckId.Trace when findings.Trace is TraceJudgement trace => Trace(plan, level, trace),
             CheckId.Gates when findings.Gates is { } gates => new CheckResult(check, level, gates.Verdict, gates.Why),
             CheckId.Green when findings.Green is GreenJudgement green => new CheckResult(check, level, green.Verdict, green.Why),
+            CheckId.Approvals when findings.Approvals is ApprovalsJudgement approvals => Approvals(level, approvals),
             CheckId.Review => new CheckResult(check, level, CheckVerdict.Skipped, plan.Inputs.ReviewExpected ? "the report joins the review job's result" : "no review job runs for this pull request"),
             _ => new CheckResult(check, level, CheckVerdict.NotEarned, NotJudgedYet),
         };
@@ -79,6 +87,10 @@ internal static class JudgeChecks
         return new CheckResult(CheckId.TestsExistingChanged, level, CheckVerdict.Pass,
             tests.Count == 0 ? "no existing test changed" : $"{tests.Count} existing tests changed, each still failing on the base's code");
     }
+
+    /// <summary>With <c>approvals.check: report</c> the problems are listed, and the check never decides the verdict.</summary>
+    private static CheckResult Approvals(CheckLevel level, ApprovalsJudgement approvals) =>
+        new(CheckId.Approvals, approvals.Facts.Check == ApprovalCheckMode.Report && level == CheckLevel.Required ? CheckLevel.Advisory : level, approvals.Verdict, approvals.Why);
 
     /// <summary>Trace is required when it applies to a class that needs it then (a spec exists), off when it does not.</summary>
     private static CheckResult Trace(JudgePlan plan, CheckLevel level, TraceJudgement trace)

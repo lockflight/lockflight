@@ -6,7 +6,8 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// The <c>pr</c> gates at head (step P5), run in the judge's worktree with the base policy laid over it and the merge base as
-/// <c>--base</c>, exactly as <c>lockflight gate run --profile pr</c> runs them; their result file is embedded in the evidence.
+/// <c>--base</c> (and, in a unit repository, the workspace shell's clone as <c>--shell</c>), exactly as
+/// <c>lockflight gate run --profile pr</c> runs them; their result file is embedded in the evidence.
 /// </summary>
 internal static class GatesJudge
 {
@@ -26,6 +27,11 @@ internal static class GatesJudge
         if (plan.MergeBase is string mergeBase)
         {
             args.AddRange(["--base", mergeBase]);
+        }
+
+        if (plan.Shell is { } shell)
+        {
+            args.AddRange([GateCommand.ShellOption, shell.Directory]);
         }
 
         CommandDescriptor command = CommandRegistry.Match(["gate", "run"])!;

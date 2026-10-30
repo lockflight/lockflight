@@ -1,6 +1,8 @@
+using Lockflight.Cli.Config;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Testing;
+using Lockflight.Cli.Workspace;
 
 namespace Lockflight.Cli.Ci;
 
@@ -8,7 +10,8 @@ namespace Lockflight.Cli.Ci;
 /// Trace in CI: every requirement of the spec must be named by a test that went red at one of this pull request's red commits, is
 /// unchanged since (or its amend was accepted) and passes at head (<see cref="TraceMatrix"/>). Tests without a red never count.
 /// When the spec was on the base already, the pull request answers for the requirements it adds or changes and those its red
-/// tests name, so a feature can be delivered one story per pull request.
+/// tests name, so a feature can be delivered one story per pull request. In a unit repository of a workspace shell the spec is the
+/// shell's (<see cref="ShellSpecSource"/>) and the pull request answers for the requirements its red tests name.
 /// </summary>
 internal static class TraceJudge
 {
@@ -28,7 +31,10 @@ internal static class TraceJudge
         }
 
         RedGreenTest[] counted = [.. cycles.Where(cycle => cycle.Accepted).SelectMany(cycle => cycle.Tests).Where(test => Counts(test, sinceRed, green))];
-        SpecResolution spec = await TreeSpecSource.ResolveAsync(plan, plan.Inputs.Branch, [.. counted.SelectMany(test => test.Requirements)], cancellationToken);
+        string[] named = [.. counted.SelectMany(test => test.Requirements).Distinct(StringComparer.Ordinal)];
+        SpecResolution spec = plan.Shell is ShellPolicy shell
+            ? await ShellSpecSource.ResolveAsync(plan, shell, plan.Inputs.Branch, named, cancellationToken)
+            : await TreeSpecSource.ResolveAsync(plan, plan.Inputs.Branch, named, cancellationToken);
         if (spec.FeatureId is null)
         {
             return spec.Problem is string problem
@@ -47,13 +53,32 @@ internal static class TraceJudge
             return new TraceJudgement(spec, CheckVerdict.NotEarned, $"{spec.SpecPath} defines no requirements (FR-001 …); there is nothing to trace", Applies: true, []);
         }
 
+        // A unit of a workspace shell delivers its part of a feature whose spec spans units: it answers for the requirements its
+        // own red tests name.
+        if (spec.Origin == SpecOrigin.Shell)
+        {
+            IReadOnlyList<Requirement> all = requirements;
+            requirements = [.. requirements.Where(requirement => named.Contains(requirement.Id))];
+            if (requirements.Count == 0 && named.Length > 0)
+            {
+                return new TraceJudgement(spec, CheckVerdict.NotEarned,
+                    $"the tests name {string.Join(", ", named)}, which the workspace shell's spec of {spec.FeatureId} does not define (it has {string.Join(", ", all.Select(requirement => requirement.Id))})", Applies: true, []);
+            }
+
+            if (requirements.Count == 0)
+            {
+                return plan.Class.Classification.Class >= ChangeClass.Feature
+                    ? new TraceJudgement(spec, CheckVerdict.NotEarned, $"no test that went red, then green names a requirement of {spec.FeatureId} in the workspace shell's spec; its class needs one", Applies: true, [])
+                    : new TraceJudgement(spec, CheckVerdict.NotApplicable, $"no test that went red, then green names a requirement of {spec.FeatureId} in the workspace shell's spec", Applies: false, []);
+            }
+        }
+
         // A feature delivered over several pull requests: this one answers for the requirements its spec diff adds or changes and
         // those its own red tests name; the others were traced when they were added.
-        if (plan.MergeBase is string mergeBase && spec.SpecPath is string specPath
+        else if (plan.MergeBase is string mergeBase && spec.SpecPath is string specPath
             && await JudgeGit.ShowFileAsync(plan.Inputs.Root, mergeBase, specPath, cancellationToken) is string baseText)
         {
             Dictionary<string, string> before = SpecDocument.Parse(baseText).Requirements.GroupBy(requirement => requirement.Id).ToDictionary(group => group.Key, group => group.First().Text, StringComparer.Ordinal);
-            HashSet<string> named = [.. counted.SelectMany(test => test.Requirements)];
             requirements = [.. requirements.Where(requirement => !before.TryGetValue(requirement.Id, out string? old) || old != requirement.Text || named.Contains(requirement.Id))];
             if (requirements.Count == 0)
             {

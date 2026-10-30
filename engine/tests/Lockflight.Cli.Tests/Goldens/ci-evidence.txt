@@ -80,6 +80,7 @@
   "green": null,
   "trace": null,
   "gates": null,
+  "specDiff": null,
   "approvals": null,
   "blocked": null,
   "review": {

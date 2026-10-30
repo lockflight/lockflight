@@ -5,8 +5,9 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// The PR comment and job summary from a verdict file: a marker line the report finds its own comment by, the verdict line, the
-/// single most actionable "Next" line, the checks table, and collapsed sections for the cycles, amends, trace and host-tampering
-/// findings. Within GitHub's comment limit the sections are dropped from the end, never the table or the Next line.
+/// single most actionable "Next" line, the spec diff (or, for a unit of a workspace shell, the shell's spec), the checks table, and
+/// collapsed sections for the cycles, amends, trace and host-tampering findings. Within GitHub's comment limit the sections are
+/// dropped from the end, never the table or the Next line.
 /// </summary>
 internal static class CommentRenderer
 {
@@ -15,6 +16,11 @@ internal static class CommentRenderer
 
     private const string Disclaimer = "this comment says what the CI re-ran; it does not show the tests were written first.";
     private const string Truncated = "\n… more in the job summary\n";
+
+    /// <summary>A spec diff up to this many lines is shown open; a longer one is collapsed.</summary>
+    private const int OpenSpecDiffLines = 200;
+
+    private const int MaxSpecDiffPaths = 3;
 
     /// <summary>The order the Next line looks for the first required check that did not pass.</summary>
     private static readonly string[] NextOrder = ["red", "tests.sinceRed", "tests.existingChanged", "tests.hostTampering", "green", "gates", "trace", "review", "approvals"];
@@ -36,6 +42,8 @@ internal static class CommentRenderer
             top.Append($"> **Next:** {CommentText.Plain(next)}\n\n");
         }
 
+        top.Append(SpecFromShell(verdict));
+        top.Append(SpecDiff(verdict, maxLength));
         top.Append("| Check | Verdict | | Detail |\n|---|---|---|---|\n");
         foreach (JsonNode? check in verdict["checks"]?.AsArray() ?? [])
         {
@@ -78,6 +86,35 @@ internal static class CommentRenderer
 
         return null;
     }
+
+    /// <summary>
+    /// The spec diff, first after the Next line because the spec is what a person approves: open up to
+    /// <see cref="OpenSpecDiffLines"/> lines, collapsed above, and in the comment cut to a third of its length limit.
+    /// </summary>
+    private static string SpecDiff(JsonNode verdict, int maxLength)
+    {
+        if (verdict["specDiff"] is not JsonObject diff || diff["text"]?.GetValue<string>() is not { Length: > 0 } text)
+        {
+            return string.Empty;
+        }
+
+        string[] paths = [.. (diff["paths"]?.AsArray() ?? []).Select(path => path?.GetValue<string>() ?? string.Empty)];
+        string shown = string.Join(", ", paths.Take(MaxSpecDiffPaths).Select(CommentText.Plain)) + (paths.Length > MaxSpecDiffPaths ? $" and {paths.Length - MaxSpecDiffPaths} more" : string.Empty);
+        int lines = diff["lines"]?.GetValue<int>() ?? 0;
+        int room = maxLength / 3;
+        string cut = text.Length <= room ? text : text[..(text.LastIndexOf('\n', room - 1) is int lastLine and > 0 ? lastLine + 1 : room)];
+        string note = cut.Length < text.Length ? "\n… the whole spec diff is in the job summary\n"
+            : diff["truncated"]?.GetValue<bool>() == true ? "\n… the spec diff is longer than the evidence keeps; read it in the pull request's files\n"
+            : string.Empty;
+        string open = lines <= OpenSpecDiffLines ? " open" : string.Empty;
+        return $"<details{open}><summary>Spec changes ({lines} lines): {shown}</summary>\n\n{CommentText.Fenced(cut, "diff")}{note}\n</details>\n\n";
+    }
+
+    /// <summary>In a unit repository of a workspace shell, the spec the pull request was traced against, which lives in the shell.</summary>
+    private static string SpecFromShell(JsonNode verdict) =>
+        verdict["feature"]?["spec"] is JsonObject { } spec && spec["origin"]?.GetValue<string>() == "shell"
+            ? $"Spec: {CommentText.Code(spec["path"]?.GetValue<string>())} from the workspace shell {CommentText.Code(spec["shell"]?["url"]?.GetValue<string>())} at `{Short(spec["shell"]?["commit"]?.GetValue<string>() ?? string.Empty)}`\n\n"
+            : string.Empty;
 
     private static string Contexts(JsonNode verdict) =>
         verdict["contexts"] is JsonObject contexts

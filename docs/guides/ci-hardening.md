@@ -154,9 +154,15 @@ until one of those owners approves it. GitHub never counts the author's own appr
 recent push (**Require approval of the most recent reviewable push**) makes a change after the review need a new one. These
 are platform settings, and they are the boundary.
 
-**Planned, not built yet:** the CI check will verify that the base branch's CODEOWNERS covers `specs/**`, show the spec diff
-first in its pull request comment, and, with `approvals: spec-first` in the manifest, check that the spec was merged on the
-base branch first and is unchanged in the code pull request.
+**What the CI judge checks.** The [`approvals` check](commands.md#ci) verifies what git can show: that the base branch's
+CODEOWNERS gives every `approvals.specPaths` glob (default `specs/**`) an owner, and, where spec-first applies
+(`approvals.default: spec-first`, `approvals.specFirstFrom` for the change's class, or a changed path under
+`approvals.specFirstPaths`), that the feature's spec was merged on the base branch first and is unchanged in the code pull
+request. Missing coverage, or a spec not merged first, is NOT-EARNED, and the evidence carries a `lockflight.blocked/v1` report
+saying who must act; a code pull request that changes an already merged spec under spec-first fails. With
+`approvals.check: report` the check is advisory. The spec diff is the first thing in the pull request comment, open up to 200
+lines. Lockflight still never reads who approved: the evidence's `platform` state says what it checked (the review is the
+platform's), not that someone approved.
 
 **Local records in CI (optional).** To make a pull request fail when a feature it touches has no local approval record, or one
 that no longer matches the artifacts, add a step after the gates:
@@ -218,6 +224,16 @@ the shell has no valid `lockflight.yaml`, or it does not list the unit, the run 
 `origin` is another repository. A `pr` run in a unit without a shell to read refuses to run rather than judge without the
 shell's policy. On a developer's machine, a unit checked out inside its shell finds the shell by itself. The pull request that
 adds the pointer is judged by a base without it, as the repository it still is: the clone step then clones nothing.
+
+**Specs from the shell.** The CI judge (`lockflight ci --shell <that dir>`) applies the same policy to the gates it runs, and
+reads the unit's spec from the shell: the feature is the one the unit's branch names (`012-checkout`, as Spec Kit names
+branches) among the shell's `specs/`, read at the clone's commit, so only a merged spec counts. A unit's pull request answers
+for the requirements its red tests name, since one feature's spec can span several units. Until the shell's spec pull request
+merges, a unit pull request on a branch named like a feature is NOT-EARNED, with a blocked report naming the spec to merge; run
+the check again once it has merged. The approvals check reads the shell's CODEOWNERS (at any platform's location) and specs,
+and the evidence records the shell's URL and commit. The change class and which checks are required still come from the unit's
+own `lockflight.yaml` on its target branch; only the gates apply the shell's stricter policy. Locally, a unit checked out
+inside its shell is judged against whatever commit the shell has checked out, merged or not.
 
 **Access.** The clone needs read access to the shell repository, and nothing else:
 

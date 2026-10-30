@@ -1,13 +1,15 @@
 using System.Runtime.InteropServices;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Workspace;
 
 namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// <c>lockflight ci</c>: judges a pull request's commits in CI. It takes the head, the target branch's tip and the source branch from
 /// flags the platform's template fills in, reads the policy from the target branch, finds the commits that carry a
-/// <c>Lockflight-Red</c> trailer and classifies the change, then writes <c>evidence.json</c> and exits with the verdict. Nothing the
+/// <c>Lockflight-Red</c> trailer and classifies the change, then writes <c>evidence.json</c> and exits with the verdict. A unit
+/// repository of a workspace shell is judged with the shell's policy and specs too (<c>--shell</c>, a read-only clone). Nothing the
 /// pull request says about itself is trusted: the trailer only says where to look. <c>--plan</c> prints the plan without building.
 /// </summary>
 internal sealed class CiCommand(CliContext context) : ICommand
@@ -36,6 +38,14 @@ internal sealed class CiCommand(CliContext context) : ICommand
             return planning.Failure;
         }
 
+        ShellPolicyReading shell = await JudgeShell.ReadAsync(plan, cancellationToken);
+        if (shell.Error is string shellError)
+        {
+            await context.Error.WriteLineAsync($"lockflight ci: {shellError}");
+            return ExitCode.Config;
+        }
+
+        plan = plan with { Shell = shell.Policy };
         if (options.Flag(PlanFlag))
         {
             await context.Output.WriteAsync(JsonFiles.Format(CiEvidence.Plan(plan)));
@@ -43,6 +53,11 @@ internal sealed class CiCommand(CliContext context) : ICommand
         }
 
         JudgeFindings findings = await JudgeExecutor.RunAsync(plan, context, cancellationToken);
+        findings = findings with
+        {
+            Approvals = await ApprovalsJudge.DecideAsync(plan, findings, cancellationToken),
+            SpecDiff = await SpecDiffReader.ReadAsync(plan, cancellationToken),
+        };
         JudgeRun run = new(plan, findings, JudgeChecks.Decide(plan, findings), startedAt, context.Time.GetUtcNow());
         string path = Path.Combine(inputs.EvidenceDirectory, inputs.Platform == JudgePlatform.Local ? CiEvidence.LocalFileName : CiEvidence.FileName);
         JsonFiles.Write(path, CiEvidence.Build(run, ToolPin.RunningVersion, RuntimeInformation.RuntimeIdentifier));

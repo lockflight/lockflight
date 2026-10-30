@@ -110,7 +110,14 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             [StatusContextNames.ToName(StatusContext.Gates)] = CheckVerdictNames.ToName(JudgeVerdicts.Of(StatusContext.Gates, checks)),
             [StatusContextNames.ToName(StatusContext.Judge)] = CheckVerdictNames.ToName(JudgeVerdicts.Of(StatusContext.Judge, checks)),
         };
-        evidence["verdict"] = CheckVerdictNames.ToName(JudgeVerdicts.Combine(checks));
+        CheckVerdict combined = JudgeVerdicts.Combine(checks);
+        evidence["verdict"] = CheckVerdictNames.ToName(combined);
+        if (combined != CheckVerdict.NotEarned)
+        {
+            // The review can turn the judge's NOT-EARNED into a FAIL: then no person is waited for.
+            evidence["blocked"] = null;
+        }
+
         return evidence;
     }
 

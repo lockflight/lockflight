@@ -94,6 +94,72 @@ public sealed class CiReportTests : IDisposable
         Assert.True(File.Exists(Path.Combine(output, "summary.md")));
     }
 
+    [Fact]
+    public void TheSpecDiffComesFirstAndItsTextCannotCloseItsFence()
+    {
+        JsonObject evidence = Evidence();
+        evidence["specDiff"] = new JsonObject
+        {
+            ["paths"] = new JsonArray("specs/@org/x</summary></details>.md"),
+            ["lines"] = 3,
+            ["truncated"] = false,
+            ["text"] = "+- **FR-002**: free above 100 kg\n+```\n+</details> @org/team\n",
+        };
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.True(comment.IndexOf("<details open><summary>Spec changes", StringComparison.Ordinal) < comment.IndexOf("| Check | Verdict |", StringComparison.Ordinal));
+        Assert.Contains("specs/@\u200Borg/x&lt;/summary&gt;&lt;/details&gt;.md</summary>", comment, StringComparison.Ordinal);
+        Assert.Contains("````diff\n+- **FR-002**: free above 100 kg\n+```\n+</details> @org/team\n````\n", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALongSpecDiffIsCollapsedAndCutInTheCommentButWholeInTheSummary()
+    {
+        JsonObject evidence = Evidence();
+        string text = string.Concat(Enumerable.Range(0, 3000).Select(line => $"+- line {line} of a long spec\n"));
+        evidence["specDiff"] = new JsonObject { ["paths"] = new JsonArray("specs/001-shipping/spec.md"), ["lines"] = 3000, ["truncated"] = false, ["text"] = text };
+        JsonObject verdict = CiReportCommand.Join(evidence, Head, null);
+
+        string comment = CommentRenderer.Render(verdict, CommentRenderer.MaxCommentLength);
+        string summary = CommentRenderer.Render(verdict, int.MaxValue);
+
+        Assert.Contains("<details><summary>Spec changes (3000 lines)", comment, StringComparison.Ordinal);
+        Assert.Contains("… the whole spec diff is in the job summary", comment, StringComparison.Ordinal);
+        Assert.True(comment.Length <= CommentRenderer.MaxCommentLength);
+        Assert.Contains("+- line 2999 of a long spec", summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AUnitsCommentNamesTheWorkspaceShellsSpec()
+    {
+        JsonObject evidence = Evidence();
+        evidence["feature"] = new JsonObject
+        {
+            ["id"] = "012-checkout",
+            ["spec"] = new JsonObject { ["path"] = "specs/012-checkout/spec.md", ["origin"] = "shell", ["shell"] = new JsonObject { ["url"] = "https://example.com/shell.git", ["commit"] = new string('e', 40) } },
+        };
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("Spec: `specs/012-checkout/spec.md` from the workspace shell `https://example.com/shell.git` at `eeeeeee`", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AVerdictThatIsNoLongerNotEarnedWaitsForNoPerson()
+    {
+        JsonObject evidence = Evidence(reviewLevel: "required");
+        evidence["blocked"] = new JsonObject { ["schema"] = "lockflight.blocked/v1" };
+        JsonObject review = new() { ["schema"] = "lockflight.ci-review/v1", ["head"] = Head, ["verdict"] = "FAIL", ["why"] = "1 confirmed blocker" };
+
+        JsonObject failed = CiReportCommand.Join(evidence.DeepClone().AsObject(), Head, review);
+        JsonObject waiting = CiReportCommand.Join(evidence, Head, null);
+
+        Assert.Null(failed["blocked"]);
+        Assert.Equal("NOT-EARNED", waiting["verdict"]!.GetValue<string>());
+        Assert.NotNull(waiting["blocked"]);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(directory);
 
     private static JsonObject Evidence(string reviewLevel = "advisory", string redVerdict = "PASS", string testName = "Shop.Tests:Shop.Tests.PriceTests.Shipping") => new()

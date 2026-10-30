@@ -32,5 +32,11 @@ internal sealed record JudgeFindings(GreenJudgement? Green, IReadOnlyList<CycleJ
     /// <summary>The time budget the steps ran under; null when nothing was built.</summary>
     public JudgeBudget? Budget { get; init; }
 
+    /// <summary>The approvals check; null when it is off or there is no base to read the policy from.</summary>
+    public ApprovalsJudgement? Approvals { get; init; }
+
+    /// <summary>The pull request's changes to the spec paths; null when it changes none, or the specs live in a workspace shell.</summary>
+    public SpecDiff? SpecDiff { get; init; }
+
     public static JudgeFindings None { get; } = new(null, null, []);
 }

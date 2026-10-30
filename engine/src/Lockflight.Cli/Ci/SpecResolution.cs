@@ -7,5 +7,11 @@ namespace Lockflight.Cli.Ci;
 /// </summary>
 internal sealed record SpecResolution(string? FeatureId, string Source, string? SpecPath, string? SpecText, string? TasksText, SpecOrigin Origin, string? Problem)
 {
+    /// <summary>The workspace shell's clone URL (from the target branch's pointer) when the spec is the shell's; else null.</summary>
+    public string? ShellUrl { get; init; }
+
+    /// <summary>The shell commit the spec was read at when it is the shell's; else null.</summary>
+    public string? ShellCommit { get; init; }
+
     public static SpecResolution None(string? problem) => new(null, "none", null, null, null, SpecOrigin.Head, problem);
 }

@@ -25,7 +25,7 @@ internal sealed partial class TreeSpecSource : ISpecSource
         string root = plan.Inputs.Root;
         string head = plan.Inputs.Head;
         string[] features = await FeaturesAsync(root, head, cancellationToken);
-        string[] named = [.. plan.Reds.Cycles.Select(red => SubjectFeature().Match(red.Subject)).Where(match => match.Success).Select(match => match.Groups["id"].Value).Where(features.Contains).Distinct(StringComparer.Ordinal)];
+        string[] named = NamedBySubjects(plan, features);
         (string? id, string source) = Find(branch, plan.ChangedFiles, features);
         if (id is null)
         {
@@ -56,17 +56,13 @@ internal sealed partial class TreeSpecSource : ISpecSource
     public static async Task<(string? Id, string Source)> FindAsync(string root, string head, string? branch, IReadOnlyList<string> changed, CancellationToken cancellationToken) =>
         Find(branch, changed, await FeaturesAsync(root, head, cancellationToken));
 
-    private static (string? Id, string Source) Find(string? branch, IReadOnlyList<string> changed, string[] features) =>
-        ByBranch(branch, features) is string fromBranch ? (fromBranch, "branch")
-            : ChangedFeature(changed, features) is string changedFeature ? (changedFeature, "specs-diff")
-            : features.Length == 1 ? (features[0], "single")
-            : (null, "none");
-
-    private static async Task<string[]> FeaturesAsync(string root, string head, CancellationToken cancellationToken) =>
+    /// <summary>The feature directories under <c>specs/</c> at <paramref name="head"/>, in order.</summary>
+    public static async Task<string[]> FeaturesAsync(string root, string head, CancellationToken cancellationToken) =>
         [.. (await JudgeGit.TreeFilesAsync(root, head, cancellationToken) ?? []).Where(path => path.StartsWith(Specs, StringComparison.Ordinal))
             .Select(path => path.Split('/')).Where(parts => parts.Length >= 3).Select(parts => parts[1]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 
-    private static string? ByBranch(string? branch, string[] features)
+    /// <summary>The feature the branch names: its last segment as a feature directory, else the one directory with its number.</summary>
+    public static string? ByBranch(string? branch, string[] features)
     {
         if (branch is null)
         {
@@ -83,6 +79,23 @@ internal sealed partial class TreeSpecSource : ISpecSource
         string[] matches = number.Success ? [.. features.Where(feature => feature.StartsWith(number.Groups["number"].Value + "-", StringComparison.Ordinal))] : [];
         return matches.Length == 1 ? matches[0] : null;
     }
+
+    /// <summary>The features the red commits' subjects name (<c>test(&lt;id&gt;): …</c>) among <paramref name="features"/>.</summary>
+    public static string[] NamedBySubjects(JudgePlan plan, string[] features) =>
+        [.. plan.Reds.Cycles.Select(red => SubjectFeature().Match(red.Subject)).Where(match => match.Success).Select(match => match.Groups["id"].Value).Where(features.Contains).Distinct(StringComparer.Ordinal)];
+
+    /// <summary>The branch's last segment when it is named as Spec Kit names a feature branch (<c>NNN-slug</c>); else null.</summary>
+    public static string? FeatureShaped(string? branch)
+    {
+        string? segment = branch?[(branch.LastIndexOf('/') + 1)..];
+        return segment is not null && FeatureNumber().IsMatch(segment) ? segment : null;
+    }
+
+    private static (string? Id, string Source) Find(string? branch, IReadOnlyList<string> changed, string[] features) =>
+        ByBranch(branch, features) is string fromBranch ? (fromBranch, "branch")
+            : ChangedFeature(changed, features) is string changedFeature ? (changedFeature, "specs-diff")
+            : features.Length == 1 ? (features[0], "single")
+            : (null, "none");
 
     private static string? ChangedFeature(IReadOnlyList<string> changed, string[] features)
     {
