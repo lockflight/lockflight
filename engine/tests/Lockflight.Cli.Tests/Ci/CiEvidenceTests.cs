@@ -50,7 +50,7 @@ public sealed class CiEvidenceTests
         InterimClassification classification = InterimClassifier.Classify(
             ["src/Shop/Price.cs"], CiSettings.DefaultLowRiskPaths, new HashSet<string>(), new HashSet<string>(), string.Empty, new PolicySource(Base, Base, null, "interim"));
         RequirementSet requirements = InterimRequirements.For(classification.Classification.Class, classification.Shape);
-        IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.Shape, JudgeEvent.PullRequest);
+        IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.ProductionChanged, JudgeEvent.PullRequest);
         JudgePlan plan = new(inputs, policy, MergeBase, [], selection, classification, requirements, levels,
             [new PlanStep("P0", null, "inputs", "git only", 0), new PlanStep("P3", Red, "red 1", "build, list, run", 1)], ["src/Shop/Price.cs"], [".specify/feature.json"]);
         return new JudgeRun(plan, JudgeFindings.None, JudgeChecks.Decide(plan, JudgeFindings.None), StartedAt, StartedAt.AddSeconds(12));

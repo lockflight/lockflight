@@ -10,12 +10,17 @@ Status: `gates` PASS · `lockflight/judge` PASS
 | Gates (pr) | PASS | required | format PASS · build PASS · test PASS |
 | Review | SKIPPED | advisory | no review ran (no API key configured, a fork, or the review job was skipped) |
 | Approvals | — | off | off for this change class |
+| Tests since red | PASS | required | 1 unchanged, 0 amends accepted |
+| Existing tests changed | PASS | advisory | no existing test changed |
+| Test host tampering | PASS | required | no code in the test assemblies that could tamper with the test host |
+| Trace | PASS | required | 1/1 requirements of 001-shipping |
+| Change class | PASS | required | class behaviour (routing) |
 
 <details><summary>Red/green cycles</summary>
 
 | Cycle | Red commit | Test | Red | Since red | At head |
 |---|---|---|---|---|---|
-| 1 | `ddddddd` | `Shop.Tests:@org/team <img src=x> 'tick' \| pipe` | RED_STUB | unchanged | pass |
+| 1 | `ddddddd` | `Shop.Tests:@org/team <img src=x> 'tick' \| pipe` | RED\_STUB | unchanged | pass |
 
 </details>
 <details><summary>Trace</summary>

@@ -15,11 +15,11 @@ public sealed class CheckLevelsTests
     }
 
     [Fact]
-    public void ALowRiskFixNeedsOnlyGreenAndGates()
+    public void ALowRiskFixNeedsNoRedGreenTraceOrApproval()
     {
         IReadOnlyDictionary<CheckId, CheckLevel> levels = For(ChangeClass.Fix, InterimShape.LowRisk, JudgeEvent.PullRequest);
 
-        Assert.Equal([CheckId.Green, CheckId.Gates], levels.Where(level => level.Value == CheckLevel.Required).Select(level => level.Key).Order());
+        Assert.Equal([CheckId.TestsHostTampering, CheckId.Green, CheckId.Gates, CheckId.Routing], levels.Where(level => level.Value == CheckLevel.Required).Select(level => level.Key).Order());
         Assert.Equal(CheckLevel.Off, levels[CheckId.Red]);
         Assert.Equal(CheckLevel.Off, levels[CheckId.Trace]);
         Assert.Equal(CheckLevel.Off, levels[CheckId.Approvals]);
@@ -33,6 +33,17 @@ public sealed class CheckLevelsTests
         Assert.Equal(CheckLevel.Off, levels[CheckId.Red]);
         Assert.Equal(CheckLevel.Required, levels[CheckId.Green]);
         Assert.Equal(CheckLevel.Required, levels[CheckId.TestsHostTampering]);
+    }
+
+    [Fact]
+    public void WithoutProductionCodeChangesRedGreenAndTraceAreOffWhateverTheClass()
+    {
+        IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(InterimRequirements.For(ChangeClass.Critical, InterimShape.Other), productionChanged: false, JudgeEvent.PullRequest);
+
+        Assert.Equal(CheckLevel.Off, levels[CheckId.Red]);
+        Assert.Equal(CheckLevel.Off, levels[CheckId.TestsSinceRed]);
+        Assert.Equal(CheckLevel.Off, levels[CheckId.Trace]);
+        Assert.Equal(CheckLevel.Required, levels[CheckId.Review]);
     }
 
     [Fact]
@@ -56,5 +67,5 @@ public sealed class CheckLevelsTests
     }
 
     private static IReadOnlyDictionary<CheckId, CheckLevel> For(ChangeClass changeClass, InterimShape shape, JudgeEvent judgeEvent) =>
-        CheckLevels.For(InterimRequirements.For(changeClass, shape), shape, judgeEvent);
+        CheckLevels.For(InterimRequirements.For(changeClass, shape), shape == InterimShape.Other, judgeEvent);
 }

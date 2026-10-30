@@ -29,4 +29,7 @@ internal enum CheckId
 
     /// <summary>The approval facts git can show: CODEOWNERS on the base covering the specs, and spec-first.</summary>
     Approvals = 9,
+
+    /// <summary>The change class from the base branch's routing policy, and its rules (a move out of a critical path fails).</summary>
+    Routing = 10,
 }

@@ -150,6 +150,13 @@
       "verdict": "NOT-EARNED",
       "requirement": "advisory",
       "why": "not judged by this engine version yet"
+    },
+    {
+      "id": "routing",
+      "context": "lockflight/judge",
+      "verdict": "PASS",
+      "requirement": "required",
+      "why": "class behaviour (interim): interim.changed in src/Shop/Price.cs"
     }
   ],
   "contexts": {

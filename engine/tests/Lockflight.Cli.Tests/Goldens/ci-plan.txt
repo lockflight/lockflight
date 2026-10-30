@@ -39,7 +39,8 @@
     "trace": "advisory",
     "gates": "required",
     "review": "advisory",
-    "approvals": "advisory"
+    "approvals": "advisory",
+    "routing": "required"
   },
   "steps": [
     {
