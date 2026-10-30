@@ -1,5 +1,6 @@
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Updating;
@@ -149,6 +150,24 @@ public sealed class UpdateCommandTests : IDisposable
         Assert.StartsWith("# ours\nversion: 2\n", File.ReadAllText(Path.Combine(root.FullName, Manifest.FileName)), StringComparison.Ordinal);
         Assert.Contains("lockflight.yaml is now version 2", output, StringComparison.Ordinal);
         Assert.Contains("gates.quality.suppressions: report", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnUpdateToAnEngineThatIsNoDevelopmentBuildRemovesTheStaleLocalLock()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
+        string localLock = EngineLockFiles.LocalPath(root.FullName);
+        EngineLockFiles.Write(localLock, new EngineLock(
+            "0.2.0-alpha.9.dev.20261030093012", EngineLockChannel.Development, new string('5', 64),
+            new Dictionary<string, string> { [EngineRids.Current ?? "linux-x64"] = new string('a', 64) }));
+        string engine = Path.Combine(home.FullName, "lockflight-native");
+        File.WriteAllText(engine, "native engine");
+
+        (ExitCode exitCode, string output, string error) = await ProjectUpdateAsync(new RunningEngine(engine, IsSingleFile: true));
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.False(File.Exists(localLock));
+        Assert.Contains(".lockflight/local/engine.lock", output, StringComparison.Ordinal);
     }
 
     [Fact]

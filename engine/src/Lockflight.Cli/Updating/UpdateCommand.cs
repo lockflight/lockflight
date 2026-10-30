@@ -255,6 +255,13 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
     /// </summary>
     private async Task PlanLockAsync(string root, EngineLockPlan plan, List<PlannedWrite> writes, CancellationToken cancellationToken)
     {
+        // A development build's local lock pins that build for this clone; once a release (or no lock) takes over it is stale.
+        string localLock = EngineLockFiles.LocalPath(root);
+        if (plan.LockPath != localLock && File.Exists(localLock))
+        {
+            writes.Add(new PlannedWrite(EngineLock.LocalRelativePath, localLock, await File.ReadAllTextAsync(localLock, cancellationToken), NewText: null));
+        }
+
         if (plan.Lock is not EngineLock engineLock)
         {
             await context.Output.WriteLineAsync($"note: no engine lock written ({plan.Reason}); the project stays pinned by version in dotnet-tools.json");

@@ -61,7 +61,7 @@ public sealed partial class ShimSyncTests
         string script = File.ReadAllText(Path.Combine(Path.GetDirectoryName(ShimLocation.Path)!, "..", "..", "..", "scripts", "install.sh"));
 
         Assert.Equal(JsonStringFunction().Match(Shim.Value).Value, JsonStringFunction().Match(script).Value);
-        Assert.True(JsonStringFunction().Match(script).Success, "install.sh has no json_string function");
+        Assert.True(JsonStringFunction().IsMatch(script), "install.sh has no json_string function");
     }
 
     [Fact]
