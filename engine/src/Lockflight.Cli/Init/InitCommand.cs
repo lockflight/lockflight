@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.EngineLocks;
@@ -24,11 +26,11 @@ internal sealed class InitCommand(CliContext context) : ICommand
 {
     private const string Commit = "Review init's changes and commit them as one commit; to undo init, `git revert` that commit.";
 
-    private const string Choices = "--profile lite|standard, --preset relaxed|default|strict, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --dry-run, --unit-of <shell url> --unit-path <path>, --speckit-preset <dir>, --no-link or --no-sandbox";
+    private const string Choices = "--profile lite|standard, --preset relaxed|default|strict, --ci pr|manual|none, --ci-platform github|azure|bitbucket|gitlab, --quality, --architecture-tests, --dry-run, --unit-of <shell url> --unit-path <path>, --speckit-preset <dir>, --native or --ci-only, --no-link or --no-sandbox";
 
     /// <summary>
     /// <c>[--profile lite|standard] [--preset relaxed|default|strict] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests]
-    /// [--dry-run] [--unit-of url --unit-path path] [--speckit-preset dir] [--no-link] [--no-sandbox]</c> in any order.
+    /// [--dry-run] [--unit-of url --unit-path path] [--speckit-preset dir] [--native | --ci-only] [--no-link] [--no-sandbox]</c> in any order.
     /// </summary>
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
@@ -50,6 +52,11 @@ internal sealed class InitCommand(CliContext context) : ICommand
                     break;
                 case "--dry-run":
                     init = init with { DryRun = true };
+                    break;
+                case "--native" or "--ci-only" when init.Level != InstallLevel.Plugin && init.Level != LevelOf(option):
+                    return await RefuseAsync("--native and --ci-only are different install levels; choose one");
+                case "--native" or "--ci-only":
+                    init = init with { Level = LevelOf(option) };
                     break;
                 case "--quality":
                     init = init with { Quality = init.Quality with { Analyzers = true } };
@@ -122,13 +129,44 @@ internal sealed class InitCommand(CliContext context) : ICommand
             }
         }
 
+        if (init is { Level: InstallLevel.CiOnly, RequestedCi: CiTrigger.None })
+        {
+            return await RefuseAsync("--ci-only sets Lockflight up for CI alone, so it needs a CI file: drop --ci none");
+        }
+
         if ((unitPath is null) != (shellUrl is null))
         {
             return await RefuseAsync("--unit-of <shell url> and --unit-path <path> go together: the shell's clone URL and this repository's path among its units");
         }
 
+        // CI only links no engine: nothing on the machine runs it.
+        init = init.Level == InstallLevel.CiOnly ? init with { Link = false } : init;
         return await InitializeAsync(shellUrl is null ? init : init with { Shell = new ShellSettings(shellUrl, Ref: null, unitPath!) }, cancellationToken);
     }
+
+    /// <summary>Whether the project's or the user's Claude Code settings enable the plugin; unreadable settings count as not.</summary>
+    private bool PluginAlsoEnabled(string root)
+    {
+        string? home = context.Environment.HomeDirectory();
+        foreach (string path in new[] { Path.Combine(root, ClaudeSettingsMerger.RelativePath), home is null ? null : Path.Combine(home, ".claude", "settings.json") }.OfType<string>())
+        {
+            try
+            {
+                if (File.Exists(path) && ClaudeSettingsMerger.PluginEnabled(JsonNode.Parse(File.ReadAllText(path))))
+                {
+                    return true;
+                }
+            }
+            catch (Exception exception) when (exception is JsonException or IOException)
+            {
+                // Unreadable settings enable nothing.
+            }
+        }
+
+        return false;
+    }
+
+    private static InstallLevel LevelOf(string option) => option == "--native" ? InstallLevel.Native : InstallLevel.CiOnly;
 
     private async Task<ExitCode> InitializeAsync(InitOptions init, CancellationToken cancellationToken)
     {
@@ -137,7 +175,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
         CiTrigger ci = init.RequestedCi ?? CiTriggerDefault.For(ToolPin.RunningVersion);
         string root = ProjectRoot();
         bool write = !init.DryRun;
-        if (await PreflightProblemAsync(root, cancellationToken) is string problem)
+        if (await PreflightProblemAsync(root, init.Level, cancellationToken) is string problem)
         {
             return await RefuseAsync($"{problem}; nothing was written");
         }
@@ -198,8 +236,12 @@ internal sealed class InitCommand(CliContext context) : ICommand
             await TransformAsync(root, Manifest.FileName, _ => (manifest.Content, manifest.Changed), write, cancellationToken),
             await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, write, cancellationToken),
             await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), write, cancellationToken),
-            await TransformAsync(root, ClaudeMdBlock.FileName, existing => ClaudeMdBlock.IsCurrent(existing ?? string.Empty) ? (existing!, false) : (ClaudeMdBlock.Upsert(existing ?? string.Empty), true), write, cancellationToken),
         ];
+        if (init.Level != InstallLevel.CiOnly)
+        {
+            steps.Add(await TransformAsync(root, ClaudeMdBlock.FileName, existing => ClaudeMdBlock.IsCurrent(existing ?? string.Empty) ? (existing!, false) : (ClaudeMdBlock.Upsert(existing ?? string.Empty), true), write, cancellationToken));
+        }
+
         steps.AddRange(await EngineLockStepsAsync(root, write, cancellationToken));
         IReadOnlyList<string> predating = firstInit ? InitAdoption.PredatingFeatures(plan) : [];
         if (predating.Count > 0)
@@ -235,9 +277,21 @@ internal sealed class InitCommand(CliContext context) : ICommand
             steps.Add(await TransformAsync(root, ".gitattributes", GitAttributesUpdater.Update, write, cancellationToken));
         }
 
-        // Last, so the deny rules and the sandbox write denials cover every protected file init has just written (the CI workflow included).
-        steps.Add(await TransformAsync(
-            root, ClaudeSettingsMerger.RelativePath, existing => ClaudeSettingsMerger.Merge(existing, PermissionDenyRules.For(root, globs), init.Sandbox ? SandboxSettings.DenyWrite(root, globs) : null), write, cancellationToken));
+        if (init.Level == InstallLevel.Native)
+        {
+            steps.Add(await TransformAsync(root, NativeHookShim.RelativePath, existing => (NativeHookShim.Text, existing != NativeHookShim.Text), write, cancellationToken));
+            steps.Add(await TransformAsync(root, ".gitattributes", GitAttributesUpdater.UpdateHookShim, write, cancellationToken));
+        }
+
+        // Last, so the deny rules and the sandbox write denials cover every protected file init has just written (the CI workflow
+        // and the native hook shim included). CI only writes nothing for Claude Code.
+        if (init.Level != InstallLevel.CiOnly)
+        {
+            steps.Add(await TransformAsync(
+                root, ClaudeSettingsMerger.RelativePath,
+                existing => ClaudeSettingsMerger.Merge(existing, PermissionDenyRules.For(root, globs), init.Sandbox ? SandboxSettings.DenyWrite(root, globs) : null, init.Level),
+                write, cancellationToken));
+        }
 
         if (init.DryRun)
         {
@@ -247,6 +301,12 @@ internal sealed class InitCommand(CliContext context) : ICommand
         foreach (InitStep step in steps)
         {
             await context.Output.WriteLineAsync($"{Describe(step.Outcome),-10} {step.RelativePath}");
+        }
+
+        if (init.Level == InstallLevel.Native && PluginAlsoEnabled(root))
+        {
+            await context.Output.WriteLineAsync(
+                $"note: the Lockflight plugin is enabled too (project or user settings), so the guard and the Stop gates would run twice; disable it for this project (\"enabledPlugins\": {{ \"{Templates.PluginId}\": false }} in .claude/settings.local.json)");
         }
 
         List<string> done = [];
@@ -455,7 +515,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
             : $"Note: {pipeline} runs on every pull request, but this engine is a development build ({ToolPin.RunningVersion}) that no package feed has: the job fails at the engine install until the project pins a published release.");
 
     /// <summary>What init cannot merge into, checked before it writes anything so a refusal leaves the project as it was.</summary>
-    private static async Task<string?> PreflightProblemAsync(string root, CancellationToken cancellationToken)
+    private static async Task<string?> PreflightProblemAsync(string root, InstallLevel level, CancellationToken cancellationToken)
     {
         string toolManifest = ToolManifestWriter.RelativePathIn(root);
         string toolManifestPath = Path.Combine(root, toolManifest);
@@ -465,9 +525,14 @@ internal sealed class InitCommand(CliContext context) : ICommand
             return $"{toolManifest} {toolsProblem}";
         }
 
+        if (level == InstallLevel.CiOnly)
+        {
+            return null;
+        }
+
         string settingsPath = Path.Combine(root, ClaudeSettingsMerger.RelativePath);
         string? settings = File.Exists(settingsPath) ? await File.ReadAllTextAsync(settingsPath, cancellationToken) : null;
-        return ClaudeSettingsMerger.Problem(settings) is string settingsProblem
+        return ClaudeSettingsMerger.Problem(settings, level == InstallLevel.Native) is string settingsProblem
             ? $"{ClaudeSettingsMerger.RelativePath} {settingsProblem}; fix it by hand (keep your settings) and run init again"
             : null;
     }

@@ -221,6 +221,13 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             writes.Add(new PlannedWrite("CLAUDE.md", claudeMd, text, ClaudeMdBlock.Upsert(text)));
         }
 
+        // The native level's vendored hook shim follows the engine, as the plugin's shim follows the plugin.
+        string shim = Path.Combine(root, NativeHookShim.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (File.Exists(shim) && await File.ReadAllTextAsync(shim, cancellationToken) is string shimText && shimText != NativeHookShim.Text)
+        {
+            writes.Add(new PlannedWrite(NativeHookShim.RelativePath, shim, shimText, NativeHookShim.Text));
+        }
+
         if (File.Exists(Path.Combine(root, Manifest.UnitFileName)))
         {
             await context.Output.WriteLineAsync(

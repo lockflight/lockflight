@@ -20,7 +20,7 @@ internal static class DenyRulesCheck
     {
         string settingsPath = Path.Combine(root, ClaudeSettingsMerger.RelativePath);
         string? text = File.Exists(settingsPath) ? File.ReadAllText(settingsPath) : null;
-        if (ClaudeSettingsMerger.Problem(text) is not null)
+        if (ClaudeSettingsMerger.Problem(text, nativeHooks: false) is not null)
         {
             return null;
         }

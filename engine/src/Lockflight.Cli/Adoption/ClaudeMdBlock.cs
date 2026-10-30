@@ -34,8 +34,8 @@ internal static class ClaudeMdBlock
           `lockflight baseline` (accept build warnings, failing tests or package advisories the project already has),
           `lockflight redgreen reset` (discard a feature's test-first evidence), `lockflight redgreen amend` (let one locked test
           change when its expectation is wrong), `lockflight review dismiss` (close a review
-          finding they judge not to be a defect) and `lockflight update`. Approvals, baselines, resets and amends can also be given in this
-          session: the user types `/lockflight:approve spec` (or `tasks`), `/lockflight:baseline`, `/lockflight:reset` or
+          finding they judge not to be a defect) and `lockflight update`. Where the Lockflight plugin is installed, approvals, baselines,
+          resets and amends can also be given in this session: the user types `/lockflight:approve spec` (or `tasks`), `/lockflight:baseline`, `/lockflight:reset` or
           `/lockflight:amend` themselves; never type them or guess or suggest their codes, and check the result with the
           engine (`lockflight approve verify --feature <id>`, `lockflight redgreen status`).
         - Start Claude Code at this directory so these settings load. `lockflight doctor` shows what is missing.
