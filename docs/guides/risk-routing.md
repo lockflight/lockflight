@@ -233,6 +233,22 @@ less. The `default` preset:
 Red→green, and spec and trace, apply only when production code lines changed: a docs-only or test-only pull request needs
 neither. The [configuration reference](configuration.md#lockflightyaml) lists the other presets' values.
 
+## Raising the class
+
+Inputs from outside the diff can only raise the class: `class = max(computed, every raise)`. Each raise is shown, and one
+below the computed class is shown as ignored (`spec 004-refunds says fix, ignored (lower than computed)`).
+
+| Input | Who controls it | Strength |
+|---|---|---|
+| A spec's `**Class**:` header line ([spec contract](spec-contract.md#specmd)) of a covering feature | the spec's author and its approval on the platform | guardrail |
+| The feature's recorded class, `.lockflight/features/<id>/class.json` on the base branch, written by `route record` | the history; a pull request can only undo a raise it added itself | guardrail |
+| A pull request label `lockflight:class/<class>` (passed in by the CI step) | anyone with triage rights, the agent too | not a control: it can only raise, and removing it returns to the computed class |
+| The workflow's `--raise <class>` input | whoever edits the workflow file | as protected as the workflow is |
+
+A **covering feature** is one whose `specs/<id>/spec.md` or `tasks.md` the pull request adds or edits, or the one its branch
+names (`NNN-slug`, `feat/NNN-slug`, or the one feature sharing the branch's number). Touching an old feature's other files does
+not make it covering.
+
 ## See the class: `route show`
 
 `lockflight route show` prints the class of the current branch the way the pull request comment will show it:

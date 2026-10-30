@@ -1,4 +1,6 @@
+using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Routing;
 
 namespace Lockflight.Cli.Tests.Routing;
 
@@ -66,5 +68,23 @@ public sealed class RouteShowCommandTests
         Assert.Equal(ExitCode.Config, exitCode);
         Assert.Empty(output);
         Assert.Contains("names no commit", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RouteRecordWritesTheClassAndNeverLowersIt()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Dictionary<string, string> files = new(BaseFiles) { ["specs/001-coupons/spec.md"] = "# Coupons\n" };
+        using RoutingRepository repository = await RoutingRepository.CreateAsync(files, cancellationToken);
+        repository.Write("src/Shop/Coupon.cs", "class Coupon { }\n");
+
+        (ExitCode first, string firstOutput, string firstError) = await TestConsole.RunAsync(["route", "record", "--feature", "001-coupons", "--base", RoutingRepository.BaseBranch], string.Empty, repository.Root);
+        repository.Write(FeatureClassRecord.PathFor("001-coupons"), FeatureClassRecord.Render(ChangeClass.Critical));
+        (ExitCode second, string secondOutput, _) = await TestConsole.RunAsync(["route", "record", "--feature", "001-coupons", "--base", RoutingRepository.BaseBranch], string.Empty, repository.Root);
+
+        Assert.True(first == ExitCode.Pass, firstError);
+        Assert.Contains("feature 001-coupons is behaviour", firstOutput, StringComparison.Ordinal);
+        Assert.Equal(ExitCode.Pass, second);
+        Assert.Contains("feature 001-coupons is critical (recorded before; this change computes behaviour)", secondOutput, StringComparison.Ordinal);
     }
 }
