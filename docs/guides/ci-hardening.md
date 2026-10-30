@@ -106,6 +106,9 @@ requirements to be traced to those tests, and the `pr` gates to pass, all with t
   so a determined pull request can forge their outcome. Doing so needs deliberate code in the test assemblies that tampers
   with the test host, which is visible in the test diff; the host-tampering check lists the plain forms of it and is
   NOT-EARNED when one is new.
+- **A strong guardrail, not a boundary:** the evidence file itself. In 0.3.0 the judge writes its evidence in the same job
+  as the pull request's code, so a process that code leaves running could rewrite it before the report jobs read it.
+  Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0.
 - **Not shown:** that the tests were written first. A red commit shows that the tests tell the stub from the
   implementation, which is what the evidence claims.
 

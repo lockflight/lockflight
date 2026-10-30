@@ -245,8 +245,8 @@ below the computed class is shown as ignored (`spec 004-refunds says fix, ignore
 |---|---|---|
 | A spec's `**Class**:` header line ([spec contract](spec-contract.md#specmd)) of a covering feature | the spec's author and its approval on the platform | guardrail |
 | The feature's recorded class, `.lockflight/features/<id>/class.json` on the base branch, written by `route record` | the history; a pull request can only undo a raise it added itself | guardrail |
-| A pull request label `lockflight:class/<class>` (passed in by the CI step) | anyone with triage rights, the agent too | not a control: it can only raise, and removing it returns to the computed class |
-| The workflow's `--raise <class>` input | whoever edits the workflow file | as protected as the workflow is |
+| A pull request label `lockflight:class/<class>` | anyone with triage rights, the agent too | not a control: it can only raise, and removing it returns to the computed class. **Not read yet:** neither `route show` nor the CI judge passes the labels in |
+| The workflow's `--raise <class>` input | whoever edits the workflow file | as protected as the workflow is. **Not read yet:** no command takes it |
 
 A **covering feature** is one whose `specs/<id>/spec.md` or `tasks.md` the pull request adds or edits, or the one its branch
 names (`NNN-slug`, `feat/NNN-slug`, or the one feature sharing the branch's number). Touching an old feature's other files does
