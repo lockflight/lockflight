@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Canaries;
+using Lockflight.Cli.Ci;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Tests.Ci;
 
@@ -14,12 +15,55 @@ internal static class CiJudgeCanaries
 {
     public const string PolicyName = "ci: a pull request that loosens lockflight.yaml is judged by the target branch's policy";
     public const string ShallowName = "ci: a shallow clone without the merge base is refused, not judged on a narrower range";
+    public const string MissingArtifactName = "ci report: a missing judge artifact is NOT-EARNED, never a pass";
+    public const string StaleReviewName = "ci report: a review of another head is ignored, not joined";
     public const string ImplementationName = "ci: a red trailer on a commit that holds the implementation is rejected (GREEN_BEFORE)";
 
     private const string ShippingTest = "    [Fact]\n    public void ShippingIsTwiceTheWeight() => Assert.Equal(4m, new Price().Shipping(2m));";
 
     public static async Task<IReadOnlyList<CanaryReport>> RunAsync(CancellationToken cancellationToken) =>
-        [await PolicyFromBaseAsync(cancellationToken), await ShallowCloneAsync(cancellationToken), await ImplementationInRedAsync(cancellationToken)];
+        [await PolicyFromBaseAsync(cancellationToken), await ShallowCloneAsync(cancellationToken), await ImplementationInRedAsync(cancellationToken), MissingArtifact(), StaleReview()];
+
+    private static CanaryReport MissingArtifact()
+    {
+        string head = new('a', 40);
+        string twin = CiReportCommand.Join(ReportEvidence(head), head, null)["contexts"]!["gates"]!.GetValue<string>();
+        if (twin != "PASS")
+        {
+            return new CanaryReport(MissingArtifactName, CanaryResult.Broken, $"a complete passing artifact reported {twin} too, so a refusal proves nothing");
+        }
+
+        string planted = CiReportCommand.Join(null, head, null)["contexts"]!["gates"]!.GetValue<string>();
+        return planted == "NOT-EARNED"
+            ? new CanaryReport(MissingArtifactName, CanaryResult.Caught, "NOT-EARNED: the judge did not finish")
+            : new CanaryReport(MissingArtifactName, CanaryResult.Missed, planted);
+    }
+
+    private static CanaryReport StaleReview()
+    {
+        string head = new('a', 40);
+        JsonObject Review(string reviewed) => new() { ["schema"] = "lockflight.ci-review/v1", ["head"] = reviewed, ["verdict"] = "PASS", ["why"] = "no findings" };
+        string twin = CiReportCommand.Join(ReportEvidence(head), head, Review(head))["contexts"]!["lockflight/judge"]!.GetValue<string>();
+        if (twin != "PASS")
+        {
+            return new CanaryReport(StaleReviewName, CanaryResult.Broken, $"a review of the right head was not joined either ({twin})");
+        }
+
+        string planted = CiReportCommand.Join(ReportEvidence(head), head, Review(new string('c', 40)))["contexts"]!["lockflight/judge"]!.GetValue<string>();
+        return planted == "NOT-EARNED"
+            ? new CanaryReport(StaleReviewName, CanaryResult.Caught, "NOT-EARNED: the review is SKIPPED (stale)")
+            : new CanaryReport(StaleReviewName, CanaryResult.Missed, planted);
+    }
+
+    /// <summary>A judge's evidence whose every check passed, with a review the class requires.</summary>
+    private static JsonObject ReportEvidence(string head) => new()
+    {
+        ["schema"] = CiEvidence.Schema,
+        ["head"] = head,
+        ["checks"] = new JsonArray(
+            new JsonObject { ["id"] = "green", ["context"] = "gates", ["verdict"] = "PASS", ["requirement"] = "required", ["why"] = "ok" },
+            new JsonObject { ["id"] = "review", ["context"] = "lockflight/judge", ["verdict"] = "SKIPPED", ["requirement"] = "required", ["why"] = "joined by the report" }),
+    };
 
     private static async Task<CanaryReport> ImplementationInRedAsync(CancellationToken cancellationToken)
     {

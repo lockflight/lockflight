@@ -24,7 +24,15 @@ internal static class HeadRunner
         }
 
         TestWorkspace workspace = listing.Workspace;
-        if (await workspace.RunAsync(null, cancellationToken) is not IReadOnlyList<ExecutedTest> results)
+        IReadOnlyList<ExecutedTest>? suite = await workspace.RunAsync(null, cancellationToken);
+        if ((suite is null || workspace.AbnormalExit is not null) && trees.OutOfBudget)
+        {
+            // A run stopped at the budget's limit did not fail: the suite was not allowed to finish.
+            TreeListing stopped = listing with { Outcome = TreeOutcome.OutOfTime, Inventory = null, Detail = trees.Budget.Why(trees.Builds.Count) };
+            return new HeadRun(stopped, null, new HashSet<string>(StringComparer.Ordinal), null, knownFailing);
+        }
+
+        if (suite is not IReadOnlyList<ExecutedTest> results)
         {
             return new HeadRun(listing, null, new HashSet<string>(StringComparer.Ordinal), workspace.AbnormalExit, knownFailing);
         }
@@ -32,7 +40,7 @@ internal static class HeadRunner
         string? abnormal = workspace.AbnormalExit;
         List<ExecutedTest> merged = [.. results];
         HashSet<string> passedOnRetry = new(StringComparer.Ordinal);
-        for (int retry = 0; retry < plan.Policy.Ci.FlakyRetries; retry++)
+        for (int retry = 0; retry < plan.Policy.Ci.FlakyRetries && trees.Budget.TryStart("flaky re-run"); retry++)
         {
             string[] failing = [.. merged.Where(result => result.Outcome == TestOutcome.Fail && !knownFailing.Contains(result.Name)).Select(result => result.Key).Distinct(StringComparer.Ordinal)];
             TestCase[] again = [.. listing.Inventory.Where(test => failing.Contains(test.Key, StringComparer.Ordinal))];

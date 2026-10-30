@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Processes;
@@ -13,8 +14,10 @@ internal static class JudgeExecutor
 {
     private const string LocalFolder = "lockflight";
 
-    public static async Task<JudgeFindings> RunAsync(JudgePlan plan, EnvironmentReader environment, TimeProvider time, CancellationToken cancellationToken)
+    public static async Task<JudgeFindings> RunAsync(JudgePlan plan, CliContext context, CancellationToken cancellationToken)
     {
+        EnvironmentReader environment = context.Environment;
+        TimeProvider time = context.Time;
         bool judgesReds = plan.Levels[CheckId.Red] != CheckLevel.Off && !plan.Reds.OverCap && plan.Reds.Cycles.Count > 0 && plan.MergeBase is not null;
         if (plan.Levels[CheckId.Green] == CheckLevel.Off)
         {
@@ -22,6 +25,7 @@ internal static class JudgeExecutor
         }
 
         string root = plan.Inputs.Root;
+        JudgeBudget budget = new(TimeSpan.FromMinutes(plan.Policy.Ci.TimeoutMinutes), time);
         TimeSpan gitLimit = TimeSpan.FromMinutes(5);
         string parent = await ParentAsync(plan.Inputs, environment, cancellationToken);
         if (await JudgeWorktree.OpenAsync(root, parent, plan.Inputs.Head, gitLimit, cancellationToken) is not JudgeWorktree worktree)
@@ -33,7 +37,7 @@ internal static class JudgeExecutor
 
         try
         {
-            TreeBuilder trees = new(worktree, plan.Policy, root, time);
+            TreeBuilder trees = new(worktree, plan.Policy, root, budget, time);
             HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);
             TreeListing? baseListing = plan.MergeBase is string mergeBase ? await trees.ListAsync(mergeBase, "base", fresh: false, cancellationToken) : null;
             IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, cancellationToken) : null;
@@ -49,13 +53,34 @@ internal static class JudgeExecutor
             TamperingJudgement? tampering = plan.Levels[CheckId.TestsHostTampering] != CheckLevel.Off
                 ? await HostTamperingJudge.DecideAsync(plan, head.Listing, baseListing, cycles ?? [], cancellationToken)
                 : null;
+            TraceJudgement? trace = plan.Levels[CheckId.Trace] != CheckLevel.Off
+                ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, cycles ?? [], sinceRed, greenAtHead, cancellationToken)
+                : null;
+            (CheckVerdict Verdict, string Why, JsonNode? Result, string? TestStep) gates = !budget.TryStart("gates")
+                ? (CheckVerdict.NotEarned, budget.Why(trees.Builds.Count), null, null)
+                : await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: false, cancellationToken) is string notMoved
+                ? (CheckVerdict.Error, notMoved, null, null)
+                : await GatesJudge.RunAsync(worktree, plan, context, plan.Inputs.EvidenceDirectory, cancellationToken);
+            if (head.Listing.Outcome == TreeOutcome.NoTestApps && gates.TestStep is string testStep)
+            {
+                // Without a test project red/green can run, the gates' own test step judges the suite at head.
+                greenAtHead = greenAtHead with
+                {
+                    Verdict = testStep switch { "PASS" => CheckVerdict.Pass, "FAIL" => CheckVerdict.Fail, "ERROR" => CheckVerdict.Error, _ => CheckVerdict.NotEarned },
+                    Why = $"no test project red/green can run (xUnit or NUnit); the gates' test step judged the suite: {testStep}",
+                };
+            }
+
             return new JudgeFindings(greenAtHead, cycles, trees.Builds)
             {
+                Trace = trace,
+                Gates = (gates.Verdict, gates.Why, gates.Result),
                 Tampering = tampering,
                 HeadFingerprints = head.Listing.Fingerprints,
                 SinceRed = sinceRed,
                 ExistingChanged = existingChanged,
                 HeadCommit = plan.Inputs.Head,
+                Budget = budget,
             };
         }
         finally

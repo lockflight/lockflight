@@ -1,5 +1,7 @@
 using Lockflight.Cli.Config;
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Routing;
@@ -46,7 +48,19 @@ internal static class CiEvidence
                 ["restored"] = Strings(plan.Policy.Files),
             },
             ["ignored"] = Strings(plan.Ignored.Select(Cap)),
-            ["feature"] = null,
+            ["feature"] = run.Findings.Trace?.Spec is { FeatureId: string featureId } spec
+                ? new JsonObject
+                {
+                    ["id"] = Cap(featureId),
+                    ["source"] = spec.Source,
+                    ["spec"] = spec.SpecPath is null ? null : new JsonObject
+                    {
+                        ["path"] = Cap(spec.SpecPath),
+                        ["sha256"] = spec.SpecText is string specText ? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(specText))) : null,
+                        ["origin"] = spec.Origin switch { SpecOrigin.Base => "base", SpecOrigin.Shell => "shell", _ => "head" },
+                    },
+                }
+                : null,
             ["changeClass"] = ChangeClassNode(plan.Class.Classification, engineVersion),
             ["redCommits"] = new JsonArray([.. plan.Reds.All.Select(RedCommitNode)]),
             ["cycles"] = new JsonArray([.. (run.Findings.Cycles ?? []).Select(cycle => CycleNode(cycle, run.Findings))]),
@@ -62,8 +76,20 @@ internal static class CiEvidence
                 : null,
             ["testsWithoutRed"] = Strings((run.Findings.Green?.WithoutRed ?? []).Select(Cap)),
             ["green"] = run.Findings.Green is GreenJudgement green ? GreenNode(green) : null,
-            ["trace"] = null,
-            ["gates"] = null,
+            ["trace"] = run.Findings.Trace is TraceJudgement trace
+                ? new JsonObject
+                {
+                    ["verdict"] = CheckVerdictNames.ToName(trace.Verdict),
+                    ["rows"] = new JsonArray([.. trace.Rows.Select(row => new JsonObject
+                    {
+                        ["requirement"] = Cap(row.RequirementId),
+                        ["tests"] = Strings(row.Tests.Select(Cap)),
+                        ["lost"] = Strings(row.Lost.Select(Cap)),
+                        ["status"] = row.Covered ? "covered" : "not-covered",
+                    })]),
+                }
+                : null,
+            ["gates"] = run.Findings.Gates?.Result?.DeepClone(),
             ["approvals"] = null,
             ["blocked"] = null,
             ["review"] = new JsonObject { ["state"] = inputs.ReviewExpected ? "expected" : "not-expected", ["artifact"] = inputs.ReviewExpected ? "lockflight-review" : null },
@@ -78,8 +104,8 @@ internal static class CiEvidence
             {
                 ["limitSeconds"] = plan.Policy.Ci.TimeoutMinutes * 60,
                 ["usedSeconds"] = (int)(run.FinishedAt - run.StartedAt).TotalSeconds,
-                ["exhausted"] = false,
-                ["notRun"] = new JsonArray(),
+                ["exhausted"] = run.Findings.Budget?.Exhausted ?? false,
+                ["notRun"] = Strings(run.Findings.Budget?.NotRun ?? []),
             },
             ["builds"] = new JsonArray([.. run.Findings.Builds.Select(build => new JsonObject
             {

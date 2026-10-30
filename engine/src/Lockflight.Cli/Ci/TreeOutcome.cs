@@ -17,4 +17,7 @@ internal enum TreeOutcome
 
     /// <summary>A tool broke: git could not check the tree out, or a runner could not list its tests.</summary>
     Broken = 5,
+
+    /// <summary>Not built: the judge's time budget ran out first.</summary>
+    OutOfTime = 6,
 }

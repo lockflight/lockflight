@@ -10,6 +10,7 @@ internal static class TreeOutcomeNames
         TreeOutcome.DiscoveryIncomplete => "discovery-incomplete",
         TreeOutcome.NoTestApps => "no-test-apps",
         TreeOutcome.Broken => "broken",
+        TreeOutcome.OutOfTime => "out-of-time",
         _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "Unknown tree outcome."),
     };
 }

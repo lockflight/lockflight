@@ -18,6 +18,7 @@ internal static class JudgeInputsReader
     public const string EvidenceOption = "--evidence";
     public const string ShellOption = "--shell";
     public const string NoReviewFlag = "--no-review-expected";
+    public const string OutOption = "--out";
 
     /// <summary>Where a local run writes its evidence, relative to the repository root (git-ignored local state).</summary>
     public const string LocalEvidenceDirectory = ".lockflight/local/ci";
@@ -62,7 +63,7 @@ internal static class JudgeInputsReader
             return Failed($"the working tree has uncommitted changes ({dirty}); the judge checks commits, so commit or stash them first");
         }
 
-        if (options.Value(EvidenceOption) is not string evidence && platform != JudgePlatform.Local)
+        if (options.Value(EvidenceOption) is null && options.Value(OutOption) is null && platform != JudgePlatform.Local)
         {
             return Failed($"{EvidenceOption} <dir> is required on {platformName}: a directory outside the checkout, such as \"$RUNNER_TEMP/lockflight-evidence\"");
         }

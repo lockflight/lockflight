@@ -8,7 +8,7 @@ namespace Lockflight.Cli.Ci;
 /// Builds and lists the trees of a pull request one after the other in the judge's single worktree, each with the base policy laid
 /// over it. A build that fails incrementally is retried once from clean before it counts as failed. Every build is recorded.
 /// </summary>
-internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, string repositoryRoot, TimeProvider time)
+internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, string repositoryRoot, JudgeBudget budget, TimeProvider time)
 {
     private const int DefaultTimeoutSeconds = 600;
 
@@ -20,7 +20,12 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
     /// <summary>The root of the tree being built: production projects are found under it.</summary>
     public string Root => worktree.Root;
 
-    public TimeSpan ProcessLimit => TimeSpan.FromSeconds(policy.Manifest?.Gates.TimeoutSeconds ?? DefaultTimeoutSeconds);
+    public TimeSpan ProcessLimit => budget.ProcessLimit(TimeSpan.FromSeconds(policy.Manifest?.Gates.TimeoutSeconds ?? DefaultTimeoutSeconds));
+
+    public JudgeBudget Budget => budget;
+
+    /// <summary>Whether the budget is spent down to its reserve, so a process that just ended may have been stopped by it.</summary>
+    public bool OutOfBudget => budget.Limit - budget.Used <= JudgeBudget.Reserve + TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// The tree at <paramref name="commit"/>, built and listed. A commit listed before is not built again unless
@@ -34,6 +39,11 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
         }
 
         TestWorkspace workspace = Workspace();
+        if (!budget.TryStart(purpose))
+        {
+            return new TreeListing(commit, TreeOutcome.OutOfTime, workspace, null, budget.Why(builds.Count));
+        }
+
         long started = time.GetTimestamp();
         TreeListing listing = await BuildAndListAsync(commit, workspace, cancellationToken);
         builds.Add(new BuildRecord(commit, purpose, time.GetElapsedTime(started).TotalSeconds, listing.Outcome));
@@ -49,6 +59,11 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
         string commit, string overlayCommit, IReadOnlyList<string> paths, IReadOnlyList<string> deleted, string purpose, CancellationToken cancellationToken)
     {
         TestWorkspace workspace = Workspace();
+        if (!budget.TryStart(purpose))
+        {
+            return new TreeListing(commit, TreeOutcome.OutOfTime, workspace, null, budget.Why(builds.Count));
+        }
+
         long started = time.GetTimestamp();
         TreeListing listing = await BuildAndListAsync(commit, workspace, cancellationToken, async () => await worktree.OverlayAsync(overlayCommit, paths, deleted, policy.Commit, cancellationToken));
         builds.Add(new BuildRecord(commit, purpose, time.GetElapsedTime(started).TotalSeconds, listing.Outcome));
@@ -61,6 +76,17 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
         string? buildOutput = null;
         foreach (bool clean in new[] { false, true })
         {
+            if (clean)
+            {
+                // The retry is a build of its own: it needs budget left, and its own process limit from what is left now.
+                if (!budget.TryStart("clean retry"))
+                {
+                    return new TreeListing(commit, TreeOutcome.OutOfTime, workspace, null, budget.Why(builds.Count));
+                }
+
+                workspace = Workspace();
+            }
+
             string? notReady = await worktree.MoveToAsync(commit, policy.Commit, clean, cancellationToken);
             if (notReady is null && overlay is not null)
             {
@@ -82,6 +108,12 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
             {
                 break;
             }
+        }
+
+        if (buildOutput is not null && OutOfBudget)
+        {
+            // A build stopped at the budget's limit did not fail: it was not allowed to finish.
+            return new TreeListing(commit, TreeOutcome.OutOfTime, workspace, null, budget.Why(builds.Count));
         }
 
         if (buildOutput is not null)
@@ -106,6 +138,6 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
 
     /// <summary>The base manifest's build targets, rooted in the worktree; the repository root when the base has no manifest.</summary>
     private TestWorkspace Workspace() => policy.Manifest is Manifest manifest
-        ? TestWorkspaces.For(manifest, feature: null, time).MovedTo(worktree.Root)
+        ? TestWorkspaces.For(manifest with { Gates = manifest.Gates with { TimeoutSeconds = Math.Max(1, (int)ProcessLimit.TotalSeconds) } }, feature: null, time).MovedTo(worktree.Root)
         : new TestWorkspace(repositoryRoot, [new BuildTarget(repositoryRoot, BuildFile: null, PreferredFramework: null)], ProcessLimit, time).MovedTo(worktree.Root);
 }

@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace Lockflight.Cli.Ci;
 
 /// <summary>
@@ -20,6 +22,15 @@ internal sealed record JudgeFindings(GreenJudgement? Green, IReadOnlyList<CycleJ
 
     /// <summary>The host-tampering check; null when it did not run.</summary>
     public TamperingJudgement? Tampering { get; init; }
+
+    /// <summary>Trace against the spec; null when it did not run.</summary>
+    public TraceJudgement? Trace { get; init; }
+
+    /// <summary>The gates at head: verdict, line and their result file; null when they did not run.</summary>
+    public (CheckVerdict Verdict, string Why, JsonNode? Result)? Gates { get; init; }
+
+    /// <summary>The time budget the steps ran under; null when nothing was built.</summary>
+    public JudgeBudget? Budget { get; init; }
 
     public static JudgeFindings None { get; } = new(null, null, []);
 }
