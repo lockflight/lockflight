@@ -85,6 +85,15 @@ internal static class CiShellScripts
           set --
           if [ -z "${LOCKFLIGHT_NUGET_FEED:-}" ]; then for file in nuget.config NuGet.config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done; fi
           sh .lockflight/ci/install.sh --lock .lockflight/engine.lock --dir "$LOCKFLIGHT_TEMP/lockflight" "$@"
+          # A pull request that changes the lock: the proposed lock must match the hashes its release published, and where the
+          # gh CLI has a token (GitHub) the release's attestation must verify. The reviewer reads "matches release vX".
+          base="${BASE:-${LOCKFLIGHT_BASE:-}}"
+          if [ -z "$base" ] && [ "${GITHUB_EVENT_NAME:-}" = pull_request ]; then base=$(git rev-parse --verify --quiet 'HEAD^1' || true); fi
+          if [ -n "$base" ] && git cat-file -e "$base:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "HEAD:.lockflight/engine.lock" 2>/dev/null \
+            && ! git diff --quiet "$base" HEAD -- .lockflight/engine.lock; then
+            git show HEAD:.lockflight/engine.lock > "$LOCKFLIGHT_TEMP/proposed-engine.lock"
+            "$LOCKFLIGHT_TEMP/lockflight/lockflight" engine verify-lock "$LOCKFLIGHT_TEMP/proposed-engine.lock" ${GH_TOKEN:+--attestation}
+          fi
         else
           if [ -z "$pinned" ]; then echo "lockflight: neither .lockflight/engine.lock nor $manifest pins the engine; run lockflight init and commit the pin" >&2; exit 1; fi
           config=""

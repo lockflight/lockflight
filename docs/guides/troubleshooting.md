@@ -137,6 +137,14 @@ locked engine when it is already installed in `~/.lockflight/tools/<version>`. O
 `~/.lockflight/bin/lockflight engine install` in the project: it installs exactly the locked engine (checked against its hash)
 and links it, and changes nothing committed.
 
+## A teammate's session can only read: "'version' must be 1"
+
+Their engine is Lockflight 0.2, and the project's `lockflight.yaml` is now version 2 (after `update` moved it). A 0.2 engine
+cannot read it, so its guard allows reading only, recovery commands included. In a separate terminal, in the project, they run
+`~/.lockflight/bin/lockflight update` once (a 0.2 `update` that says "not in a Lockflight project" installed the new engine
+anyway: run the same command again, now with the new engine), or `~/.lockflight/bin/lockflight engine install` once their
+user engine is new enough.
+
 ## `doctor` warns about gitleaks or the Claude Code version
 
 - **gitleaks:** the `pr` profile's secrets step runs gitleaks from `PATH`, or from `LOCKFLIGHT_GITLEAKS`. Without it the step is

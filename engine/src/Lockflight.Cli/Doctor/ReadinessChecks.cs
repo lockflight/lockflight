@@ -47,6 +47,11 @@ internal static class ReadinessChecks
         string root, string? userHome, string? nugetPackages, string? gitleaks, EnvironmentReader environment, TimeProvider time, CancellationToken cancellationToken)
     {
         List<DoctorCheck> checks = [CheckManifest(root), .. ManifestSettingsChecks.Check(root), CheckPin(root), .. EngineLockCheck.Check(root)];
+        if (CodeownersCheck.Check(root) is DoctorCheck codeowners)
+        {
+            checks.Add(codeowners);
+        }
+
         if (CheckDevelopmentPin(root, userHome, nugetPackages) is DoctorCheck developmentPin)
         {
             checks.Add(developmentPin);
