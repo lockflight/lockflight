@@ -298,8 +298,8 @@ writes them is your choice, and the checks are the same for all three:
 - **Spec Kit** with the Lockflight preset: its `/speckit-*` commands, if your team already uses it or wants it;
 - **you**, by hand, or the session with you, following the contract.
 
-Without Spec Kit, `doctor` still reports its Lockflight preset check as failing (and warns about PyYAML) in a standard
-project in this release; the lifecycle commands do not depend on either check.
+Without Spec Kit (no `.specify/`), `doctor` reports its Lockflight preset check as `info` ("Spec Kit is not used") and
+skips the PyYAML check; neither counts against readiness.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/lock-flight-dark.svg">

@@ -24,6 +24,7 @@ internal static class ReadinessChecks
     private const int MaxListed = 5;
     private const string Bash = "bash";
     private const string Python = "python3";
+    private const string SpecKitDirectory = ".specify";
     private const string PinRestoreCheck = "pin restorable";
     private const string DevelopmentPinCheck = "development pin";
     private const string GitleaksCheck = "gitleaks";
@@ -82,10 +83,19 @@ internal static class ReadinessChecks
 
         bool standardProfile = IsStandardProfile(root);
         // A lite project's own Spec Kit is the team's business: the preset and PyYAML matter only to Lockflight's lifecycle.
+        // Spec Kit is optional (specs follow the public spec contract), so a project without .specify/ gets no Spec Kit checks.
         if (standardProfile)
         {
-            checks.Add(await CheckPyYamlAsync(root, Python, cancellationToken));
-            checks.Add(CheckPreset(root, standardProfile));
+            if (Directory.Exists(Path.Combine(root, SpecKitDirectory)))
+            {
+                checks.Add(await CheckPyYamlAsync(root, Python, cancellationToken));
+                checks.Add(CheckPreset(root));
+            }
+            else
+            {
+                checks.Add(new(PresetCheck, CheckStatus.Info, "Spec Kit is not used (it is optional): specs and tasks follow the spec contract, written by hand or by the crew's spec writer and planner", null));
+            }
+
             checks.Add(CheckClaudeCli());
         }
 
@@ -324,16 +334,12 @@ internal static class ReadinessChecks
 
     /// <summary>
     /// <c>specify preset add</c> records installed presets in <c>.specify/presets/.registry</c> (JSON: <c>presets.&lt;id&gt;</c> with
-    /// <c>enabled</c>). Without the Lockflight preset, Spec Kit writes tasks that <c>phase check tasks</c> rejects.
+    /// <c>enabled</c>). Without the Lockflight preset, Spec Kit writes tasks that <c>phase check tasks</c> rejects. Called only when
+    /// <c>.specify/</c> exists: a project without Spec Kit writes its specs to the contract directly.
     /// </summary>
-    private static DoctorCheck CheckPreset(string root, bool standardProfile)
+    private static DoctorCheck CheckPreset(string root)
     {
-        CheckStatus missing = standardProfile ? CheckStatus.Fail : CheckStatus.Warn;
-        if (!Directory.Exists(Path.Combine(root, ".specify")))
-        {
-            return new(PresetCheck, missing, "Spec Kit is not initialised (.specify/ is missing)", "uvx --from specify-cli==1.1.3 specify init --here --force --integration claude --script sh");
-        }
-
+        const CheckStatus missing = CheckStatus.Fail;
         JsonNode? preset;
         try
         {
