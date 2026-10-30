@@ -1,10 +1,10 @@
 global: --help -h --version
 version: []
 link: []
-init: [--profile --ci --ci-platform --quality --architecture-tests --no-link --no-sandbox]
+init: [--profile --preset --ci --ci-platform --unit-of --unit-path --speckit-preset --quality --architecture-tests --dry-run --no-link --no-sandbox]
 doctor: [--self-test --canaries --canaries=full]
 statusline: []
-update: [--source --project]
+update: [--source --project --dry-run]
 docs check: []
 facts: [--json]
 hook: [] arguments
@@ -12,7 +12,7 @@ baseline build: [--path]
 baseline tests: [--path]
 baseline deps: [--path]
 baseline suppressions: []
-gate run: [--profile --path --unit --base --result]
+gate run: [--profile --path --unit --base --result --full]
 phase check: [--feature] arguments
 redgreen start: [--feature]
 redgreen red: [--feature --verbose]
@@ -25,10 +25,9 @@ review status: [--feature]
 review dismiss: [--reason --feature] arguments
 propose: [--from --delete] arguments
 trace: [--feature]
+blocked validate: [] arguments
 approve spec: [--feature]
 approve tasks: [--feature]
 approve verify: [--feature --base --require]
+ci: [--head --base --branch --platform --event --evidence --shell --no-review-expected --plan]
 workspace sync: [--check]
-adopt plan: []
-adopt apply: [--speckit-preset --skip-speckit --no-sandbox]
-adopt undo: [--backup --force]

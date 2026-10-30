@@ -14,14 +14,22 @@ internal static class CliApplication
         Usage: lockflight <command> [options]   (in a project, from its root: .lockflight/bin/lockflight <command> [options])
 
         Setup
-          init [--profile lite|standard] [--ci pr|manual|none] [--ci-platform github|azure|bitbucket|gitlab]
-               [--quality] [--architecture-tests] [--no-link] [--no-sandbox]
-                                                        onboard: manifest, tool pin, settings, CI job, link; --ci:
+          init [--profile lite|standard] [--preset relaxed|default|strict] [--ci pr|manual|none]
+               [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests] [--dry-run]
+               [--unit-of <shell url> --unit-path <path>] [--speckit-preset <dir>] [--no-link] [--no-sandbox]
+                                                        onboard: manifest, tool pin, settings, CLAUDE.md block, CI
+                                                        job, link; adopts an existing Claude Code / Spec Kit setup
+                                                        (keeps and protects it, marks existing features); --ci:
                                                         the job runs on pull requests, only by hand, or is not written;
                                                         --ci-platform: the CI service the job is for (default github);
+                                                        --preset: the routing thresholds a new manifest spells out
+                                                        (default default);
                                                         --quality: recommended analyzers and code metrics rules (an
                                                         existing file gets a proposal); --architecture-tests: a layer
-                                                        dependency test project
+                                                        dependency test project; --dry-run: print the plan, write
+                                                        nothing; --unit-of: this repository is a unit of that
+                                                        workspace shell; --speckit-preset: upgrade the existing Spec
+                                                        Kit with the Lockflight preset. Undo: git revert
           doctor [--self-test]                          readiness report with fixes; --self-test: plant a violation
                                                         before the guard, a human-only command, the linked engine
                                                         check, the test gate and red in a scratch project and
@@ -36,19 +44,21 @@ internal static class CliApplication
                                                         metrics settings, architecture tests, the ledger (read only)
           statusline                                    Claude Code status line: Levi and the last verdict
           update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
-                                                        package feed), re-pin this project
-          adopt plan                                    inventory an existing Claude Code / Spec Kit setup into
-                                                        .lockflight/adopt/plan.md (read only)
+                                                        package feed), re-pin this project and move its manifest to
+                                                        version 2; update --project --dry-run shows the change
           workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
                                                         engine pin, baselines, workflow); --check reports drift
           link                                          copy the pinned engine to .lockflight/bin/ for the hooks
           version                                       print the engine version
 
         Gates
-          gate run [--profile edit|stop|pr] [--path <dir>] [--unit <path>[,…]] [--base <ref>] [--result <file>]
-                                                        run the quality gates (default profile: stop; --base also
-                                                        scopes format and coverage to the branch's changes; at a
-                                                        workspace root, every changed unit or the --unit ones)
+          gate run [--profile edit|stop|pr] [--path <dir>] [--unit <path>[,…]] [--base <ref>] [--result <file>] [--full]
+                                                        run the quality gates (default profile: stop, which builds
+                                                        and tests the projects changed since its last PASS
+                                                        and their dependents;
+                                                        --full: every project; --base also scopes format and
+                                                        coverage to the branch's changes; at a workspace root,
+                                                        every changed unit or the --unit ones)
           hook <event>                                  Claude Code hook decision, hook JSON on stdin; events:
                                                         {string.Join(", ", HookEvents())}
 
@@ -59,6 +69,8 @@ internal static class CliApplication
                                                         red --verbose also prints each test's deciding
                                                         stack frame and the production call found
           trace [--feature <id>]                        requirement → red/green tests matrix
+          blocked validate <file>                       check a lockflight.blocked/v1 report (what stopped and what
+                                                        a person must do) against its contract (read only)
           review [--feature <id>] [--base <ref>] [--model <name>] [--budget <usd>]
                                                         review bound to evidence (defaults: the target branch,
                                                         the manifest's review model and budget, else sonnet, 3.00);
@@ -70,7 +82,7 @@ internal static class CliApplication
                                                         .lockflight/local/proposals/ for a person to review and
                                                         git apply; applies nothing itself
 
-        Human decisions (approve, redgreen reset|amend, review dismiss, baseline, adopt apply|undo and update refuse to run inside a
+        Human decisions (approve, redgreen reset|amend, review dismiss, baseline and update refuse to run inside a
         Claude Code session, a `!` command included: run them in a separate terminal window)
           approve spec|tasks [--feature <id>]           approve the feature's artifacts (a local record; the
                                                         approval of record is the pull request's review);
@@ -83,10 +95,6 @@ internal static class CliApplication
                                                         close an open review finding, recording who, when and why
           baseline build|tests|deps [--path <dir>]      accept current warnings / failing tests / advisories
           baseline suppressions                         accept the suppressions the branch adds (file and rule)
-          adopt apply [--speckit-preset <dir>] [--skip-speckit] [--no-sandbox]
-                                                        apply the reviewed adoption plan (backs up first)
-          adopt undo [--backup <id>] [--force]          revert what apply changed; files changed since are kept
-                                                        unless --force
 
         CI
           approve verify (--feature <id> | --base <ref>) [--require spec,tasks]
@@ -95,6 +103,12 @@ internal static class CliApplication
           gate run --profile pr [--base <ref>] [--result <file>]
                                                         stop steps plus policy, suppressions, references, EF
                                                         model changes, patch coverage, dependencies, secrets
+          ci [--head <sha>] [--base <sha>] [--branch <name>] [--platform github|bitbucket|gitlab|azure|local]
+             [--event pr|push|merge-group] [--evidence <dir>] [--shell <path>] [--no-review-expected] [--plan]
+                                                        judge a pull request's commits with the target branch's
+                                                        policy: the red commits (Lockflight-Red trailer), the change
+                                                        class and each check, into evidence.json; --plan prints the
+                                                        steps without building (local: HEAD against the target)
 
         Exit codes
           0  PASS; also a gate run whose steps were all N/A (e.g. edit with no changed C# lines)

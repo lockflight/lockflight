@@ -98,27 +98,6 @@ internal static class ClaudeSettingsMerger
         return (JsonFiles.Format(settings), changed);
     }
 
-    /// <summary>
-    /// Only the protected-path lists, for <c>adopt apply</c>, which leaves the plugin settings to <c>init</c>: the deny rules, and the
-    /// sandbox write denials unless null. A file that does not exist is created; one that cannot be merged into is left as it is.
-    /// </summary>
-    public static (string Json, bool Changed) MergeProtectedPaths(string? existingJson, IReadOnlyList<string> denyRules, IReadOnlyList<string>? denyWrite)
-    {
-        if (existingJson is not null && Problem(existingJson) is not null)
-        {
-            return (existingJson, false);
-        }
-
-        JsonObject settings = existingJson is null ? [] : JsonNode.Parse(existingJson)?.AsObject() ?? [];
-        bool changed = PermissionDenyRules.Merge(settings, denyRules);
-        if (denyWrite is not null)
-        {
-            changed |= SandboxSettings.Merge(settings, denyWrite);
-        }
-
-        return (JsonFiles.Format(settings), changed);
-    }
-
     private static JsonObject ObjectAt(JsonObject parent, string key)
     {
         if (parent[key] is JsonObject existing)

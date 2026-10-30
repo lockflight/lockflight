@@ -1,0 +1,4 @@
+class: behaviour
+computed: behaviour
+signal: tests.changed -> behaviour (heuristic) tests/Shop.Tests/CartTests.cs:8: a line of an existing test file removed, edited or commented out
+signal: tests.skipped -> behaviour (heuristic) tests/Shop.Tests/CartTests.cs:5: a test skip, ignore or conditional-compilation marker added

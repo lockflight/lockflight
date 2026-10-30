@@ -1,11 +1,10 @@
 using Lockflight.Cli.Processes;
-using Lockflight.Cli.Review;
 
 namespace Lockflight.Cli.Routing;
 
 /// <summary>
 /// Reads a <see cref="ChangeSet"/> for routing, as a pure function of it and the base branch's exclusion globs: each file's role
-/// at base and head, its lines with C# masked over the whole file, whitespace-only pairs dropped, moves paired, and the lines it
+/// at base and head, its lines with C# comments masked over the whole file (<see cref="CommentMask"/>), whitespace-only pairs dropped, moves paired, and the lines it
 /// adds to the change's size (docs/guides/risk-routing.md).
 /// </summary>
 internal static class ChangeAnalyzer
@@ -57,12 +56,12 @@ internal static class ChangeAnalyzer
     /// <summary>The diff's lines with their code: for C#, the line of the whole file masked, so a line inside a block comment is no code.</summary>
     private static List<RoutedLine> Lines(string path, IReadOnlyList<DiffLine> lines, string? fileText)
     {
-        string[]? masked = fileText is not null && IsCSharp(path) ? CSharpMask.Mask(fileText).Split('\n') : null;
+        string[]? masked = fileText is not null && IsCSharp(path) ? CommentMask.Of(fileText).Split('\n') : null;
         return [.. lines.Select(line => new RoutedLine(line.Line, line.Text, Code(path, line, masked)))];
     }
 
     private static string Code(string path, DiffLine line, string[]? masked) =>
         masked is not null && line.Line >= 1 && line.Line <= masked.Length
             ? masked[line.Line - 1]
-            : IsCSharp(path) ? CSharpMask.Mask(line.Text) : line.Text;
+            : IsCSharp(path) ? CommentMask.Of(line.Text) : line.Text;
 }

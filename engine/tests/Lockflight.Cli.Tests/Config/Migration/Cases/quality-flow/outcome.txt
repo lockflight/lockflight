@@ -1,0 +1,31 @@
+ManualEdit
+lockflight.yaml was left as it is: its 'gates' section is not a block mapping the migration can add keys to
+# change 'version: 1' to 'version: 2' (or add it as the first key), then add:
+# under gates:
+#   quality:
+#     suppressions: report
+#   docs:
+#     references: report
+#   ef:
+#     pendingModelChanges: auto
+approvals:                      # the approval of record is the platform's review of the pull request
+  check: report
+  default: same-pr
+  specFirstFrom: none
+  specFirstPaths: []
+  specPaths: ["specs/**"]
+
+routing:                        # how a pull request's change class is computed and what each class must prove
+  preset: default
+  floor: fix
+  fix: { maxLines: 20, maxFiles: 2 }
+  largeLines: 400
+  structural: critical
+  critical: []                  # globs of critical paths, such as "src/Payments/**"
+  coverage: { fix: 80, behaviour: 80, feature: 80, critical: 90 }
+  require:
+    specFrom: feature
+    reviewFrom: behaviour
+    reviewKeyFrom: critical
+    architectureFrom: feature
+    architectureDeclaredFrom: none

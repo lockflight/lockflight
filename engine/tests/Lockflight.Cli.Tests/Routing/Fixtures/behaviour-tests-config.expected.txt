@@ -1,0 +1,3 @@
+class: behaviour
+computed: behaviour
+signal: tests.configChanged -> behaviour (heuristic) tests/coverage.runsettings: a test-run or coverage setting changed

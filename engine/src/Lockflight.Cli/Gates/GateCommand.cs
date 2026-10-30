@@ -2,13 +2,15 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Mascot;
+using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Gates;
 
 /// <summary>
-/// <c>lockflight gate run [--profile edit|stop|pr] [--path dir] [--unit path[,path…]] [--base ref] [--result file]</c>. Outside a
-/// Lockflight project the gates run with the default settings; an invalid manifest stops the run, so a typo in it can never weaken
-/// the gates. At the root of a workspace with units the run covers every unit, or those <c>--unit</c> names.
+/// <c>lockflight gate run [--profile edit|stop|pr] [--path dir] [--unit path[,path…]] [--base ref] [--result file] [--full]</c>.
+/// Outside a Lockflight project the gates run with the default settings; an invalid manifest stops the run, so a typo in it can never
+/// weaken the gates. At the root of a workspace with units the run covers every unit, or those <c>--unit</c> names. The stop profile
+/// builds and tests the projects the changes since its last PASS affect; <c>--full</c> makes it build and test every project.
 /// </summary>
 internal sealed class GateCommand(CliContext context) : ICommand
 {
@@ -23,6 +25,13 @@ internal sealed class GateCommand(CliContext context) : ICommand
         if (!GateProfileNames.TryParse(profileName, out GateProfile profile))
         {
             await context.Error.WriteLineAsync($"lockflight: unknown profile '{profileName}'; use edit, stop or pr");
+            return ExitCode.Config;
+        }
+
+        bool full = options.Flag("--full");
+        if (full && profile != GateProfile.Stop)
+        {
+            await context.Error.WriteLineAsync("lockflight: --full applies to the stop profile; the edit profile judges changed lines only and the pr profile always runs every project");
             return ExitCode.Config;
         }
 
@@ -44,6 +53,7 @@ internal sealed class GateCommand(CliContext context) : ICommand
         GateRunContext run = manifest is null
             ? new(target, target, profile, GateSettings.Default, options.Value("--base"), context.Time)
             : GateRunContext.ForTarget(manifest, target, profile, options.Value("--base"), context.Time);
+        run = run with { FullRun = full };
         string[] units = [.. (options.Value("--unit") ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(name => name.TrimEnd('/'))];
         bool workspaceRun = manifest is { Units.Count: > 0 } && SameDirectory(target, manifest.Root);
         if (units.Length > 0 && !workspaceRun)
@@ -75,7 +85,10 @@ internal sealed class GateCommand(CliContext context) : ICommand
 
         if (options.Value("--result") is string resultPath)
         {
-            await GateResultWriter.WriteAsync(Path.GetFullPath(resultPath, context.WorkingDirectory), result, cancellationToken);
+            string? baseCommit = options.Value("--base") is string baseRef ? await Git.CommitOfAsync(target, baseRef, cancellationToken) : null;
+            await GateResultWriter.WriteAsync(
+                Path.GetFullPath(resultPath, context.WorkingDirectory), result, run.Settings, ToolPin.RunningVersion, baseCommit,
+                await Git.HeadAsync(target, cancellationToken), context.Time.GetUtcNow(), cancellationToken);
         }
 
         if (manifest is not null)

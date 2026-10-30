@@ -78,6 +78,7 @@ public sealed partial class ManifestSchemaSyncTests
     [InlineData("units.test", "version: 2\nunits:\n  - path: a\n    test:\n      x: 1\n")]
     [InlineData("shell", "version: 2\nshell:\n  x: 1\n")]
     [InlineData("review", "version: 2\nreview:\n  x: 1\n")]
+    [InlineData("ci", "version: 2\nci:\n  x: 1\n")]
     public void EverySectionKnowsTheSameKeysInTheEngineAndTheSchema(string section, string yaml)
     {
         string message = Engine(yaml).Error!.Message;

@@ -1,0 +1,3 @@
+class: critical
+computed: critical
+signal: critical.path -> critical (boundary) src/Shop/Payments/Refund.cs: matches routing.critical src/Shop/Payments/**

@@ -33,4 +33,7 @@ internal sealed record Manifest(string Root, IReadOnlyList<string> ProtectedGlob
 
     /// <summary>The workspace shell this repository is a unit of (<c>shell:</c>); null for a single repository, a shell or a monorepo.</summary>
     public ShellSettings? Shell { get; init; }
+
+    /// <summary>The CI judge's limits and path lists (<c>ci:</c>); the defaults when the manifest has no such section.</summary>
+    public CiSettings Ci { get; init; } = CiSettings.Default;
 }

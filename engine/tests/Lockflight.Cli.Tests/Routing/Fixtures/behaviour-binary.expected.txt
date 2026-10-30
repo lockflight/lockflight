@@ -1,0 +1,5 @@
+class: behaviour
+computed: behaviour
+signal: binary.changed -> behaviour (heuristic) src/Shop/logo.png: binary content cannot be read
+signal: config.changed -> behaviour (heuristic) src/Shop/logo.png: production configuration file changed
+signal: file.added -> behaviour (heuristic) src/Shop/logo.png: new production configuration file

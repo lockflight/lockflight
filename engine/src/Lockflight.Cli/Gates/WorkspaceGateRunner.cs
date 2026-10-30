@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Gates.Affected;
 using Lockflight.Cli.Gates.Steps;
 
 namespace Lockflight.Cli.Gates;
@@ -83,6 +84,11 @@ internal static class WorkspaceGateRunner
             {
                 await new StopGateCache(manifest.Root, outcome.Unit.Path).RememberPassAsync(fingerprint, cancellationToken);
             }
+
+            if (outcome.Steps.All(step => VerdictNames.AllowsNextStep(step.Verdict)) && outcome.Selection?.PassRecord is StopPassRecord passed)
+            {
+                await passed.RememberAsync(cancellationToken);
+            }
         }
 
         int? testsTotal = outcomes.Any(outcome => outcome.TestsTotal is not null) ? outcomes.Sum(outcome => outcome.TestsTotal ?? 0) : null;
@@ -166,7 +172,7 @@ internal static class WorkspaceGateRunner
     {
         // The unit shares the run's deadline: its own context would start a fresh budget.
         string directory = Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar));
-        GateRunContext run = (root with { Target = directory }).ForUnit(unit, directory);
+        GateRunContext run = (root with { Target = directory, UnitDirectories = GateRunContext.UnitDirectoriesOf(manifest) }).ForUnit(unit, directory);
 
         List<GateStep> steps = [];
         GateRunFacts facts = GateRunFacts.None;
@@ -181,10 +187,10 @@ internal static class WorkspaceGateRunner
             }
         }
 
-        return new UnitOutcome(unit, state, steps, facts.TestsTotal);
+        return new UnitOutcome(unit, state, steps, facts.TestsTotal) { Selection = facts.Selection };
     }
 
-    private static GateStep Named(Unit unit, GateStep step) => step with { Name = $"{unit.Path}: {step.Name}" };
+    private static GateStep Named(Unit unit, GateStep step) => step with { Name = $"{unit.Path}: {step.Name}", Unit = unit.Path };
 
     /// <summary>The worst verdict of the steps that applied: ERROR, then FAIL, then NOT-EARNED, then PASS; N/A when none applied.</summary>
     private static GateResult Result(GateRunContext root, List<GateStep> steps, int? testsTotal)
@@ -199,7 +205,11 @@ internal static class WorkspaceGateRunner
     }
 
     /// <summary>One unit's steps, its state when the run began (the cache key a PASS is remembered under) and its test count.</summary>
-    private sealed record UnitOutcome(Unit Unit, UnitState State, IReadOnlyList<GateStep> Steps, int? TestsTotal);
+    private sealed record UnitOutcome(Unit Unit, UnitState State, IReadOnlyList<GateStep> Steps, int? TestsTotal)
+    {
+        /// <summary>The unit's choice of projects (stop profile), whose record a PASS keeps for the next run.</summary>
+        public ProjectSelection? Selection { get; init; }
+    }
 
     /// <summary>Collects steps and prints each as it is added, in the format of <see cref="GateRunner"/>.</summary>
     private sealed class Progress(TextWriter writer)

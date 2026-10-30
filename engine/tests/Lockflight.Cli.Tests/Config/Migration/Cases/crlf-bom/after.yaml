@@ -1,0 +1,34 @@
+﻿version: 2
+protected: []
+gates:
+  timeoutSeconds: 300
+  quality:
+    suppressions: report    # fail: new suppressions fail the pr profile
+  docs:
+    references: report    # fail: references the change breaks fail the pr profile
+  ef:
+    pendingModelChanges: auto    # auto: fails when the repository pins dotnet-ef; fail forces it
+
+# Manifest version 2, written by `lockflight update`. The checks version 2 added only report here, so this upgrade changes
+# no verdict; set each to fail when the team is ready (configuration guide, "Manifest version 2").
+approvals:                      # the approval of record is the platform's review of the pull request
+  check: report
+  default: same-pr
+  specFirstFrom: none
+  specFirstPaths: []
+  specPaths: ["specs/**"]
+
+routing:                        # how a pull request's change class is computed and what each class must prove
+  preset: default
+  floor: fix
+  fix: { maxLines: 20, maxFiles: 2 }
+  largeLines: 400
+  structural: critical
+  critical: []                  # globs of critical paths, such as "src/Payments/**"
+  coverage: { fix: 80, behaviour: 80, feature: 80, critical: 90 }
+  require:
+    specFrom: feature
+    reviewFrom: behaviour
+    reviewKeyFrom: critical
+    architectureFrom: feature
+    architectureDeclaredFrom: none

@@ -1,11 +1,11 @@
 ---
 name: init
-description: Set up Lockflight in a .NET repository or a workspace shell (a root repo with Claude Code setup, Spec Kit and specs, and service repos cloned beneath it) — install and pin the engine, initialize, adopt an existing Claude Code / Spec Kit setup (plan, user applies, undo), vendor unit CI policy, verify with doctor. Use when the user asks to install, set up, onboard, adopt or initialize Lockflight.
+description: Set up Lockflight in a .NET repository or a workspace shell (a root repo with Claude Code setup, Spec Kit and specs, and service repos cloned beneath it) — install and pin the engine, initialize (which adopts an existing Claude Code / Spec Kit setup: dry run first, git is the undo), make a repository a unit of a workspace shell, vendor unit CI policy, verify with doctor. Use when the user asks to install, set up, onboard, adopt or initialize Lockflight.
 ---
 
 # Lockflight init
 
-Goal: a green `doctor` with the user's own setup kept and protected. **Never run `adopt apply`, `adopt undo`, `approve`,
+Goal: a green `doctor` with the user's own setup kept and protected. **Never run `approve`,
 `baseline` or `update` yourself.** They are human decisions: the engine refuses them inside Claude Code and the guard blocks
 them. Hand them to the user to run **in a separate terminal window** (not with `!` in Claude Code: that runs inside the session
 and is refused), with every path written out in full.
@@ -78,15 +78,17 @@ so you must not run one then.
 - If `lockflight.yaml` already exists, never run them yourself: give the user both commands, with the preset as an absolute
   path (`echo "${CLAUDE_PLUGIN_ROOT}/speckit-preset"`), to run in a separate terminal window.
 
-With an existing `.specify/`, never run `specify init`: adoption upgrades it without overwriting the team's files.
+With an existing `.specify/`, never run `specify init`: `init --speckit-preset` upgrades it without overwriting the team's files.
 
 ## 5. Initialize
 
 Run `~/.lockflight/bin/lockflight init --profile <lite|standard> --ci <pr|manual|none>` (plus `--ci-platform <name>` when it is
 not github, and `--quality` / `--architecture-tests` when chosen) and show the
-created/updated/unchanged list. It writes the manifest, the tool pin, `.gitignore`, `.claude/settings.json` (the plugin, an
-`Edit` deny rule for each protected path, and the protected paths as Claude Code sandbox write denials), the CI workflow and the linked engine; it is idempotent and only
-merges into existing files. It does not turn the sandbox on: if the user asks, point them to "The Claude Code sandbox" in
+created/updated/unchanged list. It writes the manifest, the tool pin, `.gitignore`, a short Lockflight block in `CLAUDE.md`,
+`.claude/settings.json` (the plugin, an `Edit` deny rule for each protected path, and the protected paths as Claude Code
+sandbox write denials), the CI workflow and the linked engine; it is idempotent and only merges into existing files. In a
+project with its own setup, run it with `--dry-run` first ([references/adoption.md](references/adoption.md)). Ask the user
+to commit or stash their own changes before init, so its changes are one commit: the undo is `git revert` of that commit. It does not turn the sandbox on: if the user asks, point them to "The Claude Code sandbox" in
 docs/guides/guardrails-and-boundaries.md, which says what .NET builds need inside it. Then follow the reference files that apply.
 
 ## 6. Verify
@@ -100,7 +102,7 @@ When one needs changing, write the complete new file in your scratch directory, 
 
 ## 7. Hand over
 
-- **Commit** the new files.
+- **Commit** init's changes as one commit (to undo init later: `git revert` that commit).
 - **Levi in the status line (optional).** Offer it. If the user wants it and has no status line of their own, show them the
   `statusLine` snippet from docs/guides/getting-started.md ("Levi and the status line") to add to their
   `~/.claude/settings.json` themselves. It is their settings file: never edit it for them.

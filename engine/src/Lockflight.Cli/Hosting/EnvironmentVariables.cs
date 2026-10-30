@@ -15,6 +15,9 @@ internal static class EnvironmentVariables
     /// <summary>Path of the gitleaks binary for the secrets gate; when unset, gitleaks is looked up on PATH.</summary>
     public const string Gitleaks = "LOCKFLIGHT_GITLEAKS";
 
+    /// <summary>A temporary folder outside the checkout that a CI template provides (the runner's temp); the CI judge's worktree goes there.</summary>
+    public const string Temp = "LOCKFLIGHT_TEMP";
+
     /// <summary>Spec Kit's active feature directory (relative to the project root, or absolute); it outranks <c>.specify/feature.json</c>.</summary>
     public const string SpecifyFeatureDirectory = "SPECIFY_FEATURE_DIRECTORY";
 

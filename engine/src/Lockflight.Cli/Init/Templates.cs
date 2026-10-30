@@ -1,3 +1,5 @@
+using Lockflight.Cli.Config;
+
 namespace Lockflight.Cli.Init;
 
 /// <summary>File contents <c>lockflight init</c> writes when a file does not exist yet.</summary>
@@ -43,7 +45,8 @@ internal static class Templates
         # .globalconfig, *.ruleset, stylecop.json, BannedSymbols.txt, CodeMetricsConfig.txt), .gitattributes, gitleaks policy and the
         # Lockflight CI files.
         # The full list: https://github.com/lockflight/lockflight/blob/main/docs/guides/configuration.md
-        version: 1
+        # yaml-language-server: $schema=https://raw.githubusercontent.com/lockflight/lockflight/main/lockflight.schema.json
+        version: 2
 
         # Extra paths the agent must not change.
         protected: []
@@ -217,11 +220,15 @@ internal static class Templates
 
         """;
 
-    public static IReadOnlyList<string> GitIgnoreEntries { get; } = [".lockflight/bin/", ".lockflight/ledger/", ".lockflight/local/", ".lockflight/backup/", ".lockflight/adopt/", ".claude/worktrees/"];
+    public static IReadOnlyList<string> GitIgnoreEntries { get; } = [".lockflight/bin/", ".lockflight/ledger/", ".lockflight/local/", ".claude/worktrees/"];
 
-    /// <summary>The manifest <c>init</c> writes, with the stop-gate comment of the chosen profile.</summary>
-    public static string Manifest(InitProfile profile) =>
-        ManifestTemplate.Replace(ProfilePlaceholder, profile == InitProfile.Standard ? StandardStopGateNote : LiteStopGateNote, StringComparison.Ordinal);
+    /// <summary>
+    /// The manifest <c>init</c> writes (version 2), with the stop-gate comment of the chosen profile, the approvals and the routing
+    /// preset with every value written down.
+    /// </summary>
+    public static string Manifest(InitProfile profile, RoutingPreset preset) =>
+        ManifestTemplate.Replace(ProfilePlaceholder, profile == InitProfile.Standard ? StandardStopGateNote : LiteStopGateNote, StringComparison.Ordinal)
+        + ManifestYaml.Approvals(ApprovalCheckMode.Fail, preset) + "\n" + ManifestYaml.Routing(preset);
 
     /// <summary>The CI workflow; setup-dotnet installs every channel given (a YAML block list when there are several).</summary>
     public static string Workflow(IReadOnlyList<string> dotnetChannels) => Workflow(dotnetChannels, CiTrigger.PullRequest, developmentPin: false);

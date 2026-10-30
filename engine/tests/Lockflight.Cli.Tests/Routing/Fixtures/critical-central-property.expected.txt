@@ -1,0 +1,4 @@
+class: critical
+computed: critical
+signal: critical.policy -> critical (boundary) Directory.Packages.props: policy file (**/Directory.Packages.props)
+signal: structure.buildWide -> critical (heuristic) Directory.Packages.props: changes every project's build
