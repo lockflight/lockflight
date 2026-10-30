@@ -56,8 +56,8 @@ internal static class CiSolution
         return repository.WriteCode(production, tests);
     }
 
-    /// <summary>Replaces the production class's and the test class's members.</summary>
-    public static GitHistoryFixture WriteCode(this GitHistoryFixture repository, string production, string tests) => repository
+    /// <summary>Replaces the production class's and the test class's members; the test class derives from <paramref name="testBase"/> when given.</summary>
+    public static GitHistoryFixture WriteCode(this GitHistoryFixture repository, string production, string tests, string? testBase = null) => repository
         .Write(ProductionFile, $$"""
             namespace Shop;
 
@@ -72,7 +72,7 @@ internal static class CiSolution
 
             namespace Shop.Tests;
 
-            public sealed class PriceTests
+            public sealed class PriceTests{{(testBase is null ? string.Empty : $" : {testBase}")}}
             {
                 [Fact]
                 public void ABaseTestPasses() => Assert.True(true);

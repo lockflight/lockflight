@@ -19,5 +19,6 @@ description: Run Lockflight's deterministic gates (format, build, tests; with --
    - **ERROR** — the tool or environment broke (missing runtime, toolchain, network). Explain the environment problem; do not
      change code to work around it.
    A single step may read **N/A**: it did not apply (for example patch coverage that is not configured). Say so; it is neither
-   a pass nor a failure.
+   a pass nor a failure. The stop profile's `projects.affected` row is always N/A: it judges nothing and names the projects the
+   changes since the last PASS affect, which build and test run (`--full` runs every project; the pr profile always does).
 3. Never claim a task is done while the gate is not PASS.

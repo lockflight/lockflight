@@ -217,6 +217,24 @@ The gate could not judge, and NOT-EARNED is never a pass. The line under the ste
 A step that says **N/A** did not apply (for example `coverage.patch` without `gates.coverage.collector`). It is neither a pass
 nor a failure.
 
+## The Stop gate is slow
+
+Read the `projects.affected` line of the last run (`.lockflight/bin/lockflight gate run`, or the `gate:stop` line in the
+ledger). It names the projects the gate built and why.
+
+- **"every project: …"** names the reason the gate built everything. A change to a shared build input
+  (`Directory.Build.props`, `global.json`, a `.props` file) or to a file outside every project does that on purpose. A
+  reference through an MSBuild property (`$(RepoRoot)/src/…`) makes the graph unknown: write it relative to the project
+  (`../Core/Core.csproj` or `$(MSBuildThisFileDirectory)../Core/Core.csproj`) and the gate can choose again. See
+  [how the projects are chosen](configuration.md#the-stop-profile-builds-what-the-change-affects).
+- **Many projects, each "affected by … via …":** a project most of the solution depends on changed; that is the work the
+  change needs.
+- **Few projects, but the tests take long:** keep the slow ones out of the Stop gate with `test.stopFilter` (for example
+  `Category!=Integration`); the `pr` profile still runs them.
+- **A workspace:** `doctor` names the units whose Stop time is above 2 minutes at the 95th percentile.
+
+Whatever the Stop gate leaves out, CI runs: `gate run --profile pr` builds and tests everything.
+
 ## The format gate fails
 
 The format gate judges only the lines the change touched (see the [configuration reference](configuration.md#the-format-step-judges-the-change-not-the-file)).
@@ -315,15 +333,15 @@ script, so Claude Code needs **Git Bash**; `doctor` checks for it.
 
 ## "records a human decision and does not run inside a Claude Code session"
 
-`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo` and `update` are refused when `CLAUDECODE=1` is set. That variable
+`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss` and `update` are refused when `CLAUDECODE=1` is set. That variable
 is set inside Claude Code sessions, and a command typed with the `!` prefix runs inside the session too, so it is refused as
 well. Open a separate terminal window and paste the line the refusal prints: it changes to the project root and runs the same
 command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approve spec`.
 
 ## Uninstall
 
-1. In each project, if you ran `adopt apply`, first open a separate terminal window and run
-   `.lockflight/bin/lockflight adopt undo` there, to revert what it changed.
+1. In each project where init's changes are still one commit of their own, `git revert` it; otherwise remove by hand what
+   the steps below list.
 2. In a standard-profile project, remove the Spec Kit preset: `uvx --from specify-cli==1.1.3 specify preset remove lockflight`.
    Spec Kit itself (`.specify/`, the `speckit-*` skills) is yours to keep or remove.
 3. In each project, remove what `init` added: `lockflight.yaml`, `.lockflight/`, the tool pin (the `lockflight.cli` entry

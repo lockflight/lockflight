@@ -1,6 +1,7 @@
 using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Gates.Affected;
 using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Processes;
 
@@ -35,6 +36,14 @@ internal static class GateStepCanaries
         </TestRun>
         """;
 
+    private const string PassingTrx = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+          <Results><UnitTestResult testName="Canary.Tests.Other" outcome="Passed" /></Results>
+          <ResultSummary outcome="Completed"><Counters total="1" executed="1" passed="1" failed="0" /></ResultSummary>
+        </TestRun>
+        """;
+
     private const string PlantedAdvisory = """
         { "version": 1, "parameters": "--vulnerable", "projects": [ { "path": "src/Canary.csproj", "frameworks": [ { "framework": "net10.0",
           "topLevelPackages": [ { "id": "Canary.Vulnerable", "resolvedVersion": "1.0.0",
@@ -66,7 +75,100 @@ internal static class GateStepCanaries
             reports.Add(await JudgeAsync(step, manifest, scratch.Project, time, cancellationToken) with { Control = step.Name });
         }
 
+        // The stop profile's own steps.
+        foreach (IGateStep step in GateProfiles.For(GateProfile.Stop).InOrder.Where(step => !reports.Any(report => report.Control == step.Name)))
+        {
+            CanaryReport report = step.Name == AffectedProjectsStep.StepName
+                ? await AffectedProjectsAsync(time, cancellationToken)
+                : new CanaryReport($"gate step '{step.Name}': a planted violation", CanaryResult.Missed, CanaryCoverageTests.MissingGateStepCanary);
+            reports.Add(report with { Control = step.Name });
+        }
+
         return reports;
+    }
+
+    /// <summary>
+    /// The incremental stop gate must not leave a broken dependent untested: in a solution where App.Tests → App → Core and Other
+    /// stands apart, a change to Core committed after the last PASS is judged with App.Tests chosen, and App.Tests' planted failure
+    /// fails the run.
+    /// The harmless twin: Other.Tests, which the change does not reach, is left out.
+    /// </summary>
+    private static async Task<CanaryReport> AffectedProjectsAsync(TimeProvider time, CancellationToken cancellationToken)
+    {
+        const string name = "projects.affected: a failing test two references away from a project committed since the last PASS is run";
+        using CanaryScratch scratch = new(time);
+        string Project(string reference, bool tests) =>
+            $"<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup>{(tests ? "<PackageReference Include=\"xunit\" />" : string.Empty)}" +
+            $"{(reference.Length > 0 ? $"<ProjectReference Include=\"{reference}\" />" : string.Empty)}</ItemGroup></Project>\n";
+        (string Path, string Content)[] files =
+        [
+            (".gitignore", ".lockflight/\n"),
+            ("src/Core/Core.csproj", Project(string.Empty, tests: false)),
+            ("src/Core/Core.cs", "class Core {}\n"),
+            ("src/App/App.csproj", Project("../Core/Core.csproj", tests: false)),
+            ("src/Other/Other.csproj", Project(string.Empty, tests: false)),
+            ("tests/App.Tests/App.Tests.csproj", Project("../../src/App/App.csproj", tests: true)),
+            ("tests/Other.Tests/Other.Tests.csproj", Project("../../src/Other/Other.csproj", tests: true)),
+            ("Canary.slnx", "<Solution><Project Path=\"src/Core/Core.csproj\" /><Project Path=\"src/App/App.csproj\" /><Project Path=\"src/Other/Other.csproj\" />" +
+                "<Project Path=\"tests/App.Tests/App.Tests.csproj\" /><Project Path=\"tests/Other.Tests/Other.Tests.csproj\" /></Solution>\n"),
+        ];
+        foreach ((string path, string content) in files)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(scratch.PathOf(path))!);
+            await File.WriteAllTextAsync(scratch.PathOf(path), content, cancellationToken);
+        }
+
+        if (await CanaryGit.CommitAllAsync(scratch.Project, "canary graph", initialize: true, cancellationToken) is string notCreated)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, $"{notCreated}; git is needed for this canary");
+        }
+
+        Manifest manifest = ManifestLocator.Discover(scratch.Project).Manifest!;
+        GateRunContext run = GateRunContext.ForTarget(manifest, scratch.Project, GateProfile.Stop, baseRef: null, time) with { Processes = FailingAppTestsAsync };
+        if ((await ProjectSelector.SelectAsync(run with { FullRun = true }, cancellationToken)).PassRecord is not StopPassRecord passed)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, "the working tree of the green base could not be recorded");
+        }
+
+        // The base passed; the change to Core is then committed without a stop run, so it is no longer uncommitted.
+        await passed.RememberAsync(cancellationToken);
+        await File.WriteAllTextAsync(scratch.PathOf("src/Core/Core.cs"), "class Core { int changed; }\n", cancellationToken);
+        if (await CanaryGit.CommitAllAsync(scratch.Project, "core change", initialize: false, cancellationToken) is string notCommitted)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, notCommitted);
+        }
+
+        GateRunFacts facts = GateRunFacts.None;
+        GateStep? last = null;
+        foreach (IGateStep step in GateProfiles.For(GateProfile.Stop).PerUnit)
+        {
+            GateStepResult result = await step.RunAsync(run, facts, cancellationToken);
+            facts = result.Facts;
+            last = result.Step;
+        }
+
+        if (facts.Selection is not { Kind: SelectionKind.Affected } selection || selection.Projects.Any(project => project.Name == "Other.Tests.csproj"))
+        {
+            return new CanaryReport(name, CanaryResult.Broken, $"the harmless twin is not left out ({facts.Selection?.Describe()}), so a caught failure proves nothing about the choice");
+        }
+
+        return CanaryReport.NotAPass(name, last!);
+    }
+
+    /// <summary>The build succeeds; the tests fail when App.Tests is among the projects run (a filter that names it, or everything).</summary>
+    private static async Task<ProcessResult> FailingAppTestsAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        if (arguments[0] != "test")
+        {
+            return new ProcessResult(0, "Build succeeded.", string.Empty, 0, TimedOut: false);
+        }
+
+        string? filter = arguments.FirstOrDefault(argument => argument.EndsWith(".slnf", StringComparison.OrdinalIgnoreCase));
+        bool appTestsRun = filter is null || (await File.ReadAllTextAsync(filter, cancellationToken)).Contains("App.Tests", StringComparison.Ordinal);
+        string results = arguments[arguments.ToList().IndexOf("--results-directory") + 1];
+        Directory.CreateDirectory(results);
+        await File.WriteAllTextAsync(Path.Combine(results, "canary.trx"), appTestsRun ? PlantedTrx : PassingTrx, cancellationToken);
+        return new ProcessResult(appTestsRun ? 1 : 0, string.Empty, string.Empty, 0, TimedOut: false);
     }
 
     private static async Task<CanaryReport> JudgeAsync(IGateStep step, Manifest manifest, string project, TimeProvider time, CancellationToken cancellationToken)

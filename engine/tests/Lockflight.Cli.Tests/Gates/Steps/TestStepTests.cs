@@ -1,4 +1,6 @@
+using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Gates.Affected;
 using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Processes;
@@ -213,6 +215,38 @@ public sealed class TestStepTests
 
         Assert.Equal(Verdict.NotEarned, step.Verdict);
         Assert.Contains("2 tests", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Shop.slnx", "--solution")]
+    [InlineData("Shop.sln", "--solution")]
+    [InlineData("affected.slnf", "--solution")]
+    [InlineData("src/Shop.Api/Shop.Api.csproj", "--project")]
+    public void OnTheTestingPlatformASolutionOrProjectIsPassedByItsOption(string file, string option) =>
+        Assert.Equal([option, file], TestStep.TestingPlatformTarget(file));
+
+    [Fact]
+    public async Task WhenNoAffectedProjectIsATestProjectTheTestStepRunsNothingAndIsNotApplicable()
+    {
+        List<string> calls = [];
+        GateRunContext run = new(Path.GetTempPath(), Path.GetTempPath(), GateProfile.Stop, GateSettings.Default, BaseRef: null, TimeProvider.System)
+        {
+            Processes = (fileName, arguments, workingDirectory, timeLimit, cancellationToken) =>
+            {
+                calls.Add(string.Join(' ', arguments));
+                return Task.FromResult(Run(0));
+            },
+        };
+        GateRunFacts facts = GateRunFacts.None with
+        {
+            Selection = new ProjectSelection(SelectionKind.Affected, "uncommitted changes", [new AffectedProject("Cli.csproj", "src/Cli/Cli.csproj", "changed: src/Cli/Program.cs", DeclaresTests: false)], 5, "affected.slnf", RunsTests: false),
+        };
+
+        GateStepResult result = await new TestStep().RunAsync(run, facts, TestContext.Current.CancellationToken);
+
+        Assert.Equal(Verdict.NotApplicable, result.Step.Verdict);
+        Assert.Contains("no affected project is a test project", result.Step.Detail, StringComparison.Ordinal);
+        Assert.Empty(calls);
     }
 
     private static ProcessResult Run(int exitCode) => new(exitCode, string.Empty, string.Empty, 0, TimedOut: false);

@@ -1,0 +1,127 @@
+using Lockflight.Cli.Ci;
+using Lockflight.Cli.Processes;
+
+namespace Lockflight.Cli.Tests.Ci;
+
+/// <summary>
+/// The per-method fingerprint on real builds: unchanged when a later cycle adds tests above the test in the same class or the
+/// repository's assembly version changes; changed when the test, a helper it calls in another file, an inherited method or its
+/// data changes.
+/// </summary>
+[Trait("Category", "CiIntegration")]
+public sealed class TestFingerprinterTests : IAsyncLifetime
+{
+    private const string TestClass = "Shop.Tests.PriceTests";
+    private const string Test = "ShippingFollowsTheWeight";
+    private const string Production = "    public decimal Shipping(decimal kilograms) => kilograms * 2m;";
+
+    private GitHistoryFixture repository = null!;
+
+    public async ValueTask InitializeAsync()
+    {
+        repository = await GitHistoryFixture.CreateAsync(TestContext.Current.CancellationToken);
+        repository.WriteSolution(Production, string.Empty)
+            .WriteCode(Production, Tests(string.Empty, expected: "4m"), "CheckBase")
+            .Write("tests/Shop.Tests/Weights.cs", Weights("2m"))
+            .Write("tests/Shop.Tests/CheckBase.cs", CheckBase("value > 0"));
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        repository.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task AFingerprintChangesOnlyWithWhatTheTestRuns()
+    {
+        string original = await FingerprintAsync();
+
+        repository.WriteCode(Production, Tests("""
+                [Fact]
+                public async Task AddedAbove() { await Task.Yield(); Assert.True(Run(() => 1) == 1); }
+
+                [Theory]
+                [InlineData(5)]
+                public void AlsoAbove(int value) => Assert.Equal(value, Run(() => value));
+
+            """, expected: "4m"), "CheckBase");
+        Assert.Equal(original, await FingerprintAsync());
+
+        repository.Write("src/Shop/Shop.csproj", File.ReadAllText(Path.Combine(repository.Root, "src/Shop/Shop.csproj")).Replace("<Nullable>", "<AssemblyVersion>9.8.7.6</AssemblyVersion>\n    <Nullable>", StringComparison.Ordinal));
+        Assert.Equal(original, await FingerprintAsync());
+
+        repository.Write("tests/Shop.Tests/Weights.cs", Weights("3m"));
+        string helperChanged = await FingerprintAsync();
+        Assert.NotEqual(original, helperChanged);
+
+        repository.Write("tests/Shop.Tests/CheckBase.cs", CheckBase("value >= 0"));
+        string baseChanged = await FingerprintAsync();
+        Assert.NotEqual(helperChanged, baseChanged);
+
+        repository.WriteCode(Production, Tests(string.Empty, expected: "6m"), "CheckBase");
+        Assert.NotEqual(baseChanged, await FingerprintAsync());
+    }
+
+    [Fact]
+    public async Task ATestThatIsNotInTheAssemblyHasNoFingerprint()
+    {
+        await BuildAsync();
+        using TestFingerprinter fingerprinter = new(AssemblyPath, new HashSet<string> { "Shop", "Shop.Tests" });
+
+        Assert.Null(fingerprinter.Fingerprint(TestClass, "NoSuchTest"));
+        Assert.Null(fingerprinter.Fingerprint("Shop.Tests.NoSuchClass", Test));
+    }
+
+    private string AssemblyPath => Path.Combine(repository.Root, "tests", "Shop.Tests", "bin", "Debug", "net10.0", "Shop.Tests.dll");
+
+    private async Task<string> FingerprintAsync()
+    {
+        await BuildAsync();
+        using TestFingerprinter fingerprinter = new(AssemblyPath, new HashSet<string> { "Shop", "Shop.Tests" });
+        string? fingerprint = fingerprinter.Fingerprint(TestClass, Test);
+        Assert.NotNull(fingerprint);
+        return fingerprint;
+    }
+
+    private async Task BuildAsync()
+    {
+        ProcessResult build = await ProcessRunner.RunAsync("dotnet", ["build", "--nologo", "-v", "q"], repository.Root, TimeSpan.FromMinutes(5), TestContext.Current.CancellationToken);
+        Assert.True(build.ExitCode == 0, build.Combined);
+    }
+
+    private static string Tests(string above, string expected) => $$"""
+            {{above}}
+            [Theory]
+            [InlineData(2)]
+            [Trait("Requirement", "FR-001")]
+            public async Task {{Test}}(int factor)
+            {
+                await Task.Yield();
+                Assert.Equal({{expected}}, Run(() => new Price().Shipping(Weights.Two * factor / 2)));
+                Assert.True(Check(factor));
+            }
+
+            private static T Run<T>(Func<T> action) => action();
+        """;
+
+    private static string Weights(string two) => $$"""
+        namespace Shop.Tests;
+
+        internal static class Weights
+        {
+            public static decimal Two => {{two}};
+        }
+
+        """;
+
+    private static string CheckBase(string condition) => $$"""
+        namespace Shop.Tests;
+
+        public abstract class CheckBase
+        {
+            protected static bool Check(int value) => {{condition}};
+        }
+
+        """;
+}

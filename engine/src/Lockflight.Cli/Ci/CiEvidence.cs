@@ -49,9 +49,9 @@ internal static class CiEvidence
             ["feature"] = null,
             ["changeClass"] = ChangeClassNode(plan.Class.Classification, engineVersion),
             ["redCommits"] = new JsonArray([.. plan.Reds.All.Select(RedCommitNode)]),
-            ["cycles"] = new JsonArray([.. (run.Findings.Cycles ?? []).Select(CycleNode)]),
-            ["testsWithoutRed"] = new JsonArray(),
-            ["green"] = null,
+            ["cycles"] = new JsonArray([.. (run.Findings.Cycles ?? []).Select(cycle => CycleNode(cycle, run.Findings))]),
+            ["testsWithoutRed"] = Strings((run.Findings.Green?.WithoutRed ?? []).Select(Cap)),
+            ["green"] = run.Findings.Green is GreenJudgement green ? GreenNode(green) : null,
             ["trace"] = null,
             ["gates"] = null,
             ["approvals"] = null,
@@ -131,7 +131,16 @@ internal static class CiEvidence
         ["engine"] = engineVersion,
     };
 
-    private static JsonObject CycleNode(CycleJudgement cycle) => new()
+    private static JsonObject GreenNode(GreenJudgement green) => new()
+    {
+        ["verdict"] = CheckVerdictNames.ToName(green.Verdict),
+        ["total"] = green.Total,
+        ["failed"] = green.Failed,
+        ["problems"] = Strings(green.Problems.Select(Cap)),
+        ["flaky"] = Strings(green.Flaky.Select(Cap)),
+    };
+
+    private static JsonObject CycleNode(CycleJudgement cycle, JudgeFindings findings) => new()
     {
         ["label"] = cycle.Red.Label,
         ["commit"] = cycle.Red.Commit,
@@ -146,6 +155,9 @@ internal static class CiEvidence
             ["why"] = cycle.Verdicts.TryGetValue(test.Key, out RedVerdict? verdict) ? Cap(verdict.Why) : null,
             ["assertionFree"] = test.AssertionFree,
             ["rows"] = test.Rows,
+            ["fingerprintAtRed"] = cycle.FingerprintsAtRed.GetValueOrDefault(test.Key),
+            ["fingerprintAtHead"] = findings.HeadFingerprints.GetValueOrDefault(test.Key),
+            ["atHead"] = findings.Green?.AtHead.GetValueOrDefault(test.Key),
         })]),
     };
 

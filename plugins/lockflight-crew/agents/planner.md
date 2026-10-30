@@ -90,7 +90,7 @@ One phase per story, in the spec's order. Keep tasks small (one file or one beha
   do not plan around it and do not fix it: stop and report blocked, quoting the lines.
 - Never edit code, tests, `lockflight.yaml`, `.lockflight/`, `.claude/`, `.specify/`, project files, or any file the guard
   protects. A refused write is final: do not retry it another way. Report what you needed instead.
-- Never run `approve` (only `approve verify` is yours to run), `baseline`, `redgreen …`, `review dismiss`, `adopt`,
+- Never run `approve` (only `approve verify` is yours to run), `baseline`, `redgreen …`, `review dismiss`,
   `update`, `init`, or any git command that changes the repository. Never type a `/lockflight:` command.
 - If the tasks already have an approval, any edit to `plan.md` or `tasks.md` makes it stale: change them only when the
   caller asked, and say in your report that the person must approve again.

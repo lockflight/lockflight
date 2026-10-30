@@ -19,6 +19,13 @@ Run `.lockflight/bin/lockflight workspace sync`. It writes into each .NET servic
 service repository: a service's PR is judged by these files from its base branch. Suggest a CODEOWNERS entry in each service
 for `lockflight.unit.yaml`, the pin and `.github/workflows/`.
 
+## A service repository on its own
+
+`init --unit-of <shell url> --unit-path <path>`, run in a service repository, writes a `shell:` pointer into its
+`lockflight.yaml` (version 2) for the coming model where the service's CI reads the shell's policy and specs from a read-only clone. CI
+does not read the pointer yet, and `doctor` in the shell expects a unit without a `lockflight.yaml` of its own: until the
+pointer model is built, use `workspace sync` from the shell, and do not mix the two.
+
 ## Verify and hand over
 
 In a workspace, `doctor` also checks that each unit is cloned, has no `lockflight.yaml` of its own, is ignored by the shell

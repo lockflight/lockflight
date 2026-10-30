@@ -1,0 +1,5 @@
+protected:
+  - "secrets/**"
+units:
+  - path: services/orders
+    build: Orders.sln

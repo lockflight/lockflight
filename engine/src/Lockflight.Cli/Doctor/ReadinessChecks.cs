@@ -96,7 +96,7 @@ internal static class ReadinessChecks
 
     /// <summary>
     /// The project uses the standard lifecycle: the standard profile's init wrote the evidence rule into .gitattributes (the lite
-    /// profile does not), or the Lockflight Spec Kit preset is installed and enabled (as <c>adopt apply</c> does, after either init).
+    /// profile does not), or the Lockflight Spec Kit preset is installed and enabled (as <c>init --speckit-preset</c> does).
     /// </summary>
     private static bool IsStandardProfile(string root)
     {
@@ -112,7 +112,8 @@ internal static class ReadinessChecks
     private static DoctorCheck CheckManifest(string root) => ManifestLocator.Discover(root) switch
     {
         { Manifest: Manifest { Version: ManifestVersions.Legacy } } =>
-            new("manifest", CheckStatus.Pass, $"{Manifest.FileName} is valid (version 1, read with migration defaults: the newer checks only report)", null),
+            new("manifest", CheckStatus.Warn, $"{Manifest.FileName} is version 1, read with migration defaults (the newer checks only report)",
+                $"a person runs {EngineCommand.UserInstall} update in a separate terminal (update --project --dry-run shows the change first)"),
         { Status: ManifestLoadStatus.Loaded } => new("manifest", CheckStatus.Pass, $"{Manifest.FileName} is valid (version 2)", null),
         { Error: ManifestError error } => new("manifest", CheckStatus.Fail, error.Describe(), $"fix {Manifest.FileName} (a human edit; it is protected)"),
         _ => new("manifest", CheckStatus.Fail, $"no {Manifest.FileName}", $"{EngineCommand.Name} init"),

@@ -1,3 +1,5 @@
+using Lockflight.Cli.Gates.Affected;
+
 namespace Lockflight.Cli.Gates;
 
 /// <summary>
@@ -20,7 +22,14 @@ internal static class GateRunner
             }
         }
 
-        return Result(run, steps, facts.TestsTotal);
+        GateResult gateResult = Result(run, steps, facts.TestsTotal);
+        if (VerdictNames.AllowsNextStep(gateResult.Verdict) && facts.Selection?.PassRecord is StopPassRecord passed)
+        {
+            // The next stop run of this target chooses its projects by what changed since this PASS.
+            await passed.RememberAsync(cancellationToken);
+        }
+
+        return gateResult;
     }
 
     private static async Task<bool> PassesAsync(GateStep step, List<GateStep> steps, TextWriter progress)
