@@ -247,6 +247,19 @@ and CI recomputes the class from the base branch. `--head <ref>` reads a commit 
 does, and `--json` prints the evidence block (`changeClass`: class, computed class, policy commit and manifest blob, every
 signal, raises, failures, engine version; same inputs give the same bytes). See [commands](commands.md#ci).
 
+## Workspaces
+
+- **A monorepo with units** (one git repository) is one diff and one class; `routing.critical` globs are written from the
+  project root, with the unit's path in front.
+- **A unit repository of a workspace shell** (`shell:` in its manifest) is judged by its own routing made at least as strict as
+  the shell's for it, where the shell's policy is applied (`gate run --shell`, see [the shell pointer](ci-hardening.md#the-shell-pointer-preferred)):
+  - a shell glob under the unit's path is re-based to the unit (`services/orders/src/Payments/**` → `src/Payments/**`), a glob
+    that starts with `**/` applies everywhere, and a glob about another unit is dropped;
+  - the unit's own `routing:` (when it has one) is merged key by key: the union of critical, database, API and workflow globs,
+    only the paths both exclude stay excluded (`generatedPaths`, `nonProduction`), the higher floor and structural class, the
+    lower size limits, the higher coverage, the earlier `*From` class; the unit's own layers when it declares them, else the
+    shell's.
+
 ## Guardrail or boundary
 
 Reading the diff is deterministic, but most signals are text heuristics: **guardrails**, which a determined change can dodge.

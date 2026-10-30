@@ -205,8 +205,9 @@ its CI job gets two additions:
    unit. The shell's protected paths that can match inside the unit are added (re-based as below), the build file and test
    framework of the shell's `units:` entry win over the unit's own (which apply only where the shell names none), and of the
    coverage threshold and the switchable steps (`quality.suppressions`, `docs.references`, `ef.pendingModelChanges`) the
-   stricter value wins. The run prints the shell commit it read. The shell's routing thresholds and its baselines are not
-   applied yet: the unit's own apply.
+   stricter value wins. The shell's `routing:` is re-based to the unit and merged with the unit's own key by key, the stricter
+   value winning ([risk routing in a workspace](risk-routing.md#workspaces)). The run prints the shell commit it read. The
+   shell's baselines are not applied yet: the unit's own apply.
 
 The shell's policy is read with `git show` from the clone's commit, never from files a job could change. If the clone fails,
 the shell has no valid `lockflight.yaml`, or it does not list the unit, the run is an ERROR, and so is a `--shell` clone whose
