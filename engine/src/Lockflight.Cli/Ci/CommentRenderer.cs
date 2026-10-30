@@ -17,7 +17,7 @@ internal static class CommentRenderer
     private const string Truncated = "\n… more in the job summary\n";
 
     /// <summary>The order the Next line looks for the first required check that did not pass.</summary>
-    private static readonly string[] NextOrder = ["red", "tests.sinceRed", "tests.hostTampering", "green", "gates", "trace", "review", "approvals"];
+    private static readonly string[] NextOrder = ["red", "tests.sinceRed", "tests.existingChanged", "tests.hostTampering", "green", "gates", "trace", "review", "approvals"];
 
     public static string Render(JsonNode verdict, int maxLength)
     {

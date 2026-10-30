@@ -24,6 +24,9 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
 
     public JudgeBudget Budget => budget;
 
+    /// <summary>Whether the budget is spent down to its reserve, so a process that just ended may have been stopped by it.</summary>
+    public bool OutOfBudget => budget.Limit - budget.Used <= JudgeBudget.Reserve + TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// The tree at <paramref name="commit"/>, built and listed. A commit listed before is not built again unless
     /// <paramref name="fresh"/> asks for its build to be in the worktree (to run its tests) and the worktree has moved on since.
@@ -73,6 +76,17 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
         string? buildOutput = null;
         foreach (bool clean in new[] { false, true })
         {
+            if (clean)
+            {
+                // The retry is a build of its own: it needs budget left, and its own process limit from what is left now.
+                if (!budget.TryStart("clean retry"))
+                {
+                    return new TreeListing(commit, TreeOutcome.OutOfTime, workspace, null, budget.Why(builds.Count));
+                }
+
+                workspace = Workspace();
+            }
+
             string? notReady = await worktree.MoveToAsync(commit, policy.Commit, clean, cancellationToken);
             if (notReady is null && overlay is not null)
             {
@@ -94,6 +108,12 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
             {
                 break;
             }
+        }
+
+        if (buildOutput is not null && OutOfBudget)
+        {
+            // A build stopped at the budget's limit did not fail: it was not allowed to finish.
+            return new TreeListing(commit, TreeOutcome.OutOfTime, workspace, null, budget.Why(builds.Count));
         }
 
         if (buildOutput is not null)

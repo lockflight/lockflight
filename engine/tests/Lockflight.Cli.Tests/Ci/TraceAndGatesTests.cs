@@ -68,6 +68,24 @@ public sealed class TraceAndGatesTests : IAsyncLifetime
         Assert.Equal("required", trace["requirement"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task ASpecOnTheBaseIsTracedOnlyForTheRequirementsThePullRequestAddsOrItsRedTestsName()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await repository.CheckoutAsync("main", cancellationToken);
+        main = await repository.Write("specs/001-shipping/spec.md", "# Feature Specification: Shipping\n\n## Requirements *(mandatory)*\n\n- **FR-001**: Shipping MUST cost twice the weight\n- **FR-009**: Earlier story, traced when it merged\n")
+            .CommitAsync("spec", cancellationToken);
+        await repository.CheckoutAsync("001-shipping", cancellationToken);
+        await repository.MergeAsync("main", cancellationToken);
+        await repository.WriteCode(Stub, Test).CommitAsync("test(001-shipping): red for US1", cancellationToken, null, "Lockflight-Red: 1");
+        string head = await repository.WriteCode(Implementation, Test).CommitAsync("feat(001-shipping): US1", cancellationToken);
+
+        JsonNode trace = Check(await JudgeAsync(head, "001-shipping"), "trace");
+
+        Assert.Equal("PASS", trace["verdict"]!.GetValue<string>());
+        Assert.StartsWith("1/1 requirements", trace["why"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
     private async Task<string> StoryAsync(string requirements)
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
