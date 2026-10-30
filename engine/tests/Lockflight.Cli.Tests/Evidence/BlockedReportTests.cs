@@ -71,7 +71,7 @@ public sealed class BlockedReportTests : IDisposable
     [InlineData("\"who\": \"person\"", "\"who\": \"robot\"", "'needs[0].who' 'robot' is not person, codeowner or maintainer")]
     [InlineData("{ \"label\": \"Only paid\", \"recommended\": true }, { \"label\": \"All\" }", "{ \"label\": \"All\" }, { \"label\": \"Only paid\", \"recommended\": true }",
         "the recommended option of 'questions[0]' must come first, and only one")]
-    [InlineData("\"head\": null", "\"head\": \"abc\"", "'head' must be a 40-character commit or null")]
+    [InlineData("\"head\": null", "\"head\": \"abc\"", "'head' must be a full commit id (40 or 64 hex characters) or null")]
     [InlineData("\"resumable\": true", "\"resumable\": \"yes\"", "'resumable' must be true or false")]
     public void AReportOutsideTheContractNamesTheProblem(string from, string to, string problem)
     {

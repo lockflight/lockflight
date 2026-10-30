@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lockflight/lockflight/main/schemas/lockflight.engine-hashes.v1.json",
+  "title": "lockflight.engine-hashes/v1",
+  "description": "The per-platform hashes a release publishes (engine-hashes.json in the pointer package and on the GitHub Release), the source lockflight update writes the engine lock from. Evidence a release writes: readers ignore unknown properties and platforms.",
+  "type": "object",
+  "required": ["schema", "package", "version", "commit", "binaries"],
+  "properties": {
+    "schema": { "const": "lockflight.engine-hashes/v1" },
+    "package": { "type": "string", "pattern": "^[Ll][Oo][Cc][Kk][Ff][Ll][Ii][Gg][Hh][Tt]\\.[Cc][Ll][Ii]$" },
+    "version": { "type": "string", "minLength": 1 },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "The commit the release tag points at." },
+    "binaries": {
+      "type": "object",
+      "required": ["linux-arm64", "linux-x64", "osx-arm64", "osx-x64", "win-x64"],
+      "additionalProperties": { "$ref": "#/$defs/binary" }
+    }
+  },
+  "$defs": {
+    "binary": {
+      "type": "object",
+      "required": ["sha256", "path"],
+      "properties": {
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "path": { "type": "string", "minLength": 1, "description": "The executable's path inside the platform's package, such as tools/any/linux-x64/lockflight." }
+      }
+    }
+  }
+}

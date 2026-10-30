@@ -1,0 +1,27 @@
+{
+  "schema": "lockflight.engine-hashes/v1",
+  "package": "Lockflight.Cli",
+  "version": "0.3.0",
+  "commit": "cccccccccccccccccccccccccccccccccccccccc",
+  "binaries": {
+    "linux-arm64": {
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "tools/any/linux-arm64/lockflight"
+    },
+    "linux-x64": {
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "osx-arm64": {
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "tools/any/osx-arm64/lockflight"
+    },
+    "osx-x64": {
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "tools/any/osx-x64/lockflight"
+    },
+    "win-x64": {
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "tools/any/win-x64/lockflight.exe"
+    }
+  }
+}

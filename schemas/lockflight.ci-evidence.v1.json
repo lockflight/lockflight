@@ -1,0 +1,606 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lockflight/lockflight/main/schemas/lockflight.ci-evidence.v1.json",
+  "title": "lockflight.ci-evidence/v1",
+  "description": "The CI judge's evidence: evidence.json from lockflight ci, and verdict.json from lockflight ci report (the evidence of record, with the review joined and the verdict recomputed). Evidence the engine writes: readers ignore unknown properties, and every string that comes from the pull request is data, capped in length. When the judge's artifact is missing, the report writes a short form (judge: missing) with only the checks, contexts and verdict.",
+  "type": "object",
+  "required": [
+    "schema",
+    "head",
+    "checks",
+    "contexts",
+    "verdict"
+  ],
+  "properties": {
+    "schema": {
+      "const": "lockflight.ci-evidence/v1"
+    },
+    "judge": {
+      "const": "missing",
+      "description": "Present only in the report's short form when the judge's evidence is missing or about another head."
+    },
+    "engine": {
+      "type": "object",
+      "required": [
+        "version",
+        "rid",
+        "sha256"
+      ],
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "rid": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "The target branch's engine.lock hash for this platform when the lock pins the running version (the hash the CI install checked the executable against); null without a lock, or when the lock pins another version."
+        }
+      }
+    },
+    "platform": {
+      "type": "string",
+      "description": "github, bitbucket, gitlab, azure or local."
+    },
+    "event": {
+      "type": "string",
+      "description": "pr, push or merge-group."
+    },
+    "run": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Template-supplied, for display only."
+    },
+    "head": {
+      "$ref": "#/$defs/commit"
+    },
+    "base": {
+      "type": "object",
+      "properties": {
+        "sha": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/commit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mergeBase": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/commit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "otherMergeBases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/commit"
+          }
+        }
+      }
+    },
+    "branch": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/commit"
+        },
+        "manifestSha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "restored": {
+          "$ref": "#/$defs/strings"
+        }
+      }
+    },
+    "ignored": {
+      "$ref": "#/$defs/strings"
+    },
+    "feature": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "id",
+        "source"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "branch, specs-diff, single or none."
+        },
+        "spec": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "origin": {
+              "type": "string",
+              "description": "head, base or shell."
+            },
+            "shell": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "Where the spec of a unit repository of a workspace shell was read: the shell's URL (from the target branch's pointer) and commit.",
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "commit": {
+                  "$ref": "#/$defs/commit"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "changeClass": {
+      "type": "object",
+      "description": "risk-routing.md §9.5: the class, the class computed before raises, the policy it was read from, the signals (each with its honesty label) and the raises.",
+      "required": [
+        "class"
+      ],
+      "properties": {
+        "class": {
+          "type": "string",
+          "description": "fix, behaviour, feature or critical; an unknown class is treated as critical."
+        },
+        "computed": {
+          "type": "string"
+        },
+        "policy": {
+          "type": "object"
+        },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "raisesTo",
+              "strength"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "raisesTo": {
+                "type": "string"
+              },
+              "strength": {
+                "type": "string",
+                "description": "boundary or heuristic."
+              },
+              "where": {
+                "type": "string"
+              },
+              "detail": {}
+            }
+          }
+        },
+        "raises": {
+          "type": "array"
+        },
+        "engine": {
+          "type": "string"
+        }
+      }
+    },
+    "redCommits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "label"
+        ]
+      }
+    },
+    "cycles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "label",
+          "commit",
+          "verdict",
+          "tests"
+        ]
+      }
+    },
+    "existingChanged": {
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "hostTampering": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "testsWithoutRed": {
+      "$ref": "#/$defs/strings"
+    },
+    "green": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "trace": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "gates": {
+      "description": "The gates' result, as gate run --result writes it; null when the gates did not run.",
+      "anyOf": [
+        {
+          "$ref": "lockflight.result.v1.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "specDiff": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "The pull request's changes to approvals.specPaths, shown first in the comment; null when it changes none, or the specs live in a workspace shell.",
+      "required": [
+        "paths",
+        "lines",
+        "truncated",
+        "text"
+      ],
+      "properties": {
+        "paths": {
+          "$ref": "#/$defs/strings"
+        },
+        "lines": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    "approvals": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "contracts-0.3.md §4.3. platform says what Lockflight checked in git, not that someone approved; CI never reports person.",
+      "required": [
+        "check",
+        "mode",
+        "specFirst",
+        "phases",
+        "codeowners"
+      ],
+      "properties": {
+        "check": {
+          "type": "string",
+          "description": "fail or report."
+        },
+        "mode": {
+          "type": "string",
+          "description": "same-pr or spec-first."
+        },
+        "verdict": {
+          "$ref": "#/$defs/verdict"
+        },
+        "specFirst": {
+          "type": "object",
+          "required": [
+            "applies",
+            "because"
+          ],
+          "properties": {
+            "applies": {
+              "type": "boolean"
+            },
+            "because": {
+              "$ref": "#/$defs/strings"
+            },
+            "spec": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "specOnBase": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "changedSpecs": {
+              "$ref": "#/$defs/strings"
+            }
+          }
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "phase",
+              "state",
+              "detail",
+              "rule",
+              "record"
+            ],
+            "properties": {
+              "phase": {
+                "type": "string",
+                "description": "spec or tasks."
+              },
+              "state": {
+                "type": "string",
+                "description": "person, platform, skipped-by-policy, missing or stale; an unknown state approves nothing."
+              },
+              "detail": {
+                "type": "string"
+              },
+              "rule": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "record": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "codeowners": {
+          "type": "object",
+          "required": [
+            "file",
+            "from",
+            "covers",
+            "missing"
+          ],
+          "properties": {
+            "file": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "from": {
+              "type": "string"
+            },
+            "covers": {
+              "$ref": "#/$defs/strings"
+            },
+            "missing": {
+              "$ref": "#/$defs/strings"
+            }
+          }
+        },
+        "problems": {
+          "$ref": "#/$defs/strings"
+        }
+      }
+    },
+    "blocked": {
+      "description": "A lockflight.blocked/v1 report when the verdict is NOT-EARNED because a person must act; null otherwise.",
+      "anyOf": [
+        {
+          "$ref": "lockflight.blocked.v1.json"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "review": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "state"
+      ],
+      "description": "In evidence.json: expected (with the artifact name) or not-expected. In verdict.json: skipped when no review ran, else ran or stale (about another head) with the review's head, verdict and why.",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "artifact": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "head": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verdict": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "why": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "context",
+          "verdict",
+          "requirement",
+          "why"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "red, tests.sinceRed, tests.existingChanged, tests.hostTampering, green, trace, gates, review, approvals, routing; more may be added."
+          },
+          "context": {
+            "type": "string",
+            "description": "gates or lockflight/judge."
+          },
+          "verdict": {
+            "$ref": "#/$defs/verdict"
+          },
+          "requirement": {
+            "type": "string",
+            "description": "required, advisory or off."
+          },
+          "why": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "contexts": {
+      "type": "object",
+      "required": [
+        "gates",
+        "lockflight/judge"
+      ],
+      "properties": {
+        "gates": {
+          "$ref": "#/$defs/verdict"
+        },
+        "lockflight/judge": {
+          "$ref": "#/$defs/verdict"
+        }
+      }
+    },
+    "verdict": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT-EARNED",
+        "ERROR"
+      ]
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "limitSeconds": {
+          "type": "integer"
+        },
+        "usedSeconds": {
+          "type": "integer"
+        },
+        "exhausted": {
+          "type": "boolean"
+        },
+        "notRun": {
+          "$ref": "#/$defs/strings"
+        }
+      }
+    },
+    "builds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "commit",
+          "purpose",
+          "seconds",
+          "outcome"
+        ]
+      }
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finishedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$defs": {
+    "commit": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "strings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verdict": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT-EARNED",
+        "ERROR",
+        "N/A",
+        "SKIPPED"
+      ]
+    }
+  }
+}

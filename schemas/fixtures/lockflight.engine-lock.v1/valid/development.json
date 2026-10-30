@@ -1,0 +1,14 @@
+{
+  "schema": "lockflight.engine-lock/v1",
+  "package": "Lockflight.Cli",
+  "version": "0.3.0",
+  "channel": "development",
+  "installScript": {
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "binaries": {
+    "osx-arm64": {
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  }
+}

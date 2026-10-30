@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Ci;
@@ -7,7 +8,8 @@ namespace Lockflight.Cli.Ci;
 /// <summary>
 /// The <c>pr</c> gates at head (step P5), run in the judge's worktree with the base policy laid over it and the merge base as
 /// <c>--base</c> (and, in a unit repository, the workspace shell's clone as <c>--shell</c>), exactly as
-/// <c>lockflight gate run --profile pr</c> runs them; their result file is embedded in the evidence.
+/// <c>lockflight gate run --profile pr</c> runs them; their result file (<c>lockflight.result/v1</c>, read by step id) is embedded in
+/// the evidence.
 /// </summary>
 internal static class GatesJudge
 {
@@ -37,14 +39,14 @@ internal static class GatesJudge
         CommandDescriptor command = CommandRegistry.Match(["gate", "run"])!;
         ExitCode exitCode = await new GateCommand(gates).RunAsync(new CommandArguments(command, [.. args]), cancellationToken);
         JsonNode? result = File.Exists(resultPath) ? JsonNode.Parse(await File.ReadAllTextAsync(resultPath, cancellationToken)) : null;
-        if (result?["steps"] is not JsonArray steps)
+        if (result?["schema"]?.GetValue<string>() != GateResultWriter.Schema || result["steps"] is not JsonArray steps)
         {
             string tail = string.Join(' ', error.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries).Take(3));
             return (CheckVerdict.Error, $"the gates did not produce a result (exit {(int)exitCode}): {tail}", null, null);
         }
 
         string summary = string.Join(" · ", steps.Select(step => $"{step?["name"]?.GetValue<string>()} {step?["verdict"]?.GetValue<string>()}"));
-        string? testStep = steps.FirstOrDefault(step => step?["name"]?.GetValue<string>() == "test")?["verdict"]?.GetValue<string>();
+        string? testStep = steps.FirstOrDefault(step => step?["id"]?.GetValue<string>() == TestStep.StepName)?["verdict"]?.GetValue<string>();
         CheckVerdict verdict = result["verdict"]?.GetValue<string>() switch
         {
             "PASS" or "N/A" => CheckVerdict.Pass,

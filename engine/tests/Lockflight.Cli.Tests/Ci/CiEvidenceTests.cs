@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
@@ -12,11 +13,15 @@ public sealed class CiEvidenceTests
     private static readonly string Base = new('b', 40);
     private static readonly string MergeBase = new('c', 40);
     private static readonly string Red = new('d', 40);
+    private static readonly string EngineSha256 = new('9', 64);
     private static readonly DateTimeOffset StartedAt = new(2026, 10, 29, 10, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public void TheEvidenceOfARunIsPinned() =>
-        GoldenFiles.Verify("ci-evidence", JsonFiles.Format(CiEvidence.Build(Run(), "0.3.0", "linux-x64")));
+        GoldenFiles.Verify("ci-evidence", JsonFiles.Format(CiEvidence.Build(Run(), "0.3.0", "linux-x64", EngineSha256)));
+
+    /// <summary>The evidence of <see cref="Run"/>, as the engine writes it.</summary>
+    internal static JsonObject Evidence() => CiEvidence.Build(Run(), "0.3.0", "linux-x64", EngineSha256);
 
     [Fact]
     public void ThePlanIsPinned() => GoldenFiles.Verify("ci-plan", JsonFiles.Format(CiEvidence.Plan(Run().Plan)));
@@ -30,7 +35,8 @@ public sealed class CiEvidenceTests
         Assert.EndsWith("…", capped, StringComparison.Ordinal);
     }
 
-    private static JudgeRun Run()
+    /// <summary>A pull request run with red commits of every kind and nothing built.</summary>
+    internal static JudgeRun Run()
     {
         JudgeInputs inputs = new("/repo", Head, Base, "012-checkout", JudgePlatform.GitHub, JudgeEvent.PullRequest, "/tmp/evidence", ShellPath: null, ReviewExpected: true);
         BasePolicy policy = new(Base, Manifest: null, ManifestSha256: null, ManifestBlob: null, ["lockflight.yaml"]);

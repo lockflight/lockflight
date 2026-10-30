@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lockflight/lockflight/main/schemas/lockflight.blocked.v1.json",
+  "title": "lockflight.blocked/v1",
+  "description": "\"I stopped and a person must do something\": written by the CI judge (in its evidence), the engine's refusals that need a person, the crew skills and a later autonomous mode. Advice for a person, never proof. Reason codes, who and action grow by addition: a reader shows an unknown value as it is and decides nothing on it (lockflight blocked validate reports it). A need never carries a command: renderers derive it from the reason, the action and the feature.",
+  "type": "object",
+  "required": ["schema", "at", "source", "reason", "needs", "resumable"],
+  "properties": {
+    "schema": { "const": "lockflight.blocked/v1" },
+    "at": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "pattern": "^(ci|autonomous|engine:[a-z0-9-]+|crew:[a-z0-9-]+)$" },
+    "feature": { "type": ["string", "null"] },
+    "head": { "type": ["string", "null"], "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$" },
+    "reason": {
+      "type": "object",
+      "required": ["code", "summary"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Known codes: approval-missing, approval-stale, spec-not-on-base, codeowners-missing, class-above-limit, protected-change-needed, baseline-needed, question, budget-exhausted, time-exhausted, config-invalid, engine-untrusted, access-needed."
+        },
+        "summary": { "type": "string" }
+      }
+    },
+    "needs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["who", "action", "detail", "humanOnly"],
+        "not": { "required": ["command"] },
+        "properties": {
+          "who": { "type": "string", "description": "Known: person, codeowner, maintainer." },
+          "action": { "type": "string", "description": "Known: approve, answer, review-protected-change, accept-baseline, raise-limit, fix-config, grant-access, update-engine." },
+          "detail": { "type": "string" },
+          "humanOnly": { "type": "boolean" },
+          "paths": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "options"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" },
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Ordered with the recommended option first.",
+            "items": {
+              "type": "object",
+              "required": ["label"],
+              "properties": { "label": { "type": "string" }, "recommended": { "type": "boolean" } }
+            }
+          }
+        }
+      }
+    },
+    "evidence": { "type": "array", "items": { "type": "string" } },
+    "resumable": { "type": "boolean" }
+  }
+}
