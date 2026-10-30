@@ -12,7 +12,7 @@ namespace Lockflight.Cli.Ci;
 /// <summary>
 /// The per-method fingerprint of a test, read from a built test assembly without loading it (AOT-safe): a SHA-256 over the IL of
 /// the test method and of every method of the test assembly it reaches (helpers in any class, base classes, lambdas, local functions,
-/// async and iterator state machines), its class's constructors and the module initializer, with every metadata token written as the
+/// async and iterator state machines), its class's constructors, set-up and tear-down methods and the module initializer, with every metadata token written as the
 /// name it stands for, and the test's attributes (<c>InlineData</c> values, traits, <c>Skip</c>). Compiler-generated names are
 /// replaced by their order in the walk, because their ordinals shift when a test is added above; members of assemblies outside the
 /// repository carry their version, so a swapped or downgraded assertion library changes the fingerprint while a per-commit version
@@ -33,7 +33,11 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
     private static readonly HashSet<byte> TwoByteMethodOps = [0x06, 0x07];
     private static readonly HashSet<byte> TwoByteTokenOps = [0x15, 0x16, 0x1C];
 
+    private static readonly string[] LifecycleAttributes = ["SetUp", "TearDown", "TestInitialize", "TestCleanup", "ClassInitialize", "ClassCleanup", "AssemblyInitialize", "AssemblyCleanup"];
+    private static readonly string[] LifecycleMethods = ["InitializeAsync", "DisposeAsync", "Dispose"];
+
     private readonly PEReader pe = new(File.OpenRead(assemblyPath));
+    private Dictionary<string, List<MethodDefinitionHandle>>? virtualsByName;
 
     /// <summary>The fingerprint of <paramref name="className"/>.<paramref name="method"/>; null when it cannot be computed (counts as changed).</summary>
     public string? Fingerprint(string className, string method) => CanonicalText(className, method) is string text
@@ -45,7 +49,7 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
     {
         try
         {
-            return new Walk(pe, repositoryAssemblies).Run(className, method);
+            return new Walk(pe, repositoryAssemblies, VirtualsByName()).Run(className, method);
         }
         catch (Exception exception) when (exception is BadImageFormatException or InvalidOperationException or ArgumentException)
         {
@@ -55,8 +59,43 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
 
     public void Dispose() => pe.Dispose();
 
+    /// <summary>
+    /// The assembly's virtual methods by name, built once for every test's walk; an explicit interface implementation
+    /// (<c>Ns.IClock.Now</c>) is listed under the member's own name too.
+    /// </summary>
+    private Dictionary<string, List<MethodDefinitionHandle>> VirtualsByName()
+    {
+        if (virtualsByName is null)
+        {
+            MetadataReader reader = pe.GetMetadataReader();
+            virtualsByName = new Dictionary<string, List<MethodDefinitionHandle>>(StringComparer.Ordinal);
+            foreach (MethodDefinitionHandle handle in reader.MethodDefinitions)
+            {
+                MethodDefinition method = reader.GetMethodDefinition(handle);
+                if ((method.Attributes & MethodAttributes.Virtual) == 0)
+                {
+                    continue;
+                }
+
+                string name = reader.GetString(method.Name);
+                foreach (string key in new[] { name, name[(name.LastIndexOf('.') + 1)..] }.Distinct(StringComparer.Ordinal))
+                {
+                    if (!virtualsByName.TryGetValue(key, out List<MethodDefinitionHandle>? methods))
+                    {
+                        methods = [];
+                        virtualsByName[key] = methods;
+                    }
+
+                    methods.Add(handle);
+                }
+            }
+        }
+
+        return virtualsByName;
+    }
+
     /// <summary>One fingerprint's walk: the canonical text it builds and the generated names it has seen, in order.</summary>
-    private sealed class Walk(PEReader pe, IReadOnlySet<string> repositoryAssemblies)
+    private sealed class Walk(PEReader pe, IReadOnlySet<string> repositoryAssemblies, Dictionary<string, List<MethodDefinitionHandle>> virtualsByName)
     {
         private readonly MetadataReader reader = pe.GetMetadataReader();
         private readonly StringBuilder text = new();
@@ -102,6 +141,12 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
                 {
                     pending.Enqueue(constructor);
                 }
+
+                // What the framework runs around every test of the class: set-up and tear-down methods, IAsyncLifetime, IDisposable.
+                foreach (MethodDefinitionHandle handle in reader.GetTypeDefinition(currentType).GetMethods().Where(IsLifecycle))
+                {
+                    pending.Enqueue(handle);
+                }
             }
 
             foreach (TypeDefinitionHandle moduleType in reader.TypeDefinitions.Where(handle => reader.GetString(reader.GetTypeDefinition(handle).Name) == "<Module>"))
@@ -127,6 +172,15 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             }
 
             return text.ToString();
+        }
+
+        private bool IsLifecycle(MethodDefinitionHandle handle)
+        {
+            MethodDefinition method = reader.GetMethodDefinition(handle);
+            string name = reader.GetString(method.Name);
+            return LifecycleMethods.Any(lifecycle => name == lifecycle || name.EndsWith("." + lifecycle, StringComparison.Ordinal))
+                || method.GetCustomAttributes().Any(attribute => Token(reader.GetCustomAttribute(attribute).Constructor) is string constructor
+                    && LifecycleAttributes.Any(marker => constructor.Contains($"{marker}Attribute::", StringComparison.Ordinal)));
         }
 
         /// <summary>
@@ -310,11 +364,9 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
                 return;
             }
 
-            foreach (MethodDefinitionHandle handle in reader.MethodDefinitions)
+            foreach (MethodDefinitionHandle handle in virtualsByName.GetValueOrDefault(name) ?? [])
             {
-                MethodDefinition candidate = reader.GetMethodDefinition(handle);
-                if ((candidate.Attributes & MethodAttributes.Virtual) != 0 && reader.GetString(candidate.Name) == name
-                    && (framework is null || DerivesFrom(candidate.GetDeclaringType(), framework)))
+                if (framework is null || DerivesFrom(reader.GetMethodDefinition(handle).GetDeclaringType(), framework))
                 {
                     pending.Enqueue(handle);
                 }

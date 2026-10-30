@@ -124,6 +124,23 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task WhatRunsAroundEveryTestCountsToo()
+    {
+        static string Tests(string cleanup) => $$"""
+                [Fact]
+                public void Simple() => Assert.True(new Price().Shipping(1m) > 0);
+
+                public void Dispose() => Console.WriteLine({{cleanup}});
+            """;
+        repository.WriteCode(Production, Tests("1"), "IDisposable");
+        string original = await FingerprintAsync("Simple");
+
+        repository.WriteCode(Production, Tests("2"), "IDisposable");
+
+        Assert.NotEqual(original, await FingerprintAsync("Simple"));
+    }
+
+    [Fact]
     public async Task ATestThatIsNotInTheAssemblyHasNoFingerprint()
     {
         await BuildAsync();
