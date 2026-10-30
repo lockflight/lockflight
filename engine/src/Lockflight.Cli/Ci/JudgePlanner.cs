@@ -1,3 +1,4 @@
+using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Routing;
 
@@ -62,10 +63,42 @@ internal static class JudgePlanner
         }
 
         RequirementSet requirements = InterimRequirements.For(classification.Classification.Class, classification.Shape);
-        IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.Shape, inputs.Event);
+        if (inputs.Event == JudgeEvent.PullRequest && inputs.Base is not null)
+        {
+            if (await RouteAsync(inputs, policy, cancellationToken) is not (InterimClassification routed, RequirementSet routedRequirements))
+            {
+                return JudgePlanning.Failed(ExitCode.Error, $"git could not read the change set {CommitIds.Short(inputs.Base)}...{CommitIds.Short(inputs.Head)} for routing");
+            }
+
+            (classification, requirements) = (routed, routedRequirements);
+        }
+
+        IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.ProductionChanged, inputs.Event);
         IReadOnlyList<string> ignored = await IgnoredAsync(root, inputs.Head, environment, cancellationToken);
         JudgePlan plan = new(inputs, policy, mergeBase, others, reds, classification, requirements, levels, Steps(inputs, mergeBase, reds, levels), changed, ignored);
         return JudgePlanning.Planned(plan);
+    }
+
+    /// <summary>
+    /// The change's class from the base branch's routing policy (risk routing): the change set since the merge base, the raises
+    /// (a covering feature's class line, its class record), the classifier and the class's requirements; null when git fails.
+    /// </summary>
+    private static async Task<(InterimClassification, RequirementSet)?> RouteAsync(JudgeInputs inputs, BasePolicy policy, CancellationToken cancellationToken)
+    {
+        string preset = RoutingPresetNames.ToName((policy.Manifest?.Routing ?? RoutingSettings.Default).Preset);
+        RoutingPolicy routing = RoutingPolicy.From(policy.Manifest, new PolicySource(inputs.Base!, policy.Commit, policy.ManifestBlob, preset));
+        ChangeSetReading reading = await ChangeSetReader.ReadAsync(inputs.Root, inputs.Base!, inputs.Head, cancellationToken);
+        if (reading.ChangeSet is not ChangeSet changeSet)
+        {
+            return null;
+        }
+
+        RaiseReading raises = await RaiseReader.ReadAsync(inputs.Root, changeSet, new RaiseInputs(inputs.Branch, [], Raise: null), cancellationToken);
+        ChangeAnalysis analysis = ChangeAnalyzer.Analyze(changeSet, routing.ExcludedGlobs);
+        Classification classification = ChangeClassifier.Classify(analysis, routing, raises.Status == RaiseReadStatus.Read ? raises.Raises : []);
+        bool productionChanged = analysis.Files.Any(file => file.Role == FileRole.Production && file.Added.Count + file.Removed.Count > 0);
+        InterimClassification routed = new(classification, InterimShape.Other) { Source = InterimClassification.RoutingSource, ProductionChanged = productionChanged };
+        return (routed, ClassRequirements.For(classification.Class, routing));
     }
 
     private static async Task<RedCommitSelection> WithForkPointsAsync(string root, RedCommitSelection selection, string baseCommit, CancellationToken cancellationToken)

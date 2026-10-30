@@ -54,7 +54,7 @@ internal sealed class CiCommand(CliContext context) : ICommand
     {
         JudgePlan plan = run.Plan;
         await context.Output.WriteLineAsync(
-            $"{CheckVerdictNames.ToName(run.Verdict)} head {CommitIds.Short(plan.Inputs.Head)}, class {ChangeClassNames.ToName(plan.Class.Classification.Class)} ({InterimClassifier.Source}), "
+            $"{CheckVerdictNames.ToName(run.Verdict)} head {CommitIds.Short(plan.Inputs.Head)}, class {ChangeClassNames.ToName(plan.Class.Classification.Class)} ({plan.Class.Source}), "
             + $"{plan.Reds.Cycles.Count} red commits, policy from {CommitIds.Short(plan.Policy.Commit)}");
         foreach (StatusContext statusContext in Enum.GetValues<StatusContext>())
         {

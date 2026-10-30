@@ -14,6 +14,7 @@ internal static class CheckIdNames
         CheckId.Gates => "gates",
         CheckId.Review => "review",
         CheckId.Approvals => "approvals",
+        CheckId.Routing => "routing",
         _ => throw new ArgumentOutOfRangeException(nameof(check), check, "Unknown check."),
     };
 
@@ -29,6 +30,7 @@ internal static class CheckIdNames
         CheckId.Gates => "Gates (pr)",
         CheckId.Review => "Review",
         CheckId.Approvals => "Approvals",
+        CheckId.Routing => "Change class",
         _ => throw new ArgumentOutOfRangeException(nameof(check), check, "Unknown check."),
     };
 

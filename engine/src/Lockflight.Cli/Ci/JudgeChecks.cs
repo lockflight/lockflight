@@ -1,3 +1,4 @@
+using Lockflight.Cli.Config;
 using Lockflight.Cli.Routing;
 
 namespace Lockflight.Cli.Ci;
@@ -33,6 +34,11 @@ internal static class JudgeChecks
             CheckId.Trace when findings.Trace is TraceJudgement trace => Trace(plan, level, trace),
             CheckId.Gates when findings.Gates is { } gates => new CheckResult(check, level, gates.Verdict, gates.Why),
             CheckId.Green when findings.Green is GreenJudgement green => new CheckResult(check, level, green.Verdict, green.Why),
+            CheckId.Routing => plan.Class.Classification.Failures.Count > 0
+                ? new CheckResult(check, level, CheckVerdict.Fail, string.Join("; ", plan.Class.Classification.Failures))
+                : new CheckResult(check, level, CheckVerdict.Pass, $"class {ChangeClassNames.ToName(plan.Class.Classification.Class)} ({plan.Class.Source})"
+                    + (plan.Class.Classification.Signals is [ChangeSignal top, ..] ? $": {top.Id} in {top.Where}" : string.Empty)
+                    + (plan.Class.ProductionChanged ? string.Empty : "; no production code lines changed, so no red/green or trace")),
             CheckId.Review => new CheckResult(check, level, CheckVerdict.Skipped, plan.Inputs.ReviewExpected ? "the report joins the review job's result" : "no review job runs for this pull request"),
             _ => new CheckResult(check, level, CheckVerdict.NotEarned, NotJudgedYet),
         };

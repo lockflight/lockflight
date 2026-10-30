@@ -85,7 +85,7 @@ public sealed class RedAtRedCommitsTests : IAsyncLifetime
     public async Task ARedCommitWhoseTestsDoNotCompileIsCompileRed()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        string head = await repository.WriteCode(string.Empty, ShippingTest).CommitAsync("test: red for US1", cancellationToken, null, "Lockflight-Red: 1");
+        string head = await repository.WriteCode("    public int Other => 1;", ShippingTest).CommitAsync("test: red for US1", cancellationToken, null, "Lockflight-Red: 1");
 
         JsonNode document = await JudgeAsync(head);
 
