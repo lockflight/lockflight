@@ -1,0 +1,26 @@
+{
+  "schema": "lockflight.blocked/v1",
+  "at": "2026-11-02T10:15:00Z",
+  "source": "ci",
+  "feature": "014-orders-export",
+  "head": "cccccccccccccccccccccccccccccccccccccccc",
+  "reason": {
+    "code": "spec-not-on-base",
+    "summary": "spec-first applies: specs/014-orders-export/spec.md is not on the base branch"
+  },
+  "needs": [
+    {
+      "who": "codeowner",
+      "action": "approve",
+      "detail": "Review and merge specs/014-orders-export/spec.md first",
+      "humanOnly": true,
+      "paths": [
+        "specs/014-orders-export/spec.md"
+      ],
+      "command": "lockflight approve spec"
+    }
+  ],
+  "questions": [],
+  "evidence": [],
+  "resumable": true
+}

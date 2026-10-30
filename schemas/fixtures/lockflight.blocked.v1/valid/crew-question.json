@@ -1,0 +1,11 @@
+{
+  "schema": "lockflight.blocked/v1",
+  "at": "2026-11-02T10:15:00Z",
+  "source": "crew:spec-writer",
+  "feature": null,
+  "head": null,
+  "reason": { "code": "question", "summary": "The spec needs an answer" },
+  "needs": [ { "who": "person", "action": "answer", "detail": "Answer q1", "humanOnly": true } ],
+  "questions": [ { "id": "q1", "text": "Export all orders or only paid ones?", "options": [ { "label": "Only paid", "recommended": true }, { "label": "All" } ] } ],
+  "resumable": true
+}

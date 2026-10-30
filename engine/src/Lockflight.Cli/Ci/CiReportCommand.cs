@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Evidence;
+using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Ci;
@@ -96,7 +98,7 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             checks.Add(check.Id == CheckId.Review ? Review(check, review, head) : check);
         }
 
-        evidence["review"] = review is null ? new JsonObject { ["state"] = "skipped" } : review.DeepClone();
+        evidence["review"] = ReviewNode(review, head);
         evidence["checks"] = new JsonArray([.. checks.Select(check => (JsonNode)new JsonObject
         {
             ["id"] = CheckIdNames.ToName(check.Id),
@@ -117,9 +119,29 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             // The review can turn the judge's NOT-EARNED into a FAIL: then no person is waited for.
             evidence["blocked"] = null;
         }
+        else if (evidence["blocked"] is null && review is null && EvidenceTime.Parse(evidence["finishedAt"]?.GetValue<string>()) is DateTimeOffset finishedAt
+            && checks.Any(check => check is { Id: CheckId.Review, Level: CheckLevel.Required, Verdict: CheckVerdict.Skipped })
+            && JudgeBlocked.OnlyWaitingOn(checks, check => check.Id == CheckId.Review))
+        {
+            evidence["blocked"] = BlockedReportJson.Render(JudgeBlocked.ForReview(finishedAt, head, evidence["feature"]?["id"]?.GetValue<string>()));
+        }
 
         return evidence;
     }
+
+    /// <summary>
+    /// The review section of the verdict of record: <c>skipped</c> when no review ran, else <c>ran</c> or <c>stale</c> (about another
+    /// head) with the review's head, verdict and line as data.
+    /// </summary>
+    private static JsonObject ReviewNode(JsonObject? review, string head) => review is null
+        ? new JsonObject { ["state"] = "skipped" }
+        : new JsonObject
+        {
+            ["state"] = review["head"]?.GetValue<string>() == head ? "ran" : "stale",
+            ["head"] = review["head"]?.GetValue<string>() is string reviewed ? CiEvidence.Cap(reviewed) : null,
+            ["verdict"] = review["verdict"]?.GetValue<string>() is string verdict ? CiEvidence.Cap(verdict) : null,
+            ["why"] = review["why"]?.GetValue<string>() is string why ? CiEvidence.Cap(why) : null,
+        };
 
     /// <summary>The review job's verdict as the review check, or SKIPPED: no review ran, or it reviewed another head.</summary>
     private static CheckResult Review(CheckResult check, JsonObject? review, string head)

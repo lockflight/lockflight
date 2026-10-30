@@ -46,7 +46,7 @@ internal static partial class BlockedReportReader
         Require(codeName is not null && summary is not null, "'reason' needs a 'code' and a 'summary'", problems);
         Require(codeName is null || BlockedNames.CodeOf(codeName) != BlockedReasonCode.Unknown, $"'reason.code' '{codeName}' is not a code this engine knows", problems);
         Require(OptionalString(root, "feature"), "'feature' must be a string or null", problems);
-        Require(String(root, "head") is not string head || HeadPattern().IsMatch(head), "'head' must be a 40-character commit or null", problems);
+        Require(String(root, "head") is not string head || HeadPattern().IsMatch(head), "'head' must be a full commit id (40 or 64 hex characters) or null", problems);
         Require(OptionalString(root, "head"), "'head' must be a string or null", problems);
         Require(Property(root, "resumable", JsonValueKind.True).ValueKind != JsonValueKind.Undefined
             || Property(root, "resumable", JsonValueKind.False).ValueKind != JsonValueKind.Undefined, "'resumable' must be true or false", problems);
@@ -175,6 +175,6 @@ internal static partial class BlockedReportReader
     [GeneratedRegex(@"^(ci|autonomous|engine:[a-z0-9-]+|crew:[a-z0-9-]+)$")]
     private static partial Regex SourcePattern();
 
-    [GeneratedRegex(@"^[0-9a-f]{40}$")]
+    [GeneratedRegex(@"^([0-9a-f]{40}|[0-9a-f]{64})$")]
     private static partial Regex HeadPattern();
 }

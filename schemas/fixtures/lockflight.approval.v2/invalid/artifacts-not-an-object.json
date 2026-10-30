@@ -1,0 +1,13 @@
+{
+  "schema": "lockflight.approval/v2",
+  "feature": "f1",
+  "phase": "spec",
+  "artifacts": [
+    "spec.md"
+  ],
+  "state": "person",
+  "approvedBy": "Jane Doe",
+  "at": "2026-11-02T10:15:00Z",
+  "engineVersion": "0.3.0",
+  "rule": null
+}

@@ -24,14 +24,15 @@ internal static class CiEvidence
     /// <summary>The longest string from the pull request kept in evidence; longer ones are cut and end with an ellipsis.</summary>
     public const int MaxTextLength = 300;
 
-    public static JsonObject Build(JudgeRun run, string engineVersion, string runtimeIdentifier)
+    /// <param name="engineSha256">The target branch's engine lock hash of this engine (<see cref="JudgeEngineHash"/>); null without one.</param>
+    public static JsonObject Build(JudgeRun run, string engineVersion, string runtimeIdentifier, string? engineSha256)
     {
         JudgePlan plan = run.Plan;
         JudgeInputs inputs = plan.Inputs;
         return new JsonObject
         {
             ["schema"] = Schema,
-            ["engine"] = new JsonObject { ["version"] = engineVersion, ["rid"] = runtimeIdentifier, ["sha256"] = null },
+            ["engine"] = new JsonObject { ["version"] = engineVersion, ["rid"] = runtimeIdentifier, ["sha256"] = engineSha256 },
             ["platform"] = JudgePlatformNames.ToName(inputs.Platform),
             ["event"] = JudgeEventNames.ToName(inputs.Event),
             ["run"] = null,

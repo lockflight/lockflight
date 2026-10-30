@@ -10,6 +10,9 @@ internal sealed class JudgeBudget(TimeSpan limit, TimeProvider time)
     /// <summary>Kept back for writing the evidence after the last step.</summary>
     public static readonly TimeSpan Reserve = TimeSpan.FromMinutes(3);
 
+    /// <summary>How <see cref="Why"/> starts, so the checks the budget left undecided can be told apart.</summary>
+    public const string WhyStart = "the CI budget (";
+
     private readonly long started = time.GetTimestamp();
     private readonly List<string> notRun = [];
 
@@ -43,5 +46,5 @@ internal sealed class JudgeBudget(TimeSpan limit, TimeProvider time)
 
     /// <summary>Why the checks not yet decided are NOT-EARNED.</summary>
     public string Why(int builds) =>
-        $"the CI budget ({(int)limit.TotalMinutes} min, ci.timeoutMinutes on the target branch) ran out after {builds} builds; raise it on the target branch or split the pull request";
+        $"{WhyStart}{(int)limit.TotalMinutes} min, ci.timeoutMinutes on the target branch) ran out after {builds} builds; raise it on the target branch or split the pull request";
 }

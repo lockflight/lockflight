@@ -250,6 +250,13 @@ The engine's reader is the authority. Rules a JSON Schema cannot express (globs 
 larger than a fix, coverage that never decreases with the class, layers that do not overlap, units that do not nest, a shell URL
 without credentials) are checked by the engine only, and the schema's descriptions name them.
 
+The files the engine writes for other tools to read have published schemas too, named after their ids under
+[`schemas/`](../../schemas/): the engine lock (`lockflight.engine-lock/v1`), a release's hashes
+(`lockflight.engine-hashes/v1`), an approval record (`lockflight.approval/v2`), the gate result (`lockflight.result/v1`), the
+CI judge's evidence (`lockflight.ci-evidence/v1`) and a blocked report (`lockflight.blocked/v1`). From 0.3.0 to 1.0 they change
+by addition only: read them tolerantly, ignore properties you do not know, and key on ids (a gate step's `id`, a check's
+`id`), never on display text.
+
 ```yaml
 version: 2                      # required in this shape
 requiresEngine: "0.3.0"         # optional: the lowest engine this manifest needs; an older engine says so before any
