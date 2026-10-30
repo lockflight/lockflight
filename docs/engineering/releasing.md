@@ -121,3 +121,37 @@ Check a published package against its attestation with
 (nuget.org adds its repository signature to the copy it serves, so that file's hash differs). `engine-hashes.json` and the bare
 executables are attested the same way; the executable inside nuget.org's copy of a package is byte-identical to the one in
 `engine-hashes.json`.
+
+## Releasing the crew
+
+The `lockflight-crew` plugin is released on its own, from the same repository. Its tags are
+`crew/vX.Y.Z[-pre]`; the judge's are `vX.Y.Z[-pre]`. A crew tag never starts the judge's workflow, and the changelog's
+`tag_pattern` (`^v[0-9].*`) never reads a crew tag as a judge release.
+[`.github/workflows/release-crew.yml`](../../.github/workflows/release-crew.yml) runs for a pushed crew tag, and does this:
+
+1. **Checks the version.** It checks that the tag without `crew/v` equals the `version` in
+   `plugins/lockflight-crew/.claude-plugin/plugin.json`. It also checks that `plugins/lockflight-crew/min-engine-version`
+   names an engine that nuget.org lists: the crew calls the engine (`phase check`, `redgreen red`, `facts --json`), so it is
+   never released before the engine it needs.
+2. **Checks the trust boundary.** The judge gives facts and verdicts; the crew gives advice.
+   [`scripts/crew-trust-boundary.sh`](../../scripts/crew-trust-boundary.sh) fails when the crew ships any of these:
+   - hooks: a `hooks/` directory, a `hooks` key in `plugin.json`, or `hooks:` in an agent's or skill's frontmatter;
+   - executables, MCP or LSP servers, settings or output styles;
+   - a guard or policy file: a manifest, `.lockflight/`, an engine lock, CODEOWNERS, a schema or the Spec Kit preset;
+   - in an agent or skill, a verdict record (approvals, red/green evidence, review records, results, baselines), or a command
+     that records a person's decision or the review of record (`approve` other than `approve verify`, `baseline`,
+     `redgreen reset`/`amend`, `review`, `update`, `engine install`).
+
+   The `plugin` job in CI runs the same check on every pull request. Then the workflow validates the plugin with
+   `claude plugin validate --strict`.
+3. **Packs the plugin.** It writes `lockflight-crew-<version>.tar.gz` from the tagged commit's `plugins/lockflight-crew`
+   (with `git archive`, so exactly the committed files), with `SHA256SUMS`, and runs the trust check again on what it
+   archived.
+4. **Publishes a GitHub Release** named `Lockflight crew <version>`. The release is never marked latest, because the latest
+   release is the judge's, which the install script and the docs point at. Its notes come from the commits that touched
+   the crew since the previous crew tag. There is no NuGet package and no approval environment: pushing the tag is the
+   maintainer's decision.
+
+A dispatch from a branch is a dry run, which checks and packs `0.0.0-ci.<run number>` and publishes nothing. Until the
+marketplace pins each plugin to its own tag, the published marketplace still serves the crew from the judge's tag
+(see [how the marketplace serves a release](#how-the-marketplace-serves-a-release)).

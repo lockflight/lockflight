@@ -257,9 +257,15 @@ jobs:
       - name: Shellcheck the hook shim and test scripts
         run: |
           shellcheck --version
-          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/marketplace-ref.sh scripts/user-path.sh
+          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/marketplace-ref.sh scripts/user-path.sh scripts/crew-trust-boundary.sh
       - name: The install puts its folder on PATH once, for each shell
         run: sh tests/install/user-path.sh
+      # The crew gives advice and the engine judges: the crew plugin ships no hooks, executables, policy files or
+      # verdicts. release-crew.yml runs the same check before a crew/v* release.
+      - name: The crew stays on the advice side of the trust boundary
+        run: |
+          scripts/crew-trust-boundary.sh
+          bash tests/release/crew-trust-boundary.sh
       - name: The marketplace pin check refuses incoherent pins
         run: bash tests/install/marketplace-ref.sh
       - name: The release's engine hashes describe the packages
