@@ -50,6 +50,9 @@ internal static class CiEvidence
             ["changeClass"] = ChangeClassNode(plan.Class.Classification, engineVersion),
             ["redCommits"] = new JsonArray([.. plan.Reds.All.Select(RedCommitNode)]),
             ["cycles"] = new JsonArray([.. (run.Findings.Cycles ?? []).Select(cycle => CycleNode(cycle, run.Findings))]),
+            ["existingChanged"] = run.Findings.ExistingChanged is IReadOnlyList<ExistingChangedTest> existing
+                ? new JsonArray([.. existing.Select(test => new JsonObject { ["key"] = Cap(test.Key), ["state"] = ExistingChangeNames.ToName(test.State), ["why"] = Cap(test.Why) })])
+                : null,
             ["testsWithoutRed"] = Strings((run.Findings.Green?.WithoutRed ?? []).Select(Cap)),
             ["green"] = run.Findings.Green is GreenJudgement green ? GreenNode(green) : null,
             ["trace"] = null,

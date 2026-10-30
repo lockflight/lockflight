@@ -15,5 +15,8 @@ internal sealed record JudgeFindings(GreenJudgement? Green, IReadOnlyList<CycleJ
     /// <summary>Each accepted cycle test compared from its red to head; null when tests since red were not judged.</summary>
     public IReadOnlyList<SinceRedTest>? SinceRed { get; init; }
 
+    /// <summary>The existing tests the pull request changed, re-checked on the base; null when the check did not run.</summary>
+    public IReadOnlyList<ExistingChangedTest>? ExistingChanged { get; init; }
+
     public static JudgeFindings None { get; } = new(null, null, []);
 }
