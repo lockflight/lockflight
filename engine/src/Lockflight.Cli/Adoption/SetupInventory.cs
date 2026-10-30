@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Init;
 
 namespace Lockflight.Cli.Adoption;
 
@@ -39,7 +40,8 @@ internal static class SetupInventory
             hooks.AddRange(HookInventory.Read(Path.Combine(userHome, ".claude", "settings.json"), "user", root));
         }
 
-        items.AddRange(hooks.Select(hook => HookClassifier.Classify(hook, hook.ScriptPath is null ? null : File.ReadAllText(hook.ScriptPath))));
+        // Lockflight's own native hooks (init --native) are not the team's to adopt.
+        items.AddRange(hooks.Where(hook => !NativeHooks.IsLockflights(hook.Command)).Select(hook => HookClassifier.Classify(hook, hook.ScriptPath is null ? null : File.ReadAllText(hook.ScriptPath))));
         items.AddRange(Skills(root));
         items.AddRange(Named(root, "agents", "*.md", AdoptionArea.Agent, name => name.Contains("review", StringComparison.OrdinalIgnoreCase)
             ? (AdoptionAction.Flag, "a reviewer agent: advisory next to 'lockflight review', the review of record (evidence-bound)")

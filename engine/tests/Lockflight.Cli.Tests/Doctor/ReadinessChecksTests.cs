@@ -202,6 +202,43 @@ public sealed class ReadinessChecksTests : IDisposable
     }
 
     [Fact]
+    public async Task AfterInitNativeTheClaudeSettingsPassAtTheNativeLevel()
+    {
+        await TestConsole.RunAsync(["init", "--no-link", "--native"], "", root.FullName);
+
+        DoctorCheck check = await CheckAsync("claude settings");
+
+        Assert.Equal(CheckStatus.Pass, check.Status);
+        Assert.Contains("native level", check.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task NativeHooksWithThePluginAlsoEnabledWarnThatEverythingRunsTwice()
+    {
+        await TestConsole.RunAsync(["init", "--no-link", "--native"], "", root.FullName);
+        JsonNode settings = JsonNode.Parse(File.ReadAllText(Path.Combine(root.FullName, ".claude", "settings.json")))!;
+        settings["enabledPlugins"] = new JsonObject { ["lockflight@lockflight"] = true };
+        Write(".claude/settings.json", settings.ToJsonString());
+
+        DoctorCheck check = await CheckAsync("claude settings");
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("twice", check.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnEditedNativeHookShimWarnsWithInitNativeAsTheFix()
+    {
+        await TestConsole.RunAsync(["init", "--no-link", "--native"], "", root.FullName);
+        Write(".claude/hooks/lockflight-hook", "exit 0\n");
+
+        DoctorCheck check = await CheckAsync("claude settings");
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+        Assert.Contains("init --native", check.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AfterInitEveryProtectedPathHasAnEditDenyRuleAndASandboxWriteDenial()
     {
         await InitAsync();

@@ -1,5 +1,6 @@
 using Lockflight.Cli.Adoption;
 using System.Text;
+using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Config.Migration;
 using Lockflight.Cli.EngineLocks;
@@ -219,6 +220,22 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             && ClaudeMdBlock.IsPresent(text) && !ClaudeMdBlock.IsCurrent(text))
         {
             writes.Add(new PlannedWrite("CLAUDE.md", claudeMd, text, ClaudeMdBlock.Upsert(text)));
+        }
+
+        // The native level's vendored hook shim follows the engine, as the plugin's shim follows the plugin.
+        string shim = Path.Combine(root, NativeHookShim.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (File.Exists(shim) && await File.ReadAllTextAsync(shim, cancellationToken) is string shimText && shimText != NativeHookShim.Text)
+        {
+            writes.Add(new PlannedWrite(NativeHookShim.RelativePath, shim, shimText, NativeHookShim.Text));
+        }
+
+        // And the native hooks in the settings follow the engine too, when the project has them and they can be merged into.
+        string settingsPath = Path.Combine(root, ClaudeSettingsMerger.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (File.Exists(settingsPath) && await File.ReadAllTextAsync(settingsPath, cancellationToken) is string settingsText
+            && ClaudeSettingsMerger.Problem(settingsText, nativeHooks: true) is null
+            && JsonNode.Parse(settingsText) is JsonObject settings && NativeHooks.AnyPresent(settings) && NativeHooks.Merge(settings))
+        {
+            writes.Add(new PlannedWrite(ClaudeSettingsMerger.RelativePath, settingsPath, settingsText, JsonFiles.Format(settings)));
         }
 
         if (File.Exists(Path.Combine(root, Manifest.UnitFileName)))

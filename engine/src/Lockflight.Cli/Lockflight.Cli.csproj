@@ -58,6 +58,8 @@
   <ItemGroup>
     <!-- The engine install script init and update vendor into a project's .lockflight/ci/; its hash goes into the engine lock. -->
     <EmbeddedResource Include="../../../scripts/install.sh" LogicalName="Lockflight.Cli.install.sh" Visible="false" />
+    <!-- The plugin hook shim that init (native level) and update vendor into a project (.claude/hooks/). -->
+    <EmbeddedResource Include="../../../plugins/lockflight/bin/lockflight-hook" LogicalName="Lockflight.Cli.lockflight-hook" Visible="false" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="18.1.0" />

@@ -19,4 +19,7 @@ internal sealed record InitOptions(
 {
     /// <summary><c>--preset relaxed|default|strict</c>: the routing preset a new manifest spells out (default <c>default</c>).</summary>
     public RoutingPreset Preset { get; init; } = RoutingPreset.Default;
+
+    /// <summary><c>--native</c> or <c>--ci-only</c>: how much runs on a developer's machine (default the plugin level).</summary>
+    public InstallLevel Level { get; init; } = InstallLevel.Plugin;
 }

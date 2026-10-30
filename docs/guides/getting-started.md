@@ -2,7 +2,9 @@
 
 Lockflight runs deterministic checks around a Claude Code agent working in a .NET repository: a guard on every tool call, gates
 at the end of a turn and in CI, and — in the standard profile — a spec-driven lifecycle with human approvals and red/green
-evidence. This page takes you from nothing to a first green gate.
+evidence. This page takes you from nothing to a first green gate with the plugin, the default of the three
+[install levels](install-levels.md); `init --native` (project hooks, no plugin) and `init --ci-only` (nothing on the
+machine) are the other two.
 
 **On this page:** [Requirements](#requirements) · [Install from source](#install-from-source) ·
 [Install on Windows](#install-on-windows) · [Install from a package](#install-from-a-package) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·

@@ -16,7 +16,8 @@ internal static class CliApplication
         Setup
           init [--profile lite|standard] [--preset relaxed|default|strict] [--ci pr|manual|none]
                [--ci-platform github|azure|bitbucket|gitlab] [--quality] [--architecture-tests] [--dry-run]
-               [--unit-of <shell url> --unit-path <path>] [--speckit-preset <dir>] [--no-link] [--no-sandbox]
+               [--unit-of <shell url> --unit-path <path>] [--speckit-preset <dir>] [--native | --ci-only]
+               [--no-link] [--no-sandbox]
                                                         onboard: manifest, tool pin, settings, CLAUDE.md block, CI
                                                         job, link; adopts an existing Claude Code / Spec Kit setup
                                                         (keeps and protects it, marks existing features); --ci:
@@ -29,7 +30,9 @@ internal static class CliApplication
                                                         dependency test project; --dry-run: print the plan, write
                                                         nothing; --unit-of: this repository is a unit of that
                                                         workspace shell; --speckit-preset: upgrade the existing Spec
-                                                        Kit with the Lockflight preset. Undo: git revert
+                                                        Kit with the Lockflight preset; --native: the project's own
+                                                        hooks instead of the plugin; --ci-only: nothing for Claude
+                                                        Code, no link. Undo: git revert
           doctor [--self-test]                          readiness report with fixes; --self-test: plant a violation
                                                         before the guard, a human-only command, the linked engine
                                                         check, the test gate and red in a scratch project and
