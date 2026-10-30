@@ -27,6 +27,7 @@ internal static class SignalIds
     public const string ApiPageDirective = "api.pageDirective";
     public const string ApiContractFile = "api.contractFile";
     public const string ApiPublicMember = "api.publicMember";
+    public const string ApiPublicApiFile = "api.publicApiFile";
     public const string DbMigration = "db.migration";
     public const string DbSql = "db.sql";
     public const string DbModel = "db.model";
