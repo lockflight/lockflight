@@ -1,0 +1,25 @@
+A SQL file outside test projects is db.sql.
+=== base src/Shop.Data/Shop.Data.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Data/ShopContext.cs
+using Microsoft.EntityFrameworkCore;
+
+namespace Shop.Data;
+
+public sealed class ShopContext(DbContextOptions<ShopContext> options) : DbContext(options)
+{
+    public DbSet<Order> Orders => Set<Order>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Order>().ToTable("orders");
+    }
+}
+=== base db/schema.sql
+create table orders (id int);
+=== head db/schema.sql
+create table orders (id int, total int);

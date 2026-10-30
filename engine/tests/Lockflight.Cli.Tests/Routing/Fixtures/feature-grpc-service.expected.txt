@@ -1,0 +1,7 @@
+class: feature
+computed: feature
+signal: api.contractFile -> feature (heuristic) src/Shop.Api/Protos/carts.proto: API contract file changed (**/*.proto)
+signal: api.controllerAdded -> feature (heuristic) src/Shop.Api/CartsService.cs:3: new endpoint type Shop.Api.CartsService
+signal: config.changed -> behaviour (heuristic) src/Shop.Api/Protos/carts.proto: production configuration file changed
+signal: file.added -> behaviour (heuristic) src/Shop.Api/CartsService.cs: new production file
+signal: type.added -> behaviour (heuristic) src/Shop.Api/CartsService.cs:3: new type Shop.Api.CartsService

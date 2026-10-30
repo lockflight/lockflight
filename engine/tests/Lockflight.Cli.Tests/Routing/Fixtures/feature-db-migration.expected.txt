@@ -1,0 +1,5 @@
+class: feature
+computed: feature
+signal: db.migration -> feature (heuristic) src/Shop.Data/Migrations/20261029_AddRefunds.cs: database migration path (**/Migrations/**)
+signal: file.added -> behaviour (heuristic) src/Shop.Data/Migrations/20261029_AddRefunds.cs: new production file
+signal: type.added -> behaviour (heuristic) src/Shop.Data/Migrations/20261029_AddRefunds.cs:3: new type Shop.Data.Migrations.AddRefunds

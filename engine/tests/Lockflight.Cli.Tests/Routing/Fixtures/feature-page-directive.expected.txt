@@ -1,0 +1,3 @@
+class: feature
+computed: feature
+signal: api.pageDirective -> feature (heuristic) src/Shop.Api/Pages/Cart.razor:1: a page route, render mode or authorization directive added or removed

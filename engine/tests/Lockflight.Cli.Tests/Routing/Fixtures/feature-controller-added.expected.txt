@@ -1,0 +1,6 @@
+class: feature
+computed: feature
+signal: api.controllerAdded -> feature (heuristic) src/Shop.Api/OrdersController.cs: new controller file
+signal: api.controllerAdded -> feature (heuristic) src/Shop.Api/OrdersController.cs:5: new endpoint type Shop.Api.OrdersController
+signal: file.added -> behaviour (heuristic) src/Shop.Api/OrdersController.cs: new production file
+signal: type.added -> behaviour (heuristic) src/Shop.Api/OrdersController.cs:5: new type Shop.Api.OrdersController

@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: api.publicMember -> feature (heuristic) src/Shop.Client/CartClient.cs:5: public member Shop.Client.CartClient.Count added in API project src/Shop.Client/Shop.Client.csproj
+signal: api.publicMember -> feature (heuristic) src/Shop.Client/CartClient.cs:5: public member Shop.Client.CartClient.Count removed in API project src/Shop.Client/Shop.Client.csproj
