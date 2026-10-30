@@ -30,7 +30,7 @@ internal enum FileRole
     /// <summary>A file that changes every project's build (<c>Directory.Build.props</c>, <c>*.targets</c>, <c>global.json</c>, …).</summary>
     BuildWide = 9,
 
-    /// <summary>Documentation, images, and Lockflight's own feature records.</summary>
+    /// <summary>Documentation, images, Lockflight's own feature records, and public API files (judged by <c>api.publicApiFile</c>).</summary>
     Docs = 10,
 
     /// <summary>Anything else: scripts, Dockerfiles, YAML, SQL outside projects.</summary>
