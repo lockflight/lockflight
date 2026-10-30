@@ -1,0 +1,18 @@
+## fix-body-edit
+**Class: fix** · computed fix (floor fix, preset default)
+Needs: gates · coverage 80 % (with a collector) · suppressions · docs references · ef pending changes (if an EF project changed) · red→green · trace (with a spec)
+## behaviour-size-lines
+**Class: behaviour** · computed behaviour (floor fix, preset default) · size.lines
+Needs: gates · coverage 80 % (with a collector) · suppressions · docs references · ef pending changes (if an EF project changed) · red→green · trace (with a spec) · review (key)
+## feature-endpoint-attribute
+**Class: feature** · computed feature (floor fix, preset default) · api.controllerAction `src/Shop.Api/CartsController.cs:16` · api.endpointAttribute `src/Shop.Api/CartsController.cs:16`
+Needs: gates · coverage 80 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key) · architecture (when declared)
+## feature-grpc-service
+**Class: feature** · computed feature (floor fix, preset default) · api.contractFile `src/Shop.Api/Protos/carts.proto` · api.controllerAdded `src/Shop.Api/CartsService.cs:3` · config.changed `src/Shop.Api/Protos/carts.proto` · +2 more
+Needs: gates · coverage 80 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key) · architecture (when declared)
+## critical-move-out
+**Class: critical** · computed critical (floor fix, preset default) · critical.path (policy) `src/Shop/Payments/Refund.cs` · moved `src/Shop/Refund.cs`
+Needs: gates · coverage 90 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key required) · architecture (when declared)
+## critical-policy-manifest
+**Class: critical** · computed critical (floor fix, preset default) · critical.path (policy) `src/Shop/Cart.cs` · critical.policy (policy) `lockflight.yaml` · config.changed `lockflight.yaml`
+Needs: gates · coverage 90 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key required) · architecture (when declared)
