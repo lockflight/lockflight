@@ -157,6 +157,16 @@ internal static class CiEvidence
             ["rows"] = test.Rows,
             ["fingerprintAtRed"] = cycle.FingerprintsAtRed.GetValueOrDefault(test.Key),
             ["fingerprintAtHead"] = findings.HeadFingerprints.GetValueOrDefault(test.Key),
+            ["sinceRed"] = findings.SinceRed?.FirstOrDefault(since => since.Key == test.Key) is SinceRedTest since ? SinceRedNames.ToName(since.State) : null,
+            ["amend"] = findings.SinceRed?.FirstOrDefault(since => since.Key == test.Key && since.State != SinceRed.Unchanged && since.State != SinceRed.MissingAtHead) is SinceRedTest amend
+                ? new JsonObject
+                {
+                    ["proofPoint"] = findings.HeadCommit,
+                    ["files"] = Strings(amend.ChangedFiles.Select(Cap)),
+                    ["summary"] = Cap(amend.Why),
+                    ["red"] = amend.Recheck is RedClass recheck ? RedClassNames.ToName(recheck) : null,
+                }
+                : null,
             ["atHead"] = findings.Green?.AtHead.GetValueOrDefault(test.Key),
         })]),
     };

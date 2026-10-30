@@ -41,14 +41,35 @@ internal sealed class TreeBuilder(JudgeWorktree worktree, BasePolicy policy, str
         return listing;
     }
 
-    private async Task<TreeListing> BuildAndListAsync(string commit, TestWorkspace workspace, CancellationToken cancellationToken)
+    /// <summary>
+    /// The tree at <paramref name="commit"/> with <paramref name="paths"/> from <paramref name="overlayCommit"/> laid over it (and
+    /// <paramref name="deleted"/> removed), built and listed; never cached, since no commit holds this tree.
+    /// </summary>
+    public async Task<TreeListing> ListOverlaidAsync(
+        string commit, string overlayCommit, IReadOnlyList<string> paths, IReadOnlyList<string> deleted, string purpose, CancellationToken cancellationToken)
+    {
+        TestWorkspace workspace = Workspace();
+        long started = time.GetTimestamp();
+        TreeListing listing = await BuildAndListAsync(commit, workspace, cancellationToken, async () => await worktree.OverlayAsync(overlayCommit, paths, deleted, policy.Commit, cancellationToken));
+        builds.Add(new BuildRecord(commit, purpose, time.GetElapsedTime(started).TotalSeconds, listing.Outcome));
+        listed.Remove(commit);
+        return listing;
+    }
+
+    private async Task<TreeListing> BuildAndListAsync(string commit, TestWorkspace workspace, CancellationToken cancellationToken, Func<Task<string?>>? overlay = null)
     {
         string? buildOutput = null;
         foreach (bool clean in new[] { false, true })
         {
-            if (await worktree.MoveToAsync(commit, policy.Commit, clean, cancellationToken) is string notMoved)
+            string? notReady = await worktree.MoveToAsync(commit, policy.Commit, clean, cancellationToken);
+            if (notReady is null && overlay is not null)
             {
-                return new TreeListing(commit, TreeOutcome.Broken, workspace, null, notMoved);
+                notReady = await overlay();
+            }
+
+            if (notReady is not null)
+            {
+                return new TreeListing(commit, TreeOutcome.Broken, workspace, null, notReady);
             }
 
             if (!Directory.EnumerateFiles(worktree.Root, "*.*proj", SearchOption.AllDirectories).Any())
