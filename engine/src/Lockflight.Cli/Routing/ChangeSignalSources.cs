@@ -9,6 +9,7 @@ internal static class ChangeSignalSources
         new ProjectSignals(),
         new TestSignals(),
         new ApiSignals(),
+        new PublicApiFileSignals(),
         new DatabaseSignals(),
         new CriticalSignals(),
         new StructureSignals(),
