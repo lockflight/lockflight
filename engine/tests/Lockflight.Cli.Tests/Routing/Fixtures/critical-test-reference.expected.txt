@@ -1,0 +1,3 @@
+class: critical
+computed: critical
+signal: structure.testReference -> critical (heuristic) src/Shop/Shop.csproj:6: production project references test project tests/Shop.Tests/Shop.Tests.csproj

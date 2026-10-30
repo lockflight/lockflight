@@ -18,6 +18,7 @@ internal static class HumanOnlyCanaries
         Dictionary<string, string[]> planted = new(StringComparer.Ordinal)
         {
             ["update"] = ["--source", scratch.PathOf("lockflight-canary-no-feed")],
+            ["engine install"] = ["--source", scratch.PathOf("lockflight-canary-no-feed")],
             ["baseline build"] = ["--path", NoFeature],
             ["baseline tests"] = ["--path", NoFeature],
             ["baseline deps"] = ["--path", NoFeature],
@@ -28,8 +29,6 @@ internal static class HumanOnlyCanaries
             ["approve spec"] = ["--feature", NoFeature],
             ["approve tasks"] = ["--feature", NoFeature],
             ["approve"] = [NoFeature],
-            ["adopt apply"] = ["--skip-speckit"],
-            ["adopt undo"] = [],
         };
 
         List<CanaryReport> reports = [];

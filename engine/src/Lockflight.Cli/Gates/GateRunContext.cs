@@ -18,6 +18,12 @@ internal sealed record GateRunContext(
     /// </summary>
     public string? UnitPath { get; init; }
 
+    /// <summary>
+    /// The policy the run judges with when it is not the manifest on disk: a unit repository's manifest made at least as strict as its
+    /// workspace shell's policy (<c>gate run --shell</c>). Null when the manifest on disk is the policy.
+    /// </summary>
+    public Manifest? Policy { get; init; }
+
     /// <summary>The unit's <c>build:</c> solution or project file, passed to build, test and package listing; null for the one in the target.</summary>
     public string? BuildFile { get; init; }
 
@@ -26,6 +32,14 @@ internal sealed record GateRunContext(
 
     /// <summary>The unit's <c>test.stopFilter</c>, else the root's <c>gates.test.stopFilter</c>: tests the stop profile leaves to the pr profile; null for none.</summary>
     public string? StopFilter { get; init; }
+
+    /// <summary>
+    /// <c>gate run --full</c>: the stop profile builds and tests every project instead of the ones the changes since the last PASS affect.
+    /// </summary>
+    public bool FullRun { get; init; }
+
+    /// <summary>The full paths of the workspace's units; a change inside another unit does not choose this one's projects.</summary>
+    public IReadOnlyList<string> UnitDirectories { get; init; } = [];
 
     /// <summary>Runs the tools the steps judge (the .NET SDK, gitleaks); real processes unless a test supplies its own.</summary>
     public RunTimedProcess Processes { get; init; } = ProcessRunner.RunAsync;
@@ -38,7 +52,7 @@ internal sealed record GateRunContext(
     public static GateRunContext ForTarget(
         Manifest manifest, string target, GateProfile profile, string? baseRef, TimeProvider time, bool underStopHook = true)
     {
-        GateRunContext run = new(target, manifest.Root, profile, manifest.Gates, baseRef, time, underStopHook);
+        GateRunContext run = new(target, manifest.Root, profile, manifest.Gates, baseRef, time, underStopHook) { UnitDirectories = UnitDirectoriesOf(manifest) };
         return UnitResolver.Owning(manifest, target) is Unit unit
             ? run.ForUnit(unit, Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar)))
             : run with { BuildFile = manifest.Gates.BuildFile, StopFilter = manifest.Gates.StopFilter };
@@ -55,6 +69,10 @@ internal sealed record GateRunContext(
         BuildFile = unit.Build is null ? null : Path.GetRelativePath(Target, Path.Combine(unitDirectory, unit.Build.Replace('/', Path.DirectorySeparatorChar))),
         StopFilter = unit.StopFilter ?? Settings.StopFilter,
     };
+
+    /// <summary>The full paths of a manifest's units.</summary>
+    public static IReadOnlyList<string> UnitDirectoriesOf(Manifest manifest) =>
+        [.. manifest.Units.Select(unit => Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar)))];
 
     /// <summary>The plugin's Stop hook timeout (<c>plugins/lockflight/hooks/hooks.json</c>), in seconds.</summary>
     public const int StopHookTimeoutSeconds = 600;

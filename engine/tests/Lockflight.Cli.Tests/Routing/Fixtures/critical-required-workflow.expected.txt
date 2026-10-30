@@ -1,0 +1,4 @@
+class: critical
+computed: critical
+signal: critical.policy -> critical (boundary) .github/workflows/required.yml: policy file (.github/workflows/required.yml)
+signal: config.changed -> behaviour (heuristic) .github/workflows/required.yml: non-project file changed

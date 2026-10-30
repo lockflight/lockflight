@@ -1,0 +1,3 @@
+class: behaviour
+computed: behaviour
+signal: type.added -> behaviour (heuristic) src/Shop.Api/Pricing.cs:8: new type Shop.Discount

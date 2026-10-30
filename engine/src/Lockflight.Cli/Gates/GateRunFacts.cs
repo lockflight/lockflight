@@ -1,3 +1,5 @@
+using Lockflight.Cli.Gates.Affected;
+
 namespace Lockflight.Cli.Gates;
 
 /// <summary>
@@ -10,4 +12,7 @@ namespace Lockflight.Cli.Gates;
 internal sealed record GateRunFacts(int? TestsTotal, string? TestResultsDirectory, DateTimeOffset? TestsStarted)
 {
     public static GateRunFacts None { get; } = new(null, null, null);
+
+    /// <summary>The projects the stop profile's build and test run (<see cref="Steps.AffectedProjectsStep"/>); null for everything.</summary>
+    public ProjectSelection? Selection { get; init; }
 }

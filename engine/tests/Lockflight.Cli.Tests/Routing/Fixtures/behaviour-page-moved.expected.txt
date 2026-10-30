@@ -1,0 +1,5 @@
+class: behaviour
+computed: behaviour
+signal: file.added -> behaviour (heuristic) src/Shop/Pages/Public/Report.cshtml: new markup file
+signal: file.deleted -> behaviour (heuristic) src/Shop/Pages/Admin/Report.cshtml: production file deleted
+signal: moved -> fix (heuristic) src/Shop/Pages/Public/Report.cshtml: moved from src/Shop/Pages/Admin/Report.cshtml unchanged

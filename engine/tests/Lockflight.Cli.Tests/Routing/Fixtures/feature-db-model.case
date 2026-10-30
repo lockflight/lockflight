@@ -1,0 +1,36 @@
+A model-building line added is db.model.
+=== base src/Shop.Data/Shop.Data.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Data/ShopContext.cs
+using Microsoft.EntityFrameworkCore;
+
+namespace Shop.Data;
+
+public sealed class ShopContext(DbContextOptions<ShopContext> options) : DbContext(options)
+{
+    public DbSet<Order> Orders => Set<Order>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Order>().ToTable("orders");
+    }
+}
+=== head src/Shop.Data/ShopContext.cs
+using Microsoft.EntityFrameworkCore;
+
+namespace Shop.Data;
+
+public sealed class ShopContext(DbContextOptions<ShopContext> options) : DbContext(options)
+{
+    public DbSet<Order> Orders => Set<Order>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Order>().ToTable("orders");
+        modelBuilder.Entity<Order>().HasIndex(order => order.Number);
+    }
+}

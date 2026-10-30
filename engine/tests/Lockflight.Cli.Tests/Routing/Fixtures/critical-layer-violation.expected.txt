@@ -1,0 +1,3 @@
+class: critical
+computed: critical
+signal: structure.layerViolation -> critical (heuristic) src/Shop.Domain/Shop.Domain.csproj:6: layer domain references outer layer infrastructure (src/Shop.Infrastructure/Shop.Infrastructure.csproj)

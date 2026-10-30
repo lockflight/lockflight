@@ -149,7 +149,86 @@ public sealed class ShimEngineRecordTests : IDisposable
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AnEngineTheLockPinsRuns()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        string hash = EngineRecord.HashOf(LinkEngine(AllowingEngine));
+        EngineRecord.Write(project.FullName, hash, "linux-x64");
+        WriteLock(".lockflight/engine.lock", "linux-x64", hash);
+
+        (int exitCode, string error) = await RunShimAsync(Write);
+
+        Assert.True(exitCode == 0, error);
+    }
+
+    [Theory]
+    [InlineData(".lockflight/engine.lock")]
+    [InlineData(".lockflight/local/engine.lock")]
+    public async Task AnEngineTheLockDoesNotPinIsNotRunAndTheLinkInstalledRecoveryIsAllowed(string lockPath)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        string hash = EngineRecord.HashOf(LinkEngine(AllowingEngine));
+        EngineRecord.Write(project.FullName, hash, "linux-x64");
+        WriteLock(lockPath, "linux-x64", new string('a', 64));
+
+        (int exitCode, string error) = await RunShimAsync(Write);
+        (int recovery, _) = await RunShimAsync("""{"tool_name":"Bash","tool_input":{"command":"~/.lockflight/bin/lockflight link --installed"}}""");
+
+        Assert.Equal(2, exitCode);
+        Assert.Contains($"it is not the engine {lockPath} pins for this platform", error, StringComparison.Ordinal);
+        Assert.Contains("lockflight engine install", error, StringComparison.Ordinal);
+        Assert.Equal(0, recovery);
+        Assert.Equal(0, (await RunShimAsync(Read)).ExitCode);
+    }
+
+    [Fact]
+    public async Task AnEngineRecordedWithoutAPlatformIsNotTheLockedOne()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        string hash = EngineRecord.HashOf(LinkEngine(AllowingEngine));
+        RecordEngine(LinkCommand.BinaryPath(project.FullName));
+        WriteLock(".lockflight/engine.lock", "linux-x64", hash);
+
+        Assert.Equal(2, (await RunShimAsync(Write)).ExitCode);
+    }
+
+    [Fact]
+    public async Task ALockChangedAfterAPassedCheckIsCheckedAgain()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        await ProcessRunner.RunAsync("git", ["init", "-q"], project.FullName, TestContext.Current.CancellationToken);
+        string hash = EngineRecord.HashOf(LinkEngine(AllowingEngine));
+        EngineRecord.Write(project.FullName, hash, "linux-x64");
+        WriteLock(".lockflight/engine.lock", "linux-x64", hash);
+        Assert.Equal(0, (await RunShimAsync(Write)).ExitCode);
+
+        WriteLock(".lockflight/engine.lock", "linux-x64", new string('b', 64));
+        File.SetLastWriteTimeUtc(Path.Combine(project.FullName, ".lockflight", "engine.lock"), DateTime.UtcNow.AddMinutes(1));
+
+        Assert.Equal(2, (await RunShimAsync(Write)).ExitCode);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(project);
+
+    private void WriteLock(string relativePath, string rid, string hash)
+    {
+        string path = Path.Combine(project.FullName, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, $$"""
+            {
+              "schema": "lockflight.engine-lock/v1",
+              "package": "Lockflight.Cli",
+              "version": "0.3.0",
+              "channel": "release",
+              "installScript": { "sha256": "{{new string('5', 64)}}" },
+              "binaries": {
+                "{{rid}}": { "sha256": "{{hash}}" }
+              }
+            }
+
+            """);
+    }
 
     private string LinkEngine(string script)
     {
@@ -168,7 +247,7 @@ public sealed class ShimEngineRecordTests : IDisposable
         return binary;
     }
 
-    private void RecordEngine(string binary) => EngineRecord.Write(project.FullName, EngineRecord.HashOf(binary));
+    private void RecordEngine(string binary) => EngineRecord.Write(project.FullName, EngineRecord.HashOf(binary), rid: null);
 
     private async Task<(int ExitCode, string Error)> RunShimAsync(string payload, string hookEvent = "pre-tool-use")
     {

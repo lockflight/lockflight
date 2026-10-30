@@ -19,8 +19,8 @@ public sealed class CiPipelineTests
 
         Assert.Contains($"for file in {CiShellScripts.PolicyFiles}; do", pipeline, StringComparison.Ordinal);
         Assert.Contains("git checkout \"$BASE\" -- \"$file\"; else rm -f \"$file\"; fi", pipeline, StringComparison.Ordinal);
-        Assert.Contains("rm -rf .lockflight/baselines", pipeline, StringComparison.Ordinal);
-        Assert.Contains("git checkout \"$BASE\" -- .lockflight/baselines", pipeline, StringComparison.Ordinal);
+        Assert.Contains($"for directory in {CiShellScripts.PolicyDirectories}; do", pipeline, StringComparison.Ordinal);
+        Assert.Contains("git checkout \"$BASE\" -- \"$directory\"", pipeline, StringComparison.Ordinal);
         Assert.Contains($"style={CiShellScripts.StylePattern}", pipeline, StringComparison.Ordinal);
         Assert.Contains("{ git ls-tree -r --name-only \"$BASE\"; git ls-files; }", pipeline, StringComparison.Ordinal);
     }
@@ -35,6 +35,9 @@ public sealed class CiPipelineTests
         Assert.Contains(CiShellScripts.GitleaksSha256, pipeline, StringComparison.Ordinal);
         Assert.Contains("| sha256sum -c -", pipeline, StringComparison.Ordinal);
         Assert.Contains("dotnet tool install Lockflight.Cli --tool-path", pipeline, StringComparison.Ordinal);
+        Assert.Contains("sh .lockflight/ci/install.sh --lock .lockflight/engine.lock", pipeline, StringComparison.Ordinal);
+        Assert.Contains(CiShellScripts.InstallBeginMarker, pipeline, StringComparison.Ordinal);
+        Assert.Contains(CiShellScripts.InstallEndMarker, pipeline, StringComparison.Ordinal);
         Assert.DoesNotContain("dotnet tool restore", pipeline, StringComparison.Ordinal);
         Assert.Contains("--base \"$BASE\"", pipeline, StringComparison.Ordinal);
         if (platform == "bitbucket")

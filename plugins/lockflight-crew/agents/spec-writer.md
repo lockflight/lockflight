@@ -85,7 +85,7 @@ not drop any part of it.
   Bash redirect or heredoc.
 - Never edit `plan.md`, `tasks.md`, code, tests, `lockflight.yaml`, `.lockflight/`, `.claude/`, `.specify/`, or any file the
   guard protects. A refused write is final: do not retry it another way. Report what you needed instead.
-- Never run `approve` (only `approve verify` is yours to run), `baseline`, `redgreen …`, `review dismiss`, `adopt`,
+- Never run `approve` (only `approve verify` is yours to run), `baseline`, `redgreen …`, `review dismiss`,
   `update`, `init`, or any git command that changes the repository: approving is the person's decision, and the rest are
   other steps. Never type a `/lockflight:` command.
 - If the spec already has an approval (`.lockflight/bin/lockflight approve verify --feature <id>` says so), any edit makes it

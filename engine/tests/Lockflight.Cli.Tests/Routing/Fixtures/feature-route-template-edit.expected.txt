@@ -1,0 +1,6 @@
+class: feature
+computed: feature
+signal: api.controllerAction -> feature (heuristic) src/Shop.Api/CartsController.cs:9: public action Shop.Api.CartsController.Get added
+signal: api.controllerAction -> feature (heuristic) src/Shop.Api/CartsController.cs:9: public action Shop.Api.CartsController.Get removed
+signal: api.endpointAttribute -> feature (heuristic) src/Shop.Api/CartsController.cs:9: [HttpGet("{id:int}")] on Get added
+signal: api.endpointAttribute -> feature (heuristic) src/Shop.Api/CartsController.cs:9: [HttpGet("{id}")] on Get removed

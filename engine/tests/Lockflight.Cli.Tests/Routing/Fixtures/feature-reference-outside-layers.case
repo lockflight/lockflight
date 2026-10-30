@@ -1,0 +1,45 @@
+With layers declared, a reference to a project in no layer is feature, as without layers.
+=== base lockflight.yaml
+version: 2
+routing:
+  preset: default
+  layers:
+    - { name: domain, paths: ["src/*.Domain/**"] }
+    - { name: infrastructure, paths: ["src/*.Infrastructure/**"] }
+=== base src/Shop.Domain/Shop.Domain.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Domain/Order.cs
+class Order { }
+=== base src/Shop.Infrastructure/Shop.Infrastructure.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Infrastructure/Store.cs
+class Store { }
+=== base src/Shop.Domain.Rules/Shop.Domain.Rules.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Tools/Tools.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== head src/Shop.Domain/Shop.Domain.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Tools/Tools.csproj" />
+  </ItemGroup>
+</Project>

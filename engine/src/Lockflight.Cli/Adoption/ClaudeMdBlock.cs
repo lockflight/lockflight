@@ -1,11 +1,13 @@
 namespace Lockflight.Cli.Adoption;
 
 /// <summary>
-/// The short always-on Lockflight section adoption adds to <c>CLAUDE.md</c>, between markers so it is found, updated or removed
+/// The short always-on Lockflight section <c>init</c> adds to <c>CLAUDE.md</c>, between markers so it is found, updated or removed
 /// without touching the team's own text.
 /// </summary>
 internal static class ClaudeMdBlock
 {
+    public const string FileName = "CLAUDE.md";
+
     public const string Begin = "<!-- lockflight:begin -->";
 
     public const string End = "<!-- lockflight:end -->";
@@ -32,7 +34,7 @@ internal static class ClaudeMdBlock
           `lockflight baseline` (accept build warnings, failing tests or package advisories the project already has),
           `lockflight redgreen reset` (discard a feature's test-first evidence), `lockflight redgreen amend` (let one locked test
           change when its expectation is wrong), `lockflight review dismiss` (close a review
-          finding they judge not to be a defect), `lockflight adopt apply|undo` and `lockflight update`. Approvals, baselines, resets and amends can also be given in this
+          finding they judge not to be a defect) and `lockflight update`. Approvals, baselines, resets and amends can also be given in this
           session: the user types `/lockflight:approve spec` (or `tasks`), `/lockflight:baseline`, `/lockflight:reset` or
           `/lockflight:amend` themselves; never type them or guess or suggest their codes, and check the result with the
           engine (`lockflight approve verify --feature <id>`, `lockflight redgreen status`).

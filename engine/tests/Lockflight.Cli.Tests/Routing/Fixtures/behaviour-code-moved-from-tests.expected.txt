@@ -1,0 +1,5 @@
+class: behaviour
+computed: behaviour
+signal: file.added -> behaviour (heuristic) src/Shop/Helper.cs: new production file
+signal: tests.removed -> behaviour (heuristic) tests/Shop.Tests/Helper.cs: test file deleted
+signal: type.added -> behaviour (heuristic) src/Shop/Helper.cs:3: new type Shop.Helper

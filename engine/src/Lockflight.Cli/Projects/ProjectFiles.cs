@@ -15,7 +15,10 @@ internal static partial class ProjectFiles
 
     /// <summary>The C# projects under the root that reference a test framework or declare themselves test projects, sorted.</summary>
     public static IReadOnlyList<string> TestProjects(string root) =>
-        [.. Enumerate(root).Where(project => TestMarkers.Any(marker => File.ReadAllText(project).Contains(marker, StringComparison.OrdinalIgnoreCase))).Order(StringComparer.Ordinal)];
+        [.. Enumerate(root).Where(project => MarksTests(File.ReadAllText(project))).Order(StringComparer.Ordinal)];
+
+    /// <summary>Whether project or MSBuild text names a test framework or declares a test project (<c>&lt;IsTestProject&gt;true</c>).</summary>
+    public static bool MarksTests(string text) => TestMarkers.Any(marker => text.Contains(marker, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Every C# project under the root (outside build output, <c>.git</c> and <c>.lockflight</c>), sorted.</summary>
     public static IReadOnlyList<string> All(string root) => [.. Enumerate(root).Order(StringComparer.Ordinal)];

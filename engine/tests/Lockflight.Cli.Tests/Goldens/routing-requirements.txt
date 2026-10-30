@@ -1,0 +1,27 @@
+## relaxed
+fix: gates=required, patchCoverage=whenApplicable@70, suppressions=required, docsReferences=required, efPendingModelChanges=whenApplicable, redGreen=whenApplicable, specAndTrace=whenApplicable, review=off, architectureTests=off, specFirst=off, mutation=off
+  Needs: gates · coverage 70 % (with a collector) · suppressions · docs references · ef pending changes (if an EF project changed) · red→green · trace (with a spec)
+behaviour: gates=required, patchCoverage=whenApplicable@70, suppressions=required, docsReferences=required, efPendingModelChanges=whenApplicable, redGreen=whenApplicable, specAndTrace=whenApplicable, review=off, architectureTests=off, specFirst=off, mutation=off
+  Needs: gates · coverage 70 % (with a collector) · suppressions · docs references · ef pending changes (if an EF project changed) · red→green · trace (with a spec)
+feature: gates=required, patchCoverage=required@70, suppressions=required, docsReferences=required, efPendingModelChanges=required, redGreen=whenApplicable, specAndTrace=whenApplicable, review=advisory, architectureTests=off, specFirst=off, mutation=off
+  Needs: gates · coverage 70 % · suppressions · docs references · ef pending changes · red→green per story · trace (with a spec) · review (key)
+critical: gates=required, patchCoverage=required@80, suppressions=required, docsReferences=required, efPendingModelChanges=required, redGreen=whenApplicable, specAndTrace=required, review=requiredWithKey, architectureTests=whenApplicable, specFirst=off, mutation=off
+  Needs: gates · coverage 80 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key required) · architecture (when declared)
+## default
+fix: gates=required, patchCoverage=whenApplicable@80, suppressions=required, docsReferences=required, efPendingModelChanges=whenApplicable, redGreen=whenApplicable, specAndTrace=whenApplicable, review=off, architectureTests=off, specFirst=off, mutation=off
+  Needs: gates · coverage 80 % (with a collector) · suppressions · docs references · ef pending changes (if an EF project changed) · red→green · trace (with a spec)
+behaviour: gates=required, patchCoverage=whenApplicable@80, suppressions=required, docsReferences=required, efPendingModelChanges=whenApplicable, redGreen=whenApplicable, specAndTrace=whenApplicable, review=advisory, architectureTests=off, specFirst=off, mutation=off
+  Needs: gates · coverage 80 % (with a collector) · suppressions · docs references · ef pending changes (if an EF project changed) · red→green · trace (with a spec) · review (key)
+feature: gates=required, patchCoverage=required@80, suppressions=required, docsReferences=required, efPendingModelChanges=required, redGreen=whenApplicable, specAndTrace=required, review=advisory, architectureTests=whenApplicable, specFirst=off, mutation=off
+  Needs: gates · coverage 80 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key) · architecture (when declared)
+critical: gates=required, patchCoverage=required@90, suppressions=required, docsReferences=required, efPendingModelChanges=required, redGreen=whenApplicable, specAndTrace=required, review=requiredWithKey, architectureTests=whenApplicable, specFirst=off, mutation=off
+  Needs: gates · coverage 90 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key required) · architecture (when declared)
+## strict
+fix: gates=required, patchCoverage=whenApplicable@85, suppressions=required, docsReferences=required, efPendingModelChanges=whenApplicable, redGreen=whenApplicable, specAndTrace=whenApplicable, review=off, architectureTests=off, specFirst=off, mutation=off
+  Needs: gates · coverage 85 % (with a collector) · suppressions · docs references · ef pending changes (if an EF project changed) · red→green · trace (with a spec)
+behaviour: gates=required, patchCoverage=whenApplicable@85, suppressions=required, docsReferences=required, efPendingModelChanges=whenApplicable, redGreen=whenApplicable, specAndTrace=required, review=advisory, architectureTests=whenApplicable, specFirst=off, mutation=off
+  Needs: gates · coverage 85 % (with a collector) · suppressions · docs references · ef pending changes (if an EF project changed) · red→green · spec + trace · review (key) · architecture (when declared)
+feature: gates=required, patchCoverage=required@90, suppressions=required, docsReferences=required, efPendingModelChanges=required, redGreen=whenApplicable, specAndTrace=required, review=requiredWithKey, architectureTests=whenApplicable, specFirst=off, mutation=off
+  Needs: gates · coverage 90 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key required) · architecture (when declared)
+critical: gates=required, patchCoverage=required@95, suppressions=required, docsReferences=required, efPendingModelChanges=required, redGreen=whenApplicable, specAndTrace=required, review=requiredWithKey, architectureTests=required, specFirst=required, mutation=off
+  Needs: gates · coverage 95 % · suppressions · docs references · ef pending changes · red→green per story · spec + trace · review (key required) · architecture · spec first

@@ -1,5 +1,8 @@
 using Lockflight.Cli.Adoption;
+using System.Text;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Config.Migration;
+using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
 using Lockflight.Cli.Ledger;
@@ -20,6 +23,8 @@ namespace Lockflight.Cli.Updating;
 internal sealed class UpdateCommand(CliContext context) : ICommand
 {
     private const string SourceOption = "--source";
+    private const string DryRunOption = "--dry-run";
+    private const string ProjectOption = "--project";
 
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
@@ -27,8 +32,8 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         string? feed;
         switch (options)
         {
-            case ["--project"]:
-                return await UpdateProjectAsync(cancellationToken);
+            case [ProjectOption, ..] when ProjectArguments(options[1..]) is { } project:
+                return await UpdateProjectAsync(project.DryRun, project.Feed, cancellationToken);
             case []:
                 feed = null;
                 break;
@@ -36,7 +41,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
                 feed = value;
                 break;
             default:
-                await context.Error.WriteLineAsync($"lockflight: update takes only {SourceOption} <feed> (a package source URL or folder)");
+                await context.Error.WriteLineAsync($"lockflight: update takes only {SourceOption} <feed> (a package source URL or folder); `update --project {DryRunOption}` shows what the project step would change");
                 return ExitCode.Config;
         }
 
@@ -56,7 +61,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         ExitCode installed = source is null
             ? await UpdateFromPackageAsync(home, feed, cancellationToken)
             : await UpdateFromSourceAsync(source, cancellationToken);
-        return installed == ExitCode.Pass ? await HandOverAsync(home, cancellationToken) : installed;
+        return installed == ExitCode.Pass ? await HandOverAsync(home, feed, cancellationToken) : installed;
     }
 
     private async Task<ExitCode> UpdateFromSourceAsync(string source, CancellationToken cancellationToken)
@@ -70,7 +75,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         }
 
         await context.Output.WriteLineAsync("Installing the engine and the plugin");
-        (string script, List<string> arguments) = InstallScript(source);
+        (string script, List<string> arguments) = DevInstallScript(source);
         ProcessResult install = await context.Processes(script, arguments, source, cancellationToken);
         await context.Output.WriteAsync(install.Output);
         if (install.ExitCode != 0)
@@ -86,7 +91,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
     /// The checkout's install script, told that update prints the next steps: <c>dev-install.ps1</c> through Windows PowerShell,
     /// which every Windows has, else <c>dev-install.sh</c>.
     /// </summary>
-    private static (string FileName, List<string> Arguments) InstallScript(string source) => OperatingSystem.IsWindows()
+    private static (string FileName, List<string> Arguments) DevInstallScript(string source) => OperatingSystem.IsWindows()
         ? ("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(source, "scripts", "dev-install.ps1"), "-Updating"])
         : ("sh", ["-c", "LOCKFLIGHT_UPDATING=1 exec sh \"$0\"", Path.Combine(source, "scripts", "dev-install.sh")]);
 
@@ -115,7 +120,18 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
     }
 
     /// <summary>The new engine updates the project, so the pin names its own version and the block is its own text.</summary>
-    private async Task<ExitCode> HandOverAsync(string home, CancellationToken cancellationToken)
+    /// <summary>The options after <c>--project</c>: <c>--dry-run</c> and <c>--source &lt;feed&gt;</c>, in any order; null when others are given.</summary>
+    private static (bool DryRun, string? Feed)? ProjectArguments(string[] rest) => rest switch
+    {
+        [] => (false, null),
+        [DryRunOption] => (true, null),
+        [SourceOption, string feed] when feed.Length > 0 => (false, feed),
+        [DryRunOption, SourceOption, string feed] when feed.Length > 0 => (true, feed),
+        [SourceOption, string feed, DryRunOption] when feed.Length > 0 => (true, feed),
+        _ => null,
+    };
+
+    private async Task<ExitCode> HandOverAsync(string home, string? feed, CancellationToken cancellationToken)
     {
         if (ManifestLocator.Discover(context.WorkingDirectory) is not { Manifest: Manifest manifest })
         {
@@ -123,7 +139,8 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             return ExitCode.Pass;
         }
 
-        ProcessResult project = await context.Processes(UserInstall.Engine(home), ["update", "--project"], manifest.Root, cancellationToken);
+        ProcessResult project = await context.Processes(
+            UserInstall.Engine(home), feed is null ? ["update", ProjectOption] : ["update", ProjectOption, SourceOption, feed], manifest.Root, cancellationToken);
         await context.Output.WriteAsync(project.Output);
         await context.Error.WriteAsync(project.Error);
         if (project.ExitCode != 0)
@@ -136,16 +153,43 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         return ExitCode.Pass;
     }
 
-    private async Task<ExitCode> UpdateProjectAsync(CancellationToken cancellationToken)
+    /// <param name="dryRun">Print what would change and write nothing.</param>
+    /// <param name="feed">Where the release's hashes are read from for the engine lock; null for <c>LOCKFLIGHT_NUGET_FEED</c>, else nuget.org.</param>
+    private async Task<ExitCode> UpdateProjectAsync(bool dryRun, string? feed, CancellationToken cancellationToken)
     {
-        if (ManifestLocator.Discover(context.WorkingDirectory) is not { Manifest: Manifest manifest })
+        ManifestLoadResult loaded = ManifestLocator.Discover(context.WorkingDirectory);
+        if (loaded.Error is ManifestError invalid)
+        {
+            await context.Error.WriteLineAsync($"lockflight: {invalid.Describe()}; fix it first, nothing was changed");
+            return ExitCode.Config;
+        }
+
+        if (loaded is not { Manifest: Manifest manifest })
         {
             await context.Error.WriteLineAsync($"lockflight: no {Manifest.FileName} here or above");
             return ExitCode.Config;
         }
 
         string root = manifest.Root;
-        List<string> changed = [];
+        // Every file is computed first and written last, so an error leaves the project as it was.
+        List<PlannedWrite> writes = [];
+        string manifestPath = Path.Combine(root, Manifest.FileName);
+        string manifestText = Encoding.UTF8.GetString(await File.ReadAllBytesAsync(manifestPath, cancellationToken));
+        ManifestMigrationResult migration = ManifestMigration.Migrate(manifestText, root, manifestPath);
+        switch (migration.Status)
+        {
+            case ManifestMigrationStatus.Invalid:
+                await context.Error.WriteLineAsync($"lockflight: {migration.Message}");
+                return ExitCode.Config;
+            case ManifestMigrationStatus.Migrated:
+                writes.Add(new PlannedWrite(Manifest.FileName, manifestPath, manifestText, migration.Text!));
+                break;
+            case ManifestMigrationStatus.ManualEdit:
+                await context.Error.WriteLineAsync($"lockflight: {migration.Message}. Add this by hand (a person's edit; the file is protected):");
+                await context.Error.WriteLineAsync(migration.Snippet);
+                break;
+        }
+
         string toolManifest = ToolManifestWriter.RelativePathIn(root);
         string pinPath = Path.Combine(root, toolManifest);
         string? tools = File.Exists(pinPath) ? await File.ReadAllTextAsync(pinPath, cancellationToken) : null;
@@ -158,23 +202,41 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         (string pinned, bool pinChanged) = ToolManifestWriter.Pin(tools);
         if (pinChanged)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(pinPath)!);
-            await File.WriteAllTextAsync(pinPath, pinned, cancellationToken);
-            changed.Add(Path.GetRelativePath(root, pinPath).Replace('\\', '/'));
+            writes.Add(new PlannedWrite(Path.GetRelativePath(root, pinPath).Replace('\\', '/'), pinPath, tools, pinned));
+        }
+
+        EngineLockPlan lockPlan = await EngineLockPlanner.PlanAsync(
+            root, ToolPin.RunningVersion, context.Engine.Path, feed is null ? EnginePackageFeed.FromEnvironment(context.Environment) : new EnginePackageFeed(feed, context.Environment),
+            GitHubReleaseHashes.FetchAsync, context.Processes, cancellationToken);
+        await PlanLockAsync(root, lockPlan, writes, cancellationToken);
+        if (lockPlan.Committed)
+        {
+            await PlanCiFilesAsync(root, writes, dryRun, cancellationToken);
         }
 
         string claudeMd = Path.Combine(root, "CLAUDE.md");
         if (File.Exists(claudeMd) && await File.ReadAllTextAsync(claudeMd, cancellationToken) is string text
             && ClaudeMdBlock.IsPresent(text) && !ClaudeMdBlock.IsCurrent(text))
         {
-            await File.WriteAllTextAsync(claudeMd, ClaudeMdBlock.Upsert(text), cancellationToken);
-            changed.Add("CLAUDE.md");
+            writes.Add(new PlannedWrite("CLAUDE.md", claudeMd, text, ClaudeMdBlock.Upsert(text)));
         }
 
-        LedgerWriter ledger = new(root, context.Time);
-        foreach (string file in changed)
+        if (File.Exists(Path.Combine(root, Manifest.UnitFileName)))
         {
-            await ledger.AppendAsync(new LedgerEvent(LedgerEventType.ConfigWritten, $"update:{file}", "updated", ToolPin.RunningVersion), cancellationToken);
+            await context.Output.WriteLineAsync(
+                $"note: this repository holds {Manifest.UnitFileName}, a vendored unit policy. Make it a unit of its shell with `{EngineCommand.Name} init --unit-of <shell url> --unit-path <path>`, then delete {Manifest.UnitFileName}; update does not do it (the file names no shell URL).");
+        }
+
+        if (dryRun)
+        {
+            return await ReportDryRunAsync(writes, migration, cancellationToken);
+        }
+
+        await PlannedWrite.ApplyAllAsync(writes, cancellationToken);
+        LedgerWriter ledger = new(root, context.Time);
+        foreach (PlannedWrite write in writes)
+        {
+            await ledger.AppendAsync(new LedgerEvent(LedgerEventType.ConfigWritten, $"update:{write.RelativePath}", "updated", ToolPin.RunningVersion), cancellationToken);
         }
 
         ExitCode link = await new LinkCommand(context with { WorkingDirectory = root }).RunAsync(cancellationToken);
@@ -183,10 +245,124 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             return link;
         }
 
-        await context.Output.WriteLineAsync(changed.Count == 0
+        await ReportNewChecksAsync(migration);
+        await context.Output.WriteLineAsync(writes.Count == 0
             ? $"Lockflight {ToolPin.RunningVersion}: this project was already up to date."
-            : $"Lockflight {ToolPin.RunningVersion}: updated {string.Join(", ", changed)}. Review and commit them.");
+            : $"Lockflight {ToolPin.RunningVersion}: updated {string.Join(", ", writes.Select(write => write.RelativePath))}. Review them and commit them in one commit.");
         await MascotDisplay.DrawAsync(context, MascotPose.Pass, $"Up to date: {ToolPin.RunningVersion}");
         return ExitCode.Pass;
+    }
+
+    /// <summary>
+    /// The lock and, for a committed lock, the vendored install script, when they differ from what is there. Without a lock the
+    /// project keeps its version pin, and the output says why.
+    /// </summary>
+    private async Task PlanLockAsync(string root, EngineLockPlan plan, List<PlannedWrite> writes, CancellationToken cancellationToken)
+    {
+        // A development build's local lock pins that build for this clone; once a release (or no lock) takes over it is stale.
+        string localLock = EngineLockFiles.LocalPath(root);
+        if (plan.LockPath != localLock && File.Exists(localLock))
+        {
+            writes.Add(new PlannedWrite(EngineLock.LocalRelativePath, localLock, await File.ReadAllTextAsync(localLock, cancellationToken), NewText: null));
+        }
+
+        if (plan.Lock is not EngineLock engineLock)
+        {
+            await context.Output.WriteLineAsync($"note: no engine lock written ({plan.Reason}); the project stays pinned by version in dotnet-tools.json");
+            return;
+        }
+
+        foreach (string note in plan.Notes)
+        {
+            await context.Output.WriteLineAsync($"engine lock: {note}");
+        }
+
+        string lockText = EngineLockText.Write(engineLock);
+        string? existingLock = File.Exists(plan.LockPath!) ? await File.ReadAllTextAsync(plan.LockPath!, cancellationToken) : null;
+        if (existingLock != lockText)
+        {
+            writes.Add(new PlannedWrite(Path.GetRelativePath(root, plan.LockPath!).Replace('\\', '/'), plan.LockPath!, existingLock, lockText));
+        }
+
+        if (!plan.Committed)
+        {
+            return;
+        }
+
+        string scriptPath = Path.Combine(root, InstallScript.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        string scriptText = Encoding.UTF8.GetString(InstallScript.Bytes);
+        string? existingScript = File.Exists(scriptPath) ? Encoding.UTF8.GetString(await File.ReadAllBytesAsync(scriptPath, cancellationToken)) : null;
+        if (existingScript != scriptText)
+        {
+            writes.Add(new PlannedWrite(InstallScript.RelativePath, scriptPath, existingScript, scriptText));
+        }
+    }
+
+    /// <summary>
+    /// Each generated CI file with its engine install step and policy restore moved to the lock. A file where those lines cannot
+    /// be found exactly as Lockflight wrote them is left alone, and the new step is written to
+    /// <c>.lockflight/local/migration/&lt;path&gt;</c> for a person to merge.
+    /// </summary>
+    private async Task PlanCiFilesAsync(string root, List<PlannedWrite> writes, bool dryRun, CancellationToken cancellationToken)
+    {
+        foreach (string relative in CiStepMigration.KnownFiles)
+        {
+            string path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            string text = await File.ReadAllTextAsync(path, cancellationToken);
+            if (CiStepMigration.Migrate(text) is string migrated)
+            {
+                if (migrated != text)
+                {
+                    writes.Add(new PlannedWrite(relative, path, text, migrated));
+                }
+
+                continue;
+            }
+
+            string fallback = Path.Combine(root, ".lockflight", "local", "migration", relative.Replace('/', Path.DirectorySeparatorChar));
+            if (dryRun)
+            {
+                await context.Output.WriteLineAsync($"note: {relative} does not hold the engine install step as Lockflight wrote it; update would leave it alone and write the new step for you to merge");
+                continue;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(fallback)!);
+            await File.WriteAllTextAsync(fallback, $"# Replace the engine install step of {relative} with this, and add .lockflight/engine.lock and .lockflight/ci to its policy restore:\n{CiShellScripts.InstallEngine}\n", cancellationToken);
+            await context.Output.WriteLineAsync($"note: {relative} does not hold the engine install step as Lockflight wrote it, so it was left alone; merge {Path.GetRelativePath(root, fallback).Replace('\\', '/')} into it by hand");
+        }
+    }
+
+    private async Task<ExitCode> ReportDryRunAsync(List<PlannedWrite> writes, ManifestMigrationResult migration, CancellationToken cancellationToken)
+    {
+        await context.Output.WriteLineAsync(writes.Count == 0
+            ? $"update --dry-run: nothing to change (Lockflight {ToolPin.RunningVersion})."
+            : $"update --dry-run: nothing was written. Lockflight {ToolPin.RunningVersion} would change:");
+        foreach (PlannedWrite write in writes)
+        {
+            await context.Output.WriteLineAsync($"--- {write.RelativePath}");
+            await context.Output.WriteLineAsync(await write.DiffAsync(cancellationToken));
+        }
+
+        await ReportNewChecksAsync(migration);
+        return ExitCode.Pass;
+    }
+
+    private async Task ReportNewChecksAsync(ManifestMigrationResult migration)
+    {
+        if (migration.NewChecks.Count == 0)
+        {
+            return;
+        }
+
+        await context.Output.WriteLineAsync($"{Manifest.FileName} is now version 2. New in it, set so that nothing judges differently:");
+        foreach (string check in migration.NewChecks)
+        {
+            await context.Output.WriteLineAsync($"  {check}");
+        }
     }
 }

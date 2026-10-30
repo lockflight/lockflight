@@ -1,7 +1,7 @@
-using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Docs;
 using Lockflight.Cli.Doctor;
+using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Facts;
 using Lockflight.Cli.Gates;
@@ -15,6 +15,7 @@ using Lockflight.Cli.Linking;
 using Lockflight.Cli.Mascot;
 using Lockflight.Cli.Proposals;
 using Lockflight.Cli.Review;
+using Lockflight.Cli.Routing;
 using Lockflight.Cli.Updating;
 using Lockflight.Cli.Workspace;
 
@@ -29,11 +30,13 @@ internal static class CommandRegistry
     public static IReadOnlyList<CommandDescriptor> All { get; } =
     [
         new(["version"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new VersionCommand(context)),
-        new(["link"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new LinkCommand(context)),
-        new(["init"], CommandAudience.Anyone, ["--profile", "--ci", "--ci-platform"], ["--quality", "--architecture-tests", "--no-link", "--no-sandbox"], CommandOperands.Options, OptionParsing.Own, context => new InitCommand(context)),
+        new(["link"], CommandAudience.Anyone, [], [LinkCommand.InstalledFlag], CommandOperands.Options, OptionParsing.Shared, context => new LinkCommand(context)),
+        new(["engine", "verify-lock"], CommandAudience.Anyone, ["--source"], [VerifyLockCommand.AttestationFlag], CommandOperands.AtLeastOne, OptionParsing.Own, context => new VerifyLockCommand(context)),
+        new(["engine", "install"], CommandAudience.Human, ["--source"], [], CommandOperands.Options, OptionParsing.Shared, context => new EngineInstallCommand(context)),
+        new(["init"], CommandAudience.Anyone, ["--profile", "--preset", "--ci", "--ci-platform", "--unit-of", "--unit-path", "--speckit-preset"], ["--quality", "--architecture-tests", "--dry-run", "--no-link", "--no-sandbox"], CommandOperands.Options, OptionParsing.Own, context => new InitCommand(context)),
         new(["doctor"], CommandAudience.Anyone, [], [DoctorCommand.SelfTestFlag, DoctorCommand.CanariesFlag, DoctorCommand.FullCanariesFlag], CommandOperands.Options, OptionParsing.Shared, context => new DoctorCommand(context)),
         new(["statusline"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new StatusLineCommand(context)),
-        new(["update"], CommandAudience.Human, ["--source"], ["--project"], CommandOperands.Options, OptionParsing.Own, context => new UpdateCommand(context)),
+        new(["update"], CommandAudience.Human, ["--source"], ["--project", "--dry-run"], CommandOperands.Options, OptionParsing.Own, context => new UpdateCommand(context)),
         new(["docs", "check"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new DocsCheckCommand(context)),
         new(["facts"], CommandAudience.Anyone, [], [FactsCommand.JsonFlag], CommandOperands.Options, OptionParsing.Shared, context => new FactsCommand(context)),
         new(["hook"], CommandAudience.Anyone, [], [], CommandOperands.ExactlyOne, OptionParsing.Own, context => new HookCommand(context)),
@@ -41,7 +44,7 @@ internal static class CommandRegistry
         new(["baseline", "tests"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
         new(["baseline", "deps"], CommandAudience.Human, ["--path"], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
         new(["baseline", "suppressions"], CommandAudience.Human, [], [], CommandOperands.Options, OptionParsing.Shared, context => new BaselineCommand(context)),
-        new(["gate", "run"], CommandAudience.Anyone, ["--profile", "--path", "--unit", "--base", "--result"], [], CommandOperands.Options, OptionParsing.Shared, context => new GateCommand(context)),
+        new(["gate", "run"], CommandAudience.Anyone, ["--profile", "--path", "--unit", "--base", "--result", GateCommand.ShellOption], ["--full"], CommandOperands.Options, OptionParsing.Shared, context => new GateCommand(context)),
         new(["phase", "check"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.AtLeastOne, OptionParsing.Shared, context => new PhaseCommand(context)),
         new(["redgreen", "start"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),
         new(["redgreen", "red"], CommandAudience.Anyone, ["--feature"], ["--verbose"], CommandOperands.Options, OptionParsing.Shared, context => new RedGreenCommand(context)),
@@ -67,16 +70,14 @@ internal static class CommandRegistry
             Listing = CommandListing.Unlisted,
         },
         new(["ci"], CommandAudience.Anyone, [JudgeInputsReader.HeadOption, JudgeInputsReader.BaseOption, JudgeInputsReader.BranchOption, JudgeInputsReader.PlatformOption, JudgeInputsReader.EventOption, JudgeInputsReader.EvidenceOption, JudgeInputsReader.ShellOption], [JudgeInputsReader.NoReviewFlag, CiCommand.PlanFlag], CommandOperands.Options, OptionParsing.Shared, context => new CiCommand(context)),
-        new(["ci", "report"], CommandAudience.Anyone, [CiReportCommand.EvidenceOption, CiReportCommand.ReviewOption, CiReportCommand.HeadOption, CiReportCommand.ContextOption, CiReportCommand.OutOption], [], CommandOperands.Options, OptionParsing.Shared, context => new CiReportCommand(context)),
-        new(["ci", "review"], CommandAudience.Anyone, [JudgeInputsReader.HeadOption, JudgeInputsReader.BaseOption, JudgeInputsReader.BranchOption, JudgeInputsReader.PlatformOption, JudgeInputsReader.OutOption], [], CommandOperands.Options, OptionParsing.Shared, context => new CiReviewCommand(context)),
+        new(["route", "show"], CommandAudience.Anyone, [RouteShowCommand.BaseOption, RouteShowCommand.HeadOption], [RouteShowCommand.JsonFlag], CommandOperands.Options, OptionParsing.Shared, context => new RouteShowCommand(context)),
+        new(["route", "record"], CommandAudience.Anyone, [RouteRecordCommand.FeatureOption, RouteRecordCommand.BaseOption], [], CommandOperands.Options, OptionParsing.Shared, context => new RouteRecordCommand(context)),
         new(["workspace", "sync"], CommandAudience.Anyone, [], ["--check"], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceSyncCommand(context)),
-        new(["adopt", "plan"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
-        new(["adopt", "apply"], CommandAudience.Human, ["--speckit-preset"], ["--skip-speckit", "--no-sandbox"], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
-        new(["adopt", "undo"], CommandAudience.Human, ["--backup"], ["--force"], CommandOperands.Options, OptionParsing.Shared, context => new AdoptCommand(context)),
+        new(["workspace", "clone"], CommandAudience.Anyone, [WorkspaceCloneCommand.IntoOption], [], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceCloneCommand(context)),
     ];
 
     /// <summary>Command groups reserved for a person even with a verb no descriptor names (<c>approve xyz</c>), except their agent verbs.</summary>
-    public static IReadOnlyList<ReservedGroup> ReservedGroups { get; } = [new("baseline", []), new("approve", ["verify"]), new("update", [])];
+    public static IReadOnlyList<ReservedGroup> ReservedGroups { get; } = [new("baseline", []), new("approve", ["verify"]), new("update", []), new("engine", ["verify-lock"])];
 
     /// <summary>The descriptor whose words begin <paramref name="args"/>, the longest when several do; null when none does.</summary>
     public static CommandDescriptor? Match(IReadOnlyList<string> args)

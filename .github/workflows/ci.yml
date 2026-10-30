@@ -133,6 +133,7 @@ jobs:
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" sh tests/workspace/gates.sh "$RUNNER_TEMP/workspace"
           ENGINE="$engine" bash tests/workspace/lifecycle.sh "$RUNNER_TEMP/workspace-lifecycle"
+          ENGINE="$engine" sh tests/workspace/shell-pointer.sh "$RUNNER_TEMP/shell-pointer"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lockflight-${{ matrix.rid }}

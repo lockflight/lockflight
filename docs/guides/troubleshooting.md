@@ -129,6 +129,22 @@ call is blocked with that command. For a development pin, use the commands for a
 If the message says **"the engine pin cannot be read"**, `dotnet-tools.json` is malformed. It is protected, so fix it yourself,
 then run the restore command.
 
+## Every write is blocked: "not the engine .lockflight/engine.lock pins"
+
+The linked engine is not the one the project's engine lock pins for this platform: the lock moved (a branch switch, a pull,
+a teammate's upgrade) or the engine did. The agent may run `~/.lockflight/bin/lockflight link --installed`, which links the
+locked engine when it is already installed in `~/.lockflight/tools/<version>`. Otherwise, in a separate terminal, run
+`~/.lockflight/bin/lockflight engine install` in the project: it installs exactly the locked engine (checked against its hash)
+and links it, and changes nothing committed.
+
+## A teammate's session can only read: "'version' must be 1"
+
+Their engine is Lockflight 0.2, and the project's `lockflight.yaml` is now version 2 (after `update` moved it). A 0.2 engine
+cannot read it, so its guard allows reading only, recovery commands included. In a separate terminal, in the project, they run
+`~/.lockflight/bin/lockflight update` once (a 0.2 `update` that says "not in a Lockflight project" installed the new engine
+anyway: run the same command again, now with the new engine), or `~/.lockflight/bin/lockflight engine install` once their
+user engine is new enough.
+
 ## `doctor` warns about gitleaks or the Claude Code version
 
 - **gitleaks:** the `pr` profile's secrets step runs gitleaks from `PATH`, or from `LOCKFLIGHT_GITLEAKS`. Without it the step is
@@ -216,6 +232,24 @@ The gate could not judge, and NOT-EARNED is never a pass. The line under the ste
 
 A step that says **N/A** did not apply (for example `coverage.patch` without `gates.coverage.collector`). It is neither a pass
 nor a failure.
+
+## The Stop gate is slow
+
+Read the `projects.affected` line of the last run (`.lockflight/bin/lockflight gate run`, or the `gate:stop` line in the
+ledger). It names the projects the gate built and why.
+
+- **"every project: …"** names the reason the gate built everything. A change to a shared build input
+  (`Directory.Build.props`, `global.json`, a `.props` file) or to a file outside every project does that on purpose. A
+  reference through an MSBuild property (`$(RepoRoot)/src/…`) makes the graph unknown: write it relative to the project
+  (`../Core/Core.csproj` or `$(MSBuildThisFileDirectory)../Core/Core.csproj`) and the gate can choose again. See
+  [how the projects are chosen](configuration.md#the-stop-profile-builds-what-the-change-affects).
+- **Many projects, each "affected by … via …":** a project most of the solution depends on changed; that is the work the
+  change needs.
+- **Few projects, but the tests take long:** keep the slow ones out of the Stop gate with `test.stopFilter` (for example
+  `Category!=Integration`); the `pr` profile still runs them.
+- **A workspace:** `doctor` names the units whose Stop time is above 2 minutes at the 95th percentile.
+
+Whatever the Stop gate leaves out, CI runs: `gate run --profile pr` builds and tests everything.
 
 ## The format gate fails
 
@@ -315,15 +349,15 @@ script, so Claude Code needs **Git Bash**; `doctor` checks for it.
 
 ## "records a human decision and does not run inside a Claude Code session"
 
-`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `adopt apply|undo` and `update` are refused when `CLAUDECODE=1` is set. That variable
+`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss` and `update` are refused when `CLAUDECODE=1` is set. That variable
 is set inside Claude Code sessions, and a command typed with the `!` prefix runs inside the session too, so it is refused as
 well. Open a separate terminal window and paste the line the refusal prints: it changes to the project root and runs the same
 command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approve spec`.
 
 ## Uninstall
 
-1. In each project, if you ran `adopt apply`, first open a separate terminal window and run
-   `.lockflight/bin/lockflight adopt undo` there, to revert what it changed.
+1. In each project where init's changes are still one commit of their own, `git revert` it; otherwise remove by hand what
+   the steps below list.
 2. In a standard-profile project, remove the Spec Kit preset: `uvx --from specify-cli==1.1.3 specify preset remove lockflight`.
    Spec Kit itself (`.specify/`, the `speckit-*` skills) is yours to keep or remove.
 3. In each project, remove what `init` added: `lockflight.yaml`, `.lockflight/`, the tool pin (the `lockflight.cli` entry

@@ -1,0 +1,3 @@
+class: feature
+computed: feature
+signal: api.publicMember -> feature (heuristic) src/Shop.Client/CartClient.cs:7: public member Shop.Client.CartClient.Total added in API project src/Shop.Client/Shop.Client.csproj

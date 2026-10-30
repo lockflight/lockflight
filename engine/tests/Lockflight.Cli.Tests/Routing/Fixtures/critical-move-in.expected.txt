@@ -1,0 +1,4 @@
+class: critical
+computed: critical
+signal: critical.path -> critical (boundary) src/Shop/Payments/Cart.cs: matches routing.critical src/Shop/Payments/**
+signal: moved -> fix (heuristic) src/Shop/Payments/Cart.cs: moved from src/Shop/Cart.cs unchanged

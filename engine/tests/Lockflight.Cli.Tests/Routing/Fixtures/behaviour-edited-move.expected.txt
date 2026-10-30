@@ -1,0 +1,5 @@
+class: behaviour
+computed: behaviour
+signal: file.added -> behaviour (heuristic) src/Shop/Pricing/Cart.cs: new production file
+signal: type.added -> behaviour (heuristic) src/Shop/Pricing/Cart.cs:3: new type Shop.Pricing.Cart
+signal: moved -> fix (heuristic) src/Shop/Pricing/Cart.cs: moved from src/Shop/Cart.cs, 2 lines differ

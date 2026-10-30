@@ -14,15 +14,20 @@ yourself. Tell them to start sessions at the shell root, where their own hooks l
 
 `init` lists the services under `units:` and adds the child repositories to `.gitignore`.
 
-Run `.lockflight/bin/lockflight workspace sync`. It writes into each .NET service repository its CI policy:
-`lockflight.unit.yaml`, the engine pin, the service's baselines and the workflow. Tell the user to review and commit in each
-service repository: a service's PR is judged by these files from its base branch. Suggest a CODEOWNERS entry in each service
-for `lockflight.unit.yaml`, the pin and `.github/workflows/`.
+Each service repository then needs the shell's policy in its own CI. The preferred way is the pointer: in each service
+repository, the user runs `lockflight init --unit-of <shell url> --unit-path <its path in units:>`. It writes `shell:` into the
+service's `lockflight.yaml` and a CI job that clones the shell read-only and judges with its policy. Tell the user that a
+private shell needs a read-only token in the `LOCKFLIGHT_SHELL_TOKEN` CI secret (or a deploy key for an SSH URL), and to
+review and commit in each service repository. Suggest a CODEOWNERS entry in each service for `lockflight.yaml` and the CI file.
+
+The older way still works for GitHub: `.lockflight/bin/lockflight workspace sync` in the shell writes into each .NET service
+repository that has no pointer `lockflight.unit.yaml`, the engine pin, the service's baselines and the workflow. Do not mix
+the two in one service.
 
 ## Verify and hand over
 
-In a workspace, `doctor` also checks that each unit is cloned, has no `lockflight.yaml` of its own, is ignored by the shell
-and carries the current unit CI policy; and that the plugin is enabled at user scope and no SDK pin keeps the engine from
+In a workspace, `doctor` also checks that each unit is cloned, has no `lockflight.yaml` of its own other than a `shell:` pointer
+to this shell, is ignored by the shell and carries the current vendored CI policy; and that the plugin is enabled at user scope and no SDK pin keeps the engine from
 running.
 
 - The Stop gate builds and tests only the changed services, at most two at a time. `doctor` names services that are slow at

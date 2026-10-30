@@ -155,7 +155,7 @@ Never approve for them.
    - the feature's files under `specs/<id>/` (`spec.md`, `plan.md`, `tasks.md` and the rest);
    - the engine's evidence under `.lockflight/features/<id>/`: `approvals/*.json`,
      `redgreen.json` and `reviews/`. CI's `approve verify` and the pull request read them there; never leave them untracked.
-   Git ignores the engine's local state (`.lockflight/bin/`, `ledger/`, `local/`, `backup/`, `adopt/`); never force-add it.
+   Git ignores the engine's local state (`.lockflight/bin/`, `ledger/`, `local/`); never force-add it.
    Run `git status` afterwards: nothing of the feature may stay changed or untracked.
 9. **Review.** Run the review of record as the `review` skill describes (`.lockflight/bin/lockflight review`; leave out
    `--base`, `--model` and `--budget`). Fix confirmed findings in a new red/green cycle, commit as in step 8, and review again;

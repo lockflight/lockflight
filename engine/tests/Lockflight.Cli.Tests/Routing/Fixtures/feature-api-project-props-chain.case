@@ -1,0 +1,27 @@
+A project made packable by a Directory.Build.props above it is an API project.
+=== base src/Directory.Build.props
+<Project>
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Client/Shop.Client.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Client/CartClient.cs
+namespace Shop.Client;
+
+public sealed class CartClient
+{
+    public int Count() => 0;
+}
+=== head src/Shop.Client/CartClient.cs
+namespace Shop.Client;
+
+public sealed class CartClient
+{
+    public long Count() => 0;
+}

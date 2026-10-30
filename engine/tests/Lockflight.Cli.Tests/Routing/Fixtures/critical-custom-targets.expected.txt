@@ -1,0 +1,3 @@
+class: critical
+computed: critical
+signal: structure.buildWide -> critical (heuristic) build/Shop.targets: changes every project's build

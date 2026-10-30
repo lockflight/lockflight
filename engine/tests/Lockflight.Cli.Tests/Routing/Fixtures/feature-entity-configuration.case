@@ -1,0 +1,34 @@
+A changed entity configuration (length, query filter) is db.model.
+=== base src/Shop.Data/Shop.Data.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop.Data/OrderConfiguration.cs
+using Microsoft.EntityFrameworkCore;
+
+namespace Shop.Data;
+
+public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
+{
+    public void Configure(EntityTypeBuilder<Order> builder)
+    {
+        builder.Property(order => order.Number)
+            .HasMaxLength(20);
+        builder.HasQueryFilter(order => order.TenantId == Tenant.Current);
+    }
+}
+=== head src/Shop.Data/OrderConfiguration.cs
+using Microsoft.EntityFrameworkCore;
+
+namespace Shop.Data;
+
+public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
+{
+    public void Configure(EntityTypeBuilder<Order> builder)
+    {
+        builder.Property(order => order.Number)
+            .HasMaxLength(10);
+    }
+}

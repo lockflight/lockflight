@@ -40,7 +40,7 @@ public sealed class ReadinessChecksTests : IDisposable
     [Fact]
     public async Task AProjectThatUsesTheLockflightPresetGetsTheStandardChecksWithoutTheGitAttributesRule()
     {
-        // adopt apply installs the preset into a project set up by a plain init, which writes no .gitattributes rule.
+        // init --speckit-preset installs the preset into a lite project, which has no .gitattributes rule.
         Write(".specify/presets/.registry", """{ "presets": { "lockflight": { "version": "0.1.0", "enabled": true } } }""");
 
         IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
