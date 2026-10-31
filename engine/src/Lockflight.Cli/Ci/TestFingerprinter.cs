@@ -44,6 +44,42 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
         ? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)))
         : null;
 
+    /// <summary>
+    /// How many call sites in the test's walk call an assertion (<see cref="IsAssertion"/>); null when the walk cannot be read. A
+    /// static count, compared between two versions of one test: an amend that has fewer dropped an assertion.
+    /// </summary>
+    public int? Assertions(string className, string method) => CanonicalText(className, method) is string text ? CountAssertions(text) : null;
+
+    /// <summary>The call sites (<c>call</c>, <c>callvirt</c>) in a canonical text whose target is an assertion.</summary>
+    public static int CountAssertions(string canonicalText) =>
+        canonicalText.Split('\n').Where(line => !line.StartsWith("method ", StringComparison.Ordinal) && !line.StartsWith("attr ", StringComparison.Ordinal))
+            .SelectMany(line => line.Split(';'))
+            .Count(instruction => (instruction.StartsWith("28 ", StringComparison.Ordinal) || instruction.StartsWith("6f ", StringComparison.Ordinal)) && IsAssertion(instruction[3..]));
+
+    /// <summary>
+    /// Whether a call target (<c>[xunit.assert 2.9]Xunit.Assert::Equal`1(…)</c>) is an assertion: a member of a type whose name holds
+    /// <c>Assert</c> or <c>Expect</c> (xUnit, NUnit and MSTest asserts, a repository's own <c>Expect</c> helper), or a method named
+    /// <c>Should…</c> or <c>Verify…</c>, or holding <c>Assert</c> (Shouldly, FluentAssertions, mocking verifications).
+    /// </summary>
+    private static bool IsAssertion(string target)
+    {
+        int separator = target.IndexOf("::", StringComparison.Ordinal);
+        if (separator < 0)
+        {
+            return false;
+        }
+
+        string parent = target[..separator];
+        int generic = parent.IndexOf('<', StringComparison.Ordinal);
+        parent = generic < 0 ? parent : parent[..generic];
+        string type = parent[(parent.LastIndexOfAny(['.', '+', ']']) + 1)..];
+        string rest = target[(separator + 2)..];
+        int end = rest.IndexOfAny(['`', '(', '<']);
+        string method = end < 0 ? rest : rest[..end];
+        return type.Contains("Assert", StringComparison.Ordinal) || type.Contains("Expect", StringComparison.Ordinal)
+            || method.StartsWith("Should", StringComparison.Ordinal) || method.StartsWith("Verify", StringComparison.Ordinal) || method.Contains("Assert", StringComparison.Ordinal);
+    }
+
     /// <summary>The text the fingerprint hashes, for a person comparing two fingerprints; null when it cannot be computed.</summary>
     public string? CanonicalText(string className, string method)
     {

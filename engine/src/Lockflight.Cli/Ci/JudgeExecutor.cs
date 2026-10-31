@@ -45,7 +45,7 @@ internal static class JudgeExecutor
                 ? new GreenJudgement(CheckVerdict.NotEarned, $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
                 : GreenJudge.Decide(head, baseListing?.AsBaseline, cycles ?? []);
             IReadOnlyList<SinceRedTest>? sinceRed = cycles is not null && plan.Levels[CheckId.TestsSinceRed] != CheckLevel.Off
-                ? await new SinceRedJudge(trees, time).JudgeAsync(plan, head.Listing, cycles, cancellationToken)
+                ? await new SinceRedJudge(trees, time).JudgeAsync(plan, head.Listing, head.Results, cycles, cancellationToken)
                 : null;
             IReadOnlyList<ExistingChangedTest>? existingChanged = baseListing is not null && plan.Levels[CheckId.TestsExistingChanged] != CheckLevel.Off
                 ? await new ExistingChangedJudge(trees, time).JudgeAsync(plan, head.Listing, baseListing, cancellationToken)
