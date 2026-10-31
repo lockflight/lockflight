@@ -242,7 +242,8 @@ public sealed class CiReportTests : IDisposable
             Check("tests.existingChanged", "lockflight/judge", "PASS", "advisory", "no existing test changed"),
             Check("tests.hostTampering", "lockflight/judge", "PASS", "required", "no code in the test assemblies that could tamper with the test host"),
             Check("trace", "lockflight/judge", "PASS", "required", "1/1 requirements of 001-shipping"),
-            Check("routing", "lockflight/judge", "PASS", "required", "class behaviour (routing)")),
+            Check("routing", "lockflight/judge", "PASS", "required", "class behaviour (routing)"),
+            Check("policy", "lockflight/judge", "PASS", "required", "lockflight.yaml is no looser than the base's")),
     };
 
     private static JsonObject Check(string id, string context, string verdict, string level, string why) =>

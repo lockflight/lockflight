@@ -40,7 +40,8 @@
     "gates": "required",
     "review": "advisory",
     "approvals": "advisory",
-    "routing": "required"
+    "routing": "required",
+    "policy": "off"
   },
   "steps": [
     {

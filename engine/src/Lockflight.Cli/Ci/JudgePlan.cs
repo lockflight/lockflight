@@ -26,4 +26,13 @@ internal sealed record JudgePlan(
 
     /// <summary>The workspace shell's policy for this unit repository, read from its clone; null when the repository is no unit.</summary>
     public ShellPolicy? Shell { get; init; }
+
+    /// <summary>
+    /// How the pull request's <c>lockflight.yaml</c> is looser than the base's, one line each; null when it was not compared (no
+    /// pull request, or no manifest on the base).
+    /// </summary>
+    public IReadOnlyList<string>? Loosened { get; init; }
+
+    /// <summary>Why the head's <c>lockflight.yaml</c> could not be compared (it does not parse with this engine); null when it was.</summary>
+    public string? PolicyNotCompared { get; init; }
 }
