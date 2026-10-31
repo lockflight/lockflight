@@ -74,6 +74,31 @@ public sealed class GitOutputParsersTests
     }
 
     [Fact]
+    public void WhitespacePairsKeepALineDeletedInOneHunkAndAddedBackInAnother()
+    {
+        // git diff -U0 of "A\nB\nC" -> "B\nA\nC": @@ -1 +0,0 @@ -A and @@ -2,0 +2 @@ +A.
+        RoutedLine[] removed = [new(1, "app.UseAuthentication();", "app.UseAuthentication();")];
+        RoutedLine[] added = [new(2, "app.UseAuthentication();", "app.UseAuthentication();")];
+
+        (IReadOnlyList<RoutedLine> keptAdded, IReadOnlyList<RoutedLine> keptRemoved) = WhitespacePairs.Drop(added, removed);
+
+        Assert.Single(keptAdded);
+        Assert.Single(keptRemoved);
+    }
+
+    [Fact]
+    public void WhitespacePairsPairInsideAHunkWithUnequalCounts()
+    {
+        RoutedLine[] removed = [new(4, "  a();", "  a();"), new(5, "  b();", "  b();"), new(9, "  c();", "  c();")];
+        RoutedLine[] added = [new(4, "\ta();", "\ta();"), new(8, "\tc();", "\tc();")];
+
+        (IReadOnlyList<RoutedLine> keptAdded, IReadOnlyList<RoutedLine> keptRemoved) = WhitespacePairs.Drop(added, removed);
+
+        Assert.Empty(keptAdded);
+        Assert.Equal(["  b();"], keptRemoved.Select(line => line.Text));
+    }
+
+    [Fact]
     public void WhitespacePairsDropAWholeReindentInOrder()
     {
         string[] lines = ["{", "    a();", "}", "{", "    b();", "}"];

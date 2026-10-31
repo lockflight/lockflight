@@ -240,6 +240,21 @@ public sealed class JudgeRoutingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SwappingTwoProductionLinesOfTheSameIndentNeedsRedGreen()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string Pipeline = "namespace Shop;\n\npublic static class Pipeline\n{\n    public static void Use(App app)\n    {\n        app.UseAuthentication();\n        app.UseAuthorization();\n    }\n}\n";
+        baseCommit = await repository.Write("src/Shop/Pipeline.cs", Pipeline).CommitAsync("feat: pipeline", cancellationToken);
+        await repository.Write("src/Shop/Pipeline.cs", Pipeline.Replace("app.UseAuthentication();\n        app.UseAuthorization();", "app.UseAuthorization();\n        app.UseAuthentication();", StringComparison.Ordinal))
+            .CommitAsync("refactor: swap", cancellationToken);
+
+        JudgePlan plan = await PlanAsync();
+
+        Assert.True(plan.Class.ProductionChanged);
+        Assert.Equal(CheckLevel.Required, plan.Levels[CheckId.Red]);
+    }
+
+    [Fact]
     public async Task MarkupOutsideTheCodeBlockIsNotProductionCode()
     {
         await repository.Write("src/Shop/Prices.razor", Page.Replace("<h1>Prices</h1>", "<h1 class=\"title\">Prices</h1>", StringComparison.Ordinal))

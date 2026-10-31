@@ -3,9 +3,10 @@ namespace Lockflight.Cli.Routing;
 /// <summary>
 /// Drops reformatting from a file's diff: a removed line and an added line that are equal once runs of whitespace are collapsed
 /// and the ends trimmed are paired and both dropped, so a reindent, a re-wrap of spaces or a CRLF normalization counts as nothing
-/// and fires no signal. Pairs keep their order (a longest common subsequence of the collapsed texts): lines that swap places are
-/// a change, because the order of statements is behaviour. The text is compared as written (not masked), so editing a string
-/// literal or a comment that shares a line with code is still a change.
+/// and fires no signal. Lines pair only inside one hunk of the zero-context diff (the removed lines and the added lines that take
+/// their place), in order (a longest common subsequence of the collapsed texts): lines that swap places, or a line deleted in one
+/// place and added back in another, are a change, because the order of statements is behaviour. The text is compared as written
+/// (not masked), so editing a string literal or a comment that shares a line with code is still a change.
 /// </summary>
 internal static class WhitespacePairs
 {
@@ -14,16 +15,62 @@ internal static class WhitespacePairs
 
     public static (IReadOnlyList<RoutedLine> Added, IReadOnlyList<RoutedLine> Removed) Drop(IReadOnlyList<RoutedLine> added, IReadOnlyList<RoutedLine> removed)
     {
-        string[] addedKeys = [.. added.Select(line => Collapse(line.Text))];
-        string[] removedKeys = [.. removed.Select(line => Collapse(line.Text))];
-        (HashSet<int> pairedAdded, HashSet<int> pairedRemoved) = (long)addedKeys.Length * removedKeys.Length <= MaxTableCells
-            ? Common(addedKeys, removedKeys)
-            : InOrder(addedKeys, removedKeys);
-        return ([.. added.Where((_, index) => !pairedAdded.Contains(index))], [.. removed.Where((_, index) => !pairedRemoved.Contains(index))]);
+        HashSet<RoutedLine> paired = new(ReferenceEqualityComparer.Instance);
+        foreach ((IReadOnlyList<RoutedLine> hunkAdded, IReadOnlyList<RoutedLine> hunkRemoved) in Hunks(added, removed))
+        {
+            string[] addedKeys = [.. hunkAdded.Select(line => Collapse(line.Text))];
+            string[] removedKeys = [.. hunkRemoved.Select(line => Collapse(line.Text))];
+            (HashSet<int> pairedAdded, HashSet<int> pairedRemoved) = (long)addedKeys.Length * removedKeys.Length <= MaxTableCells
+                ? Common(addedKeys, removedKeys)
+                : InOrder(addedKeys, removedKeys);
+            paired.UnionWith(pairedAdded.Select(index => hunkAdded[index]));
+            paired.UnionWith(pairedRemoved.Select(index => hunkRemoved[index]));
+        }
+
+        return ([.. added.Where(line => !paired.Contains(line))], [.. removed.Where(line => !paired.Contains(line))]);
     }
 
     /// <summary>The text with every run of whitespace as one space and none at the ends.</summary>
     public static string Collapse(string text) => string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>
+    /// The hunks of a zero-context diff, rebuilt from the line numbers (removed at base, added at head, each in order): a run of
+    /// consecutive removed lines and the run of consecutive added lines that starts where they stood at head, or a run of added
+    /// lines alone. Unchanged lines map from base to head by the offset of the hunks before them.
+    /// </summary>
+    private static IEnumerable<(IReadOnlyList<RoutedLine> Added, IReadOnlyList<RoutedLine> Removed)> Hunks(IReadOnlyList<RoutedLine> added, IReadOnlyList<RoutedLine> removed)
+    {
+        int addedIndex = 0;
+        int removedIndex = 0;
+        int offset = 0;
+        while (addedIndex < added.Count || removedIndex < removed.Count)
+        {
+            List<RoutedLine> hunkRemoved = [];
+            int headStart = addedIndex < added.Count ? added[addedIndex].Line : int.MaxValue;
+            if (removedIndex < removed.Count && removed[removedIndex].Line + offset <= headStart)
+            {
+                headStart = removed[removedIndex].Line + offset;
+                hunkRemoved.Add(removed[removedIndex++]);
+                while (removedIndex < removed.Count && removed[removedIndex].Line == hunkRemoved[^1].Line + 1)
+                {
+                    hunkRemoved.Add(removed[removedIndex++]);
+                }
+            }
+
+            List<RoutedLine> hunkAdded = [];
+            if (addedIndex < added.Count && added[addedIndex].Line == headStart)
+            {
+                hunkAdded.Add(added[addedIndex++]);
+                while (addedIndex < added.Count && added[addedIndex].Line == hunkAdded[^1].Line + 1)
+                {
+                    hunkAdded.Add(added[addedIndex++]);
+                }
+            }
+
+            offset += hunkAdded.Count - hunkRemoved.Count;
+            yield return (hunkAdded, hunkRemoved);
+        }
+    }
 
     /// <summary>A longest common subsequence of the two key lists, as the indexes it pairs.</summary>
     private static (HashSet<int> Added, HashSet<int> Removed) Common(string[] added, string[] removed)
