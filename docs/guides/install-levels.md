@@ -24,7 +24,7 @@ change to how people work. It needs a CI file, so `--ci none` is refused with it
 `doctor` recognises this level when `CLAUDE.md` has no Lockflight block, the project's Claude Code settings are missing or
 hold nothing Lockflight writes (the team's own rules and sandbox are fine), and no settings enable the plugin. The Claude
 settings line is then `info`, and so is the linked engine line when no engine is linked (one that is linked is still checked);
-the plugin engine, deny rules, sandbox and Claude Code lines are left out. A person or an agent can still run the engine by hand (`lockflight gate run`, `lockflight redgreen red`). The CI check is
+the plugin engine, deny rules, sandbox and Claude Code lines are left out. A person or an agent can still run the engine by hand (`lockflight gate run`) and make a red commit with `git commit --trailer "Lockflight-Red: 1"`. The CI check is
 the boundary where it runs as a required check with policy, the lock and CODEOWNERS on the base branch
 ([CI hardening](ci-hardening.md)).
 
