@@ -1,8 +1,15 @@
 # CI on Azure Pipelines, Bitbucket and GitLab
 
-`lockflight init --ci-platform azure|bitbucket|gitlab` writes a CI job for that service instead of the GitHub workflow. It is
-the same job as the [GitHub workflow](ci-hardening.md#what-the-generated-workflow-does), translated: this page says where each
-file goes, how to make the job a required check, and what stands in for CODEOWNERS.
+`lockflight init --ci-platform azure|bitbucket|gitlab` writes a CI job for that service instead of the GitHub workflow. This
+page says where each file goes, how to make the job a required check, and what stands in for CODEOWNERS. The platforms are
+not at the same stage:
+
+| Platform | What runs | State |
+|---|---|---|
+| GitHub | the CI judge (red/green, trace, gates, review, approvals) through the action | the reference platform |
+| Bitbucket Pipelines | the CI judge, from a pipeline template | not yet run on a live workspace; a blocking check needs Bitbucket Premium |
+| GitLab CI/CD | the `pr` gates only, no red/green judge | experimental; code-owner approval needs GitLab Premium |
+| Azure Pipelines | the `pr` gates only, no red/green judge | experimental; not run at all |
 
 **On this page:** [What every template does](#what-every-template-does) · [Azure Pipelines](#azure-pipelines) ·
 [Bitbucket Pipelines](#bitbucket-pipelines) · [GitLab CI/CD](#gitlab-cicd) ·
@@ -17,7 +24,7 @@ file goes, how to make the job a required check, and what stands in for CODEOWNE
 
 ## What every template does
 
-The same steps as the GitHub workflow, in the same order:
+The policy and install steps of the GitHub workflow, in the same order:
 
 - **Policy from the base commit** on a pull request: the engine lock and the version pin, `lockflight.yaml`, the gitleaks
   policy, the root `nuget.config`, `.lockflight/baselines/`, `.lockflight/ci/` and the code-style and analyzer config anywhere

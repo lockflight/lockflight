@@ -14,7 +14,8 @@ Strict YAML: unknown keys and wrong types are errors with a position. In CI, pul
 branch's** copy.
 
 > [!NOTE]
-> The file is protected — the agent cannot edit it; change it yourself and commit.
+> The file is protected: the guard blocks the agent's edits to it. Change it yourself and commit; in CI, CODEOWNERS with
+> required review is what protects it.
 
 ```yaml
 version: 1                      # optional; when present it must be 1
@@ -314,9 +315,10 @@ Every preset sets `structural: critical`. How each `routing:` key is used, signa
 [risk routing](risk-routing.md#signals).
 
 > [!IMPORTANT]
-> In this version `routing:` and `approvals:` are read and validated, `doctor` reports on them, and `route show` computes a
-> change's class and requirements from `routing:`, but no check judges a change by them yet. `autonomy:` is reserved and has no effect. None of them is a control today; the descriptions above say
-> what they will decide.
+> The CI judge reads `routing:` and `approvals:` from the target branch. The class decides whether red→green, spec and
+> trace, the review (and its API key) and spec-first approvals are required. `routing.coverage`, `require.architectureFrom`
+> and `require.architectureDeclaredFrom` are validated and shown by `route show`, but the judge does not apply them yet: its
+> gates use the `gates:` settings. `autonomy:` is reserved and has no effect.
 
 ### The engine lock
 
@@ -511,9 +513,9 @@ A reference is the same when its file, text and kind are, wherever its line move
 broken references new. `docs check` itself stays advisory and also reads `docs/` and `README.md`; this step does not.
 
 `gates.docs.references` takes `fail`, `report` (the default: findings listed on a `PASS`) or `off`, as
-`gates.quality.suppressions` does; an `ERROR` (an unknown base, a shallow checkout) stays an `ERROR`. Locally the step is a guardrail; in CI, with `fail`, a
-required check and the manifest taken from the base branch, it is a strong guardrail in 0.3.0, as is all of the judge's
-evidence (written in the job that runs the pull request's code). What it checks is what `docs check`
+`gates.quality.suppressions` does; an `ERROR` (an unknown base, a shallow checkout) stays an `ERROR`. Locally the step is a guardrail. In CI, with `fail`, a
+required check and the manifest from the base branch, it is a strong guardrail in 0.3.0: its result reaches the report in the
+judge's evidence, which is written in the job that runs the pull request's code. What it checks is what `docs check`
 checks: a path the repository never had is not reported, and a code-span path counts only with evidence from history.
 
 ### EF Core model changes need a migration

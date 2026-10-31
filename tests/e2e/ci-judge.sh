@@ -41,7 +41,7 @@ perl -pi -e 's/=> throw new NotImplementedException\(\);/=> 5m;/' "$calc"
 git commit -qam "feat(001-shipping): US1"; head=$(git rev-parse HEAD)
 
 # Each run starts from an empty evidence folder, so a run that writes none is never judged on an earlier run's evidence.
-judge() { rm -rf "$W/evidence"; "$E" ci --platform github --head "$1" --base "$main" --branch 001-shipping --evidence "$W/evidence"; }
+judge() { rm -rf "$W/evidence"; "$E" ci --platform github --head "$1" --base "$main" --branch "${2:-001-shipping}" --evidence "$W/evidence"; }
 expect_exit 0 "the judge passes the story" -- judge "$head"
 for id in red tests.sinceRed green trace tests.hostTampering; do check "$W/evidence/evidence.json" "$id" PASS; done
 expect_exit 0 "the lockflight/judge context passes" -- "$E" ci report --evidence "$W/evidence" --head "$head" --out "$W/verdict" --context lockflight/judge
@@ -76,10 +76,11 @@ perl -0pi -e 's/\}\s*\z/\n    public bool Lend(string title) => throw new NotImp
 perl -0pi -e 's/\}\s*\z/\n    [TestMethod]\n    [TestProperty("Requirement", "FR-003")]\n    public void AnAvailableCopyIsLent()\n    {\n        Catalog catalog = new();\n        catalog.AddCopies("Dune", 1);\n\n        Assert.IsTrue(catalog.Lend("Dune"));\n    }\n}\n/' tests/Lending.Tests/CatalogTests.cs
 git add -A; git commit -qm "test(001-lending): red for US1" -m "Lockflight-Red: 1"
 perl -pi -e 's/=> throw new NotImplementedException\(\);/=> Copies(title) > 0;/' src/Lending/Catalog.cs
-git commit -qam "feat(001-lending): US1"
-rm -rf "$W/evidence"
-expect_exit 0 "the judge passes the story on MSTest" -- "$E" ci --platform github --head "$(git rev-parse HEAD)" --base "$main" --branch 001-lending --evidence "$W/evidence"
+git commit -qam "feat(001-lending): US1"; head=$(git rev-parse HEAD)
+expect_exit 0 "the judge passes the story on MSTest" -- judge "$head" 001-lending
 for id in red tests.sinceRed green trace tests.hostTampering; do check "$W/evidence/evidence.json" "$id" PASS; done
+expect_exit 0 "the lockflight/judge context passes on MSTest" -- "$E" ci report --evidence "$W/evidence" --head "$head" --out "$W/verdict-mstest" --context lockflight/judge
+expect_exit 0 "the gates context passes on MSTest" -- "$E" ci report --evidence "$W/evidence" --head "$head" --out "$W/verdict-mstest-gates" --context gates
 
 if [ "$failures" -gt 0 ]; then echo "$failures CI judge checks failed"; exit 1; fi
 echo "CI judge end to end: all checks passed"

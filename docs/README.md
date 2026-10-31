@@ -3,8 +3,9 @@
 <table>
 <tr>
 <td width="140" align="center"><img src="assets/levi-on-duty.svg" alt="Levi the pixel beaver, on duty" width="120"></td>
-<td>Guides for people who set up and run Lockflight around a Claude Code agent, and for people who change Lockflight itself.
-New here? Start with <a href="guides/getting-started.md">getting started</a>, then read
+<td>Guides for people who set up and run Lockflight, a CI check for .NET pull requests written by coding agents, and for people
+who change Lockflight itself. New here? Start with the <a href="../QUICKSTART.md">quickstart</a> (a first verdict from the
+CI judge), then <a href="guides/getting-started.md">getting started</a>, and read
 <a href="guides/guardrails-and-boundaries.md">guardrails and boundaries</a> to see what each control can promise.</td>
 </tr>
 </table>
@@ -14,7 +15,7 @@ New here? Start with <a href="guides/getting-started.md">getting started</a>, th
 | Page | Read it when |
 |---|---|
 | [Quickstart](../QUICKSTART.md) | You want a first green verdict from the CI judge on a new solution, with every command, before you set up your own repository. |
-| [Getting started](guides/getting-started.md) | You are installing Lockflight and setting up a repository: the lite and standard profiles, step by step, and the status line. |
+| [Getting started](guides/getting-started.md) | You set up your own repository: the engine, the install level, profile and preset, the plugin's lite and standard profiles, and the status line. |
 | [Install levels](guides/install-levels.md) | You choose how much runs on developers' machines: CI only, CI + native Claude Code settings (`init --native`), or CI + plugin. |
 
 ## Use
@@ -31,14 +32,14 @@ New here? Start with <a href="guides/getting-started.md">getting started</a>, th
 | Page | Read it when |
 |---|---|
 | [Configuration](guides/configuration.md) | You edit `lockflight.yaml`: gate profiles, protected paths, units, baselines, lifecycle commands, environment variables. |
-| [CI hardening](guides/ci-hardening.md) | You make CI the check of record: the generated workflow, what is a boundary there and what is a strong guardrail, CODEOWNERS, required checks, approvals in CI, workspace units. |
+| [CI hardening](guides/ci-hardening.md) | You make CI the check of record: the workflow, which parts are a boundary, CODEOWNERS, required checks, approvals in CI, workspace units. |
 
 ## Understand
 
 | Page | Read it when |
 |---|---|
 | [How it works](architecture.md) | You want the parts and how they fit: the engine, the plugin, the guard, gates, the lifecycle and where the trust comes from. |
-| [Risk routing](guides/risk-routing.md) | You want to know how a pull request's change class is computed from its diff: file roles, size, moves (being built). |
+| [Risk routing](guides/risk-routing.md) | You want to know how a pull request's change class is computed from its diff: file roles, size, moves, and what each class requires in CI. |
 | [Guardrails and boundaries](guides/guardrails-and-boundaries.md) | You need to know what Lockflight can and cannot guarantee, and what the shell write detection sees. |
 | [Glossary](guides/glossary.md) | A term is unfamiliar: verdicts, profiles, cycles, approvals, the ledger. |
 

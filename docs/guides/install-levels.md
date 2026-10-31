@@ -4,6 +4,10 @@ Lockflight's verdict of record is the CI check: it runs under the base branch's 
 level to level is how much runs on a developer's machine, before the pull request. Choose one level per repository. The
 level is not a manifest key: it is what `init` writes for Claude Code.
 
+Two other settings are separate from the level: the profile (`--profile lite|standard`) chooses how deep the local lifecycle
+goes, and the preset (`--preset relaxed|default|strict`) chooses how much evidence each change class needs in CI. See
+[getting started](getting-started.md).
+
 | | CI only | CI + native settings | CI + plugin |
 |---|---|---|---|
 | Command | `init --ci-only` | `init --native` | `init` (the default) |
@@ -22,11 +26,14 @@ Code. It links no engine. Use it when the team's agents are not Claude Code, or 
 change to how people work. It needs a CI file, so `--ci none` is refused with it.
 
 `doctor` checks a developer's machine, so at this level its local lines (the linked engine, Claude settings, deny rules)
-report what CI only leaves out; they need no fix. A person or an agent can still run the engine by hand (`lockflight gate run`, `lockflight redgreen red`). What CI
-reads from the base branch (the policy, the engine lock, CODEOWNERS) is a boundary, and so is the check itself where it runs as a
-required check ([CI hardening](ci-hardening.md)). The judge's red/green, tests-since-red and trace results are a strong
-guardrail, not a boundary, in 0.3.0: the pull request's own code runs in the judge's job ([guardrails and
-boundaries](guardrails-and-boundaries.md)).
+report what CI only leaves out; they need no fix. A person or an agent can still run the engine by hand
+(`lockflight gate run`, `lockflight redgreen red`).
+
+What CI reads from the base branch is a boundary: the policy, the engine lock and CODEOWNERS. The check itself is a boundary
+where the platform enforces it: a required check whose workflow files are under CODEOWNERS with required code-owner review
+([CI hardening](ci-hardening.md)). The judge's red/green, tests-since-red and trace results are a strong guardrail in
+0.3.0, not a boundary: the pull request's own code runs in the judge's job
+([guardrails and boundaries](guardrails-and-boundaries.md)).
 
 ## CI + native settings
 
@@ -84,5 +91,5 @@ Commit the change as one commit; `git revert` undoes it.
 
 The local controls are guardrails at every level, as described in [guardrails and boundaries](guardrails-and-boundaries.md):
 the guard catches accidents, and an agent with a shell can get around a check that runs on its own machine. What CI adds
-is the same at all three levels: the base branch's policy, engine lock and CODEOWNERS are a boundary, the check is one where it
-is required, and the judge's test results are a strong guardrail in 0.3.0.
+is the same at all three levels. The base branch's policy, engine lock and CODEOWNERS are a boundary. The check is one where
+it is required and its workflow is under code-owner review. The judge's test results are a strong guardrail in 0.3.0.
