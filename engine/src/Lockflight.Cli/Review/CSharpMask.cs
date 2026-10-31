@@ -8,19 +8,27 @@ namespace Lockflight.Cli.Review;
 /// </summary>
 internal static class CSharpMask
 {
-    public static string Mask(string source)
+    public static string Mask(string source) => Scan(source, literals: null);
+
+    /// <summary>
+    /// The source with comments and preprocessor lines blanked but string and character literals kept whole; adds the span
+    /// (start, end exclusive) of every literal's contents to <paramref name="literals"/>, its line breaks included.
+    /// </summary>
+    public static string MaskComments(string source, List<(int Start, int End)> literals) => Scan(source, literals);
+
+    private static string Scan(string source, List<(int Start, int End)>? literals)
     {
         char[] masked = source.ToCharArray();
         int position = 0;
         while (position < source.Length)
         {
-            position = Next(source, masked, position);
+            position = Next(source, masked, position, literals);
         }
 
         return new string(masked);
     }
 
-    private static int Next(string source, char[] masked, int position)
+    private static int Next(string source, char[] masked, int position, List<(int Start, int End)>? literals)
     {
         char current = source[position];
         if (current == '/' && At(source, position + 1) == '/')
@@ -41,7 +49,7 @@ internal static class CSharpMask
 
         if (current == '\'')
         {
-            return Literal(source, masked, position, CharacterEnd(source, position));
+            return Literal(source, masked, position, CharacterEnd(source, position), literals);
         }
 
         if (current is '"' or '$' or '@' && StringStart(source, position) is (int quote, bool verbatim, bool interpolated))
@@ -52,7 +60,7 @@ internal static class CSharpMask
                 : RegularEnd(source, quote, interpolated);
             int opening = quotes >= 3 ? quote + quotes : quote + 1;
             int closing = quotes >= 3 ? Math.Max(opening, end - quotes) : Math.Max(opening, end - 1);
-            Blank(source, masked, opening, closing);
+            Contents(source, masked, opening, closing, literals);
             return end;
         }
 
@@ -175,10 +183,23 @@ internal static class CSharpMask
         return Math.Min(source.Length, position + 1);
     }
 
-    private static int Literal(string source, char[] masked, int start, int end)
+    private static int Literal(string source, char[] masked, int start, int end, List<(int Start, int End)>? literals)
     {
-        Blank(source, masked, start + 1, Math.Max(start + 1, end - 1));
+        Contents(source, masked, start + 1, Math.Max(start + 1, end - 1), literals);
         return end;
+    }
+
+    /// <summary>Blanks a literal's contents, or, when the caller collects literals, keeps them and records their span.</summary>
+    private static void Contents(string source, char[] masked, int start, int end, List<(int Start, int End)>? literals)
+    {
+        if (literals is null)
+        {
+            Blank(source, masked, start, end);
+        }
+        else if (end > start)
+        {
+            literals.Add((start, Math.Min(end, source.Length)));
+        }
     }
 
     private static int Blank(string source, char[] masked, int start, int end)

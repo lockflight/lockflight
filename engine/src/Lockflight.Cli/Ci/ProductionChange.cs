@@ -1,3 +1,4 @@
+using Lockflight.Cli.Review;
 using Lockflight.Cli.Routing;
 
 namespace Lockflight.Cli.Ci;
@@ -11,8 +12,8 @@ namespace Lockflight.Cli.Ci;
 /// code ships, or of a project that was a production project at base. Project,
 /// build-wide and config files do not count (a dependency bump needs no red); they raise their own routing signals. A file whose
 /// code lines, in order, are the same at base and head changes no code: a pure rename (the moved file's old text against its new
-/// text), an edit of lines that hold only a comment or XML doc, a reindent. A reorder is a change, and so is a move of a markup file or
-/// one into or out of <c>bin/</c> or <c>obj/</c>.
+/// text), an edit of lines that hold only a comment or XML doc, a reindent of C# outside string literals. A reorder is a change,
+/// and so is a move of a markup file or one into or out of <c>bin/</c>, <c>obj/</c> or a dot folder.
 /// </summary>
 internal static class ProductionChange
 {
@@ -50,30 +51,67 @@ internal static class ProductionChange
     }
 
     /// <summary>
-    /// The file's lines as written, whitespace runs collapsed, without blank lines and, for C#, without lines that hold only a
-    /// comment: the mask (<see cref="CommentMask"/>) blanks the line and the line itself reads as one (<c>//</c>, <c>/*</c>,
-    /// <c>*</c>, <c>*/</c>). Both must agree, so a line of a string literal the mask got wrong is kept, and an edit of a comment
-    /// that shares a line with code still counts. Other files keep every line.
+    /// The lines the comparison reads. Other files than C# keep every line exactly as written (indentation is code in F#, and a
+    /// literal's whitespace is part of its value). In C#, a line that holds any part of a string or character literal's contents
+    /// (<see cref="CSharpMask.MaskComments"/>; a line inside a multi-line literal, even a blank one) is kept exactly as written;
+    /// any other line has its whitespace runs collapsed, and is left out when blank, or when it holds only a comment: the comment
+    /// mask blanks the line and the line itself reads as one (<c>//</c>, <c>/*</c>, <c>*</c>, <c>*/</c>), so a lexing slip keeps
+    /// the line. A comment that shares a line with code, and a <c>&lt;auto-generated</c> marker (it turns analyzers and the
+    /// nullable context off), still count.
     /// </summary>
     private static IEnumerable<string> CodeLines(string path, string text)
     {
         string[] lines = text.Split('\n');
-        string[] code = ChangeAnalyzer.IsCSharp(path) ? CommentMask.Of(text).Split('\n') : lines;
-        for (int index = 0; index < lines.Length; index++)
+        if (!ChangeAnalyzer.IsCSharp(path))
         {
-            string line = WhitespacePairs.Collapse(lines[index]);
-            if (line.Length > 0 && !(code.Length == lines.Length && code[index].AsSpan().Trim().IsEmpty && LooksLikeAComment(line)))
+            foreach (string line in lines)
             {
                 yield return line;
             }
+
+            yield break;
+        }
+
+        List<(int Start, int End)> literals = [];
+        string[] code = CSharpMask.MaskComments(text, literals).Split('\n');
+        int lineStart = 0;
+        int next = 0;
+        for (int index = 0; index < lines.Length; index++)
+        {
+            int lineEnd = lineStart + lines[index].Length;
+            while (next < literals.Count && literals[next].End <= lineStart)
+            {
+                next++;
+            }
+
+            // The line, with its line break, overlaps a literal's contents.
+            bool inLiteral = next < literals.Count && literals[next].Start <= lineEnd;
+            string line = WhitespacePairs.Collapse(lines[index]);
+            if (inLiteral)
+            {
+                yield return "\u0001" + lines[index];
+            }
+            else if (line.Length > 0 && !(code.Length == lines.Length && code[index].AsSpan().Trim().IsEmpty && LooksLikeAComment(line)))
+            {
+                yield return line;
+            }
+
+            lineStart = lineEnd + 1;
         }
     }
 
-    private static bool UnderBuildOutput(string path) => path.Split('/').Any(segment => segment is "bin" or "obj");
+    /// <summary>
+    /// Whether moving a file between these paths can change whether it compiles: a <c>bin</c> or <c>obj</c> folder (any case), or a
+    /// folder whose name starts with a dot, which the SDK's default items leave out.
+    /// </summary>
+    private static bool UnderBuildOutput(string path) =>
+        path.Split('/').SkipLast(1).Any(segment => segment.Equals("bin", StringComparison.OrdinalIgnoreCase)
+            || segment.Equals("obj", StringComparison.OrdinalIgnoreCase) || segment.StartsWith('.'));
 
     private static bool LooksLikeAComment(string line) =>
-        line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("/*", StringComparison.Ordinal)
-        || line.StartsWith('*') || line.EndsWith("*/", StringComparison.Ordinal);
+        !line.Contains("<auto-generated", StringComparison.OrdinalIgnoreCase)
+        && (line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("/*", StringComparison.Ordinal)
+            || line.StartsWith('*') || line.EndsWith("*/", StringComparison.Ordinal));
 
     /// <summary>A project the pull request turned into a test project: its new files are still the production code they were.</summary>
     private static bool WasProduction(ChangeAnalysis analysis, string project) =>
