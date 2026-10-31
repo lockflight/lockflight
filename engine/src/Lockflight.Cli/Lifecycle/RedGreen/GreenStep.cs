@@ -33,9 +33,9 @@ internal sealed class GreenStep(RedGreenSession session)
             return await RejectAsync(open, [changed], cancellationToken);
         }
 
-        if (session.UnapprovedArtifacts() is string unapproved)
+        if (session.NotApproved() is { Count: > 0 } notApproved)
         {
-            return await session.FailAsync(unapproved, cancellationToken);
+            return await session.RefuseUnapprovedAsync("redgreen-green", notApproved, cancellationToken);
         }
 
         TestWorkspace workspace = session.Workspace;
