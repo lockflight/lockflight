@@ -290,13 +290,13 @@ internal sealed class InitCommand(CliContext context) : ICommand
 
         if (init.DryRun)
         {
-            ExitCode planned = await DryRunAsync(root, plan, steps, proposals, manifest, predating);
+            ExitCode dryRun = await DryRunAsync(root, plan, steps, proposals, manifest, predating);
             if (keepsEngine)
             {
                 await context.Output.WriteLineAsync(KeepsEngineNote);
             }
 
-            return planned;
+            return dryRun;
         }
 
         foreach (InitStep step in steps)
