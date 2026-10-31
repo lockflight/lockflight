@@ -36,8 +36,17 @@ internal static class CiStepMigration
         $"for directory in {CiShellScripts.PolicyDirectories}; do",
         "  rm -rf \"$directory\"",
         "  if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then",
-        "    git ls-tree -r --name-only \"$BASE\" -- \"$directory\" | while IFS= read -r file; do mkdir -p \"$(dirname \"$file\")\"; git show \"$BASE:$file\" > \"$file\"; done",
+        "    git -c core.quotePath=false ls-tree -r --name-only \"$BASE\" -- \"$directory\" | while IFS= read -r file; do mkdir -p \"$(dirname \"$file\")\"; git show \"$BASE:$file\" > \"$file\"; done",
         "  fi",
+        "done",
+    ];
+
+    /// <summary>The policy directories' restore before it read the committed bytes (a checkout, which converts line endings).</summary>
+    private static readonly string[] LegacyDirectories =
+    [
+        $"for directory in {CiShellScripts.PolicyDirectories}; do",
+        "  rm -rf \"$directory\"",
+        "  if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then git checkout \"$BASE\" -- \"$directory\"; fi",
         "done",
     ];
 
@@ -118,6 +127,14 @@ internal static class CiStepMigration
         int[] current = [.. Indexes(lines, line => line.Trim() == $"for file in {CiShellScripts.PolicyFiles}; do")];
         if (current.Length == 1)
         {
+            // The current lists restored by checkout (an earlier 0.3 pre-release): the committed bytes are restored instead.
+            RestoreCommittedFile(lines, current[0]);
+            if (Find(lines, LegacyDirectories) is (int at, string directoryIndent))
+            {
+                lines.RemoveRange(at, LegacyDirectories.Length);
+                lines.InsertRange(at, Directories[2..].Select(line => directoryIndent + line));
+            }
+
             return true;
         }
 
@@ -134,12 +151,8 @@ internal static class CiStepMigration
             return false;
         }
 
-        string loopIndent = Indent(lines[legacy[0]]);
-        lines[legacy[0]] = loopIndent + $"for file in {CiShellScripts.PolicyFiles}; do";
-        if (legacy[0] + 1 < lines.Count && lines[legacy[0] + 1] == loopIndent + LegacyFileRestore)
-        {
-            lines[legacy[0] + 1] = loopIndent + FileRestore;
-        }
+        lines[legacy[0]] = Indent(lines[legacy[0]]) + $"for file in {CiShellScripts.PolicyFiles}; do";
+        RestoreCommittedFile(lines, legacy[0]);
 
         // The GitHub workflow's style loop failed under bash -e on a base without style files; it now tolerates none, as the others do.
         int[] styleLoop = [.. Indexes(lines, line => line.Trim() == LegacyGitHubStyleLoop)];
@@ -151,6 +164,16 @@ internal static class CiStepMigration
         lines.RemoveRange(start, LegacyBaselines.Length);
         lines.InsertRange(start, Directories.Select(line => indent + line));
         return true;
+    }
+
+    /// <summary>The policy file loop at <paramref name="loop"/> restores each file's committed bytes rather than checking it out.</summary>
+    private static void RestoreCommittedFile(List<string> lines, int loop)
+    {
+        string loopIndent = Indent(lines[loop]);
+        if (loop + 1 < lines.Count && lines[loop + 1] == loopIndent + LegacyFileRestore)
+        {
+            lines[loop + 1] = loopIndent + FileRestore;
+        }
     }
 
     /// <summary>Where <paramref name="block"/> occurs exactly once as consecutive lines with one indentation; null otherwise.</summary>

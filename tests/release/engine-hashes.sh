@@ -105,6 +105,16 @@ expect_failure "the first-lock check refuses another engine hash" python3 -I "$c
 sed 's/"binaries": {/"binaries": {\n    "linux-x64": { "sha256": "'"$(printf '%064d' 0)"'" },/' "$work/first.lock" > "$work/duplicate.lock"
 expect_failure "the first-lock check refuses a key that appears twice" python3 -I "$check" "$work/duplicate.lock" "$work/engine-hashes.json" "$work/install.sh"
 grep -q "appears twice" "$work/out" && ok "it names the repeated key" || bad "duplicate message: $(cat "$work/out")"
+# install.sh's awk reader takes "\binaries" for binaries and stops at the first match; JSON reads a backspace and "inaries".
+zero="$(printf '%064d' 0)"
+sed 's/^{/{\n  "\\binaries": { "linux-x64": { "sha256": "'"$zero"'" } },/' "$work/first.lock" > "$work/escaped.lock"
+grep -q '"\\binaries"' "$work/escaped.lock" || bad "the escaped-key lock was not written"
+expect_failure "the first-lock check refuses a lock with a backslash, which install.sh would read differently" python3 -I "$check" "$work/escaped.lock" "$work/engine-hashes.json" "$work/install.sh"
+grep -q "backslash" "$work/out" && ok "it names the backslash" || bad "backslash message: $(cat "$work/out")"
+sed 's/^{/{\n  "comment": "x",/' "$work/first.lock" > "$work/unknown.lock"
+expect_failure "the first-lock check refuses an unknown key, as the engine does" python3 -I "$check" "$work/unknown.lock" "$work/engine-hashes.json" "$work/install.sh"
+sed 's/"sha256": "'"$script_hash"'"/"sha256": "'"$script_hash"'", "path": "x"/' "$work/first.lock" > "$work/extra.lock"
+expect_failure "the first-lock check refuses an install script entry with more than its hash" python3 -I "$check" "$work/extra.lock" "$work/engine-hashes.json" "$work/install.sh"
 
 [ "$failures" -eq 0 ] || { echo "$failures check(s) failed"; exit 1; }
 echo "all engine-hashes checks passed"

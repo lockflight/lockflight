@@ -16,6 +16,9 @@ namespace Lockflight.Cli.EngineLocks;
 internal static class EngineLockPlanner
 {
     public const string Repository = "lockflight/lockflight";
+
+    /// <summary>The workflow that attests a release's files: an attestation from any other workflow of the repository is refused.</summary>
+    public const string SignerWorkflow = "lockflight/lockflight/.github/workflows/release-packages.yml";
     private const string LocalBuild = "0.0.0-local";
     private static readonly TimeSpan AttestationTimeLimit = TimeSpan.FromMinutes(2);
 
@@ -95,7 +98,7 @@ internal static class EngineLockPlanner
             await File.WriteAllBytesAsync(file, content, cancellationToken);
             using CancellationTokenSource limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             limit.CancelAfter(AttestationTimeLimit);
-            ProcessResult result = await processes(gh, ["attestation", "verify", file, "--repo", Repository, "--source-ref", $"refs/tags/v{version}"], directory, limit.Token);
+            ProcessResult result = await processes(gh, ["attestation", "verify", file, "--repo", Repository, "--source-ref", $"refs/tags/v{version}", "--signer-workflow", SignerWorkflow], directory, limit.Token);
             return result.ExitCode == 0
                 ? $"the release workflow's attestation of {EngineHashes.FileName} verifies (gh attestation verify)"
                 : $"warning: gh attestation verify did not verify {EngineHashes.FileName}: {FirstLine(result.Error + result.Output)}";

@@ -147,7 +147,12 @@ runs:
           if git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then exit 0; fi
           git show "$LF_HEAD:.lockflight/engine.lock" > "$RUNNER_TEMP/proposed-engine.lock"
           git show "$LF_BASE:.lockflight/engine.lock" > "$RUNNER_TEMP/base-engine.lock"
-          "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" --base "$RUNNER_TEMP/base-engine.lock" ${GH_TOKEN:+--attestation}
+          # The pull request's vendored install script is compared with the lock it proposes: CI runs that script next time.
+          if ! git show "$LF_HEAD:.lockflight/ci/install.sh" > "$RUNNER_TEMP/proposed-install.sh" 2>/dev/null; then
+            echo "::error::the changed engine lock comes without .lockflight/ci/install.sh"; exit 1
+          fi
+          "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" --base "$RUNNER_TEMP/base-engine.lock" \
+            --script "$RUNNER_TEMP/proposed-install.sh" ${GH_TOKEN:+--attestation}
           exit 0
         fi
         # The first lock (the pull request that moves a 0.2 tool pin to the lock): the base's engine predates verify-lock, so the
@@ -161,7 +166,8 @@ runs:
         if [ -z "$version" ]; then echo "::error::the first engine lock names no version"; exit 1; fi
         gh release download "v$version" --repo lockflight/lockflight --pattern engine-hashes.json --dir "$work/release" \
           || { echo "::error::the first engine lock pins $version, and the GitHub Release v$version has no engine-hashes.json"; exit 1; }
-        gh attestation verify "$work/release/engine-hashes.json" --repo lockflight/lockflight --source-ref "refs/tags/v$version" > /dev/null \
+        gh attestation verify "$work/release/engine-hashes.json" --repo lockflight/lockflight --source-ref "refs/tags/v$version" \
+          --signer-workflow lockflight/lockflight/.github/workflows/release-packages.yml > /dev/null \
           || { echo "::error::the release workflow's attestation of engine-hashes.json for v$version did not verify"; exit 1; }
         python3 -I "$GITHUB_ACTION_PATH/first-lock-check.py" "$work/engine.lock" "$work/release/engine-hashes.json" "$work/install.sh"
 

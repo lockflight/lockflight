@@ -31,7 +31,7 @@ internal static class CommandRegistry
     [
         new(["version"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new VersionCommand(context)),
         new(["link"], CommandAudience.Anyone, [], [LinkCommand.InstalledFlag], CommandOperands.Options, OptionParsing.Shared, context => new LinkCommand(context)),
-        new(["engine", "verify-lock"], CommandAudience.Anyone, ["--source", VerifyLockCommand.BaseOption], [VerifyLockCommand.AttestationFlag], CommandOperands.AtLeastOne, OptionParsing.Own, context => new VerifyLockCommand(context)),
+        new(["engine", "verify-lock"], CommandAudience.Anyone, ["--source", VerifyLockCommand.BaseOption, VerifyLockCommand.ScriptOption], [VerifyLockCommand.AttestationFlag], CommandOperands.AtLeastOne, OptionParsing.Own, context => new VerifyLockCommand(context)),
         new(["engine", "install"], CommandAudience.Human, ["--source"], [], CommandOperands.Options, OptionParsing.Shared, context => new EngineInstallCommand(context)),
         new(["init"], CommandAudience.Anyone, ["--profile", "--preset", "--ci", "--ci-platform", "--unit-of", "--unit-path", "--speckit-preset"], ["--quality", "--architecture-tests", "--dry-run", "--native", "--ci-only", "--no-link", "--no-sandbox"], CommandOperands.Options, OptionParsing.Own, context => new InitCommand(context)),
         new(["doctor"], CommandAudience.Anyone, [], [DoctorCommand.SelfTestFlag, DoctorCommand.CanariesFlag, DoctorCommand.FullCanariesFlag], CommandOperands.Options, OptionParsing.Shared, context => new DoctorCommand(context)),

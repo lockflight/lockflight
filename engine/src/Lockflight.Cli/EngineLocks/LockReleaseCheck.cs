@@ -56,11 +56,24 @@ internal sealed record LockReleaseCheck(LockReleaseVerdict Verdict, string Detai
             : new LockReleaseCheck(LockReleaseVerdict.Matches, $"{matches}; {note}");
     }
 
-    /// <summary>A warning when the lock moves the engine to a lower version than the base's lock; empty otherwise.</summary>
+    /// <summary>
+    /// A warning when the lock moves the engine to a lower version than the base's lock, or when the base's lock cannot be read so
+    /// a move down cannot be told; empty otherwise.
+    /// </summary>
     private static string Downgrade(EngineLock engineLock, string? baseLockText)
     {
-        if (baseLockText is null || EngineLockReader.Read(baseLockText, allowDevelopment: false, ToolPin.RunningVersion).Lock is not EngineLock baseLock
-            || EngineVersion.Parse(baseLock.Version) is not EngineVersion from || EngineVersion.Parse(engineLock.Version) is not EngineVersion to
+        if (baseLockText is null)
+        {
+            return string.Empty;
+        }
+
+        EngineLockReading baseReading = EngineLockReader.Read(baseLockText, allowDevelopment: false, ToolPin.RunningVersion);
+        if (baseReading.Lock is not EngineLock baseLock)
+        {
+            return $"; warning: the base's lock cannot be read ({baseReading.Problem}), so a move to an older engine is not checked";
+        }
+
+        if (EngineVersion.Parse(baseLock.Version) is not EngineVersion from || EngineVersion.Parse(engineLock.Version) is not EngineVersion to
             || to.CompareTo(from) >= 0)
         {
             return string.Empty;

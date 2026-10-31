@@ -49,11 +49,14 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
     `dotnet tool install --tool-path`.
   - **A pull request that changes the lock:** the judge job runs `lockflight engine verify-lock` on the proposed lock with the
     base's engine; it fails unless every platform's hash and the install script's hash are the ones the release of that version
-    published, and unless the release's attestation verifies (the workflow's token). A lock that moves the engine to an older
+    published, unless the pull request's `.lockflight/ci/install.sh` is the script the proposed lock pins (`--script`), and unless
+    the release workflow's attestation verifies (the workflow's token). A lock that moves the engine to an older
     version is named in the verdict ("moves the engine down"), so a downgrade is accepted only on purpose.
   - **The first lock** (the pull request that moves a 0.2 tool pin to the lock): the base's 0.2 engine has no `verify-lock`, so
     the action downloads the GitHub Release's `engine-hashes.json` for the lock's version, verifies its attestation with `gh`,
-    and compares every hash, the install script's included, and the vendored `.lockflight/ci/install.sh` with it. Without a
+    and compares every hash, the install script's included, and the vendored `.lockflight/ci/install.sh` with it. It reads the
+    lock as strictly as the engine does: an unknown or repeated key, or any backslash (which `install.sh`'s reader would not
+    decode as JSON does), is refused. Without a
     token it only warns. On Azure, Bitbucket and GitLab the first lock is **not** release-checked: the job prints a warning, and
     the person accepting the pull request runs `lockflight engine verify-lock .lockflight/engine.lock` first.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An

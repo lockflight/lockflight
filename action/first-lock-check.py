@@ -8,8 +8,11 @@ engine-hashes.json, verifies its attestation with gh, and runs this script, whic
   first-lock-check.py <proposed engine.lock> <release engine-hashes.json> <proposed .lockflight/ci/install.sh>
 
 Exit 0 when every released platform's hash and the install script's hash are the ones the release published and the vendored
-script is the one the lock pins; exit 1 otherwise. A key that appears twice in either file is refused, because the shell
-readers of a lock take the first and a JSON library the last. Run with `python3 -I`.
+script is the one the lock pins; exit 1 otherwise. The lock is read as strictly as the engine's EngineLockReader and so that
+every reader of it agrees: install.sh, which installs from it in CI, reads it with a small awk scanner that does not decode
+JSON escapes as JSON does ("\\binaries" is `binaries` to awk, a backspace and `inaries` here). So a lock with any backslash, an
+unknown key, or a key that appears twice (the shell readers take the first, a JSON library the last) is refused rather than
+read either way. Run with `python3 -I`.
 """
 
 import hashlib
@@ -18,6 +21,7 @@ import re
 import sys
 
 RIDS = ("linux-arm64", "linux-x64", "osx-arm64", "osx-x64", "win-x64")
+LOCK_KEYS = ("schema", "package", "version", "channel", "installScript", "binaries")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
@@ -35,12 +39,46 @@ def unique(pairs):
     return seen
 
 
-def load(path, what):
+def load(path, what, escapes_allowed):
     try:
         with open(path, encoding="utf-8") as stream:
-            return json.load(stream, object_pairs_hook=unique)
+            text = stream.read()
+        if not escapes_allowed and "\\" in text:
+            fail(f"the {what} holds a backslash; a lock names its keys and values without escapes, so every reader reads it alike")
+        return json.loads(text, object_pairs_hook=unique)
     except (OSError, ValueError) as error:
         fail(f"the {what} cannot be read: {error}")
+
+
+def hash_entry(parent, key, where):
+    """The hash of an entry { "sha256": "<64 lower-case hex>" }, refusing anything else, as EngineLockReader does."""
+    entry = parent.get(key)
+    if not isinstance(entry, dict) or set(entry) != {"sha256"} or sha256_of(entry) is None:
+        fail(f"'{where}' must be {{ \"sha256\": \"<64 lower-case hex>\" }}")
+    return entry["sha256"]
+
+
+def strict_lock(lock):
+    """Refuses a lock the engine would refuse: unknown keys, wrong types, a malformed hash or a missing released platform."""
+    if not isinstance(lock, dict):
+        fail("the proposed lock must be a JSON object")
+    unknown = [key for key in lock if key not in LOCK_KEYS]
+    if unknown:
+        fail(f"the proposed lock has the unknown key '{unknown[0]}' (known: {', '.join(LOCK_KEYS)})")
+    if not isinstance(lock.get("package"), str) or lock["package"].lower() != "lockflight.cli":
+        fail("the proposed lock's 'package' must be Lockflight.Cli")
+    if not isinstance(lock.get("version"), str) or not re.fullmatch(r"[0-9A-Za-z.-]+", lock["version"]):
+        fail("the proposed lock's 'version' must be an engine version without build metadata")
+    hash_entry(lock, "installScript", "installScript")
+    binaries = lock.get("binaries")
+    if not isinstance(binaries, dict):
+        fail("'binaries' must map each platform to { \"sha256\": … }")
+    for rid in binaries:
+        if rid in RIDS:
+            hash_entry(binaries, rid, f"binaries.{rid}")
+    missing = [rid for rid in RIDS if rid not in binaries]
+    if missing:
+        fail(f"a release lock needs a hash for every released platform; missing: {', '.join(missing)}")
 
 
 def sha256_of(entry):
@@ -51,11 +89,12 @@ def sha256_of(entry):
 def main():
     if len(sys.argv) != 4:
         fail("usage: first-lock-check.py <engine.lock> <engine-hashes.json> <install.sh>")
-    lock = load(sys.argv[1], "proposed lock")
-    release = load(sys.argv[2], "release's engine-hashes.json")
-    if lock.get("schema") != "lockflight.engine-lock/v1" or lock.get("channel") != "release":
+    lock = load(sys.argv[1], "proposed lock", escapes_allowed=False)
+    release = load(sys.argv[2], "release's engine-hashes.json", escapes_allowed=True)
+    if not isinstance(lock, dict) or lock.get("schema") != "lockflight.engine-lock/v1" or lock.get("channel") != "release":
         fail("the proposed lock is not a lockflight.engine-lock/v1 release lock")
-    if release.get("schema") != "lockflight.engine-hashes/v1":
+    strict_lock(lock)
+    if not isinstance(release, dict) or release.get("schema") != "lockflight.engine-hashes/v1":
         fail("the release's file is not lockflight.engine-hashes/v1")
     version = lock.get("version")
     if version != release.get("version"):

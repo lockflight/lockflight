@@ -65,7 +65,7 @@ internal static class CiShellScripts
         for directory in {{PolicyDirectories}}; do
           rm -rf "$directory"
           if git cat-file -e "$BASE:$directory" 2>/dev/null; then
-            git ls-tree -r --name-only "$BASE" -- "$directory" | while IFS= read -r file; do mkdir -p "$(dirname "$file")"; git show "$BASE:$file" > "$file"; done
+            git -c core.quotePath=false ls-tree -r --name-only "$BASE" -- "$directory" | while IFS= read -r file; do mkdir -p "$(dirname "$file")"; git show "$BASE:$file" > "$file"; done
           fi
         done
         # Code-style and analyzer config (nested files too) decides what the build and format gates enforce: a PR is
@@ -113,7 +113,10 @@ internal static class CiShellScripts
           if [ -n "$base" ] && git cat-file -e "$base:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "HEAD:.lockflight/engine.lock" 2>/dev/null \
             && ! git diff --quiet "$base" HEAD -- .lockflight/engine.lock; then
             git show HEAD:.lockflight/engine.lock > "$LOCKFLIGHT_TEMP/proposed-engine.lock"
-            "$LOCKFLIGHT_TEMP/lockflight/lockflight" engine verify-lock "$LOCKFLIGHT_TEMP/proposed-engine.lock" --base .lockflight/engine.lock ${GH_TOKEN:+--attestation}
+            git show "$base:.lockflight/engine.lock" > "$LOCKFLIGHT_TEMP/base-engine.lock"
+            # The pull request's own install script must be the one its lock pins: CI runs that script once it is merged.
+            if ! git show HEAD:.lockflight/ci/install.sh > "$LOCKFLIGHT_TEMP/proposed-install.sh" 2>/dev/null; then echo "lockflight: the changed .lockflight/engine.lock comes without .lockflight/ci/install.sh" >&2; exit 1; fi
+            "$LOCKFLIGHT_TEMP/lockflight/lockflight" engine verify-lock "$LOCKFLIGHT_TEMP/proposed-engine.lock" --base "$LOCKFLIGHT_TEMP/base-engine.lock" --script "$LOCKFLIGHT_TEMP/proposed-install.sh" ${GH_TOKEN:+--attestation}
           fi
         else
           # The first lock (the move from a 0.2 tool pin) is judged by the base's 0.2 engine, which cannot check it against its release.

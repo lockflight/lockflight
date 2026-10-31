@@ -5,7 +5,7 @@ using Lockflight.Cli.Config;
 namespace Lockflight.Cli.EngineLocks;
 
 /// <summary>
-/// The strict reader of <c>lockflight.engine-lock/v1</c>: a lock is policy a person commits, so an unknown or repeated key, a wrong type, a hash
+/// The strict reader of <c>lockflight.engine-lock/v1</c>: a lock is policy a person commits, so a backslash anywhere, an unknown or repeated key, a wrong type, a hash
 /// that is not 64 lower-case hex, a release lock without every released platform, or a development lock where only release
 /// locks belong is an error naming the problem. A RID this engine does not know is ignored, so a later platform does not break
 /// an older engine.
@@ -18,6 +18,11 @@ internal static partial class EngineLockReader
     /// <param name="engine">The engine reading the lock, named when a key is unknown.</param>
     public static EngineLockReading Read(string text, bool allowDevelopment, string engine)
     {
+        if (text.Contains('\\', StringComparison.Ordinal))
+        {
+            return Problem("the lock holds a backslash; install.sh reads a lock without decoding JSON escapes, so a lock names its keys and values without any");
+        }
+
         try
         {
             using JsonDocument document = JsonDocument.Parse(text);
