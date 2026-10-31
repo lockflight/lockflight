@@ -135,7 +135,7 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
         ApprovalCheck tasks = new ApprovalStore(session.Feature).Check(ApprovalPhase.Tasks);
         if (tasks.State != ApprovalState.Valid)
         {
-            return await session.FailAsync(tasks.Describe(session.Manifest.Root), cancellationToken);
+            return await session.RefuseUnapprovedAsync("redgreen-start", session.NotApproved(), cancellationToken);
         }
 
         TestWorkspace workspace = session.Workspace;
