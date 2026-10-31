@@ -194,11 +194,9 @@ internal sealed class TestCodeScanner(string assemblyPath, IReadOnlySet<string> 
         }
     }
 
-    private static TypeDefinitionHandle? BaseInSameAssembly(MetadataReader reader, TypeDefinitionHandle handle)
-    {
-        EntityHandle baseType = reader.GetTypeDefinition(handle).BaseType;
-        return !baseType.IsNil && baseType.Kind == HandleKind.TypeDefinition ? (TypeDefinitionHandle)baseType : null;
-    }
+    /// <summary>The base type when this assembly defines it, a generic base (<c>PriceTestsBase&lt;decimal&gt;</c>) by its definition.</summary>
+    private static TypeDefinitionHandle? BaseInSameAssembly(MetadataReader reader, TypeDefinitionHandle handle) =>
+        GenericTypes.Definition(reader, reader.GetTypeDefinition(handle).BaseType);
 
     /// <summary>
     /// The compiler moves the body of an async or iterator method (or lambda) into a nested state machine type named

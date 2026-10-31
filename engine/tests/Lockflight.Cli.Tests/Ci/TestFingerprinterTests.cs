@@ -15,6 +15,8 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
     private const string Test = "ShippingFollowsTheWeight";
     private const string Production = "    public decimal Shipping(decimal kilograms) => kilograms * 2m;";
 
+    private static readonly string[] BuildOutputs = ["src/Shop/bin", "src/Shop/obj", "tests/Shop.Tests/bin", "tests/Shop.Tests/obj"];
+
     private GitHistoryFixture repository = null!;
 
     public async ValueTask InitializeAsync()
@@ -61,6 +63,73 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
 
         repository.WriteCode(Production, Tests(string.Empty, expected: "6m"), "CheckBase");
         Assert.NotEqual(baseChanged, await FingerprintAsync());
+    }
+
+    [Fact]
+    public async Task AnUnchangedTestKeepsItsFingerprintAcrossACleanRebuildAndANullableContextShift()
+    {
+        string original = await FingerprintAsync();
+        string contextsBefore = NullableContexts();
+
+        foreach (string output in BuildOutputs.Select(path => Path.Combine(repository.Root, path)).Where(Directory.Exists))
+        {
+            Directory.Delete(output, recursive: true);
+        }
+
+        Assert.Equal(original, await FingerprintAsync());
+
+        // Members with nullable reference types outnumber the rest, so the compiler moves the class's [NullableContext] and puts
+        // one on the test method: attributes of types it embeds in the assembly, which no person wrote.
+        repository.WriteCode(Production, Tests("""
+                public static string? First(string? value) => value;
+
+                public static string? Second(string? value) => value;
+
+                public static string? Third(string? value) => value;
+
+                public static object? Fourth(object? value) => value;
+
+            """, expected: "4m"), "CheckBase");
+        Assert.Equal(original, await FingerprintAsync());
+        Assert.NotEqual(contextsBefore, NullableContexts());
+    }
+
+    [Fact]
+    public async Task AnOwnTypeArgumentOfAGenericBaseAndAnOwnAttributeOnTheTestCount()
+    {
+        static string Base(string price, string log) => $$"""
+            namespace Shop.Tests;
+
+            public sealed class Seed
+            {
+                public decimal Price { get; } = {{price}};
+            }
+
+            public abstract class SeededBase<T> where T : new()
+            {
+                protected static T Seeded => new();
+            }
+
+            public sealed class LogAttribute : Xunit.v3.BeforeAfterTestAttribute
+            {
+                public override void Before(System.Reflection.MethodInfo methodUnderTest, Xunit.v3.IXunitTest test) => Console.WriteLine({{log}});
+            }
+
+            """;
+        const string Tests = """
+                [Fact]
+                [Log]
+                public void Seeds() => Assert.True(Seeded is not null);
+            """;
+        repository.WriteCode(Production, Tests, "SeededBase<Seed>").Write("tests/Shop.Tests/SeededBase.cs", Base("1m", "1"));
+        string original = await FingerprintAsync("Seeds");
+
+        repository.Write("tests/Shop.Tests/SeededBase.cs", Base("2m", "1"));
+        string seedChanged = await FingerprintAsync("Seeds");
+        Assert.NotEqual(original, seedChanged);
+
+        repository.Write("tests/Shop.Tests/SeededBase.cs", Base("2m", "2"));
+        Assert.NotEqual(seedChanged, await FingerprintAsync("Seeds"));
     }
 
     [Fact]
@@ -141,6 +210,93 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ATestInheritedFromAGenericBaseHasAFingerprintThatFollowsTheBaseAndItsTypeArgument()
+    {
+        static string Base(string length) => $$"""
+            namespace Shop.Tests;
+
+            public abstract class PriceTestsBase<T>
+            {
+                [Fact]
+                public void Inherited() => Assert.True(typeof(T).Name.Length > {{length}});
+            }
+
+            """;
+        repository.WriteCode(Production, string.Empty, "PriceTestsBase<decimal>").Write("tests/Shop.Tests/PriceTestsBase.cs", Base("1"));
+        string original = await FingerprintAsync("Inherited");
+
+        repository.Write("tests/Shop.Tests/PriceTestsBase.cs", Base("2"));
+        string body = await FingerprintAsync("Inherited");
+        Assert.NotEqual(original, body);
+
+        repository.WriteCode(Production, string.Empty, "PriceTestsBase<int>");
+        Assert.NotEqual(body, await FingerprintAsync("Inherited"));
+    }
+
+    [Fact]
+    public async Task ExceptionClausesLocalTypesFixturesAndClassAndAssemblyAttributesCountToo()
+    {
+        static string Tests(string trait, string collection, string caught, string local) => $$"""
+            using Shop;
+
+            [assembly: AssemblyFixture(typeof(Shop.Tests.Warehouse))]
+
+            namespace Shop.Tests;
+
+            [Trait("Area", "{{trait}}")]
+            [Collection("{{collection}}")]
+            public sealed class PriceTests
+            {
+                [Fact]
+                public void ShippingFollowsTheWeight()
+                {
+                    {{local}} weight = "2";
+                    Assert.NotNull(weight);
+                    try { Assert.Equal(4m, new Price().Shipping(2m)); }
+                    catch ({{caught}}) { }
+                }
+            }
+
+            [CollectionDefinition("db")]
+            public sealed class DbCollection : ICollectionFixture<DbFixture>;
+
+            """;
+        static string Fixtures(string db, string warehouse) => $$"""
+            namespace Shop.Tests;
+
+            public sealed class DbFixture
+            {
+                public DbFixture() => Console.WriteLine({{db}});
+            }
+
+            public sealed class Warehouse
+            {
+                public Warehouse() => Console.WriteLine({{warehouse}});
+            }
+
+            """;
+        repository.Write(CiSolution.TestsFile, Tests("prices", "db", "ArgumentException", "object")).Write("tests/Shop.Tests/Fixtures.cs", Fixtures("1", "1"));
+        List<string> fingerprints = [await FingerprintAsync()];
+
+        repository.Write(CiSolution.TestsFile, Tests("prices", "db", "InvalidOperationException", "object"));
+        fingerprints.Add(await FingerprintAsync());
+        repository.Write(CiSolution.TestsFile, Tests("prices", "db", "InvalidOperationException", "string"));
+        fingerprints.Add(await FingerprintAsync());
+        repository.Write(CiSolution.TestsFile, Tests("shipping", "db", "InvalidOperationException", "string"));
+        fingerprints.Add(await FingerprintAsync());
+        repository.Write("tests/Shop.Tests/Fixtures.cs", Fixtures("2", "1"));
+        fingerprints.Add(await FingerprintAsync());
+        repository.Write("tests/Shop.Tests/Fixtures.cs", Fixtures("2", "2"));
+        fingerprints.Add(await FingerprintAsync());
+
+        string[] steps = ["caught type", "local type", "class attribute", "collection fixture", "assembly fixture"];
+        for (int step = 0; step < steps.Length; step++)
+        {
+            Assert.True(fingerprints[step] != fingerprints[step + 1], $"the {steps[step]} did not change the fingerprint");
+        }
+    }
+
+    [Fact]
     public async Task ATestThatIsNotInTheAssemblyHasNoFingerprint()
     {
         await BuildAsync();
@@ -149,6 +305,28 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
         Assert.Null(fingerprinter.Fingerprint(TestClass, "NoSuchTest"));
         Assert.Null(fingerprinter.Fingerprint("Shop.Tests.NoSuchClass", Test));
     }
+
+    /// <summary>Every <c>[NullableContext]</c> on the test class and its methods with its value, to show the compiler moved them.</summary>
+    private string NullableContexts()
+    {
+        using System.Reflection.PortableExecutable.PEReader pe = new(File.OpenRead(AssemblyPath));
+        System.Reflection.Metadata.MetadataReader reader = System.Reflection.Metadata.PEReaderExtensions.GetMetadataReader(pe);
+        System.Reflection.Metadata.TypeDefinition type = reader.TypeDefinitions.Select(reader.GetTypeDefinition)
+            .Single(candidate => $"{reader.GetString(candidate.Namespace)}.{reader.GetString(candidate.Name)}" == TestClass);
+        IEnumerable<(string Member, System.Reflection.Metadata.CustomAttributeHandleCollection Attributes)> members =
+            [("class", type.GetCustomAttributes()), .. type.GetMethods().Select(reader.GetMethodDefinition).Select(method => (reader.GetString(method.Name), method.GetCustomAttributes()))];
+        return string.Join(';', members.SelectMany(member => member.Attributes.Select(reader.GetCustomAttribute)
+            .Where(attribute => AttributeTypeName(reader, attribute) == "NullableContextAttribute")
+            .Select(attribute => $"{member.Member}={Convert.ToHexString(reader.GetBlobBytes(attribute.Value))}")));
+    }
+
+    private static string AttributeTypeName(System.Reflection.Metadata.MetadataReader reader, System.Reflection.Metadata.CustomAttribute attribute) => attribute.Constructor.Kind switch
+    {
+        System.Reflection.Metadata.HandleKind.MethodDefinition => reader.GetString(reader.GetTypeDefinition(reader.GetMethodDefinition((System.Reflection.Metadata.MethodDefinitionHandle)attribute.Constructor).GetDeclaringType()).Name),
+        System.Reflection.Metadata.HandleKind.MemberReference when reader.GetMemberReference((System.Reflection.Metadata.MemberReferenceHandle)attribute.Constructor).Parent is { Kind: System.Reflection.Metadata.HandleKind.TypeReference } parent
+            => reader.GetString(reader.GetTypeReference((System.Reflection.Metadata.TypeReferenceHandle)parent).Name),
+        _ => string.Empty,
+    };
 
     private string AssemblyPath => Path.Combine(repository.Root, "tests", "Shop.Tests", "bin", "Debug", "net10.0", "Shop.Tests.dll");
 

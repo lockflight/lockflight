@@ -6,6 +6,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text;
+using Lockflight.Cli.Lifecycle.RedGreen;
 
 namespace Lockflight.Cli.Ci;
 
@@ -13,7 +14,10 @@ namespace Lockflight.Cli.Ci;
 /// The per-method fingerprint of a test, read from a built test assembly without loading it (AOT-safe): a SHA-256 over the IL of
 /// the test method and of every method of the test assembly it reaches (helpers in any class, base classes, lambdas, local functions,
 /// async and iterator state machines), its class's constructors, set-up and tear-down methods and the module initializer, with every metadata token written as the
-/// name it stands for, and the test's attributes (<c>InlineData</c> values, traits, <c>Skip</c>). Compiler-generated names are
+/// name it stands for, each method's exception clauses and local variable types, the test's attributes (<c>InlineData</c> values,
+/// traits, <c>Skip</c>), its class's and base classes' attributes and base types (a generic base with its type arguments), the
+/// assembly's own attributes, and the code of the fixtures they name (a collection's or the assembly's fixtures, an attribute
+/// type of the assembly). Compiler-generated names are
 /// replaced by their order in the walk, because their ordinals shift when a test is added above; members of assemblies outside the
 /// repository carry their version, so a swapped or downgraded assertion library changes the fingerprint while a per-commit version
 /// of the repository's own assemblies does not. Anything the walk cannot read, or a walk past its bound, gives no fingerprint, which
@@ -26,8 +30,25 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
     private const byte SwitchOpCode = 0x45;
     private const byte StringOpCode = 0x72;
     private const byte CallVirtOpCode = 0x6F;
+    private const byte LdVirtFtnOpCode = 0x07;
 
     private static readonly string[] CompilerAttributes = ["]System.Runtime.CompilerServices.", "]System.Diagnostics."];
+
+    private static readonly HashSet<string> EmbeddedAttributes = new(StringComparer.Ordinal)
+    {
+        "Microsoft.CodeAnalysis.EmbeddedAttribute",
+        "System.Runtime.CompilerServices.NullableAttribute",
+        "System.Runtime.CompilerServices.NullableContextAttribute",
+        "System.Runtime.CompilerServices.NullablePublicOnlyAttribute",
+        "System.Runtime.CompilerServices.RefSafetyRulesAttribute",
+        "System.Runtime.CompilerServices.IsReadOnlyAttribute",
+        "System.Runtime.CompilerServices.IsByRefLikeAttribute",
+        "System.Runtime.CompilerServices.IsUnmanagedAttribute",
+        "System.Runtime.CompilerServices.NativeIntegerAttribute",
+        "System.Runtime.CompilerServices.ScopedRefAttribute",
+        "System.Runtime.CompilerServices.RequiresLocationAttribute",
+        "System.Runtime.CompilerServices.ParamCollectionAttribute",
+    };
     private static readonly HashSet<byte> MethodOps = [0x27, 0x28, 0x6F, 0x73];
     private static readonly HashSet<byte> TokenOps = [0x70, 0x71, 0x74, 0x75, 0x79, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F, 0x80, 0x81, 0x8C, 0x8D, 0x8F, 0xA3, 0xA4, 0xA5, 0xC2, 0xC6, 0xD0];
     private static readonly HashSet<byte> TwoByteMethodOps = [0x06, 0x07];
@@ -159,18 +180,14 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             MethodDefinition test = reader.GetMethodDefinition(roots[0]);
             foreach (CustomAttributeHandle handle in test.GetCustomAttributes())
             {
-                CustomAttribute attribute = reader.GetCustomAttribute(handle);
-                string constructor = Token(attribute.Constructor);
-
-                // The compiler's own attributes name generated types with their ordinals (AsyncStateMachine(typeof(<T>d__5))).
-                if (!CompilerAttributes.Any(prefix => constructor.Contains(prefix, StringComparison.Ordinal)))
-                {
-                    text.Append("attr ").Append(constructor).Append(' ').Append(AttributeValue(attribute)).Append('\n');
-                }
+                // The compiler's own attributes name generated types with their ordinals (AsyncStateMachine(typeof(<T>d__5))) and
+                // are left out; an attribute type of this assembly (a before/after hook, a data source) brings in its code.
+                Attribute(reader.GetCustomAttribute(handle), "attr ");
             }
 
             pending.Enqueue(roots[0]);
             EnqueueFrameworkCode(type, test);
+            ClassAndAssembly(type);
             for (TypeDefinitionHandle? current = type; current is TypeDefinitionHandle currentType; current = BaseInAssembly(currentType))
             {
                 foreach (MethodDefinitionHandle constructor in MethodsNamed(currentType, ".ctor").Concat(MethodsNamed(currentType, ".cctor")))
@@ -209,6 +226,135 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
 
             return text.ToString();
         }
+
+        /// <summary>
+        /// What the test framework reads off the class and the assembly: each class's attributes and base type up the chain (a
+        /// <c>[Collection]</c> also brings in its definition's fixtures), and the assembly's attributes outside <c>System.</c>
+        /// (an assembly fixture, a test framework or orderer); an attribute type of this assembly, or a type of this assembly an
+        /// attribute names, brings in all of its code.
+        /// </summary>
+        private void ClassAndAssembly(TypeDefinitionHandle type)
+        {
+            for (TypeDefinitionHandle? current = type; current is TypeDefinitionHandle currentType; current = BaseInAssembly(currentType))
+            {
+                TypeDefinition definition = reader.GetTypeDefinition(currentType);
+                text.Append("class ").Append(DefinitionName(currentType)).Append(" : ").Append(definition.BaseType.IsNil ? "-" : Token(definition.BaseType)).Append('\n');
+
+                // A type of this assembly a generic base is built with (Base<Calculator>) runs through it: new T(), T.Create().
+                foreach (TypeDefinitionHandle argument in GenericTypes.OwnTypes(reader, definition.BaseType))
+                {
+                    EnqueueAll(argument, name: null);
+                }
+
+                foreach (CustomAttributeHandle handle in definition.GetCustomAttributes())
+                {
+                    Attribute(reader.GetCustomAttribute(handle), "class-attr ");
+                }
+            }
+
+            foreach (CustomAttributeHandle handle in reader.GetAssemblyDefinition().GetCustomAttributes())
+            {
+                CustomAttribute attribute = reader.GetCustomAttribute(handle);
+                string constructor = Token(attribute.Constructor);
+                if (!constructor[..Math.Max(0, constructor.IndexOf("::", StringComparison.Ordinal))].Contains("]System.", StringComparison.Ordinal))
+                {
+                    Attribute(attribute, "assembly-attr ");
+                }
+            }
+        }
+
+        /// <summary>
+        /// An attribute the compiler writes, not the person: one of <c>System.Runtime.CompilerServices</c> or
+        /// <c>System.Diagnostics</c> from another assembly, or a type the compiler embedded in this one (<c>NullableContext</c>,
+        /// <c>Nullable</c>, <c>RefSafetyRules</c> and the like, marked <c>[Microsoft.CodeAnalysis.Embedded]</c>). The nullable ones
+        /// follow the majority of a class's members, so a member added elsewhere in the class would change a test's fingerprint.
+        /// </summary>
+        private static bool IsCompilerAttribute(string name) =>
+            name[..Math.Max(0, name.IndexOf("::", StringComparison.Ordinal))] is string declaring
+            && CompilerAttributes.Any(prefix => declaring.Contains(prefix, StringComparison.Ordinal));
+
+        /// <summary>
+        /// One of the attribute types the compiler embeds in an assembly, by its full name, deriving from <c>System.Attribute</c>
+        /// with no interface and marked <c>[Microsoft.CodeAnalysis.Embedded]</c>; a person's type with such a name is still walked.
+        /// </summary>
+        private bool IsEmbedded(TypeDefinitionHandle type)
+        {
+            const string Embedded = "Microsoft.CodeAnalysis.EmbeddedAttribute";
+            TypeDefinition definition = reader.GetTypeDefinition(type);
+            string name = DefinitionName(type);
+            if (!EmbeddedAttributes.Contains(name) || definition.GetInterfaceImplementations().Count > 0
+                || definition.BaseType.IsNil || !Token(definition.BaseType).EndsWith("]System.Attribute", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return name == Embedded || definition.GetCustomAttributes()
+                .Any(handle => Token(reader.GetCustomAttribute(handle).Constructor).StartsWith($"{Embedded}::", StringComparison.Ordinal));
+        }
+
+        /// <summary>Appends an attribute with its arguments and follows the code of this assembly it names.</summary>
+        private void Attribute(CustomAttribute attribute, string kind)
+        {
+            string constructor = Token(attribute.Constructor);
+            if (IsCompilerAttribute(constructor))
+            {
+                return;
+            }
+
+            if (attribute.Constructor.Kind == HandleKind.MethodDefinition
+                && reader.GetMethodDefinition((MethodDefinitionHandle)attribute.Constructor).GetDeclaringType() is var attributeType)
+            {
+                // An embedded one is left out whole: where the compiler places it follows the class's other members, and its code
+                // (a constructor storing its argument) only runs when something reads it by reflection.
+                if (IsEmbedded(attributeType))
+                {
+                    return;
+                }
+
+                EnqueueAll(attributeType, name: null);
+            }
+
+            CustomAttributeValue<string> value = attribute.DecodeValue(new AttributeTypes(Names));
+            text.Append(kind).Append(constructor).Append(' ').Append(AttributeValue(attribute)).Append('\n');
+
+            // A generic attribute ([Collection<Db>], [ClassData<Rows>]) carries its type in the constructor's parent.
+            if (attribute.Constructor.Kind == HandleKind.MemberReference)
+            {
+                foreach (TypeDefinitionHandle argument in GenericTypes.OwnTypes(reader, reader.GetMemberReference((MemberReferenceHandle)attribute.Constructor).Parent))
+                {
+                    EnqueueAll(argument, name: null);
+                    EnqueueFixtures(argument);
+                }
+            }
+
+            bool collection = constructor.Contains("CollectionAttribute", StringComparison.Ordinal);
+            foreach (CustomAttributeTypedArgument<string> argument in value.FixedArguments.Concat(value.NamedArguments.Select(named => new CustomAttributeTypedArgument<string>(named.Type, named.Value))))
+            {
+                if (argument.Value is not string named)
+                {
+                    continue;
+                }
+
+                if (new AttributeTypes(Names).IsSystemType(argument.Type) && FindType(named.Split(',')[0].Trim()) is TypeDefinitionHandle own)
+                {
+                    EnqueueAll(own, name: null);
+                    EnqueueFixtures(own);
+                }
+                else if (collection)
+                {
+                    foreach (TypeDefinitionHandle definition in CollectionDefinitions(named))
+                    {
+                        EnqueueFixtures(definition);
+                    }
+                }
+            }
+        }
+
+        /// <summary>The types of this assembly marked <c>[CollectionDefinition(name)]</c>.</summary>
+        private IEnumerable<TypeDefinitionHandle> CollectionDefinitions(string name) =>
+            reader.TypeDefinitions.Where(candidate => reader.GetTypeDefinition(candidate).GetCustomAttributes().Select(reader.GetCustomAttribute).Any(attribute =>
+                Token(attribute.Constructor).Contains("CollectionDefinitionAttribute", StringComparison.Ordinal)
+                && attribute.DecodeValue(new AttributeTypes(Names)).FixedArguments.Any(argument => argument.Value is string text && text == name)));
 
         private bool IsLifecycle(MethodDefinitionHandle handle)
         {
@@ -289,7 +435,21 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
                 return true;
             }
 
-            BlobReader il = pe.GetMethodBody(definition.RelativeVirtualAddress).GetILReader();
+            MethodBodyBlock body = pe.GetMethodBody(definition.RelativeVirtualAddress);
+            if (!body.LocalSignature.IsNil)
+            {
+                text.Append("locals ").Append(string.Join(',', reader.GetStandaloneSignature(body.LocalSignature).DecodeLocalSignature(Names, null))).Append('\n');
+            }
+
+            foreach (ExceptionRegion region in body.ExceptionRegions)
+            {
+                text.Append("region ").Append(region.Kind).Append(' ').Append(region.TryOffset).Append('+').Append(region.TryLength)
+                    .Append(' ').Append(region.HandlerOffset).Append('+').Append(region.HandlerLength)
+                    .Append(' ').Append(region.CatchType.IsNil ? "-" : Token(region.CatchType))
+                    .Append(' ').Append(region.FilterOffset).Append('\n');
+            }
+
+            BlobReader il = body.GetILReader();
             while (il.RemainingBytes > 0)
             {
                 byte code = il.ReadByte();
@@ -300,7 +460,12 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
                     text.Append(second.ToString("x2", CultureInfo.InvariantCulture));
                     if (TwoByteMethodOps.Contains(second) || TwoByteTokenOps.Contains(second))
                     {
-                        Operand(MetadataTokens.EntityHandle(il.ReadInt32()));
+                        EntityHandle token = MetadataTokens.EntityHandle(il.ReadInt32());
+                        Operand(token);
+                        if (second == LdVirtFtnOpCode)
+                        {
+                            EnqueueOverrides(token);
+                        }
                     }
                     else
                     {
@@ -470,6 +635,12 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
                 EnqueueAll(type, ".cctor");
             }
 
+            EnqueueFixtures(type);
+        }
+
+        /// <summary>The fixtures a type takes through generic interfaces (<c>IClassFixture&lt;T&gt;</c>, <c>ICollectionFixture&lt;T&gt;</c>), up its bases.</summary>
+        private void EnqueueFixtures(TypeDefinitionHandle type)
+        {
             for (TypeDefinitionHandle? current = type; current is TypeDefinitionHandle currentType; current = BaseInAssembly(currentType))
             {
                 foreach (InterfaceImplementationHandle implementation in reader.GetTypeDefinition(currentType).GetInterfaceImplementations())
@@ -651,11 +822,8 @@ internal sealed class TestFingerprinter(string assemblyPath, IReadOnlySet<string
             return [];
         }
 
-        private TypeDefinitionHandle? BaseInAssembly(TypeDefinitionHandle handle)
-        {
-            EntityHandle baseType = reader.GetTypeDefinition(handle).BaseType;
-            return !baseType.IsNil && baseType.Kind == HandleKind.TypeDefinition ? (TypeDefinitionHandle)baseType : null;
-        }
+        /// <summary>The base type when this assembly defines it, a generic base (<c>PriceTestsBase&lt;decimal&gt;</c>) by its definition.</summary>
+        private TypeDefinitionHandle? BaseInAssembly(TypeDefinitionHandle handle) => GenericTypes.Definition(reader, reader.GetTypeDefinition(handle).BaseType);
 
         /// <summary>The methods of this assembly a token names, so the walk follows helpers and generic types defined here.</summary>
         private IEnumerable<MethodDefinitionHandle> OwnMethods(EntityHandle token)
