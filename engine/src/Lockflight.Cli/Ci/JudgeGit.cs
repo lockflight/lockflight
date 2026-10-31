@@ -86,12 +86,12 @@ internal static class JudgeGit
         return diff.ExitCode == 0 ? Split(diff.Output) : null;
     }
 
-    /// <summary>The zero-context diff of <paramref name="paths"/> between two commits; null when git fails.</summary>
+    /// <summary>The zero-context diff of <paramref name="paths"/> between two commits as text, whatever a change's own <c>.gitattributes</c> says; null when git fails.</summary>
     public static async Task<string?> DiffHunksAsync(string root, string from, string to, IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
         ProcessResult diff = await ProcessRunner.RunAsync(
             Executable,
-            [.. Pinned, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--diff-algorithm=myers", "--src-prefix=a/", "--dst-prefix=b/", from, to, "--", .. paths],
+            [.. Pinned, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-textconv", "--text", "--no-renames", "--diff-algorithm=myers", "--src-prefix=a/", "--dst-prefix=b/", from, to, "--", .. paths],
             root,
             cancellationToken);
         return diff.ExitCode == 0 ? diff.Output : null;
@@ -102,7 +102,7 @@ internal static class JudgeGit
     {
         ProcessResult diff = await ProcessRunner.RunAsync(
             Executable,
-            [.. Pinned, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/", from, to, "--", .. paths],
+            [.. Pinned, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--text", "--find-renames", "--src-prefix=a/", "--dst-prefix=b/", from, to, "--", .. paths],
             root,
             cancellationToken);
         return diff.ExitCode == 0 ? diff.Output : null;

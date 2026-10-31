@@ -61,6 +61,28 @@ public sealed class ShellJudgeTests : IAsyncLifetime
         Assert.Null(merged["blocked"]);
     }
 
+    [Fact]
+    public async Task TheShellsRoutingRaisesTheUnitsClass()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string before = (await PlanAsync())["changeClass"]!.GetValue<string>();
+        await shell.Write("lockflight.yaml", "version: 2\nunits:\n  - path: services/shop\nrouting:\n  preset: default\n  critical:\n    - services/shop/src/**\n").CommitAsync("routing", cancellationToken);
+
+        JsonNode after = await PlanAsync();
+
+        Assert.NotEqual("critical", before);
+        Assert.Equal("critical", after["changeClass"]!.GetValue<string>());
+    }
+
+    private async Task<JsonNode> PlanAsync()
+    {
+        (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(
+            ["ci", "--platform", "github", "--head", head, "--base", main, "--branch", "001-shipping", "--evidence", evidence.FullName, "--shell", shell.Root, "--plan"], string.Empty, unit.Root,
+            new Dictionary<string, string> { [EnvironmentVariables.Temp] = evidence.FullName, ["PATH"] = Environment.GetEnvironmentVariable("PATH") ?? string.Empty, ["HOME"] = Environment.GetEnvironmentVariable("HOME") ?? string.Empty });
+        Assert.True(exitCode == ExitCode.Pass, $"exit {(int)exitCode}: {output}\n{error}");
+        return JsonNode.Parse(output)!;
+    }
+
     private async Task<JsonNode> JudgeAsync()
     {
         string path = Path.Combine(evidence.FullName, "evidence.json");

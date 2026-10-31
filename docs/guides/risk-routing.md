@@ -75,7 +75,10 @@ Each changed path gets one role, first match wins. Every name test ignores case 
   line inside a multi-line string (SQL, JSON, an expected value) counts like code.
 - **Reformatting does not count.** A removed and an added line of the same file that are equal once whitespace is collapsed
   are both dropped, so a reindent or a line-ending normalization is close to zero lines.
-- **Binary files** count no lines; they get their own signal.
+- **Binary files** count no lines; they get their own signal. A file that any attributes source (`.gitattributes` at any depth,
+  `info/attributes`) marks `binary` or `-diff` still counts its lines when its content is text on both sides (no NUL byte in the
+  first 8,000 bytes, 4 MB at most), so a change cannot hide its own lines that way. In CI the judge also makes git itself tell
+  text from binary by content (`* !diff` in the clone's `info/attributes`), for every gate and the spec diff.
 
 ## Moves
 

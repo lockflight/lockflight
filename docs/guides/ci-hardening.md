@@ -24,7 +24,7 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
     mirror, and the version pin of a project without a lock);
   - `lockflight.yaml`;
   - `.gitleaks.toml` and `.gitleaksignore`;
-  - `nuget.config` / `NuGet.config` at the root (package sources: a PR cannot make CI install an engine of its own choosing);
+  - `nuget.config`, `NuGet.config` and `NuGet.Config` at the root (package sources: a PR cannot make CI install an engine of its own choosing);
   - `.lockflight/baselines/` (accepted warnings, known-failing tests, advisories) and `.lockflight/ci/` (the vendored engine
     install script);
   - code-style and analyzer config anywhere in the tree: `.editorconfig`, `.globalconfig`/`*.globalconfig`, `*.ruleset`,
@@ -272,8 +272,9 @@ branches) among the shell's `specs/`, read at the clone's commit, so only a merg
 for the requirements its red tests name, since one feature's spec can span several units. Until the shell's spec pull request
 merges, a unit pull request on a branch named like a feature is NOT-EARNED, with a blocked report naming the spec to merge; run
 the check again once it has merged. The approvals check reads the shell's CODEOWNERS (at any platform's location) and specs,
-and the evidence records the shell's URL and commit. The change class and which checks are required still come from the unit's
-own `lockflight.yaml` on its target branch; only the gates apply the shell's stricter policy. Locally, a unit checked out
+and the evidence records the shell's URL and commit. The change class and which checks are required come from the unit's own
+`lockflight.yaml` on its target branch with the shell's `routing:` for the unit merged in, the stricter value winning, as the
+gates apply the shell's stricter policy; approvals settings stay the unit's. Locally, a unit checked out
 inside its shell is judged against whatever commit the shell has checked out, merged or not.
 
 **Access.** The clone needs read access to the shell repository, and nothing else:

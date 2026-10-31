@@ -18,6 +18,7 @@ internal static class ChangeSetReader
     private static readonly string[] RawFormat = ["--raw", "-z", "--no-abbrev"];
     private static readonly string[] NumstatFormat = ["--numstat", "-z"];
     private static readonly string[] PatchFormat = ["-U0"];
+    private static readonly string[] TextPatchFormat = ["-U0", "--text"];
     private static readonly string[] PolicyTextSuffixes = [".csproj", ".fsproj", ".vbproj", ".props", ".targets"];
 
     /// <summary>Reads the change from <paramref name="baseRef"/>'s merge base to <paramref name="headRef"/> (null: the working tree).</summary>
@@ -103,7 +104,20 @@ internal static class ChangeSetReader
         }
 
         List<string> existingHeadPaths = headCommit is null ? [.. headPaths.Where(path => ExistsOnDisk(repo.Directory, path))] : [.. headPaths];
-        List<ChangedFile> files = ChangedFiles(RawDiff.Parse(raw), NumstatDiff.BinaryPaths(numstat), UnifiedDiff.PatchFilesOf(patch));
+        IReadOnlySet<string> gitBinary = NumstatDiff.BinaryPaths(numstat);
+        if (await TextMarkedBinaryAsync(repo.Directory, mergeBase, headCommit, prefix, gitBinary, cancellationToken) is not IReadOnlyList<string> markedText)
+        {
+            return null;
+        }
+
+        string? textPatch = markedText.Count == 0 ? string.Empty : await RoutingGit.DiffAsync(repo.Directory, range, TextPatchFormat, markedText, cancellationToken);
+        if (textPatch is null)
+        {
+            return null;
+        }
+
+        IReadOnlySet<string> binaryPaths = new HashSet<string>(gitBinary.Except(markedText, StringComparer.Ordinal), StringComparer.Ordinal);
+        List<ChangedFile> files = ChangedFiles(RawDiff.Parse(raw), binaryPaths, [.. UnifiedDiff.PatchFilesOf(patch), .. UnifiedDiff.PatchFilesOf(textPatch)]);
         HashSet<string> listed = new(files.Select(file => file.Path), StringComparer.Ordinal);
         files.AddRange(UntrackedFiles(repo.Directory, untracked.Where(path => !listed.Contains(path))));
         if (headCommit is null && !await FillWorkingTreeBlobsAsync(repo.Directory, files, cancellationToken))
@@ -235,6 +249,64 @@ internal static class ChangeSetReader
 
         return texts;
     }
+
+    /// <summary>
+    /// The files git calls binary whose content is text on every side that has them: a change's own <c>.gitattributes</c>
+    /// (<c>*.cs -diff</c>, <c>binary</c>) marked them, and the attributes git reads are the head's, so routing decides by content
+    /// (git's NUL test, and the size limit) and counts their lines. A file larger than the limit on either side stays binary and
+    /// is never read. Null when git fails.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>?> TextMarkedBinaryAsync(
+        string directory, string mergeBase, string? headCommit, string prefix, IReadOnlySet<string> gitBinary, CancellationToken cancellationToken)
+    {
+        if (gitBinary.Count == 0)
+        {
+            return [];
+        }
+
+        if (await SideAsync(directory, mergeBase, prefix, gitBinary, cancellationToken) is not IReadOnlyDictionary<string, byte[]?> atBase)
+        {
+            return null;
+        }
+
+        IReadOnlyDictionary<string, byte[]?>? atHead = headCommit is null
+            ? WorkingTreeSide(directory, gitBinary)
+            : await SideAsync(directory, headCommit, prefix, gitBinary, cancellationToken);
+        if (atHead is null)
+        {
+            return null;
+        }
+
+        return [.. gitBinary.Where(path => (atBase.ContainsKey(path) || atHead.ContainsKey(path)) && IsText(atBase, path) && IsText(atHead, path)).Order(StringComparer.Ordinal)];
+    }
+
+    /// <summary>A side's content is text when it decodes; a side that lacks the file says nothing; a file too large to read is not text.</summary>
+    private static bool IsText(IReadOnlyDictionary<string, byte[]?> side, string path) =>
+        !side.TryGetValue(path, out byte[]? content) || (content is not null && RevisionText.Decode(content) is not null);
+
+    /// <summary>The paths a commit has, each with its content, or null for content larger than <see cref="RevisionText.MaxBytes"/>.</summary>
+    private static async Task<IReadOnlyDictionary<string, byte[]?>?> SideAsync(
+        string directory, string commit, string prefix, IReadOnlySet<string> paths, CancellationToken cancellationToken)
+    {
+        if (await RoutingGit.SizesAsync(directory, commit, [.. paths.Select(path => prefix + path)], cancellationToken) is not IReadOnlyDictionary<string, long> sizes)
+        {
+            return null;
+        }
+
+        string[] small = [.. sizes.Where(entry => entry.Value <= RevisionText.MaxBytes).Select(entry => entry.Key)];
+        if (await RoutingGit.BlobsAsync(directory, commit, small, cancellationToken) is not IReadOnlyDictionary<string, byte[]> blobs)
+        {
+            return null;
+        }
+
+        return sizes.Keys.ToDictionary(path => path[prefix.Length..], path => blobs.TryGetValue(path, out byte[]? content) ? content : null, StringComparer.Ordinal);
+    }
+
+    private static Dictionary<string, byte[]?> WorkingTreeSide(string directory, IReadOnlySet<string> paths) =>
+        paths.Where(path => ExistsAsFile(directory, path)).ToDictionary(
+            path => path,
+            path => new FileInfo(Path.Combine(directory, path)).Length <= RevisionText.MaxBytes ? File.ReadAllBytes(Path.Combine(directory, path)) : null,
+            StringComparer.Ordinal);
 
     private static Dictionary<string, string> WorkingTreeTexts(string directory, IReadOnlyList<string> paths)
     {

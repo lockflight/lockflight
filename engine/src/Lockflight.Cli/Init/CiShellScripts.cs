@@ -12,8 +12,11 @@ internal static class CiShellScripts
     public const string GitleaksVersion = "8.30.1";
     public const string GitleaksSha256 = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb";
 
-    /// <summary>The single policy files restored from the base commit, as the GitHub workflow's loop lists them.</summary>
-    public const string PolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .lockflight/engine.lock .gitleaks.toml .gitleaksignore nuget.config NuGet.config";
+    /// <summary>
+    /// The single policy files restored from the base commit, as the pipelines' loop lists them: the three spellings NuGet reads
+    /// on a case-sensitive file system each, so a PR's own <c>NuGet.Config</c> next to the base's <c>nuget.config</c> goes.
+    /// </summary>
+    public const string PolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .lockflight/engine.lock .gitleaks.toml .gitleaksignore nuget.config NuGet.config NuGet.Config";
 
     /// <summary>The policy directories restored from the base commit as a whole: accepted baselines and the vendored install script.</summary>
     public const string PolicyDirectories = ".lockflight/baselines .lockflight/ci";
@@ -95,7 +98,7 @@ internal static class CiShellScripts
           locked=$(sed -n 's/^  "version":[[:space:]]*"\([^"]*\)".*/\1/p' .lockflight/engine.lock)
           if [ -n "$pinned" ] && [ "$pinned" != "$locked" ]; then echo "lockflight: $manifest pins $pinned but .lockflight/engine.lock pins $locked; they must agree" >&2; exit 1; fi
           set --
-          if [ -z "${LOCKFLIGHT_NUGET_FEED:-}" ]; then for file in nuget.config NuGet.config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done; fi
+          if [ -z "${LOCKFLIGHT_NUGET_FEED:-}" ]; then for file in nuget.config NuGet.config NuGet.Config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done; fi
           sh .lockflight/ci/install.sh --lock .lockflight/engine.lock --dir "$LOCKFLIGHT_TEMP/lockflight" "$@"
           # A pull request that changes the lock: the proposed lock must match the hashes its release published, and where the
           # gh CLI has a token (GitHub) the release's attestation must verify. The reviewer reads "matches release vX".
@@ -109,7 +112,7 @@ internal static class CiShellScripts
         else
           if [ -z "$pinned" ]; then echo "lockflight: neither .lockflight/engine.lock nor $manifest pins the engine; run lockflight init and commit the pin" >&2; exit 1; fi
           config=""
-          for file in nuget.config NuGet.config; do if [ -f "$file" ]; then config="$PWD/$file"; fi; done
+          for file in nuget.config NuGet.config NuGet.Config; do if [ -f "$file" ]; then config="$PWD/$file"; fi; done
           (cd "$LOCKFLIGHT_TEMP" && dotnet tool install Lockflight.Cli --tool-path "$LOCKFLIGHT_TEMP/lockflight" --version "$pinned" ${config:+--configfile "$config"})
         fi
         # lockflight:install-engine:end

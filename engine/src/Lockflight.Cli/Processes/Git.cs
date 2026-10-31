@@ -134,9 +134,12 @@ internal static class Git
     public static async Task<string?> DiffHunksAsync(
         string root, string range, IReadOnlyList<string> pathspecs, string pathPrefix, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
+        // With paths named (source and build files), --text keeps a change's own .gitattributes (`*.cs -diff`) from turning its
+        // lines into "Binary files differ" and hiding them from the gates; the whole-tree diff keeps git's binary detection.
+        string[] text = pathspecs.Count > 0 ? ["--text"] : [];
         ProcessResult diff = await ProcessRunner.RunAsync(
             Executable,
-            [.. Unquoted, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", "--relative", $"--src-prefix=a/{pathPrefix}", $"--dst-prefix=b/{pathPrefix}", range, "--", .. pathspecs],
+            [.. Unquoted, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-textconv", .. text, "--no-renames", "--relative", $"--src-prefix=a/{pathPrefix}", $"--dst-prefix=b/{pathPrefix}", range, "--", .. pathspecs],
             root,
             timeLimit,
             cancellationToken);

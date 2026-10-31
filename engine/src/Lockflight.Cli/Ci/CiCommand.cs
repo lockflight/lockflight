@@ -31,6 +31,12 @@ internal sealed class CiCommand(CliContext context) : ICommand
             return ExitCode.Config;
         }
 
+        if (inputs.Platform != JudgePlatform.Local && await JudgeAttributes.NeutraliseAsync(inputs.Root, cancellationToken) is string attributesError)
+        {
+            await context.Error.WriteLineAsync($"lockflight ci: {attributesError}");
+            return ExitCode.Error;
+        }
+
         JudgePlanning planning = await JudgePlanner.PlanAsync(inputs, context.Environment, cancellationToken);
         if (planning.Plan is not JudgePlan plan)
         {
@@ -43,6 +49,19 @@ internal sealed class CiCommand(CliContext context) : ICommand
         {
             await context.Error.WriteLineAsync($"lockflight ci: {shellError}");
             return ExitCode.Config;
+        }
+
+        if (shell.Policy is ShellPolicy shellPolicy)
+        {
+            // The class and its check levels are routed again under the shell's policy merged with the unit's.
+            planning = await JudgePlanner.PlanAsync(inputs, context.Environment, shellPolicy, cancellationToken);
+            if (planning.Plan is not JudgePlan shellPlan)
+            {
+                await context.Error.WriteLineAsync($"lockflight ci: {planning.Error}");
+                return planning.Failure;
+            }
+
+            plan = shellPlan;
         }
 
         plan = plan with { Shell = shell.Policy };

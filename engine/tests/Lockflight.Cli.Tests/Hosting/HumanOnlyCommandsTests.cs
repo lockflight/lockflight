@@ -22,6 +22,9 @@ public sealed class HumanOnlyCommandsTests : IDisposable
     [InlineData("bash -c \"lockflight approve spec\"", "approve spec")]
     [InlineData("eval 'dotnet lockflight approve tasks'", "approve tasks")]
     [InlineData("sh -ec 'cd src && lockflight baseline build'", "baseline build")]
+    [InlineData("dotnet lockflight init --speckit-preset ~/lockflight/plugins/lockflight/speckit-preset", "init --speckit-preset")]
+    [InlineData(".lockflight/bin/lockflight init --speckit-preset=/tmp/preset", "init --speckit-preset")]
+    [InlineData("bash -c 'lockflight init --profile standard --speckit-preset /tmp/preset'", "init --speckit-preset")]
     public void ReservedCommandsAreFoundWhateverTheSpelling(string command, string expected) =>
         Assert.Equal(expected, HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 
@@ -32,6 +35,8 @@ public sealed class HumanOnlyCommandsTests : IDisposable
     [InlineData("lockflight review status --feature 001-orders")]
     [InlineData("lockflight gate run --profile pr")]
     [InlineData("echo approve && lockflight phase check tasks")]
+    [InlineData("lockflight init --profile standard")]
+    [InlineData("lockflight init --speckit-preset --help")]
     public void OtherCommandsPass(string command) => Assert.Null(HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 
     [Theory]
