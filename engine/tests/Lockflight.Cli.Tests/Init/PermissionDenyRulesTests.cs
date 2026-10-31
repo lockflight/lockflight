@@ -36,11 +36,16 @@ public sealed class PermissionDenyRulesTests : IDisposable
     public void TheLockflightDirectoryIsCoveredByItsProtectedPartsOnly()
     {
         Write(".lockflight/baselines/known-failing-tests.json", "[]");
+        Write(".lockflight/engine.lock", "{}");
+        Write(".lockflight/ci/install.sh", "exit 0");
 
         IReadOnlyList<string> rules = PermissionDenyRules.For(root.FullName, DefaultProtectedPaths.Globs);
 
         Assert.Contains("Edit(/.lockflight/bin/**)", rules);
         Assert.Contains("Edit(/.lockflight/baselines/**)", rules);
+        Assert.Contains("Edit(/.lockflight/engine.lock)", rules);
+        Assert.Contains("Edit(/.lockflight/ci/**)", rules);
+        Assert.DoesNotContain("Edit(/.lockflight/local/**)", rules);
         Assert.Contains("Edit(/.lockflight/features/*/approvals/**)", rules);
         Assert.DoesNotContain("Edit(/.lockflight/**)", rules);
     }

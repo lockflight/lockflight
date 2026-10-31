@@ -22,8 +22,10 @@ internal static class PermissionDenyRules
     /// <summary>
     /// The parts of <c>.lockflight/</c> a rule names. Claude Code also adds <c>Edit</c> deny paths to the sandbox's write denials,
     /// and the commands the agent runs write evidence, the ledger and the Stop cache there, so the whole directory is not named.
+    /// The engine lock and the vendored install script are written only by <c>init</c> and <c>update</c>.
     /// </summary>
-    private static readonly string[] LockflightParts = [".lockflight/bin/**", ".lockflight/baselines/**", ".lockflight/features/*/approvals/**"];
+    private static readonly string[] LockflightParts =
+        [".lockflight/bin/**", ".lockflight/baselines/**", ".lockflight/features/*/approvals/**", ".lockflight/engine.lock", ".lockflight/ci/**"];
 
     /// <summary>
     /// One rule per protected path. A pattern with a wildcard inside it is written as it is. A plain path, or a directory

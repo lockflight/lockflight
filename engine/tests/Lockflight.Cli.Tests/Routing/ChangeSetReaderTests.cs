@@ -87,6 +87,40 @@ public sealed class ChangeSetReaderTests
         Assert.NotNull(icon.NewBlob);
     }
 
+    [Theory]
+    [InlineData("*.cs -diff\n")]
+    [InlineData("*.cs binary\n")]
+    public async Task AChangesOwnGitAttributesDoNotTurnItsSourceIntoABinaryFile(string attributes)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using RoutingRepository repository = await RoutingRepository.CreateAsync(BaseFiles, cancellationToken);
+        repository.Write(".gitattributes", attributes);
+        repository.Write("src/Shop/Order.cs", Code.Replace("int Tax;", "int Fee;", StringComparison.Ordinal));
+        await repository.CommitAsync("hide", cancellationToken);
+
+        ChangeSet changeSet = await ReadAsync(repository, "HEAD", cancellationToken);
+
+        ChangedFile order = changeSet.Files.Single(file => file.Path == "src/Shop/Order.cs");
+        Assert.False(order.Binary);
+        Assert.Equal(["    int Fee;"], order.Added.Select(line => line.Text));
+        Assert.Equal(["    int Tax;"], order.Removed.Select(line => line.Text));
+    }
+
+    [Fact]
+    public async Task ABinaryFileMarkedByAttributesStaysBinary()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        using RoutingRepository repository = await RoutingRepository.CreateAsync(BaseFiles, cancellationToken);
+        repository.Write(".gitattributes", "*.png -diff\n");
+        repository.WriteBytes("src/Shop/icon.png", [137, 80, 78, 71, 0, 0, 1]);
+        await repository.CommitAsync("icon", cancellationToken);
+
+        ChangedFile icon = (await ReadAsync(repository, "HEAD", cancellationToken)).Files.Single(file => file.Path == "src/Shop/icon.png");
+
+        Assert.True(icon.Binary);
+        Assert.Empty(icon.Added);
+    }
+
     [Fact]
     public async Task UntrackedFilesCountLocallyWithEveryLineAndTheBlobGitWouldStore()
     {

@@ -26,6 +26,12 @@ internal static partial class HumanOnlyCommands
 
     private const string DotnetHost = "dotnet";
 
+    /// <summary>The init option that upgrades the team's Spec Kit: a person's decision, refused in the session like the reserved commands.</summary>
+    private const string SpecKitPresetOption = "--speckit-preset";
+
+    /// <summary>What a refusal names for <see cref="SpecKitPresetOption"/>.</summary>
+    private const string SpecKitPresetCommand = "init " + SpecKitPresetOption;
+
     /// <summary>
     /// Whether the command line is reserved for a person: its command is registered for <see cref="CommandAudience.Human"/>, or it
     /// starts with a reserved group (<see cref="CommandRegistry.ReservedGroups"/>) and its verb is not one of the group's agent verbs.
@@ -152,6 +158,11 @@ internal static partial class HumanOnlyCommands
             if (IsReserved(arguments))
             {
                 return string.Join(' ', arguments.Take(CommandWords));
+            }
+
+            if (arguments is ["init", ..] && words.Skip(index + 1).Any(word => word == SpecKitPresetOption || word.StartsWith(SpecKitPresetOption + "=", StringComparison.Ordinal)))
+            {
+                return SpecKitPresetCommand;
             }
         }
 

@@ -240,7 +240,7 @@ internal static class Templates
                 env:
                   BASE: ${{ github.event.pull_request.base.sha }}
                 run: |
-                  for file in dotnet-tools.json .config/dotnet-tools.json lockflight.unit.yaml .gitleaks.toml .gitleaksignore nuget.config NuGet.config; do
+                  for file in dotnet-tools.json .config/dotnet-tools.json lockflight.unit.yaml .gitleaks.toml .gitleaksignore nuget.config NuGet.config NuGet.Config; do
                     if git cat-file -e "$BASE:$file" 2>/dev/null; then git checkout "$BASE" -- "$file"; else rm -f "$file"; fi
                   done
                   rm -rf .lockflight/baselines
@@ -264,7 +264,7 @@ internal static class Templates
                   manifest=$(ls dotnet-tools.json .config/dotnet-tools.json 2>/dev/null | head -n 1)
                   version=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["tools"]["lockflight.cli"]["version"])' "$manifest")
                   config=()
-                  for file in nuget.config NuGet.config; do [ -f "$file" ] && config=(--configfile "$PWD/$file"); done
+                  for file in nuget.config NuGet.config NuGet.Config; do [ -f "$file" ] && config=(--configfile "$PWD/$file"); done
                   (cd "$RUNNER_TEMP" && dotnet tool install Lockflight.Cli --tool-path "$RUNNER_TEMP/lockflight" --version "$version" "${config[@]}")
                   echo "$RUNNER_TEMP/lockflight" >> "$GITHUB_PATH"
               - name: Gates

@@ -16,6 +16,9 @@ internal static class CiStepMigration
     /// <summary>The policy file list before the engine lock.</summary>
     private const string LegacyPolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .gitleaks.toml .gitleaksignore nuget.config NuGet.config";
 
+    /// <summary>The policy file list with the engine lock, before the third NuGet config spelling.</summary>
+    private const string PreviousPolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .lockflight/engine.lock .gitleaks.toml .gitleaksignore nuget.config NuGet.config";
+
     private static readonly string[] LegacyBaselines =
     [
         "# Accepted baselines (known-failing tests, warnings, advisories) are policy too: a PR cannot accept its own failures.",
@@ -109,6 +112,13 @@ internal static class CiStepMigration
         int[] current = [.. Indexes(lines, line => line.Trim() == $"for file in {CiShellScripts.PolicyFiles}; do")];
         if (current.Length == 1)
         {
+            return true;
+        }
+
+        int[] previous = [.. Indexes(lines, line => line.Trim() == $"for file in {PreviousPolicyFiles}; do")];
+        if (previous.Length == 1)
+        {
+            lines[previous[0]] = Indent(lines[previous[0]]) + $"for file in {CiShellScripts.PolicyFiles}; do";
             return true;
         }
 

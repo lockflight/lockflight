@@ -73,6 +73,24 @@ public sealed class GitTests : IDisposable
     }
 
     [Fact]
+    public async Task AChangesOwnGitAttributesDoNotHideItsSourceLinesFromTheGates()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await InitAsync();
+        Write("Price.cs", "class Price {}\n");
+        await CommitAllAsync();
+        await GitAsync(["checkout", "-q", "-b", "change"]);
+        Write(".gitattributes", "*.cs -diff\n");
+        Write("Price.cs", "class Price {}\n#pragma warning disable CA1000\n");
+        await CommitAllAsync();
+
+        string? diff = await Git.DiffHunksAsync(repository.FullName, Git.SinceMergeBase("main"), ["*.cs"], Timeout.InfiniteTimeSpan, cancellationToken);
+
+        FileDiff file = Assert.Single(UnifiedDiff.FilesOf(diff!));
+        Assert.Equal([2], file.Added.Select(line => line.Line));
+    }
+
+    [Fact]
     public async Task BeforeTheFirstCommitUncommittedChangesAreComparedWithTheEmptyTree()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;

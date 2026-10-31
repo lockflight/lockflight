@@ -35,6 +35,7 @@ internal static class GuardCanaries
             await BlockedAsync(scratch, "guard: bash -ce \"rm lockflight.yaml\" is blocked", BashCall("bash -ce \"rm lockflight.yaml\"", scratch), ProtectedPathRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "guard: sed -i on lockflight.yaml is blocked", BashCall("sed -i 's/version/v/' lockflight.yaml", scratch), ProtectedPathRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "guard: a Bash call of 'lockflight approve spec' is blocked", BashCall("lockflight approve spec", scratch), HumanOnlyCommandRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "guard: a Bash call of 'lockflight init --speckit-preset' is blocked", BashCall("lockflight init --speckit-preset /tmp/lockflight-canary-preset", scratch), HumanOnlyCommandRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "approve relay: a CronCreate that sends /lockflight:approve is blocked", Call("CronCreate", new JsonObject
             {
                 ["cron"] = "*/5 * * * *",

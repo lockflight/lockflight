@@ -50,6 +50,18 @@ public sealed class CiStepMigrationTests
         Assert.Equal(judge, CiStepMigration.Migrate(judge));
     }
 
+    [Theory]
+    [MemberData(nameof(Platforms))]
+    public void APipelineWithoutTheThirdNuGetConfigSpellingGetsIt(string platform)
+    {
+        Assert.True(CiPlatformNames.TryParse(platform, out CiPlatform parsed));
+        string current = CiPipeline.Files(parsed, Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+        string previous = current.Replace(" NuGet.config NuGet.Config; do", " NuGet.config; do", StringComparison.Ordinal);
+
+        Assert.NotEqual(current, previous);
+        Assert.Equal(current, CiStepMigration.Migrate(previous));
+    }
+
     [Fact]
     public void AHandEditedInstallStepIsLeftAlone()
     {
