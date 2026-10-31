@@ -71,6 +71,7 @@ public sealed class CiCommandTests : IAsyncLifetime
         string why = red["why"]!.GetValue<string>();
         Assert.Contains("git commit --trailer \"Lockflight-Red: 1\"", why, StringComparison.Ordinal);
         Assert.True(why.IndexOf("--trailer", StringComparison.Ordinal) < why.IndexOf("redgreen red", StringComparison.Ordinal), why);
+        Assert.True(why.Length + " (1 commits carry a malformed Lockflight-Red trailer)".Length <= 300, $"{why.Length} characters: the comment cuts a reason at 300");
     }
 
     [Fact]

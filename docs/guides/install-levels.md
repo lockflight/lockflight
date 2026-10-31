@@ -22,7 +22,7 @@ Code. It links no engine. Use it when the team's agents are not Claude Code, or 
 change to how people work. It needs a CI file, so `--ci none` is refused with it.
 
 `doctor` checks a developer's machine, so at this level its local lines (the linked engine, Claude settings, deny rules)
-report what CI only leaves out; they need no fix. A person or an agent can still run the engine by hand (`lockflight gate run`, `lockflight redgreen red`). The CI check is
+report what CI only leaves out; they need no fix. A person or an agent can still run the engine by hand (`lockflight gate run`, or a red commit with `git commit --trailer "Lockflight-Red: 1"`). The CI check is
 the boundary where it runs as a required check with policy, the lock and CODEOWNERS on the base branch
 ([CI hardening](ci-hardening.md)).
 
