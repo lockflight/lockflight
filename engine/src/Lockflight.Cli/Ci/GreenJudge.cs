@@ -7,14 +7,17 @@ namespace Lockflight.Cli.Ci;
 /// Green at head over the record the judge synthesizes from what it re-ran (the base's inventory, the accepted cycles), never the
 /// tree's <c>redgreen.json</c>: every cycle test present and passing every row; no other failure beyond the base's known-failing
 /// baseline; nothing deleted, skipped or made explicit since the base; the runner finished and every listed test that is not
-/// explicit is in its report. A non-cycle test that passes only on a re-run is a warning; a cycle test that does is FLAKY, which
+/// explicit is in its report. A base test skipped at run time at head (<c>Assert.Skip</c>, <c>Skip.If</c>, "no Docker here") is a
+/// new skip only when it skips more rows than the same test run on the base: the base is listed, not run, so those tests alone are
+/// run there (<see cref="SkippedAtRunTime"/>). A non-cycle test that passes only on a re-run is a warning; a cycle test that does is FLAKY, which
 /// NOT-EARNS the check.
 /// </summary>
 internal static class GreenJudge
 {
     private const int MaxListed = 5;
 
-    public static GreenJudgement Decide(HeadRun head, IReadOnlyList<TestCase>? baseInventory, IReadOnlyList<CycleJudgement> cycles)
+    public static GreenJudgement Decide(
+        HeadRun head, IReadOnlyList<TestCase>? baseInventory, IReadOnlyDictionary<string, int> baseSkippedRows, IReadOnlyList<CycleJudgement> cycles)
     {
         TreeListing listing = head.Listing;
         if (listing.Outcome == TreeOutcome.CompileFailed)
@@ -33,7 +36,7 @@ internal static class GreenJudge
         }
 
         RedGreenTest[] cycleTests = [.. cycles.Where(cycle => cycle.Accepted).SelectMany(cycle => cycle.Tests)];
-        RedGreenRecord record = Synthesized(baseInventory ?? inventory, cycles);
+        RedGreenRecord record = Synthesized(baseInventory ?? inventory, cycles) with { BaselineSkippedRows = baseSkippedRows };
         RedGreenCycle all = new(0, DateTimeOffset.UnixEpoch, GreenAt: null, cycleTests);
         List<string> problems = [.. Incomplete(inventory, results, head.AbnormalExit)];
         problems.AddRange(SuiteChecks.GreenProblems(record, all, inventory, results, head.KnownFailing));
@@ -53,6 +56,21 @@ internal static class GreenJudge
             : (CheckVerdict.Pass, $"{inventory.Count} tests, {results.Count} test cases run, {failed} failed"
                 + (flakyOther.Length > 0 ? $"; passed only when run again: {string.Join(", ", flakyOther.Take(MaxListed))}" : string.Empty));
         return new GreenJudgement(verdict, why, results.Count, failed, problems, [.. head.PassedOnRetry.Order(StringComparer.Ordinal)], atHead, withoutRed);
+    }
+
+    /// <summary>
+    /// The base's tests that head skipped at run time, not skipped or explicit in the base's listing: the ones to run on the base to
+    /// learn whether they skip there too. Empty when head did not run or the base was not listed.
+    /// </summary>
+    public static IReadOnlyList<TestCase> SkippedAtRunTime(HeadRun head, IReadOnlyList<TestCase>? baseInventory)
+    {
+        if (head.Results is not IReadOnlyList<ExecutedTest> results || baseInventory is null)
+        {
+            return [];
+        }
+
+        HashSet<string> skipped = [.. SuiteChecks.SkippedRows(results).Keys];
+        return [.. baseInventory.Where(test => skipped.Contains(test.Key) && test.SkipReason is null && !test.IsExplicit)];
     }
 
     /// <summary>The record of what the judge re-ran: the base inventory as the baseline, each accepted cycle closed at head.</summary>

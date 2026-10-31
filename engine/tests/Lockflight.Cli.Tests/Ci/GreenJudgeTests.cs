@@ -38,6 +38,32 @@ public sealed class GreenJudgeTests
     }
 
     [Fact]
+    public void ABaseTestSkippedAtRunTimeOnTheBaseTooIsNoNewSkip()
+    {
+        GreenJudgement green = Decide([BaseTest, CycleTest], [Skip(BaseTest), Pass(CycleTest)], baseSkippedRows: new Dictionary<string, int> { [BaseTest.Key] = 1 });
+
+        Assert.Equal(CheckVerdict.Pass, green.Verdict);
+    }
+
+    [Fact]
+    public void ABaseTestSkippedAtRunTimeOnlyAtHeadFails()
+    {
+        GreenJudgement green = Decide([BaseTest, CycleTest], [Skip(BaseTest), Pass(CycleTest)]);
+
+        Assert.Equal(CheckVerdict.Fail, green.Verdict);
+        Assert.Contains("new skipped tests", green.Why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OnlyTheBaseTestsSkippedAtRunTimeAtHeadAreRunAgainOnTheBase()
+    {
+        TestCase attributeSkipped = Test("Later") with { SkipReason = "later" };
+        HeadRun head = new(new TreeListing("h", TreeOutcome.Ok, Workspace(), [BaseTest, CycleTest, attributeSkipped], null), [Skip(BaseTest), Skip(CycleTest), Skip(attributeSkipped)], new HashSet<string>(), null, new HashSet<string>());
+
+        Assert.Equal([BaseTest.Key], GreenJudge.SkippedAtRunTime(head, [BaseTest, attributeSkipped]).Select(test => test.Key));
+    }
+
+    [Fact]
     public void AFailureOnTheBasesKnownFailingListDoesNotFail()
     {
         GreenJudgement green = Decide([BaseTest, CycleTest], [Fail(BaseTest), Pass(CycleTest)], knownFailing: [BaseTest.MethodFilter]);
@@ -87,11 +113,15 @@ public sealed class GreenJudgeTests
     {
         TreeListing broken = new("h", TreeOutcome.CompileFailed, Workspace(), null, "error CS1002");
 
-        Assert.Equal(CheckVerdict.Fail, GreenJudge.Decide(new HeadRun(broken, null, new HashSet<string>(), null, new HashSet<string>()), [BaseTest], []).Verdict);
+        Assert.Equal(CheckVerdict.Fail, GreenJudge.Decide(new HeadRun(broken, null, new HashSet<string>(), null, new HashSet<string>()), [BaseTest], new Dictionary<string, int>(), []).Verdict);
     }
 
     private static GreenJudgement Decide(
-        IReadOnlyList<TestCase> inventory, IReadOnlyList<ExecutedTest> results, string[]? passedOnRetry = null, string[]? knownFailing = null)
+        IReadOnlyList<TestCase> inventory,
+        IReadOnlyList<ExecutedTest> results,
+        string[]? passedOnRetry = null,
+        string[]? knownFailing = null,
+        IReadOnlyDictionary<string, int>? baseSkippedRows = null)
     {
         TreeListing listing = new("h", TreeOutcome.Ok, Workspace(), inventory, null);
         HeadRun head = new(listing, results, new HashSet<string>(passedOnRetry ?? []), null, new HashSet<string>(knownFailing ?? []));
@@ -102,7 +132,7 @@ public sealed class GreenJudgeTests
             new Dictionary<string, RedVerdict>(),
             CheckVerdict.Pass,
             "accepted");
-        return GreenJudge.Decide(head, [BaseTest], [cycle]);
+        return GreenJudge.Decide(head, [BaseTest], baseSkippedRows ?? new Dictionary<string, int>(), [cycle]);
     }
 
     private static TestWorkspace Workspace() => new("/repo", [], TimeSpan.FromMinutes(1), TimeProvider.System);

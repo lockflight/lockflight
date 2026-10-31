@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Ci;
 
@@ -40,10 +41,11 @@ internal static class JudgeExecutor
             TreeBuilder trees = new(worktree, plan.Policy, root, budget, time);
             HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);
             TreeListing? baseListing = plan.MergeBase is string mergeBase ? await trees.ListAsync(mergeBase, "base", fresh: false, cancellationToken) : null;
+            IReadOnlyDictionary<string, int> baseSkippedRows = await BaseSkippedRowsAsync(trees, head, baseListing, cancellationToken);
             IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, cancellationToken) : null;
             GreenJudgement greenAtHead = baseListing is { AsBaseline: null }
                 ? new GreenJudgement(CheckVerdict.NotEarned, $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
-                : GreenJudge.Decide(head, baseListing?.AsBaseline, cycles ?? []);
+                : GreenJudge.Decide(head, baseListing?.AsBaseline, baseSkippedRows, cycles ?? []);
             IReadOnlyList<SinceRedTest>? sinceRed = cycles is not null && plan.Levels[CheckId.TestsSinceRed] != CheckLevel.Off
                 ? await new SinceRedJudge(trees, time).JudgeAsync(plan, head.Listing, cycles, cancellationToken)
                 : null;
@@ -90,6 +92,24 @@ internal static class JudgeExecutor
         {
             await worktree.RemoveAsync();
         }
+    }
+
+    /// <summary>
+    /// How many rows the base skips of the base tests head skipped at run time, from running just those on the base's build (still in
+    /// the worktree, or built again). Empty when there are none or the base could not run them, so each counts as a new skip.
+    /// </summary>
+    private static async Task<IReadOnlyDictionary<string, int>> BaseSkippedRowsAsync(TreeBuilder trees, HeadRun head, TreeListing? baseListing, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<TestCase> again = GreenJudge.SkippedAtRunTime(head, baseListing?.Inventory);
+        if (again.Count == 0 || baseListing is null)
+        {
+            return new Dictionary<string, int>(StringComparer.Ordinal);
+        }
+
+        TreeListing built = await trees.ListAsync(baseListing.Commit, "base", fresh: true, cancellationToken);
+        return built.Inventory is not null && await built.Workspace.RunAsync(again, cancellationToken) is IReadOnlyList<ExecutedTest> results
+            ? SuiteChecks.SkippedRows(results)
+            : new Dictionary<string, int>(StringComparer.Ordinal);
     }
 
     private static async Task<string> ParentAsync(JudgeInputs inputs, EnvironmentReader environment, CancellationToken cancellationToken)
