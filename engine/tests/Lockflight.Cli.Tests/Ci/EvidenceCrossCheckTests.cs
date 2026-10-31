@@ -80,13 +80,26 @@ public sealed class EvidenceCrossCheckTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EvidenceWithAnotherClassIsRefused()
+    public async Task EvidenceWithALowerClassIsRefused()
     {
+        head = await repository.Write("src/Shop/Cart.cs", "namespace Shop;\n\npublic sealed class Cart\n{\n    public decimal Total(decimal price, int count) => price * count;\n}\n")
+            .Write("src/Shop/Order.cs", "namespace Shop;\n\npublic sealed class Order\n{\n    public decimal Due(Cart cart) => cart.Total(1m, 1);\n}\n")
+            .CommitAsync("feat: cart and order", TestContext.Current.CancellationToken);
         JsonObject evidence = await EvidenceAsync();
-        string other = evidence["changeClass"]!["class"]!.GetValue<string>() == "fix" ? "behaviour" : "fix";
+        Assert.NotEqual("fix", evidence["changeClass"]!["class"]!.GetValue<string>());
+        const string other = "fix";
         evidence["changeClass"]!["class"] = other;
 
         Assert.Contains($"its change class is {other}", await MismatchAsync(evidence), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EvidenceWithAHigherClassIsAccepted()
+    {
+        JsonObject evidence = await EvidenceAsync();
+        evidence["changeClass"]!["class"] = "critical";
+
+        Assert.Null(await MismatchAsync(evidence));
     }
 
     [Fact]

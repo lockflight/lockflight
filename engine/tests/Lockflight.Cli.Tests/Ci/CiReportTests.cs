@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Ci;
+using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Tests.Goldens;
 
@@ -209,7 +210,7 @@ public sealed class CiReportTests : IDisposable
     public void AVerdictThatIsNoLongerNotEarnedWaitsForNoPerson()
     {
         JsonObject evidence = Evidence(reviewLevel: "required");
-        evidence["blocked"] = new JsonObject { ["schema"] = "lockflight.blocked/v1" };
+        evidence["blocked"] = WaitingForReview();
         JsonObject review = new() { ["schema"] = "lockflight.ci-review/v1", ["head"] = Head, ["verdict"] = "FAIL", ["why"] = "1 confirmed blocker" };
 
         JsonObject failed = CiReportCommand.Join(evidence.DeepClone().AsObject(), Head, review);
@@ -238,7 +239,7 @@ public sealed class CiReportTests : IDisposable
     public void ANotEarnedThatWaitsForAPersonShowsTheBarrier()
     {
         JsonObject evidence = Evidence(reviewLevel: "required");
-        evidence["blocked"] = new JsonObject { ["schema"] = "lockflight.blocked/v1" };
+        evidence["blocked"] = WaitingForReview();
 
         string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
 
@@ -246,6 +247,9 @@ public sealed class CiReportTests : IDisposable
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(directory);
+
+    /// <summary>A valid blocked report, as the judge writes one when the class's review has no key to run.</summary>
+    private static JsonObject WaitingForReview() => BlockedReportJson.Render(JudgeBlocked.ForReview(new DateTimeOffset(2026, 10, 31, 0, 0, 0, TimeSpan.Zero), Head, "001-shipping"));
 
     private static JsonObject Evidence(string reviewLevel = "advisory", string redVerdict = "PASS", string testName = "Shop.Tests:Shop.Tests.PriceTests.Shipping") => new()
     {
