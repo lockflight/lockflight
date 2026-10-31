@@ -1,0 +1,4 @@
+class: critical
+computed: critical
+signal: structure.buildWide -> critical (heuristic) build/Common.props: changes every project's build
+signal: deps.changed -> behaviour (heuristic) build/Common.props:3: package reference or version changed
