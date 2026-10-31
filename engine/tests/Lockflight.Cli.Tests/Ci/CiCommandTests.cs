@@ -60,6 +60,20 @@ public sealed class CiCommandTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AProductionChangeWithoutARedNamesTheManualTrailerFirst()
+    {
+        string head = await repository.Write("a.cs", "a").CommitAsync("feat", TestContext.Current.CancellationToken);
+
+        await RunAsync(head);
+
+        JsonNode red = Evidence()["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == "red")!;
+        Assert.Equal("NOT-EARNED", red["verdict"]!.GetValue<string>());
+        string why = red["why"]!.GetValue<string>();
+        Assert.Contains("git commit --trailer \"Lockflight-Red: 1\"", why, StringComparison.Ordinal);
+        Assert.True(why.IndexOf("--trailer", StringComparison.Ordinal) < why.IndexOf("redgreen red", StringComparison.Ordinal), why);
+    }
+
+    [Fact]
     public async Task AnInvalidManifestOnTheTargetBranchIsAConfigurationError()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
@@ -72,6 +86,24 @@ public sealed class CiCommandTests : IAsyncLifetime
 
         Assert.Equal(ExitCode.Config, exitCode);
         Assert.Contains("the target branch's lockflight.yaml is invalid", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ATargetBranchWithoutAManifestIsRefusedWithTheReason()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await repository.CheckoutAsync("main", cancellationToken);
+        repository.Delete("lockflight.yaml");
+        main = await repository.CommitAsync("drop policy", cancellationToken);
+        await repository.CheckoutAsync("012-checkout", cancellationToken);
+        await repository.MergeAsync("main", cancellationToken);
+        string head = await repository.Write("lockflight.yaml", "version: 1\n").Write("a.cs", "a").CommitAsync("feat", cancellationToken);
+
+        (ExitCode exitCode, _, string error) = await RunAsync(head);
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains($"the target branch ({main[..7]}) has no lockflight.yaml", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(evidence.FullName, "evidence.json")));
     }
 
     [Fact]
