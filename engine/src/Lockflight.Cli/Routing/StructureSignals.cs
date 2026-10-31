@@ -54,7 +54,7 @@ internal sealed partial class StructureSignals : IChangeSignalSource
         }
     }
 
-    /// <summary>Whether a build-wide MSBuild file changes only packages and versions (those are <c>deps.changed</c>).</summary>
+    /// <summary>Whether a build-wide MSBuild file only re-versions or adds packages (those are <c>deps.changed</c>); removing one is build-wide.</summary>
     private static bool OnlyDependencies(ChangeAnalysis analysis, RoutedFile file)
     {
         if (file.Change.Kind != ChangeKind.Modified || !(file.Path.EndsWith(".props", StringComparison.OrdinalIgnoreCase) || file.Path.EndsWith(".targets", StringComparison.OrdinalIgnoreCase)))
@@ -62,8 +62,7 @@ internal sealed partial class StructureSignals : IChangeSignalSource
             return false;
         }
 
-        IReadOnlyList<ProjectLine> lines = ProjectFileLines.Of(file.Added, file.Removed);
-        return lines.Count > 0 && lines.All(line => line.Kind == ProjectLineKind.Package);
+        return ProjectFileLines.OnlyVersionsOrAdditions(file.Added, file.Removed);
     }
 
     private static IEnumerable<ChangeSignal> ProjectFile(ChangeAnalysis analysis, RoutedFile file, RoutingPolicy policy)

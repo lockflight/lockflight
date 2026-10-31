@@ -1,0 +1,39 @@
+A NUL byte in a production file hides its content from every content signal, so the file alone raises to feature.
+=== base src/Shop/Shop.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+=== base src/Shop/Cart.cs
+namespace Shop;
+
+public sealed class Cart
+{
+    public int Total(int price, int count)
+    {
+        return price * count;
+    }
+
+    public int Discount(int total) => total / 10;
+}
+=== base tests/Shop.Tests/Shop.Tests.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.0.0" />
+    <ProjectReference Include="../../src/Shop/Shop.csproj" />
+  </ItemGroup>
+</Project>
+=== base tests/Shop.Tests/CartTests.cs
+namespace Shop.Tests;
+
+public sealed class CartTests
+{
+    [Fact]
+    public void TotalMultiplies() => Assert.Equal(6, new Cart().Total(2, 3));
+
+    [Fact]
+    public void DiscountIsATenth() => Assert.Equal(1, new Cart().Discount(10));
+}
+=== bytes src/Shop/Cart.cs
+6E 61 6D 65 73 70 61 63 65 20 53 68 6F 70 3B 0A 0A 70 75 62 6C 69 63 20 73 65 61 6C 65 64 20 63 6C 61 73 73 20 43 61 72 74 0A 7B 0A 20 20 20 20 2F 2F 20 00 0A 20 20 20 20 70 75 62 6C 69 63 20 69 6E 74 20 54 6F 74 61 6C 28 69 6E 74 20 70 72 69 63 65 2C 20 69 6E 74 20 63 6F 75 6E 74 29 20 3D 3E 20 70 72 69 63 65 20 2A 20 63 6F 75 6E 74 3B 0A 0A 20 20 20 20 70 75 62 6C 69 63 20 69 6E 74 20 44 69 73 63 6F 75 6E 74 28 69 6E 74 20 74 6F 74 61 6C 29 20 3D 3E 20 74 6F 74 61 6C 20 2F 20 31 30 3B 0A 7D 0A

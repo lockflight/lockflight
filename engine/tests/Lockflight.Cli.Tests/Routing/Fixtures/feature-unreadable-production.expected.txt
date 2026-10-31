@@ -1,0 +1,4 @@
+class: feature
+computed: feature
+signal: content.unreadable -> feature (heuristic) src/Shop/Cart.cs: the base and head text cannot be read (binary, a NUL byte or above 4 MB), so no content signal can see it
+signal: binary.changed -> behaviour (heuristic) src/Shop/Cart.cs: binary content cannot be read

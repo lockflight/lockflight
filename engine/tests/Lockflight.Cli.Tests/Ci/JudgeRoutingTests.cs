@@ -225,6 +225,82 @@ public sealed class JudgeRoutingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CodeCompiledFromAFileThatIsNotCSharpNeedsRedGreen()
+    {
+        await repository.Write("src/Shop/Pricing.logic", "namespace Shop;\n\npublic static class Pricing\n{\n    public static decimal Shipping(decimal kilograms) => 0m;\n}\n")
+            .Write("src/Shop/Shop.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <Compile Include=\"Pricing.logic\" />\n  </ItemGroup>\n</Project>\n")
+            .CommitAsync("feat: pricing", TestContext.Current.CancellationToken);
+
+        JudgePlan plan = await PlanAsync();
+
+        Assert.True(plan.Class.ProductionChanged);
+        Assert.Equal(CheckLevel.Required, plan.Levels[CheckId.Red]);
+    }
+
+    [Fact]
+    public async Task AnEditToAFileABuildWideGlobCompilesNeedsRedGreen()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        baseCommit = await repository.Write("Directory.Build.props", "<Project>\n  <ItemGroup>\n    <Compile Include=\"**/*.logic\" />\n  </ItemGroup>\n</Project>\n")
+            .Write("src/Shop/Pricing.logic", "namespace Shop;\n\npublic static class Pricing\n{\n    public static decimal Shipping(decimal kilograms) => 2m;\n}\n")
+            .CommitAsync("build: logic files", cancellationToken);
+        await repository.Write("src/Shop/Pricing.logic", "namespace Shop;\n\npublic static class Pricing\n{\n    public static decimal Shipping(decimal kilograms) => 0m;\n}\n")
+            .CommitAsync("fix: shipping", cancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task AnEditToAFileTheDefaultSourceExtensionCompilesNeedsRedGreen()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        baseCommit = await repository.Write("Directory.Build.props", "<Project>\n  <PropertyGroup>\n    <DefaultLanguageSourceExtension>.logic</DefaultLanguageSourceExtension>\n  </PropertyGroup>\n</Project>\n")
+            .Write("src/Shop/Pricing.logic", "namespace Shop;\n\npublic static class Pricing\n{\n    public static decimal Shipping(decimal kilograms) => 2m;\n}\n")
+            .CommitAsync("build: logic files", cancellationToken);
+        await repository.Write("src/Shop/Pricing.logic", "namespace Shop;\n\npublic static class Pricing\n{\n    public static decimal Shipping(decimal kilograms) => 0m;\n}\n")
+            .CommitAsync("fix: shipping", cancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task ASingleQuotedCompileIncludeCountsToo()
+    {
+        await repository.Write("src/Shop/Pricing.logic", "namespace Shop;\n\npublic static class Pricing\n{\n    public static decimal Shipping(decimal kilograms) => 0m;\n}\n")
+            .Write("src/Shop/Shop.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <Compile Include='Pricing.logic' />\n  </ItemGroup>\n</Project>\n")
+            .CommitAsync("feat: pricing", TestContext.Current.CancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Theory]
+    [InlineData("<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"Humanizer\" Version=\"3.0.1\" />\n  </ItemGroup>\n</Project>\n")]
+    [InlineData("<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <Compile Update=\"Properties/Resources.Designer.cs\">\n      <DependentUpon>Resources.resx</DependentUpon>\n    </Compile>\n  </ItemGroup>\n</Project>\n")]
+    public async Task AProjectEditThatCompilesNothingNewIsNotProductionCode(string project)
+    {
+        await repository.Write("src/Shop/Shop.csproj", project).CommitAsync("build: project", TestContext.Current.CancellationToken);
+
+        Assert.False((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task ACompileItemUnderTestProjectsOnlyIsNotProductionCode()
+    {
+        await repository.Write("tests/Directory.Build.props", "<Project>\n  <ItemGroup>\n    <Compile Remove=\"**/Fixtures/**\" />\n  </ItemGroup>\n</Project>\n")
+            .CommitAsync("build: test fixtures", TestContext.Current.CancellationToken);
+
+        Assert.False((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task AConfigFileNoCompileItemNamesIsNotProductionCode()
+    {
+        await repository.Write("src/Shop/appsettings.json", "{ \"Shipping\": 2 }\n").CommitAsync("config: shipping", TestContext.Current.CancellationToken);
+
+        Assert.False((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
     public async Task MarkupOutsideTheCodeBlockIsNotProductionCode()
     {
         await repository.Write("src/Shop/Prices.razor", Page.Replace("<h1>Prices</h1>", "<h1 class=\"title\">Prices</h1>", StringComparison.Ordinal))

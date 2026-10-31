@@ -9,8 +9,9 @@ namespace Lockflight.Cli.Ci;
 /// project); a changed line of a <c>markup</c> file inside its C# logic (<see cref="RazorCodeBlocks"/>; a file whose text cannot be
 /// read counts); a changed production or markup file routing treats as binary (binary content, or a file
 /// too large to read; a binary file has no lines to judge); or a changed line of a test project that a production project references, because that
-/// code ships, or of a project that was a production project at base. Project,
-/// build-wide and config files do not count (a dependency bump needs no red); they raise their own routing signals. A file whose
+/// code ships, or of a project that was a production project at base; or code a project compiles from a file that is not C# by
+/// its name (<see cref="CompiledFiles"/>). Other project, build-wide and config changes do not count (a dependency bump needs no
+/// red); they raise their own routing signals. A file whose
 /// code lines, in order, are the same at base and head changes no code: a pure rename (the moved file's old text against its new
 /// text), an edit of lines that hold only a comment or XML doc, a reindent of C# outside string literals. A reorder is a change,
 /// and so is a move of a markup file or one into or out of <c>bin/</c>, <c>obj/</c> or a dot folder.
@@ -20,7 +21,7 @@ internal static class ProductionChange
     public static bool Of(ChangeAnalysis analysis)
     {
         HashSet<string> shipped = ShippedTestProjects(analysis);
-        return analysis.Files.Any(file => (file.Change.Binary || ChangesCode(analysis, file)) && file.Role switch
+        return CompiledFiles.Changed(analysis) || analysis.Files.Any(file => (file.Change.Binary || ChangesCode(analysis, file)) && file.Role switch
         {
             FileRole.Production => true,
             FileRole.Markup => file.Change.Binary || InLogic(file, analysis.ChangeSet),

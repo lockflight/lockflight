@@ -109,6 +109,7 @@ can see why a pull request is in its class. The defaults below are the `default`
 | `file.deleted` | a production or markup file deleted (not moved) | `behaviour` |
 | `config.changed` | a production config or other file changed | `behaviour` |
 | `binary.changed` | binary content in a file of those roles | `behaviour` |
+| `content.unreadable` | a production or markup file whose text cannot be read on a side where it exists (binary to git, a NUL byte in its first 8000 bytes, or above 4 MB): no type, endpoint or database signal can see it | `feature` |
 | `moved` | a move, listed for the reader | nothing |
 
 Base exclusions (`routing.generatedPaths`, `routing.nonProduction`) keep files out of these signals only. A policy, critical or
@@ -185,10 +186,11 @@ repository pins `dotnet-ef`.
 | `ci.workflowChanged` | any other CI file changed (`.github/workflows/**`, `.gitlab-ci*.yml`, `azure-pipelines*.yml`, `bitbucket-pipelines.yml`, …), unless the edit only bumps pins | `feature` | heuristic |
 
 - The policy list is the engine's, not the manifest's: `routing.critical` can add paths, never remove one.
-- **A version-only `Directory.Packages.props` edit** (`PackageVersion` lines added, removed or re-versioned, nothing else on
-  any changed line) is `deps.changed`, not `critical.policy`, so a dependency bot's pull request does not need the critical
-  class. Any other edit of the file is policy, a `GlobalPackageReference` (an analyzer for every project) and an
-  `ExcludeAssets` / `IncludeAssets` change included.
+- **A version-only `Directory.Packages.props` edit** (`PackageVersion` lines re-versioned or added, nothing else on any changed
+  line) is `deps.changed`, not `critical.policy`, so a dependency bot's pull request does not need the critical class. Any
+  other edit of the file is policy: a `PackageVersion` line removed or swapped for another package, a `GlobalPackageReference`
+  (an analyzer for every project), and an `ExcludeAssets` / `IncludeAssets` change; removing or swapping a package line in
+  any build-wide file is `structure.buildWide` too.
 - **Leaving a critical path:** an exact move from a `routing.critical` path to a path outside it is a failure of the routing
   rules (`routing.criticalMove`), not only a class: add the new path to `routing.critical` on the base branch first, then move
   the file. A move with edits cannot be told apart from a delete and an add; it is `critical` through its old path.
@@ -199,7 +201,7 @@ repository pins `dotnet-ef`.
 |---|---|---|
 | `structure.projectAdded` | a new production project (a moved project is not new; a new test project fires nothing) | `routing.structural` (`critical`) |
 | `structure.projectKindChanged` | a project is a test project on one side and a production project on the other (its own text or a `Directory.Build.props` above it changed) | `critical` |
-| `structure.buildWide` | a build-wide file changed, other than packages and versions in a props or targets file | `routing.structural` |
+| `structure.buildWide` | a build-wide file changed, other than packages added or re-versioned in a props or targets file | `routing.structural` |
 | `structure.solution` | a project added to or removed from a `.sln`, `.slnx` or `.slnf`, or from the solution's build (`.Build.0` lines, `<Build>`) | `routing.structural` |
 | `structure.layerViolation` | an added `<ProjectReference>` from a project in one `routing.layers` entry to a project in an outer one | `critical` |
 | `structure.testReference` | an added `<ProjectReference>` from a production project to a test project | `critical` |
