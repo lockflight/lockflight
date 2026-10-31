@@ -225,6 +225,21 @@ public sealed class JudgeRoutingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SwappingTwoProductionLinesNeedsRedGreen()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string Guard = "namespace Shop;\n\npublic sealed class Price\n{\n    public bool Allowed(bool admin)\n    {\n        if (admin)\n            return true;\n        return false;\n    }\n}\n";
+        baseCommit = await repository.Write("src/Shop/Price.cs", Guard).CommitAsync("feat: guard", cancellationToken);
+        await repository.Write("src/Shop/Price.cs", Guard.Replace("return true;\n        return false;", "return false;\n        return true;", StringComparison.Ordinal))
+            .CommitAsync("refactor: swap", cancellationToken);
+
+        JudgePlan plan = await PlanAsync();
+
+        Assert.True(plan.Class.ProductionChanged);
+        Assert.Equal(CheckLevel.Required, plan.Levels[CheckId.Red]);
+    }
+
+    [Fact]
     public async Task MarkupOutsideTheCodeBlockIsNotProductionCode()
     {
         await repository.Write("src/Shop/Prices.razor", Page.Replace("<h1>Prices</h1>", "<h1 class=\"title\">Prices</h1>", StringComparison.Ordinal))
