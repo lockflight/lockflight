@@ -489,8 +489,9 @@ changes and untracked files) and lists each suppression it finds, with file, lin
 
 Suppressions already in the code are not judged, and one moved within its file is not new. Comments and strings are not read
 as code. Generated files are left out by path and shape (package lock files, EF Core model snapshots and migration designer
-files, as the review leaves them out), and so is the `#nullable disable` EF Core writes at the top of a migration whose designer
-is EF Core's. A person accepts a needed suppression with `lockflight baseline suppressions`, by file and rule: that rule may then
+files, as the review leaves them out), and so is the `#nullable disable` EF Core writes above the namespace of a migration
+whose designer is EF Core's, or, with no designer, which carries EF Core's `[DbContext]` and `[Migration]` attributes itself and
+declares no other type (a `#nullable disable` anywhere else in that file still counts). A person accepts a needed suppression with `lockflight baseline suppressions`, by file and rule: that rule may then
 be suppressed again in that file, any other file or rule still fails.
 
 `gates.quality.suppressions` decides what a finding does: `fail` fails the run, `report` lists the findings on a `PASS`

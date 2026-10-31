@@ -35,6 +35,26 @@ public sealed class SuppressionsStepTests : IDisposable
 
         """;
 
+    private const string MigrationWithItsAttributes = """
+        using Microsoft.EntityFrameworkCore.Infrastructure;
+        using Microsoft.EntityFrameworkCore.Migrations;
+
+        #nullable disable
+
+        namespace Shop.Migrations
+        {
+            [DbContext(typeof(ShopContext))]
+            [Migration("20260101000000_AddComment")]
+            public partial class AddComment : Migration
+            {
+                protected override void Up(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("COMMENT ON TABLE orders IS 'orders';");
+
+                protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("COMMENT ON TABLE orders IS NULL;");
+            }
+        }
+
+        """;
+
     private readonly DirectoryInfo repository = Directory.CreateTempSubdirectory("lockflight-suppressions-");
 
     [Fact]
@@ -197,6 +217,76 @@ public sealed class SuppressionsStepTests : IDisposable
 
         Assert.Equal(Verdict.Fail, step.Verdict);
         Assert.Contains("_Init.cs:1 nullable", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheNullableDisableInAMigrationThatCarriesItsOwnMigrationAttributeIsNotJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/20260101000000_AddComment.cs", MigrationWithItsAttributes);
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Pass, step.Verdict);
+    }
+
+    [Fact]
+    public async Task AMigrationWithItsOwnAttributesAndWindowsLineEndingsIsNotJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/20260101000000_AddComment.cs", MigrationWithItsAttributes.Replace("\n", "\r\n", StringComparison.Ordinal));
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Pass, step.Verdict);
+    }
+
+    [Fact]
+    public async Task MigrationAttributesOnlyInACommentDoNotMakeAFileAMigration()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/Helpers.cs", "#nullable disable\n\n/* [DbContext(typeof(ShopContext))] [Migration(\"1\")] partial class Fake : Migration */\nnamespace Shop.Migrations;\n\ninternal static class Helpers { }\n");
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Contains("Helpers.cs:1 nullable", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AMigrationThatAlsoDeclaresAnotherTypeIsJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/20260101000000_AddComment.cs", MigrationWithItsAttributes + "\ninternal static class Helpers { }\n");
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Contains("_AddComment.cs:4 nullable", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ANullableDisableInsideAMigrationsNamespaceIsJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/20260101000000_AddComment.cs", MigrationWithItsAttributes.Replace("    public partial class", "#nullable disable\n    public partial class", StringComparison.Ordinal));
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Contains("_AddComment.cs:10 nullable", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ANullableDisableInAMigrationsFolderFileThatIsNoEfMigrationIsJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/Helpers.cs", "using System;\n\n#nullable disable\n\nnamespace Shop.Migrations;\n\ninternal static class Helpers { }\n");
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Contains("Helpers.cs:3 nullable", step.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

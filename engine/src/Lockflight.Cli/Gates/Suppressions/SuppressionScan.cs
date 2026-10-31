@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Lockflight.Cli.Processes;
 using Lockflight.Cli.Review;
 
@@ -9,10 +10,10 @@ namespace Lockflight.Cli.Gates.Suppressions;
 /// Suppressions already in the code are not judged, and a suppression moved within a file is not new: per file, rule and kind, only the
 /// added ones beyond those the change removes count. An analyzer config line counts when it sets a severity below warning or below
 /// what the same setting said before. Generated files are left out by path and shape (<see cref="GeneratedFiles"/>: lock files,
-/// EF Core model snapshots and migration designers), and so is the <c>#nullable disable</c> that EF Core writes at the top of a
-/// migration whose designer file is EF Core's.
+/// EF Core model snapshots and migration designers), and so is the <c>#nullable disable</c> that EF Core writes above the namespace
+/// of a migration whose designer file is EF Core's, or which carries EF Core's migration attributes itself.
 /// </summary>
-internal static class SuppressionScan
+internal static partial class SuppressionScan
 {
     private const string MigrationsDirectory = "Migrations";
     private const string DesignerSuffix = ".Designer.cs";
@@ -64,10 +65,10 @@ internal static class SuppressionScan
             .Where(line => line.Line >= 1 && line.Line <= lines.Length)
             .SelectMany(line => SuppressionPatterns.InLine(file.File, lines[line.Line - 1], masked[line.Line - 1]).Select(hit => (line, hit)))];
 
-        bool migration = IsEfMigration(root, file.File);
+        int efHeaderEnd = IsEfMigration(root, file.File, masked) ? NamespaceLine(masked) : 0;
         IEnumerable<(DiffLine Line, SuppressionHit Hit)> addedSuppressions = added
             .Where(entry => Silences(entry.Hit) || Lowers(entry.Hit, removed.Select(old => old.Hit)))
-            .Where(entry => !(migration && entry.Hit.Kind == SuppressionKind.NullableDisable));
+            .Where(entry => !(entry.Hit.Kind == SuppressionKind.NullableDisable && entry.Line.Line < efHeaderEnd));
         List<SuppressionHit> removedSuppressions = [.. removed.Select(entry => entry.Hit).Where(Silences)];
 
         return addedSuppressions
@@ -92,8 +93,13 @@ internal static class SuppressionScan
         return File.Exists(fullPath) ? [.. File.ReadAllText(fullPath).Split('\n').Select((text, index) => new DiffLine(index + 1, text.TrimEnd('\r')))] : [];
     }
 
-    /// <summary>An EF Core migration: <c>Migrations/&lt;name&gt;.cs</c> whose <c>&lt;name&gt;.Designer.cs</c> is EF Core's generated designer.</summary>
-    private static bool IsEfMigration(string root, string path)
+    // The 1-based number of the first namespace line, masked; 0 when there is none.
+    private static int NamespaceLine(string[] masked) => Array.FindIndex(masked, line => NamespaceStart().IsMatch(line)) + 1;
+
+    // An EF Core migration: Migrations/<name>.cs whose <name>.Designer.cs is EF Core's generated designer, or, with no designer,
+    // a file whose code (comments and strings masked) carries [DbContext(…)] and [Migration(…)] and declares one class only, which
+    // derives from Migration. Either way only a #nullable disable above the namespace, where EF Core writes it, is left out.
+    private static bool IsEfMigration(string root, string path, string[] masked)
     {
         if (!SuppressionPatterns.IsCSharp(path) || path.EndsWith(DesignerSuffix, StringComparison.Ordinal))
         {
@@ -108,6 +114,29 @@ internal static class SuppressionScan
         }
 
         string designer = Path.Combine(root, path[..^".cs".Length] + DesignerSuffix);
-        return File.Exists(designer) && EfGeneratedCode.IsMigrationDesigner(File.ReadAllText(designer));
+        return File.Exists(designer)
+            ? EfGeneratedCode.IsMigrationDesigner(File.ReadAllText(designer))
+            : CarriesMigrationAttributes(string.Join('\n', masked));
     }
+
+    private static bool CarriesMigrationAttributes(string code) =>
+        DbContextAttribute().IsMatch(code)
+        && MigrationAttribute().IsMatch(code)
+        && TypeDeclaration().Count(code) == 1
+        && MigrationClass().IsMatch(code);
+
+    [GeneratedRegex(@"^\s*namespace\s")]
+    private static partial Regex NamespaceStart();
+
+    [GeneratedRegex(@"\[\s*(?:global::)?(?:Microsoft\.EntityFrameworkCore\.Infrastructure\.)?DbContext(?:Attribute)?\s*\(\s*typeof\s*\(")]
+    private static partial Regex DbContextAttribute();
+
+    [GeneratedRegex(@"[\[,]\s*(?:global::)?(?:Microsoft\.EntityFrameworkCore\.Migrations\.)?Migration(?:Attribute)?\s*\(\s*""")]
+    private static partial Regex MigrationAttribute();
+
+    [GeneratedRegex(@"\b(?:class|struct|interface|enum|record|delegate)\s+\w")]
+    private static partial Regex TypeDeclaration();
+
+    [GeneratedRegex(@"\bclass\s+\w+\s*:\s*(?:global::)?(?:Microsoft\.EntityFrameworkCore\.Migrations\.)?Migration\b")]
+    private static partial Regex MigrationClass();
 }
