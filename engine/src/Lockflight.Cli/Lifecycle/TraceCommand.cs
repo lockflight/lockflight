@@ -65,7 +65,7 @@ internal sealed class TraceCommand(CliContext context) : ICommand
         }
 
         IReadOnlyList<TraceRow> rows = TraceMatrix.Build(requirements, record, inventory);
-        await WriteMatrixAsync(feature, rows);
+        await WriteMatrixAsync(feature, rows, manifest.Root);
         await WriteNotesAsync(requirements, record);
         string[] lostLast = [.. rows.Where(row => !row.Covered && row.Lost.Count > 0).Select(row => row.RequirementId)];
         if (lostLast.Length > 0)
@@ -79,14 +79,14 @@ internal sealed class TraceCommand(CliContext context) : ICommand
     }
 
     /// <summary>The Markdown matrix, after a warning for each approval that no longer covers the artifacts.</summary>
-    private async Task WriteMatrixAsync(Feature feature, IReadOnlyList<TraceRow> rows)
+    private async Task WriteMatrixAsync(Feature feature, IReadOnlyList<TraceRow> rows, string root)
     {
         await context.Output.WriteLineAsync($"### Requirement trace — {feature.Id}\n");
         ApprovalStore approvals = new(feature);
         ApprovalCheck[] checks = [approvals.Check(ApprovalPhase.Spec), approvals.Check(ApprovalPhase.Tasks)];
         foreach (ApprovalCheck unapproved in checks.Where(check => check.State is ApprovalState.Stale or ApprovalState.Invalid))
         {
-            await context.Output.WriteLineAsync($"> **Warning:** {unapproved.Describe()}; this trace is against artifacts nobody approved.\n");
+            await context.Output.WriteLineAsync($"> **Warning:** {unapproved.Describe(root)}; this trace is against artifacts nobody approved.\n");
         }
 
         await context.Output.WriteLineAsync("| Requirement | Tests (red → green) | Status |");

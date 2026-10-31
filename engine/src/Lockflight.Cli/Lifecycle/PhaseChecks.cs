@@ -26,7 +26,7 @@ internal static class PhaseChecks
     public static IReadOnlyList<PhaseCheckItem>? Run(string phase, Feature feature, Manifest manifest) => phase switch
     {
         SpecifyPhase => Specify(feature),
-        TasksPhase => Tasks(feature, new ApprovalStore(feature).Check(ApprovalPhase.Spec), [.. manifest.Units.Select(unit => unit.Path)]),
+        TasksPhase => Tasks(feature, new ApprovalStore(feature).Check(ApprovalPhase.Spec), [.. manifest.Units.Select(unit => unit.Path)], manifest.Root),
         _ => null,
     };
 
@@ -62,9 +62,10 @@ internal static class PhaseChecks
     }
 
     /// <param name="units">The workspace's unit paths: <c>[unit:path]</c> tags must name one of them; empty for a single repository.</param>
-    public static IReadOnlyList<PhaseCheckItem> Tasks(Feature feature, ApprovalCheck specApproval, IReadOnlyList<string> units)
+    /// <param name="root">The project root, for how a missing approval is handed to a person.</param>
+    public static IReadOnlyList<PhaseCheckItem> Tasks(Feature feature, ApprovalCheck specApproval, IReadOnlyList<string> units, string root)
     {
-        List<PhaseCheckItem> items = [new("spec.approved", specApproval.State == ApprovalState.Valid, specApproval.Describe())];
+        List<PhaseCheckItem> items = [new("spec.approved", specApproval.State == ApprovalState.Valid, specApproval.Describe(root))];
         if (!File.Exists(feature.TasksPath) || !File.Exists(feature.SpecPath))
         {
             items.Add(new PhaseCheckItem("tasks.exists", false, $"{feature.Id}/tasks.md (and spec.md) must exist; run /speckit-tasks"));

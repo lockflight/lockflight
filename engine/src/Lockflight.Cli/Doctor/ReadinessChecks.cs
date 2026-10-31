@@ -58,21 +58,14 @@ internal static class ReadinessChecks
             checks.Add(developmentPin);
         }
 
-        checks.Add(await CheckLinkAsync(root, cancellationToken));
-        if (PluginEngineCheck.Check(root, userHome, environment) is DoctorCheck pluginEngine)
+        bool ciOnly = ClaudeUserSettings.CiOnlyFor(root, userHome);
+        if (ciOnly)
         {
-            checks.Add(pluginEngine);
+            checks.AddRange(await CiOnlyLevelChecksAsync(root, cancellationToken));
         }
-
-        checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root, userHome)]);
-        if (DenyRulesCheck.Check(root) is DoctorCheck denyRules)
+        else
         {
-            checks.Add(denyRules);
-        }
-
-        if (SandboxCheck.Check(root, userHome) is DoctorCheck sandbox)
-        {
-            checks.Add(sandbox);
+            checks.AddRange(await LocalLevelChecksAsync(root, userHome, environment, cancellationToken));
         }
 
         if (WorkflowTriggerCheck.Check(root) is DoctorCheck workflowTrigger)
@@ -85,7 +78,12 @@ internal static class ReadinessChecks
             checks.Add(workflowJudge);
         }
 
-        checks.AddRange([await CheckClaudeVersionAsync(root, Claude, cancellationToken), CheckGitleaks(gitleaks)]);
+        if (!ciOnly)
+        {
+            checks.Add(await CheckClaudeVersionAsync(root, Claude, cancellationToken));
+        }
+
+        checks.Add(CheckGitleaks(gitleaks));
         if (OperatingSystem.IsWindows())
         {
             checks.Add(await CheckGitBashAsync(root, Bash, cancellationToken));
@@ -116,6 +114,44 @@ internal static class ReadinessChecks
 
         checks.AddRange(await WorkspaceChecks.RunAsync(root, ManifestLocator.Discover(root).Manifest, userHome, time.GetUtcNow(), cancellationToken));
         checks.AddRange(await DocsChecks.RunAsync(root, cancellationToken));
+        return checks;
+    }
+
+    /// <summary>
+    /// The CI-only level: nothing is set up for Claude Code and no engine needs to be linked, so the plugin, hooks, deny rules,
+    /// sandbox and Claude Code lines are left out. A linked engine is still checked, because a person may run it by hand.
+    /// </summary>
+    private static async Task<IReadOnlyList<DoctorCheck>> CiOnlyLevelChecksAsync(string root, CancellationToken cancellationToken) =>
+    [
+        File.Exists(LinkCommand.BinaryPath(root))
+            ? await CheckLinkAsync(root, cancellationToken)
+            : new("linked engine", CheckStatus.Info, "CI-only level: no engine linked, and none is needed; CI installs the pinned engine", null),
+        CheckGitIgnore(root),
+        new("claude settings", CheckStatus.Info,
+            $"CI-only level (init --ci-only): nothing is set up for Claude Code, so no plugin, hooks, deny rules or sandbox are checked; {EngineCommand.Name} init or init --native adds the local checks",
+            null),
+    ];
+
+    /// <summary>The plugin and native levels: the linked engine the hooks run, the plugin's engine, and the project's Claude Code settings.</summary>
+    private static async Task<IReadOnlyList<DoctorCheck>> LocalLevelChecksAsync(string root, string? userHome, EnvironmentReader environment, CancellationToken cancellationToken)
+    {
+        List<DoctorCheck> checks = [await CheckLinkAsync(root, cancellationToken)];
+        if (PluginEngineCheck.Check(root, userHome, environment) is DoctorCheck pluginEngine)
+        {
+            checks.Add(pluginEngine);
+        }
+
+        checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root, userHome)]);
+        if (DenyRulesCheck.Check(root) is DoctorCheck denyRules)
+        {
+            checks.Add(denyRules);
+        }
+
+        if (SandboxCheck.Check(root, userHome) is DoctorCheck sandbox)
+        {
+            checks.Add(sandbox);
+        }
+
         return checks;
     }
 

@@ -128,14 +128,14 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
         if (record is not null)
         {
             return await session.FailAsync(
-                $"the baseline was taken at {record.BaselineAt:u} (commit {RedGreenSession.Short(record.BaselineCommit)}); it is never retaken by the agent. Only a person can discard it: {HumanOnlyCommands.AskTheUser("redgreen reset")}.",
+                $"the baseline was taken at {record.BaselineAt:u} (commit {RedGreenSession.Short(record.BaselineCommit)}); it is never retaken by the agent. Only a person can discard it: {HumanOnlyCommands.AskTheUser("redgreen reset", session.Manifest.Root)}.",
                 cancellationToken);
         }
 
         ApprovalCheck tasks = new ApprovalStore(session.Feature).Check(ApprovalPhase.Tasks);
         if (tasks.State != ApprovalState.Valid)
         {
-            return await session.FailAsync(tasks.Describe(), cancellationToken);
+            return await session.FailAsync(tasks.Describe(session.Manifest.Root), cancellationToken);
         }
 
         TestWorkspace workspace = session.Workspace;
@@ -214,7 +214,7 @@ internal sealed class RedGreenCommand(CliContext context) : ICommand
         await context.Output.WriteLineAsync($"WARN {failing.Length} {(failing.Length == 1 ? "test fails" : "tests fail")} before any change: {string.Join(", ", failing.Take(RedGreenSession.MaxTestsListed))}");
         await context.Output.WriteLineAsync(
             "     Every green will be refused while they fail. If they fail for reasons outside this feature, " +
-            HumanOnlyCommands.AskTheUser("baseline tests") + ", and to merge that baseline in its own pull request first: CI " +
+            HumanOnlyCommands.AskTheUser("baseline tests", session.Manifest.Root) + ", and to merge that baseline in its own pull request first: CI " +
             "takes baselines from the base branch, so one added in the feature's pull request is discarded.");
 
         return regression;

@@ -8,7 +8,8 @@ internal static class InitNextSteps
 {
     /// <param name="specKit">How far Spec Kit is set up: an existing one without the preset gets it from <c>init --speckit-preset</c>, not a new Spec Kit.</param>
     /// <param name="presetDirectory">The Lockflight Spec Kit preset on this machine; null leaves a placeholder.</param>
-    public static IReadOnlyList<string> For(InitProfile profile, SpecKitSetup specKit, string? presetDirectory)
+    /// <param name="level">The install level: only the plugin brings the init skill and the <c>/lockflight:</c> commands.</param>
+    public static IReadOnlyList<string> For(InitProfile profile, SpecKitSetup specKit, string? presetDirectory, InstallLevel level)
     {
         string doctor = $"commit these files, then run `{EngineCommand.Linked} doctor` from the project root.";
         if (profile != InitProfile.Standard)
@@ -22,7 +23,7 @@ internal static class InitNextSteps
         int step = 1;
         if (specKit == SpecKitSetup.None)
         {
-            lines.Add($"  {step++}. Set up Spec Kit with the Lockflight preset (the init skill does this with you):");
+            lines.Add($"  {step++}. Set up Spec Kit with the Lockflight preset{(level == InstallLevel.Plugin ? " (the init skill does this with you)" : string.Empty)}:");
             lines.Add($"       {specify} init --here --force --integration claude --script sh");
             lines.Add($"       {specify} preset add --dev {preset}");
         }
@@ -32,7 +33,9 @@ internal static class InitNextSteps
         }
 
         lines.Add($"  {step++}. {char.ToUpperInvariant(doctor[0])}{doctor[1..]}");
-        lines.Add($"  {step}. Before the first feature, accept the tests that already fail: you type /lockflight:baseline tests in Claude Code, or {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.Linked} baseline tests")}; then merge that baseline in its own pull request.");
+        string baseline = HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.Linked} baseline tests");
+        string accept = level == InstallLevel.Plugin ? $"you type /lockflight:baseline tests in Claude Code, or {baseline}" : $"you {baseline}";
+        lines.Add($"  {step}. Before the first feature, accept the tests that already fail: {accept}; then merge that baseline in its own pull request.");
         return lines;
     }
 }

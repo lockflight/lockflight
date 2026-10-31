@@ -21,8 +21,10 @@ level is not a manifest key: it is what `init` writes for Claude Code.
 Code. It links no engine. Use it when the team's agents are not Claude Code, or when the team wants the judge without any
 change to how people work. It needs a CI file, so `--ci none` is refused with it.
 
-`doctor` checks a developer's machine, so at this level its local lines (the linked engine, Claude settings, deny rules)
-report what CI only leaves out; they need no fix. A person or an agent can still run the engine by hand (`lockflight gate run`, `lockflight redgreen red`). The CI check is
+`doctor` recognises this level when `CLAUDE.md` has no Lockflight block, the project's Claude Code settings are missing or
+hold nothing Lockflight writes (the team's own rules and sandbox are fine), and no settings enable the plugin. The Claude
+settings line is then `info`, and so is the linked engine line when no engine is linked (one that is linked is still checked);
+the plugin engine, deny rules, sandbox and Claude Code lines are left out. A person or an agent can still run the engine by hand (`lockflight gate run`, `lockflight redgreen red`). The CI check is
 the boundary where it runs as a required check with policy, the lock and CODEOWNERS on the base branch
 ([CI hardening](ci-hardening.md)).
 
@@ -52,9 +54,9 @@ engine is linked. A `.gitattributes` rule keeps it LF on Windows checkouts.
 - **Kept up to date.** `lockflight update` refreshes the shim and the hooks with the engine. `doctor` checks that the hooks
   (command, matcher, time limit, failure mode) and the shim are the ones the engine writes.
 - **No slash commands.** There is no plugin at this level, so there are no `/lockflight:*` commands. A person gives approvals,
-  baselines, resets and amends in a separate terminal window (`lockflight approve`, `lockflight baseline`, and so on). Some
-  engine messages (the session banner, a refused human-only command) still name the `/lockflight:` command as well; at this
-  level, use the terminal command they name beside it.
+  baselines, resets and amends in a separate terminal window (`lockflight approve`, `lockflight baseline`, and so on). The
+  engine's messages (the session banner, a refused human-only command, a gate or red/green hand-off) name only the terminal
+  command when the project's `.claude/settings.json` runs the native hooks and does not enable the plugin.
 - **One level at a time.** When the plugin is also enabled, in the project or in the user's settings, the guard and the Stop
   gates run twice. `init --native` and `doctor` say so. Disable the plugin for the project in `.claude/settings.local.json`
   (`"enabledPlugins": { "lockflight@lockflight": false }`) or go back to the plugin level.

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Gates.Suppressions;
+using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Gates.Steps;
 
@@ -63,6 +64,9 @@ internal sealed class SuppressionsStep : IGateStep
         string listed = string.Join("; ", fresh.Take(MaxListed).Select(suppression => suppression.Describe()));
         string more = fresh.Length > MaxListed ? $"; and {fresh.Length - MaxListed} more" : string.Empty;
         return new GateStep(StepName, 0, Verdict.Fail, stopwatch.ElapsedMilliseconds,
-            $"{fresh.Length} new suppressions: {listed}{more}; fix what they silence, or a person accepts a needed one (file and rule) with /lockflight:baseline suppressions");
+            $"{fresh.Length} new suppressions: {listed}{more}; fix what they silence, or a person accepts a needed one (file and rule) with {AcceptCommand(run.ProjectRoot)}");
     }
+
+    private static string AcceptCommand(string root) =>
+        HumanOnlyCommands.InSessionFor("baseline suppressions", root) ?? $"`{EngineCommand.Linked} baseline suppressions` in a separate terminal window";
 }
