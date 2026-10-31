@@ -35,9 +35,26 @@ internal static class CiStepMigration
         "# the vendored engine install script: CI runs the base commit's copy, checked against the base commit's lock.",
         $"for directory in {CiShellScripts.PolicyDirectories}; do",
         "  rm -rf \"$directory\"",
+        "  if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then",
+        "    git -c core.quotePath=false ls-tree -r --name-only \"$BASE\" -- \"$directory\" | while IFS= read -r file; do mkdir -p \"$(dirname \"$file\")\"; rm -f \"$file\"; git show \"$BASE:$file\" > \"$file\"; done",
+        "  fi",
+        "done",
+    ];
+
+    /// <summary>The policy directories' restore before it read the committed bytes (a checkout, which converts line endings).</summary>
+    private static readonly string[] LegacyDirectories =
+    [
+        $"for directory in {CiShellScripts.PolicyDirectories}; do",
+        "  rm -rf \"$directory\"",
         "  if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then git checkout \"$BASE\" -- \"$directory\"; fi",
         "done",
     ];
+
+    /// <summary>How 0.2 restored each policy file: a checkout, which converts line endings.</summary>
+    private const string LegacyFileRestore = "  if git cat-file -e \"$BASE:$file\" 2>/dev/null; then git checkout \"$BASE\" -- \"$file\"; else rm -f \"$file\"; fi";
+
+    /// <summary>How each policy file is restored now: its committed bytes, in place of whatever the pull request put there.</summary>
+    private const string FileRestore = "  if git cat-file -e \"$BASE:$file\" 2>/dev/null; then mkdir -p \"$(dirname \"$file\")\"; rm -f \"$file\"; git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi";
 
     /// <summary>The migrated text; null when the file must be left alone. The file's own text when it is current already.</summary>
     public static string? Migrate(string text)
@@ -112,7 +129,16 @@ internal static class CiStepMigration
         int[] current = [.. Indexes(lines, line => line.Trim() == $"for file in {CiShellScripts.PolicyFiles}; do")];
         if (current.Length == 1)
         {
-            return true;
+            // The current lists restored by checkout (an earlier 0.3 pre-release): the committed bytes are restored instead.
+            RestoreCommittedFile(lines, current[0]);
+            if (Find(lines, LegacyDirectories) is (int at, string directoryIndent))
+            {
+                lines.RemoveRange(at, LegacyDirectories.Length);
+                lines.InsertRange(at, Directories[2..].Select(line => directoryIndent + line));
+            }
+
+            // A checkout restore left that is not the block Lockflight wrote (hand-edited) is not half migrated: the person merges it.
+            return !lines.Any(line => line.Contains("git checkout \"$BASE\" -- \"$directory\"", StringComparison.Ordinal));
         }
 
         int[] previous = [.. Indexes(lines, line => line.Trim() == $"for file in {PreviousPolicyFiles}; do")];
@@ -129,6 +155,8 @@ internal static class CiStepMigration
         }
 
         lines[legacy[0]] = Indent(lines[legacy[0]]) + $"for file in {CiShellScripts.PolicyFiles}; do";
+        RestoreCommittedFile(lines, legacy[0]);
+
         // The GitHub workflow's style loop failed under bash -e on a base without style files; it now tolerates none, as the others do.
         int[] styleLoop = [.. Indexes(lines, line => line.Trim() == LegacyGitHubStyleLoop)];
         if (styleLoop.Length == 1)
@@ -139,6 +167,16 @@ internal static class CiStepMigration
         lines.RemoveRange(start, LegacyBaselines.Length);
         lines.InsertRange(start, Directories.Select(line => indent + line));
         return true;
+    }
+
+    /// <summary>The policy file loop at <paramref name="loop"/> restores each file's committed bytes rather than checking it out.</summary>
+    private static void RestoreCommittedFile(List<string> lines, int loop)
+    {
+        string loopIndent = Indent(lines[loop]);
+        if (loop + 1 < lines.Count && lines[loop + 1] == loopIndent + LegacyFileRestore)
+        {
+            lines[loop + 1] = loopIndent + FileRestore;
+        }
     }
 
     /// <summary>Where <paramref name="block"/> occurs exactly once as consecutive lines with one indentation; null otherwise.</summary>

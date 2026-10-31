@@ -5,10 +5,10 @@ using Lockflight.Cli.Config;
 namespace Lockflight.Cli.EngineLocks;
 
 /// <summary>
-/// The strict reader of <c>lockflight.engine-lock/v1</c>: a lock is policy a person commits, so an unknown key, a wrong type, a hash
+/// The strict reader of <c>lockflight.engine-lock/v1</c>: a lock is policy a person commits, so a backslash anywhere, an unknown or repeated key, a wrong type, a hash
 /// that is not 64 lower-case hex, a release lock without every released platform, or a development lock where only release
 /// locks belong is an error naming the problem. A RID this engine does not know is ignored, so a later platform does not break
-/// an older engine.
+/// an older engine, but it must be a platform name holding only a well-formed hash.
 /// </summary>
 internal static partial class EngineLockReader
 {
@@ -18,6 +18,11 @@ internal static partial class EngineLockReader
     /// <param name="engine">The engine reading the lock, named when a key is unknown.</param>
     public static EngineLockReading Read(string text, bool allowDevelopment, string engine)
     {
+        if (text.Contains('\\', StringComparison.Ordinal))
+        {
+            return Problem("the lock holds a backslash; install.sh reads a lock without decoding JSON escapes, so a lock names its keys and values without any");
+        }
+
         try
         {
             using JsonDocument document = JsonDocument.Parse(text);
@@ -46,6 +51,11 @@ internal static partial class EngineLockReader
         if (root.ValueKind != JsonValueKind.Object)
         {
             return Problem("the lock must be a JSON object");
+        }
+
+        if (JsonDuplicateKeys.Find(root) is string duplicate)
+        {
+            return Problem($"the key '{duplicate}' appears twice; CI's script reads the first and the engine the last, so a lock names each key once");
         }
 
         foreach (JsonProperty property in root.EnumerateObject())
@@ -95,9 +105,11 @@ internal static partial class EngineLockReader
         Dictionary<string, string> hashes = new(StringComparer.Ordinal);
         foreach (JsonProperty entry in binaries.EnumerateObject())
         {
-            if (!EngineRids.Released.Contains(entry.Name, StringComparer.Ordinal))
+            // A platform this engine does not know is skipped, but it must look like one and hold only a hash, so no reader of the
+            // lock (CI's line-oriented ones included) can find another key's value in it.
+            if (!RidName().IsMatch(entry.Name))
             {
-                continue;
+                return Problem($"'binaries.{entry.Name}' is not a platform name (such as linux-x64)");
             }
 
             if (HashOf(binaries, entry.Name, out string? entryProblem) is not string hash)
@@ -105,7 +117,10 @@ internal static partial class EngineLockReader
                 return Problem(entryProblem!);
             }
 
-            hashes[entry.Name] = hash;
+            if (EngineRids.Released.Contains(entry.Name, StringComparer.Ordinal))
+            {
+                hashes[entry.Name] = hash;
+            }
         }
 
         string[] missing = [.. EngineRids.Released.Where(rid => !hashes.ContainsKey(rid))];
@@ -154,4 +169,8 @@ internal static partial class EngineLockReader
 
     [GeneratedRegex("^[0-9a-f]{64}$")]
     private static partial Regex Sha256();
+
+    /// <summary>A .NET runtime identifier as a lock names it: lower-case words joined by hyphens.</summary>
+    [GeneratedRegex("^[a-z0-9]+(-[a-z0-9]+)+$")]
+    private static partial Regex RidName();
 }

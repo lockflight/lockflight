@@ -59,9 +59,12 @@ internal static class CliApplication
                                                         installed in ~/.lockflight/tools
           engine install [--source <feed>]              you: install exactly the engine .lockflight/engine.lock pins and
                                                         link it (after a branch switch or a fresh clone)
-          engine verify-lock <file> [--source <feed>] [--attestation]
-                                                        compare an engine lock with the hashes its release published;
-                                                        --attestation: also verify the release's attestation with gh
+          engine verify-lock <file> [--source <feed>] [--base <file>] [--script <file>] [--attestation]
+                                                        compare an engine lock (its install script included) with the
+                                                        hashes its release published; --base: the lock it replaces,
+                                                        to name a downgrade; --script: the vendored install script,
+                                                        which must be the one the lock pins; --attestation: also
+                                                        verify the release's attestation with gh
                                                         (CI runs it on a pull request that changes the lock; read only)
           version                                       print the engine version
 

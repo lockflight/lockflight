@@ -10,6 +10,12 @@
     "package": { "type": "string", "pattern": "^[Ll][Oo][Cc][Kk][Ff][Ll][Ii][Gg][Hh][Tt]\\.[Cc][Ll][Ii]$" },
     "version": { "type": "string", "minLength": 1 },
     "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "The commit the release tag points at." },
+    "installScript": {
+      "type": "object",
+      "description": "The install script the release ships (scripts/install.sh, the copy the engine vendors as .lockflight/ci/install.sh). Absent in a file from before it was published; a lock cannot be release-checked against such a file.",
+      "required": ["sha256"],
+      "properties": { "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+    },
     "binaries": {
       "type": "object",
       "required": ["linux-arm64", "linux-x64", "osx-arm64", "osx-x64", "win-x64"],

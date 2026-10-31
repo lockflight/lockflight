@@ -7,8 +7,9 @@ signs every package after the push, which changes the package's bytes but not th
 
   engine-hashes.py rid --package <nupkg> --rid <rid> --version <v> --out <dir>
       Extracts the executable to <dir>/lockflight-<v>-<rid>[.exe] and writes <dir>/hash-<rid>.json.
-  engine-hashes.py merge --dir <dir> --version <v> --commit <sha> --out <engine-hashes.json>
-      Merges the hash-<rid>.json files; exactly the released platforms, each once.
+  engine-hashes.py merge --dir <dir> --version <v> --commit <sha> --install-script <install.sh> --out <engine-hashes.json>
+      Merges the hash-<rid>.json files (exactly the released platforms, each once) and the hash of the install script the
+      release ships, the copy the engine vendors into a project, so a lock's installScript can be checked against the release.
   engine-hashes.py verify --hashes <engine-hashes.json> --packages <dir> [--pointer <nupkg>]
       Re-extracts every RID package and compares it with the file; the pointer package must hold the same file.
 
@@ -94,12 +95,17 @@ def command_merge(arguments):
         binaries[rid] = {"sha256": entry["sha256"], "path": entry["path"]}
     if sorted(binaries) != list(RIDS):
         fail(f"expected hashes of {', '.join(RIDS)}; found {', '.join(sorted(binaries)) or 'none'}")
+    with open(arguments.install_script, "rb") as stream:
+        script = stream.read()
+    if b"\r\n" in script:
+        fail(f"{arguments.install_script} has CRLF line endings; the script the engine vendors is LF")
     write_json(arguments.out, {
         "schema": SCHEMA,
         "package": PACKAGE,
         "version": arguments.version,
         "commit": arguments.commit,
         "binaries": {rid: binaries[rid] for rid in RIDS},
+        "installScript": {"sha256": sha256_of(script)},
     })
     print(f"wrote {arguments.out} for {len(binaries)} platforms")
 
@@ -113,6 +119,8 @@ def command_verify(arguments):
     version = document["version"]
     if sorted(document["binaries"]) != list(RIDS):
         fail(f"{arguments.hashes} does not list exactly {', '.join(RIDS)}")
+    if not re.fullmatch(r"[0-9a-f]{64}", document.get("installScript", {}).get("sha256", "")):
+        fail(f"{arguments.hashes} has no install script hash")
     for rid in RIDS:
         package = os.path.join(arguments.packages, f"{PACKAGE}.{rid}.{version}.nupkg")
         with zipfile.ZipFile(package) as archive:
@@ -143,6 +151,7 @@ def main():
     merge.add_argument("--dir", required=True)
     merge.add_argument("--version", required=True)
     merge.add_argument("--commit", required=True)
+    merge.add_argument("--install-script", required=True)
     merge.add_argument("--out", required=True)
     verify = commands.add_parser("verify")
     verify.add_argument("--hashes", required=True)

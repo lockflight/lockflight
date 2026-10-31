@@ -64,6 +64,8 @@ lock_json() { # lock_json <channel> <hash>
 lock_json release "$engine_hash" > "$work/engine.lock"
 lock_json development "$engine_hash" > "$work/dev.lock"
 lock_json release "$(printf 'a%.0s' $(seq 64))" > "$work/wrong.lock"
+# A key the awk reader takes for binaries ("\binaries") ahead of the real one: refused, as by the engine and the first-lock check.
+sed 's/^{/{\n  "\\binaries": {},/' "$work/engine.lock" > "$work/escaped.lock"
 mkdir -p "$feed/lockflight.cli.$rid/$version" "$feed/lockflight.cli/$version"
 make_package "$feed/lockflight.cli.$rid/$version/lockflight.cli.$rid.$version.nupkg" "tools/any/$rid/lockflight" "@$work/engine" "tools/any/$rid/DotnetToolSettings.xml" "<x/>"
 printf '{\n  "schema": "lockflight.engine-hashes/v1",\n  "package": "Lockflight.Cli",\n  "version": "%s",\n  "commit": "%s",\n  "binaries": {\n    "%s": {\n      "sha256": "%s",\n      "path": "tools/any/%s/lockflight"\n    }\n  }\n}\n' \
@@ -164,6 +166,9 @@ for shell_name in $shells; do
 
   run "development lock" 1 -- --lock "$work/dev.lock" --dir "$work/case/out" \
     && says "'development' lock" "a development lock is refused"
+
+  run "escaped key" 1 -- --lock "$work/escaped.lock" --dir "$work/case/out" \
+    && says "holds a backslash" "a lock with a backslash is refused"
 
   if [ "$rid" = linux-x64 ] || [ "$rid" = linux-arm64 ]; then
     run "musl" 1 PATH="$work/musl:$PATH" -- --lock "$work/engine.lock" --dir "$work/case/out" \

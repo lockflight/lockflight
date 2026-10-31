@@ -85,7 +85,10 @@ try {
   $expected = ""
   if ($Lock) {
     if (-not (Test-Path -LiteralPath $Lock)) { Fail "no lock at $Lock" }
-    $document = Get-Content -Raw -LiteralPath $Lock | ConvertFrom-Json
+    $text = Get-Content -Raw -LiteralPath $Lock
+    # install.sh reads a lock without decoding JSON escapes, so every reader refuses a lock with a backslash.
+    if ($text.Contains("\")) { Fail "$Lock holds a backslash; a lock names its keys and values without escapes" }
+    $document = $text | ConvertFrom-Json
     if ($document.schema -ne "lockflight.engine-lock/v1") { Fail "$Lock is not a lockflight.engine-lock/v1 file" }
     if ($document.channel -ne "release") { Fail "$Lock is a '$($document.channel)' lock (a local development build); only release locks are installed" }
     if ($Version -and $Version -ne $document.version) { Fail "-Version $Version differs from the lock's $($document.version)" }

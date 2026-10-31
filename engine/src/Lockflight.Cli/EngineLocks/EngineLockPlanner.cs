@@ -8,13 +8,17 @@ namespace Lockflight.Cli.EngineLocks;
 /// Works out the engine lock for the running engine. A release takes every platform's hash from the release's
 /// <c>engine-hashes.json</c> in the pointer package on the feed, after checking that it describes this very engine (its own
 /// platform's executable), that GitHub's attestation of the file verifies when the <c>gh</c> CLI is there, and that the GitHub
-/// Release serves the same bytes when it can be reached. The first lock trusts the feed and the attestation; the person who
-/// commits it, with CI confirming it matches a release, makes it policy. A development build writes a git-ignored local lock
+/// Release serves the same bytes when it can be reached, and that the release's install script is the one this engine vendors.
+/// The first lock trusts the feed and the attestation; the person who commits it makes it policy (the GitHub action checks it
+/// against the release; on the other platforms the reviewer runs <c>engine verify-lock</c>). A development build writes a git-ignored local lock
 /// with its own hash only; a local build (<c>0.0.0-local</c>, the test builds) writes none.
 /// </summary>
 internal static class EngineLockPlanner
 {
     public const string Repository = "lockflight/lockflight";
+
+    /// <summary>The workflow that attests a release's files: an attestation from any other workflow of the repository is refused.</summary>
+    public const string SignerWorkflow = "lockflight/lockflight/.github/workflows/release-packages.yml";
     private const string LocalBuild = "0.0.0-local";
     private static readonly TimeSpan AttestationTimeLimit = TimeSpan.FromMinutes(2);
 
@@ -50,6 +54,11 @@ internal static class EngineLockPlanner
         if (hashes.Binaries[rid].Sha256 != ownHash)
         {
             return EngineLockPlan.None($"the feed's {EngineHashes.FileName} for {version} does not describe this engine ({rid} is {ownHash}, the file says {hashes.Binaries[rid].Sha256}); nothing was pinned");
+        }
+
+        if (hashes.InstallScriptSha256 is string releasedScript && releasedScript != InstallScript.Sha256)
+        {
+            return EngineLockPlan.None($"the feed's {EngineHashes.FileName} for {version} names another install script ({releasedScript}) than this engine carries ({InstallScript.Sha256}); nothing was pinned");
         }
 
         List<string> notes = [$"{EngineHashes.FileName} of {version} from the feed describes this engine ({rid})"];
@@ -89,7 +98,7 @@ internal static class EngineLockPlanner
             await File.WriteAllBytesAsync(file, content, cancellationToken);
             using CancellationTokenSource limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             limit.CancelAfter(AttestationTimeLimit);
-            ProcessResult result = await processes(gh, ["attestation", "verify", file, "--repo", Repository, "--source-ref", $"refs/tags/v{version}"], directory, limit.Token);
+            ProcessResult result = await processes(gh, ["attestation", "verify", file, "--repo", Repository, "--source-ref", $"refs/tags/v{version}", "--signer-workflow", SignerWorkflow], directory, limit.Token);
             return result.ExitCode == 0
                 ? $"the release workflow's attestation of {EngineHashes.FileName} verifies (gh attestation verify)"
                 : $"warning: gh attestation verify did not verify {EngineHashes.FileName}: {FirstLine(result.Error + result.Output)}";
