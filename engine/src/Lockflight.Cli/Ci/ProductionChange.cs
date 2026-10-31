@@ -11,7 +11,8 @@ namespace Lockflight.Cli.Ci;
 /// code ships, or of a project that was a production project at base. Project,
 /// build-wide and config files do not count (a dependency bump needs no red); they raise their own routing signals. A file whose
 /// code lines, in order, are the same at base and head changes no code: a pure rename (the moved file's old text against its new
-/// text), a comment or XML doc edit, a reindent. Preprocessor lines count as code there, and a reorder is a change.
+/// text), an edit of lines that hold only a comment or XML doc, a reindent. A reorder is a change, and so is a move of a markup file or
+/// one into or out of <c>bin/</c> or <c>obj/</c>.
 /// </summary>
 internal static class ProductionChange
 {
@@ -34,6 +35,13 @@ internal static class ProductionChange
     /// </summary>
     private static bool ChangesCode(ChangeAnalysis analysis, RoutedFile file)
     {
+        // Where a markup file or a file under bin/ or obj/ lives is part of what it does (view and _ViewStart lookup, the
+        // component's namespace, whether it compiles), so a move of one always counts.
+        if (file.Move is FileMove move && (file.Role == FileRole.Markup || UnderBuildOutput(move.OldPath) || UnderBuildOutput(move.NewPath)))
+        {
+            return true;
+        }
+
         string basePath = file.Move?.OldPath ?? file.Path;
         string headPath = file.Move?.NewPath ?? file.Path;
         string? before = analysis.ChangeSet.Base.Contains(basePath) ? analysis.ChangeSet.Base.TextOf(basePath) : string.Empty;
@@ -42,8 +50,10 @@ internal static class ProductionChange
     }
 
     /// <summary>
-    /// The file's non-blank code lines with whitespace runs collapsed: for C#, comments blanked (<see cref="CommentMask"/>) but a
-    /// preprocessor line kept as written, since it decides what compiles; other files line by line as written.
+    /// The file's lines as written, whitespace runs collapsed, without blank lines and, for C#, without lines that hold only a
+    /// comment: the mask (<see cref="CommentMask"/>) blanks the line and the line itself reads as one (<c>//</c>, <c>/*</c>,
+    /// <c>*</c>, <c>*/</c>). Both must agree, so a line of a string literal the mask got wrong is kept, and an edit of a comment
+    /// that shares a line with code still counts. Other files keep every line.
     /// </summary>
     private static IEnumerable<string> CodeLines(string path, string text)
     {
@@ -51,19 +61,19 @@ internal static class ProductionChange
         string[] code = ChangeAnalyzer.IsCSharp(path) ? CommentMask.Of(text).Split('\n') : lines;
         for (int index = 0; index < lines.Length; index++)
         {
-            string line = index < code.Length ? code[index] : lines[index];
-            if (line.AsSpan().Trim().IsEmpty && lines[index].AsSpan().TrimStart().StartsWith("#", StringComparison.Ordinal))
+            string line = WhitespacePairs.Collapse(lines[index]);
+            if (line.Length > 0 && !(code.Length == lines.Length && code[index].AsSpan().Trim().IsEmpty && LooksLikeAComment(line)))
             {
-                line = lines[index];
-            }
-
-            string collapsed = WhitespacePairs.Collapse(line);
-            if (collapsed.Length > 0)
-            {
-                yield return collapsed;
+                yield return line;
             }
         }
     }
+
+    private static bool UnderBuildOutput(string path) => path.Split('/').Any(segment => segment is "bin" or "obj");
+
+    private static bool LooksLikeAComment(string line) =>
+        line.StartsWith("//", StringComparison.Ordinal) || line.StartsWith("/*", StringComparison.Ordinal)
+        || line.StartsWith('*') || line.EndsWith("*/", StringComparison.Ordinal);
 
     /// <summary>A project the pull request turned into a test project: its new files are still the production code they were.</summary>
     private static bool WasProduction(ChangeAnalysis analysis, string project) =>
