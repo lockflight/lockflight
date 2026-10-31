@@ -38,6 +38,15 @@ internal sealed class CiCommand(CliContext context) : ICommand
             return planning.Failure;
         }
 
+        if (plan.Policy.Manifest is null)
+        {
+            // Defaults would judge with a policy nobody chose, and every verdict would be about the wrong thing.
+            await context.Error.WriteLineAsync(
+                $"lockflight ci: the target branch ({CommitIds.Short(plan.Policy.Commit)}) has no {Manifest.FileName}, so there is no policy to judge with; "
+                + $"commit 'lockflight init --ci-only' (or 'lockflight init') to the target branch first, then branch from it or merge it in");
+            return ExitCode.Config;
+        }
+
         ShellPolicyReading shell = await JudgeShell.ReadAsync(plan, cancellationToken);
         if (shell.Error is string shellError)
         {
