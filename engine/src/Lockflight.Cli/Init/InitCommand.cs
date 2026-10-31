@@ -144,6 +144,10 @@ internal sealed class InitCommand(CliContext context) : ICommand
 
     private static InstallLevel LevelOf(string option) => option == "--native" ? InstallLevel.Native : InstallLevel.CiOnly;
 
+    /// <summary>What init says when it leaves the engine as it is: in Claude Code, on a project that has a manifest.</summary>
+    private static string KeepsEngineNote =>
+        $"note: inside Claude Code, init on an existing project leaves the engine as it is (the pin, the engine lock and the linked engine): changing the engine changes the judge, so it is the user's step ({EngineCommand.UserInstall} update or engine install, in a separate terminal window)";
+
     private async Task<ExitCode> InitializeAsync(InitOptions init, CancellationToken cancellationToken)
     {
         // The pin init writes is this engine's version: a newer pin is refused below and an older one is raised to it.
@@ -206,6 +210,13 @@ internal sealed class InitCommand(CliContext context) : ICommand
         // An agent may run init again (doctor's fixes add deny rules and the like), but the engine is the judge: in a project that
         // has a manifest, init under Claude Code keeps the pin, writes no lock or install script, and links nothing.
         bool keepsEngine = existingManifestText is not null && HumanOnlyCommands.RunsUnderAgent(context.Environment);
+        if (keepsEngine && ToolPin.ReadPin(root).Version is string kept)
+        {
+            // The CI default and the development-build note follow the engine the project keeps, not the one running init.
+            developmentPin = EngineVersion.IsDevelopmentBuild(kept);
+            ci = init.RequestedCi ?? CiTriggerDefault.For(kept);
+        }
+
         IReadOnlyList<string> globs = DefaultProtectedPaths.For(planned);
         string[] testFrameworks = [.. ProjectFiles.TestProjects(root).SelectMany(project => ProjectFiles.TargetFrameworks(root, project)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
         IReadOnlyList<string> dotnetChannels = DotnetChannels.For(testFrameworks);
@@ -279,7 +290,13 @@ internal sealed class InitCommand(CliContext context) : ICommand
 
         if (init.DryRun)
         {
-            return await DryRunAsync(root, plan, steps, proposals, manifest, predating);
+            ExitCode planned = await DryRunAsync(root, plan, steps, proposals, manifest, predating);
+            if (keepsEngine)
+            {
+                await context.Output.WriteLineAsync(KeepsEngineNote);
+            }
+
+            return planned;
         }
 
         foreach (InitStep step in steps)
@@ -341,8 +358,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
         await context.Output.WriteLineAsync(Commit);
         if (keepsEngine)
         {
-            await context.Output.WriteLineAsync(
-                $"note: inside Claude Code, init on an existing project leaves the engine as it is (the pin, the engine lock and the linked engine): changing the engine changes the judge, so it is the user's step ({EngineCommand.UserInstall} update or engine install, in a separate terminal window)");
+            await context.Output.WriteLineAsync(KeepsEngineNote);
             return ExitCode.Pass;
         }
 

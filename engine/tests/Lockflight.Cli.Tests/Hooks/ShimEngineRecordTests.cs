@@ -62,6 +62,22 @@ public sealed class ShimEngineRecordTests : IDisposable
         Assert.Equal(2, (await RunShimAsync(Write)).ExitCode);
     }
 
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("session-start")]
+    public async Task AnOlderEnginesHookApiRefusalLetsAnEventThatIsNotAToolCallThroughLoudly(string hookEvent)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        RecordEngine(LinkEngine("#!/bin/sh\ncat > /dev/null\necho 'lockflight: the plugin speaks hook API 9, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link' >&2\nexit 2\n"));
+
+        (int exitCode, string output) = await RunShimOutputAsync("{}", hookEvent);
+
+        Assert.Equal(0, exitCode);
+        using JsonDocument message = JsonDocument.Parse(output);
+        Assert.Contains("did not run, so this event was let through", message.RootElement.GetProperty("systemMessage").GetString(), StringComparison.Ordinal);
+        Assert.Equal(2, (await RunShimAsync(Write)).ExitCode);
+    }
+
     [Fact]
     public async Task TheEnginesOutputOnAnEventThatIsNotAToolCallReachesClaudeCode()
     {

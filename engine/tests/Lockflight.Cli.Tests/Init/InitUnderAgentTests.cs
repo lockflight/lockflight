@@ -36,6 +36,26 @@ public sealed class InitUnderAgentTests : IDisposable
     }
 
     [Fact]
+    public async Task TheAgentsDryRunSaysTheEngineIsKept()
+    {
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--dry-run"], "", projectRoot.FullName, Agent);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("leaves the engine as it is", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheAgentsInitOnADevelopmentPinWritesTheManualCiTrigger()
+    {
+        File.WriteAllText(Path.Combine(projectRoot.FullName, "dotnet-tools.json"), OlderPin.Replace("0.0.0-alpha.1", "0.0.0-dev.20261031", StringComparison.Ordinal));
+
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["init", "--ci-platform", "gitlab"], "", projectRoot.FullName, Agent);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("pins a development build of the engine", File.ReadAllText(Path.Combine(projectRoot.FullName, ".gitlab", "ci", "lockflight-gates.yml")), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task APersonsInitStillMovesThePin()
     {
         (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
