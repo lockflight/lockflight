@@ -5,7 +5,8 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// Runs the head's version of some tests on older code: the older commit is built with the head's whole test side laid over it
-/// (files the head no longer has removed, the base policy laid over again), each test's fingerprint there must be the head's, and
+/// (files the head no longer has removed, test files added since that hold only other tests left out, the base policy laid over
+/// again), each test's fingerprint there must be the head's, and
 /// the tests are classified as a red's are. The D4 idea: a changed test must still tell the old code from the new.
 /// </summary>
 internal sealed class OverlayRecheck(TreeBuilder trees, TimeProvider time)
@@ -14,9 +15,10 @@ internal sealed class OverlayRecheck(TreeBuilder trees, TimeProvider time)
         JudgePlan plan, string olderCommit, IReadOnlyList<string> keys, TestSide side, TreeListing head, string purpose, CancellationToken cancellationToken)
     {
         string root = plan.Inputs.Root;
-        IReadOnlyList<string> overlay = side.Of(await JudgeGit.TreeFilesAsync(root, plan.Inputs.Head, cancellationToken) ?? []);
+        HashSet<string> older = [.. await JudgeGit.TreeFilesAsync(root, olderCommit, cancellationToken) ?? []];
+        IReadOnlyList<string> overlay = await side.OverlayAsync(root, plan.Inputs.Head, await JudgeGit.TreeFilesAsync(root, plan.Inputs.Head, cancellationToken) ?? [], older, cancellationToken);
         HashSet<string> overlaid = [.. overlay];
-        string[] deleted = [.. (await JudgeGit.TreeFilesAsync(root, olderCommit, cancellationToken) ?? []).Where(side.IsTestSide).Where(path => !overlaid.Contains(path))];
+        string[] deleted = [.. older.Where(side.IsTestSide).Where(path => !overlaid.Contains(path))];
         TreeListing tree = await trees.ListOverlaidAsync(olderCommit, plan.Inputs.Head, overlay, deleted, purpose, cancellationToken);
         if (tree.Inventory is not IReadOnlyList<TestCase> inventory)
         {
