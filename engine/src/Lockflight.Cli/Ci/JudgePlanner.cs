@@ -86,7 +86,34 @@ internal static class JudgePlanner
         IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.ProductionChanged, inputs.Event);
         IReadOnlyList<string> ignored = await IgnoredAsync(root, inputs.Head, environment, cancellationToken);
         JudgePlan plan = new(inputs, policy, mergeBase, others, reds, classification, requirements, levels, Steps(inputs, mergeBase, reds, levels), changed, ignored);
+        if (inputs.Event == JudgeEvent.PullRequest && inputs.Base is not null && policy.Manifest is Manifest baseManifest)
+        {
+            Dictionary<CheckId, CheckLevel> withPolicy = new(levels) { [CheckId.Policy] = CheckLevel.Required };
+            (IReadOnlyList<string> loosened, string? notCompared) = await LoosenedAsync(root, inputs.Head, baseManifest, cancellationToken);
+            plan = plan with { Levels = withPolicy, Loosened = loosened, PolicyNotCompared = notCompared };
+        }
+
         return JudgePlanning.Planned(plan);
+    }
+
+    /// <summary>
+    /// How the head's <c>lockflight.yaml</c> is looser than the base's: removed counts as loosened (later pull requests would be
+    /// judged by the defaults). One that does not parse is not compared: it may be written for a newer engine (a new key, a raised
+    /// <c>requiresEngine</c>, which is not checked here), so the check is NOT-EARNED, not FAIL.
+    /// </summary>
+    private static async Task<(IReadOnlyList<string> Loosened, string? NotCompared)> LoosenedAsync(
+        string root, string head, Manifest baseManifest, CancellationToken cancellationToken)
+    {
+        if (await JudgeGit.ShowFileAsync(root, head, Manifest.FileName, cancellationToken) is not string text)
+        {
+            return ([$"{Manifest.FileName} removed"], null);
+        }
+
+        ManifestParser parser = new(root, $"{Manifest.FileName} at {CommitIds.Short(head)}") { Engine = ManifestParser.LocalBuildVersion };
+        ManifestLoadResult parsed = parser.Parse(text);
+        return parsed.Manifest is Manifest headManifest
+            ? (PolicyLoosening.Between(baseManifest, headManifest), null)
+            : ([], $"the head's {Manifest.FileName} could not be compared with the base's: {parsed.Error?.Describe()}; a person checks what it changes");
     }
 
     /// <summary>

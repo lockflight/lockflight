@@ -15,6 +15,7 @@ Status: `gates` PASS · `lockflight/judge` PASS
 | Test host tampering | PASS | required | no code in the test assemblies that could tamper with the test host |
 | Trace | PASS | required | 1/1 requirements of 001-shipping |
 | Change class | PASS | required | class behaviour (routing) |
+| Policy vs base | PASS | required | lockflight.yaml is no looser than the base's |
 
 <details><summary>Red/green cycles</summary>
 

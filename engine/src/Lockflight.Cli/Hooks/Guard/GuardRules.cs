@@ -9,8 +9,9 @@ namespace Lockflight.Cli.Hooks.Guard;
 /// The PreToolUse guard: the one place its rules are registered, in order, in two stages. Once per call, on the input alone:
 /// lockdown (which, when active, replaces the engine pin check), the engine pin, the relay guard; so a stale engine or a broken
 /// test lock can never block the recovery command through an exception while facts are built. Then per root, the project and
-/// each agent worktree under it (<c>.claude/worktrees/*</c>, a full checkout whose copies get the same rules at their own root):
-/// human-only commands, protected paths. The first block wins. The plugin API and unknown-event checks apply to every hook event,
+/// each agent worktree under it (<c>.claude/worktrees/*</c>, a full checkout whose copies get the same rules at their own root), and
+/// any other checkout of a Lockflight project the call writes into (<see cref="OtherProjectRoots"/>, such as a worktree in /tmp):
+/// human-only commands, protected paths, the user's install (<c>~/.lockflight</c>). The first block wins. The plugin API and unknown-event checks apply to every hook event,
 /// so they stay in <see cref="HookCommand"/>, ahead of all of these.
 /// </summary>
 internal static class GuardRules
@@ -20,7 +21,7 @@ internal static class GuardRules
 
     /// <summary>The rules that judge the call at each root, built for one invocation.</summary>
     public static IReadOnlyList<IGuardRule> PerRoot(CliContext context, DirectoryReads reads) =>
-        [new HumanOnlyCommandRule(), new ProtectedPathRule(context.Error, context.Environment, reads)];
+        [new HumanOnlyCommandRule(), new ProtectedPathRule(context.Error, context.Environment, reads), new UserInstallRule(context.Environment)];
 
     public static async Task<HookDecision> DecideAsync(HookRequest input, Manifest manifest, CliContext context, DirectoryReads reads, CancellationToken cancellationToken)
     {
@@ -36,7 +37,7 @@ internal static class GuardRules
             return atRoot.ToDecision();
         }
 
-        foreach (string worktree in AgentWorktrees.Under(manifest.Root))
+        foreach (string worktree in AgentWorktrees.Under(manifest.Root).Concat(OtherProjectRoots.Of(project, context.Environment.HomeDirectory())))
         {
             if (await FirstBlockAsync(perRoot, new GuardFacts(input, manifest with { Root = worktree }), cancellationToken) is GuardBlock inWorktree)
             {

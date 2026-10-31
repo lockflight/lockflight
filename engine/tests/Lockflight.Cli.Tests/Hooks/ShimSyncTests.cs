@@ -4,6 +4,7 @@ using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hooks.Adapters;
 using Lockflight.Cli.Hooks.Requests;
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Linking;
 
 namespace Lockflight.Cli.Tests.Hooks;
@@ -73,6 +74,27 @@ public sealed partial class ShimSyncTests
         Assert.Contains($"record=\"$root/{LinkCommand.RelativeBinDirectory}/{EngineRecord.FileName}\"", Shim.Value, StringComparison.Ordinal);
 
     [Fact]
+    public async Task TheShimRecognisesTheRefusalOfAnEngineThatSpeaksAnotherHookApi()
+    {
+        Match refusal = HookApiRefusalCase().Match(Shim.Value);
+        DirectoryInfo project = Directory.CreateTempSubdirectory("lockflight-shim-api-");
+        try
+        {
+            File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 1\n");
+
+            (_, _, string error) = await TestConsole.RunAsync(
+                ["hook", "pre-tool-use"], "{}", project.FullName, new Dictionary<string, string> { [EnvironmentVariables.PluginApi] = "99" });
+
+            Assert.True(refusal.Success, "the shim's hook API case was not found");
+            Assert.StartsWith(refusal.Groups["text"].Value, error, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TempDirectories.DeleteRecursively(project);
+        }
+    }
+
+    [Fact]
     public async Task TheShimRecognisesTheRefusalOfAnEngineThatDoesNotKnowAnEvent()
     {
         Match refusal = UnknownEventRefusalCase().Match(Shim.Value);
@@ -84,7 +106,7 @@ public sealed partial class ShimSyncTests
             (_, _, string error) = await TestConsole.RunAsync(["hook", "not-an-event"], "{}", project.FullName);
 
             Assert.True(refusal.Success, "the shim's unknown-event case was not found");
-            Assert.Contains(refusal.Groups["text"].Value, error, StringComparison.Ordinal);
+            Assert.StartsWith(refusal.Groups["text"].Value, error, StringComparison.Ordinal);
         }
         finally
         {
@@ -132,6 +154,9 @@ public sealed partial class ShimSyncTests
     [GeneratedRegex(@"grep -(?<flags>[A-Za-z]+) -e '(?<pattern>[^']*)'")]
     private static partial Regex DevelopmentGrep();
 
-    [GeneratedRegex(@"case ""\$refusal"" in \*""(?<text>[^""]+)""\*\)")]
+    [GeneratedRegex(@"case ""\$status:\$refusal"" in\s+""2:(?<text>[^""]+)""\*\)")]
     private static partial Regex UnknownEventRefusalCase();
+
+    [GeneratedRegex(@"""2:(?<text>lockflight: the plugin speaks hook API [^""]*)""\*\)")]
+    private static partial Regex HookApiRefusalCase();
 }

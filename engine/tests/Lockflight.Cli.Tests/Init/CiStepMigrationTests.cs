@@ -92,6 +92,17 @@ public sealed class CiStepMigrationTests
         Assert.Null(CiStepMigration.Migrate(edited));
     }
 
+    [Theory]
+    [InlineData("azure", "BASE=$(git merge-base HEAD \"origin/$target\")", "BASE=$(git merge-base HEAD \"origin/$target\" || true)")]
+    [InlineData("gitlab", "BASE=\"$CI_MERGE_REQUEST_DIFF_BASE_SHA\" ;;", "BASE=\"${CI_MERGE_REQUEST_DIFF_BASE_SHA}\" ;;")]
+    public void AHandEditedPullRequestBaseIsLeftAlone(string platform, string written, string edited)
+    {
+        string legacy = File.ReadAllText(Path.Combine(CasesDirectory(), $"{platform}.yml"));
+        Assert.Contains(written, legacy, StringComparison.Ordinal);
+
+        Assert.Null(CiStepMigration.Migrate(legacy.Replace(written, edited, StringComparison.Ordinal)));
+    }
+
     [Fact]
     public void AStepWithOnlyOneMarkerIsLeftAlone()
     {

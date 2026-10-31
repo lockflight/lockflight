@@ -545,7 +545,7 @@ file is not seen.
 | `lockflight baseline deps` | current vulnerable-package advisories | `.lockflight/baselines/vulnerable-packages.json` |
 | `lockflight baseline suppressions` | the suppressions the branch adds since it left the default branch, by file and rule, added to those accepted before | `.lockflight/baselines/suppressions.json` |
 | `.gitleaksignore` | known false-positive secrets (gitleaks' own format) | repository root |
-| written by a person | test-assembly code the CI judge's host-tampering check may accept (a fixture that starts a process, writes a file), one id per finding as the judge's evidence names it (`<assembly>\|<kind>\|<Type::Method>\|<member>`), as `{ "schema": "lockflight.baseline.host-tampering/v1", "findings": [ … ] }` | `.lockflight/baselines/host-tampering.json` |
+| written by a person | test-assembly code the CI judge's host-tampering check may accept (a fixture that starts a process, writes a file), one id per finding as the judge's evidence names it (`<assembly>\|<kind>\|<Type::Method>\|<member>`), or every finding of its kind in one method (`<assembly>\|<kind>\|<Type::Method>`), so a method not written yet can be accepted (never a whole kind in an assembly, which would switch the check off for it), as `{ "schema": "lockflight.baseline.host-tampering/v1", "findings": [ … ] }` | `.lockflight/baselines/host-tampering.json` |
 
 ## Lifecycle commands (standard profile)
 

@@ -83,6 +83,23 @@ public sealed class EngineLockInUseTests : IDisposable
     }
 
     [Fact]
+    public async Task LinkInstalledRefusesWhileALocalDevelopmentLockExists()
+    {
+        Assert.SkipWhen(EngineRids.Current is null, "No released engine for this platform.");
+        WriteLock(new string('a', 64));
+        string fake = Path.Combine(UserInstall.ToolPath(home.FullName, "9.9.9"), EngineRids.ExecutableName(Rid));
+        Directory.CreateDirectory(Path.GetDirectoryName(fake)!);
+        File.WriteAllBytes(fake, Engine);
+        EngineLockFiles.Write(EngineLockFiles.LocalPath(root.FullName), new EngineLock("9.9.9", EngineLockChannel.Development, new string('5', 64), new Dictionary<string, string> { [Rid] = EngineHash }));
+
+        (ExitCode exitCode, _, string error) = await RunAsync(["link", "--installed"], EngineFile("x"));
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("links only the engine the committed .lockflight/engine.lock pins", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(LinkCommand.BinaryPath(root.FullName)));
+    }
+
+    [Fact]
     public async Task EngineInstallInstallsAndLinksExactlyTheLockedEngine()
     {
         Assert.SkipWhen(EngineRids.Current is null, "No released engine for this platform.");

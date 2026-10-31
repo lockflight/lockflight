@@ -144,6 +144,10 @@ internal sealed class InitCommand(CliContext context) : ICommand
 
     private static InstallLevel LevelOf(string option) => option == "--native" ? InstallLevel.Native : InstallLevel.CiOnly;
 
+    /// <summary>What init says when it leaves the engine as it is: in Claude Code, on a project that has a manifest.</summary>
+    private static string KeepsEngineNote =>
+        $"note: inside Claude Code, init on an existing project leaves the engine as it is (the pin, the engine lock and the linked engine): changing the engine changes the judge, so it is the user's step ({EngineCommand.UserInstall} update or engine install, in a separate terminal window)";
+
     private async Task<ExitCode> InitializeAsync(InitOptions init, CancellationToken cancellationToken)
     {
         // The pin init writes is this engine's version: a newer pin is refused below and an older one is raised to it.
@@ -176,7 +180,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
         if (init.SpecKitPreset is string requested && HumanOnlyCommands.RunsUnderAgent(context.Environment))
         {
             // The upgrade rewrites the team's protected Spec Kit skills and runs a preset from the directory named: a person's decision.
-            string line = $"cd {ShellQuoting.Quote(root)} && {EngineCommand.Linked} init --speckit-preset {ShellQuoting.Quote(Path.GetFullPath(requested, context.WorkingDirectory))}";
+            string line = $"cd {ShellQuoting.Quote(root)} && {InitNextSteps.EngineIn(root)} init --speckit-preset {ShellQuoting.Quote(Path.GetFullPath(requested, context.WorkingDirectory))}";
             await context.Error.WriteLineAsync($"lockflight: 'init --speckit-preset' upgrades the team's Spec Kit and is a person's decision, so it does not run inside a Claude Code session. Ask the user to {HumanOnlyCommands.OpenATerminalAndRun(line)}.");
             return ExitCode.HookBlock;
         }
@@ -203,6 +207,16 @@ internal sealed class InitCommand(CliContext context) : ICommand
             return await RefuseAsync($"the {Manifest.FileName} init would write does not load ({plannedLoad.Error?.Message}); nothing was written");
         }
 
+        // An agent may run init again (doctor's fixes add deny rules and the like), but the engine is the judge: in a project that
+        // has a manifest, init under Claude Code keeps the pin, writes no lock or install script, and links nothing.
+        bool keepsEngine = existingManifestText is not null && HumanOnlyCommands.RunsUnderAgent(context.Environment);
+        if (keepsEngine && ToolPin.ReadPin(root).Version is string kept)
+        {
+            // The CI default and the development-build note follow the engine the project keeps, not the one running init.
+            developmentPin = EngineVersion.IsDevelopmentBuild(kept);
+            ci = init.RequestedCi ?? CiTriggerDefault.For(kept);
+        }
+
         IReadOnlyList<string> globs = DefaultProtectedPaths.For(planned);
         string[] testFrameworks = [.. ProjectFiles.TestProjects(root).SelectMany(project => ProjectFiles.TargetFrameworks(root, project)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
         IReadOnlyList<string> dotnetChannels = DotnetChannels.For(testFrameworks);
@@ -210,7 +224,9 @@ internal sealed class InitCommand(CliContext context) : ICommand
         List<InitStep> steps =
         [
             await TransformAsync(root, Manifest.FileName, _ => (manifest.Content, manifest.Changed), write, cancellationToken),
-            await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, write, cancellationToken),
+            keepsEngine
+                ? new InitStep(ToolManifestWriter.RelativePathIn(root), FileOutcome.Unchanged)
+                : await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, write, cancellationToken),
             await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), write, cancellationToken),
         ];
         if (init.Level != InstallLevel.CiOnly)
@@ -218,7 +234,10 @@ internal sealed class InitCommand(CliContext context) : ICommand
             steps.Add(await TransformAsync(root, ClaudeMdBlock.FileName, existing => ClaudeMdBlock.IsCurrent(existing ?? string.Empty) ? (existing!, false) : (ClaudeMdBlock.Upsert(existing ?? string.Empty), true), write, cancellationToken));
         }
 
-        steps.AddRange(await EngineLockStepsAsync(root, write, cancellationToken));
+        if (!keepsEngine)
+        {
+            steps.AddRange(await EngineLockStepsAsync(root, write, cancellationToken));
+        }
         IReadOnlyList<string> predating = firstInit ? InitAdoption.PredatingFeatures(plan) : [];
         if (predating.Count > 0)
         {
@@ -271,7 +290,13 @@ internal sealed class InitCommand(CliContext context) : ICommand
 
         if (init.DryRun)
         {
-            return await DryRunAsync(root, plan, steps, proposals, manifest, predating);
+            ExitCode dryRun = await DryRunAsync(root, plan, steps, proposals, manifest, predating);
+            if (keepsEngine)
+            {
+                await context.Output.WriteLineAsync(KeepsEngineNote);
+            }
+
+            return dryRun;
         }
 
         foreach (InitStep step in steps)
@@ -296,7 +321,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
             }
             else
             {
-                manual.Add(InitAdoption.SpecKitLine(root, PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root)));
+                manual.Add(InitAdoption.SpecKitLine(root, PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root), init.Link ? EngineCommand.Linked : InitNextSteps.EngineIn(root)));
             }
         }
 
@@ -331,6 +356,12 @@ internal sealed class InitCommand(CliContext context) : ICommand
         }
 
         await context.Output.WriteLineAsync(Commit);
+        if (keepsEngine)
+        {
+            await context.Output.WriteLineAsync(KeepsEngineNote);
+            return ExitCode.Pass;
+        }
+
         if (!init.Link)
         {
             return ExitCode.Pass;
@@ -344,7 +375,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
                 : LockflightPresetRegistry.IsInstalled(root) ? SpecKitSetup.WithPreset
                 : SpecKitSetup.WithoutPreset;
             string? foundPreset = init.Profile == InitProfile.Standard && specKit != SpecKitSetup.WithPreset ? PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root) : null;
-            foreach (string line in InitNextSteps.For(init.Profile, specKit, foundPreset, init.Level))
+            foreach (string line in InitNextSteps.For(init.Profile, specKit, foundPreset, init.Level, InitNextSteps.EngineIn(root)))
             {
                 await context.Output.WriteLineAsync(line);
             }

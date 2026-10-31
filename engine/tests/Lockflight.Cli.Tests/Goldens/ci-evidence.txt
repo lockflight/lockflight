@@ -157,6 +157,13 @@
       "verdict": "PASS",
       "requirement": "required",
       "why": "class behaviour (interim): interim.changed in src/Shop/Price.cs"
+    },
+    {
+      "id": "policy",
+      "context": "lockflight/judge",
+      "verdict": "N/A",
+      "requirement": "off",
+      "why": "no lockflight.yaml on the base to compare with"
     }
   ],
   "contexts": {

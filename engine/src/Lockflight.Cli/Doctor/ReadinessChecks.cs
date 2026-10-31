@@ -183,10 +183,10 @@ internal static class ReadinessChecks
     private static DoctorCheck CheckPin(string root) => ToolPin.ReadPin(root) switch
     {
         { Status: ToolPinStatus.Unreadable, Problem: string problem } =>
-            new("tool pin", CheckStatus.Fail, problem, $"fix the file by hand (a person's edit: it is protected), then {EngineCommand.Name} init"),
+            new("tool pin", CheckStatus.Fail, problem, $"fix the file by hand (a person's edit: it is protected), then {EngineCommand.Name} init in your own terminal"),
         { Version: string pinned } when ToolPin.Matches(pinned, ToolPin.RunningVersion) => new("tool pin", CheckStatus.Pass, $"pinned {pinned}", null),
         { Version: string pinned } => new("tool pin", CheckStatus.Fail, $"pinned {pinned}, running {ToolPin.RunningVersion}", Relink(pinned)),
-        _ => new("tool pin", CheckStatus.Fail, "dotnet-tools.json does not pin lockflight.cli", $"{EngineCommand.Name} init"),
+        _ => new("tool pin", CheckStatus.Fail, "dotnet-tools.json does not pin lockflight.cli", $"{EngineCommand.Name} init, in your own terminal (inside Claude Code init leaves the engine pin as it is)"),
     };
 
     /// <summary>
