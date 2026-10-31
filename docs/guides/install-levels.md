@@ -41,11 +41,13 @@ engine is linked. A `.gitattributes` rule keeps it LF on Windows checkouts.
   refuses an extra one).
 - **Same checks on a linked engine.** The shim runs only the engine `lockflight link` linked for this user. It checks the
   hash record `link` wrote and the hash `.lockflight/engine.lock` pins, as the plugin's shim does.
-- **No engine: the hooks fail open.** With no linked engine and no lockdown, each hook does nothing. The deny rules and the
-  sandbox still apply to Claude Code's own tools, but there is no guard, no test lock and no Stop gate. This differs from the
-  plugin, whose shim blocks everything but reads and the restore command until the engine is there. Removing the linked
-  engine therefore turns the native guard off; the deny rules and the sandbox protect `.lockflight/bin/`, and CI judges either
-  way. A teammate who installs and links the engine (`dotnet tool restore && dotnet lockflight link`, or
+- **No engine: the hooks fail open, and say so.** With no linked engine and no lockdown, each hook does nothing but tell you,
+  at session start and at every stop, that Lockflight is off in this session. The deny rules and the sandbox still apply to
+  Claude Code's own tools, but there is no guard, no test lock and no Stop gate. This differs from the plugin, whose shim
+  blocks everything but reads and the restore command until the engine is there. Removing the linked engine therefore turns
+  the native guard off: the `Edit` deny rule covers Claude Code's file tools, and the sandbox (when you turn it on) covers
+  shell writes to `.lockflight/bin/`, but a command the guard does not parse (`find … -delete`, an interpreter) can still
+  remove it without the sandbox. CI judges either way. A teammate who installs and links the engine (`dotnet tool restore && dotnet lockflight link`, or
   `~/.lockflight/bin/lockflight engine install`) gets the guard. In a lockdown with no engine, only reading is allowed.
 - **Merging is safe.** The team's own hooks and settings are kept. Lockflight finds its own hooks by the shim path in their
   command, and running `init --native` again brings them up to date: one hook per event, in a group with the event's

@@ -203,6 +203,9 @@ internal sealed class InitCommand(CliContext context) : ICommand
             return await RefuseAsync($"the {Manifest.FileName} init would write does not load ({plannedLoad.Error?.Message}); nothing was written");
         }
 
+        // An agent may run init again (doctor's fixes add deny rules and the like), but the engine is the judge: in a project that
+        // has a manifest, init under Claude Code keeps the pin, writes no lock or install script, and links nothing.
+        bool keepsEngine = existingManifestText is not null && HumanOnlyCommands.RunsUnderAgent(context.Environment);
         IReadOnlyList<string> globs = DefaultProtectedPaths.For(planned);
         string[] testFrameworks = [.. ProjectFiles.TestProjects(root).SelectMany(project => ProjectFiles.TargetFrameworks(root, project)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
         IReadOnlyList<string> dotnetChannels = DotnetChannels.For(testFrameworks);
@@ -210,7 +213,9 @@ internal sealed class InitCommand(CliContext context) : ICommand
         List<InitStep> steps =
         [
             await TransformAsync(root, Manifest.FileName, _ => (manifest.Content, manifest.Changed), write, cancellationToken),
-            await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, write, cancellationToken),
+            keepsEngine
+                ? new InitStep(ToolManifestWriter.RelativePathIn(root), FileOutcome.Unchanged)
+                : await TransformAsync(root, ToolManifestWriter.RelativePathIn(root), ToolManifestWriter.Pin, write, cancellationToken),
             await TransformAsync(root, ".gitignore", existing => GitIgnoreUpdater.Update(existing, childRepositories), write, cancellationToken),
         ];
         if (init.Level != InstallLevel.CiOnly)
@@ -218,7 +223,10 @@ internal sealed class InitCommand(CliContext context) : ICommand
             steps.Add(await TransformAsync(root, ClaudeMdBlock.FileName, existing => ClaudeMdBlock.IsCurrent(existing ?? string.Empty) ? (existing!, false) : (ClaudeMdBlock.Upsert(existing ?? string.Empty), true), write, cancellationToken));
         }
 
-        steps.AddRange(await EngineLockStepsAsync(root, write, cancellationToken));
+        if (!keepsEngine)
+        {
+            steps.AddRange(await EngineLockStepsAsync(root, write, cancellationToken));
+        }
         IReadOnlyList<string> predating = firstInit ? InitAdoption.PredatingFeatures(plan) : [];
         if (predating.Count > 0)
         {
@@ -331,6 +339,13 @@ internal sealed class InitCommand(CliContext context) : ICommand
         }
 
         await context.Output.WriteLineAsync(Commit);
+        if (keepsEngine)
+        {
+            await context.Output.WriteLineAsync(
+                $"note: inside Claude Code, init on an existing project leaves the engine as it is (the pin, the engine lock and the linked engine): changing the engine changes the judge, so it is the user's step ({EngineCommand.UserInstall} update or engine install, in a separate terminal window)");
+            return ExitCode.Pass;
+        }
+
         if (!init.Link)
         {
             return ExitCode.Pass;

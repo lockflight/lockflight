@@ -49,6 +49,31 @@ public sealed class ShimEngineRecordTests : IDisposable
         Assert.Contains("dotnet tool restore && dotnet lockflight link", error, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("session-start")]
+    [InlineData("task-completed")]
+    public async Task AnOlderEnginesUnknownEventRefusalDoesNotBlockAnEventThatIsNotAToolCall(string hookEvent)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        RecordEngine(LinkEngine("#!/bin/sh\ncat > /dev/null\necho 'lockflight: this engine does not know the hook event it was called for' >&2\nexit 2\n"));
+
+        Assert.Equal(0, (await RunShimAsync("{}", hookEvent)).ExitCode);
+        Assert.Equal(2, (await RunShimAsync(Write)).ExitCode);
+    }
+
+    [Fact]
+    public async Task TheEnginesOutputOnAnEventThatIsNotAToolCallReachesClaudeCode()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        RecordEngine(LinkEngine("#!/bin/sh\ncat > /dev/null\necho '{\"systemMessage\":\"banner\"}'\nexit 0\n"));
+
+        (int exitCode, string output) = await RunShimOutputAsync("{}", "session-start");
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains("\"systemMessage\":\"banner\"", output, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ARecordChangedAfterAPassedCheckIsCheckedAgain()
     {
