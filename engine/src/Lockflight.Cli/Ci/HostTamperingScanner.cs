@@ -8,8 +8,10 @@ namespace Lockflight.Cli.Ci;
 /// <summary>
 /// A static scan of a built test assembly (or shared test-helper assembly) for the plain ways to forge a test result, read without
 /// loading it: module initializers, process-exit and unhandled-exception handlers, <c>Environment.Exit</c>/<c>FailFast</c>,
-/// starting processes, file writes in a method that does not visibly use the temporary folder, reflection in a method that names a
-/// test framework's or runner's types, and setting CI variables. A guardrail: an obfuscated call evades it. What it catches is
+/// starting processes, file writes in a method that does not visibly use a temporary folder, reflection in a method that names a
+/// test framework's or runner's types, and setting CI variables. A method visibly uses a temporary folder when it asks for one before
+/// it writes, or reads a field or calls a method of a type of the assembly that asks for one (a fixture that makes a temporary
+/// folder, a test class that writes into its fixture's folder); either way it must name no other folder of the run. A guardrail: an obfuscated call evades it. What it catches is
 /// listed, so the code is visible in the pull request's evidence.
 /// </summary>
 internal static partial class HostTamperingScanner
@@ -20,6 +22,9 @@ internal static partial class HostTamperingScanner
 
     private static readonly HashSet<byte> MethodOps = [0x27, 0x28, 0x6F, 0x73];
     private static readonly HashSet<byte> TwoByteMethodOps = [0x06, 0x07];
+
+    /// <summary><c>ldfld</c>, <c>ldflda</c>, <c>ldsfld</c>, <c>ldsflda</c>.</summary>
+    private static readonly HashSet<byte> FieldLoadOps = [0x7B, 0x7C, 0x7E, 0x7F];
 
     private static readonly (string Type, string[] Members, string Kind)[] Calls =
     [
@@ -46,6 +51,7 @@ internal static partial class HostTamperingScanner
             MetadataReader reader = pe.GetMetadataReader();
             string assembly = reader.GetString(reader.GetAssemblyDefinition().Name);
             List<TamperingFinding> findings = [];
+            List<(string Location, TamperingBody Body)> bodies = [];
             foreach (TypeDefinitionHandle typeHandle in reader.TypeDefinitions)
             {
                 TypeDefinition type = reader.GetTypeDefinition(typeHandle);
@@ -60,9 +66,17 @@ internal static partial class HostTamperingScanner
 
                     if (method.RelativeVirtualAddress != 0)
                     {
-                        findings.AddRange(ScanBody(reader, pe.GetMethodBody(method.RelativeVirtualAddress).GetILReader(), assembly, location));
+                        bodies.Add((location, Read(reader, pe.GetMethodBody(method.RelativeVirtualAddress).GetILReader(), Outermost(reader, typeHandle))));
                     }
                 }
+            }
+
+            // The types of the assembly that ask for a temporary folder, by their outermost type (an async method's state machine
+            // and a lambda's closure are nested types).
+            HashSet<TypeDefinitionHandle> tempOwners = [.. bodies.Where(body => body.Body.Calls.Any(IsTemp)).Select(body => body.Body.Owner)];
+            foreach ((string location, TamperingBody body) in bodies)
+            {
+                findings.AddRange(Findings(body, tempOwners, assembly, location));
             }
 
             return [.. findings.DistinctBy(finding => (finding.Id, finding.Member))];
@@ -90,10 +104,9 @@ internal static partial class HostTamperingScanner
         return method.GetCustomAttributes().Any(handle => AttributeName(reader, reader.GetCustomAttribute(handle).Constructor) == "System.Runtime.CompilerServices.ModuleInitializerAttribute");
     }
 
-    private static IEnumerable<TamperingFinding> ScanBody(MetadataReader reader, BlobReader il, string assembly, string location)
+    private static TamperingBody Read(MetadataReader reader, BlobReader il, TypeDefinitionHandle owner)
     {
-        List<(string Type, string Member)> calls = [];
-        List<string> strings = [];
+        TamperingBody body = new(owner, [], [], []);
         while (il.RemainingBytes > 0)
         {
             byte code = il.ReadByte();
@@ -102,7 +115,7 @@ internal static partial class HostTamperingScanner
                 byte second = il.ReadByte();
                 if (TwoByteMethodOps.Contains(second))
                 {
-                    calls.Add(Member(reader, MetadataTokens.EntityHandle(il.ReadInt32())));
+                    Call(reader, body, MetadataTokens.EntityHandle(il.ReadInt32()));
                 }
                 else
                 {
@@ -111,11 +124,18 @@ internal static partial class HostTamperingScanner
             }
             else if (MethodOps.Contains(code))
             {
-                calls.Add(Member(reader, MetadataTokens.EntityHandle(il.ReadInt32())));
+                Call(reader, body, MetadataTokens.EntityHandle(il.ReadInt32()));
+            }
+            else if (FieldLoadOps.Contains(code))
+            {
+                if (MetadataTokens.EntityHandle(il.ReadInt32()) is { Kind: HandleKind.FieldDefinition } field)
+                {
+                    body.Touched.Add(Outermost(reader, reader.GetFieldDefinition((FieldDefinitionHandle)field).GetDeclaringType()));
+                }
             }
             else if (code == StringOpCode)
             {
-                strings.Add(reader.GetUserString(MetadataTokens.UserStringHandle(il.ReadInt32() & 0x00FFFFFF)));
+                body.Strings.Add(reader.GetUserString(MetadataTokens.UserStringHandle(il.ReadInt32() & 0x00FFFFFF)));
             }
             else if (code == SwitchOpCode)
             {
@@ -127,6 +147,35 @@ internal static partial class HostTamperingScanner
             }
         }
 
+        return body;
+    }
+
+    private static void Call(MetadataReader reader, TamperingBody body, EntityHandle token)
+    {
+        body.Calls.Add(Member(reader, token));
+        EntityHandle method = token.Kind == HandleKind.MethodSpecification ? reader.GetMethodSpecification((MethodSpecificationHandle)token).Method : token;
+        if (method.Kind == HandleKind.MethodDefinition)
+        {
+            body.Touched.Add(Outermost(reader, reader.GetMethodDefinition((MethodDefinitionHandle)method).GetDeclaringType()));
+        }
+    }
+
+    private static bool IsTemp((string Type, string Member) call) => TempMembers.Contains(call.Member, StringComparer.Ordinal);
+
+    private static TypeDefinitionHandle Outermost(MetadataReader reader, TypeDefinitionHandle type)
+    {
+        while (reader.GetTypeDefinition(type).GetDeclaringType() is { IsNil: false } declaring)
+        {
+            type = declaring;
+        }
+
+        return type;
+    }
+
+    private static IEnumerable<TamperingFinding> Findings(TamperingBody body, HashSet<TypeDefinitionHandle> tempOwners, string assembly, string location)
+    {
+        List<(string Type, string Member)> calls = body.Calls;
+        List<string> strings = body.Strings;
         foreach ((string type, string member) in calls)
         {
             foreach ((string callType, string[] members, string kind) in Calls)
@@ -138,12 +187,15 @@ internal static partial class HostTamperingScanner
             }
         }
 
-        // A write counts as visibly temporary only when the method asks for the temporary folder before it, reads no
-        // environment variable (the CI's own files are named by variables) and names no other folder of the run.
-        int firstTemp = calls.FindIndex(call => TempMembers.Contains(call.Member, StringComparer.Ordinal));
+        // A write counts as visibly temporary only when the method asks for the temporary folder before it, or uses a type of the
+        // assembly that asks for one (its own, or a fixture's), reads no environment variable (the CI's own files are named by
+        // variables) and names no other folder of the run.
+        int firstTemp = calls.FindIndex(call => IsTemp(call));
         bool namesAnotherFolder = calls.Any(call => call is ("System.Environment", "GetEnvironmentVariable" or "GetEnvironmentVariables" or "ExpandEnvironmentVariables" or "get_CurrentDirectory")
             or ("System.IO.Directory", "GetCurrentDirectory") or ("System.AppContext", "get_BaseDirectory") or ("System.AppDomain", "get_BaseDirectory"));
-        foreach ((string type, string member) in calls.Where((call, index) => (firstTemp < 0 || index < firstTemp || namesAnotherFolder) && WriteTypes.Contains(call.Type, StringComparer.Ordinal)
+        bool usesATempOwner = body.Touched.Overlaps(tempOwners);
+        foreach ((string type, string member) in calls.Where((call, index) => (namesAnotherFolder || ((firstTemp < 0 || index < firstTemp) && !usesATempOwner))
+            && WriteTypes.Contains(call.Type, StringComparer.Ordinal)
             && WriteMembers.Any(prefix => call.Member.StartsWith(prefix, StringComparison.Ordinal)) && !call.Member.Contains("Read", StringComparison.Ordinal)))
         {
             yield return new TamperingFinding(assembly, "file-write", location, $"{type}.{member}");

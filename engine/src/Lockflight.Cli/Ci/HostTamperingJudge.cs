@@ -7,7 +7,8 @@ namespace Lockflight.Cli.Ci;
 /// Host tampering (<c>tests.hostTampering</c>): the findings in the head's and every red commit's test assemblies that the base's
 /// assemblies did not have and the base's <c>.lockflight/baselines/host-tampering.json</c> does not accept make the check
 /// NOT-EARNED, with each one listed; findings the base already had are listed as information, so old code in a fixture does not
-/// block. Forging a test result needs deliberate code of this kind, and this makes the plain forms of it visible.
+/// block. A baseline entry accepts the finding it names (<c>assembly|kind|Type::Method|member</c>) or, cut at a <c>|</c>, every
+/// finding under it: <c>assembly|kind</c> or <c>assembly|kind|Type::Method</c>, so a person can accept code that is not written yet. Forging a test result needs deliberate code of this kind, and this makes the plain forms of it visible.
 /// </summary>
 internal static class HostTamperingJudge
 {
@@ -30,8 +31,8 @@ internal static class HostTamperingJudge
         HashSet<string> atBase = [.. (baseListing?.Tampering ?? []).Select(finding => finding.Id)];
         HashSet<string> accepted = await AcceptedAsync(plan, cancellationToken);
         TamperingFinding[] all = [.. head.Tampering.Concat(cycles.SelectMany(cycle => cycle.Tampering)).DistinctBy(finding => (finding.Id, finding.Member))];
-        TamperingFinding[] added = [.. all.Where(finding => !atBase.Contains(finding.Id) && !accepted.Contains(finding.Id))];
-        TamperingFinding[] existing = [.. all.Where(finding => atBase.Contains(finding.Id) || accepted.Contains(finding.Id))];
+        TamperingFinding[] added = [.. all.Where(finding => !atBase.Contains(finding.Id) && !Accepts(accepted, finding))];
+        TamperingFinding[] existing = [.. all.Where(finding => atBase.Contains(finding.Id) || Accepts(accepted, finding))];
         return added.Length > 0
             ? new TamperingJudgement(CheckVerdict.NotEarned,
                 $"new code in the test assemblies that could tamper with the test host: {string.Join("; ", added.Take(MaxListed).Select(Describe))}"
@@ -41,6 +42,11 @@ internal static class HostTamperingJudge
                 existing.Length == 0 ? "no code in the test assemblies that could tamper with the test host" : $"nothing new; {existing.Length} findings the base already had or accepted",
                 added, existing);
     }
+
+    /// <summary>Whether a baseline entry names the finding, or a <c>|</c>-separated prefix of its id holding at least the assembly and kind.</summary>
+    public static bool Accepts(IReadOnlySet<string> accepted, TamperingFinding finding) =>
+        accepted.Contains(finding.Id)
+        || accepted.Any(entry => entry.Contains('|', StringComparison.Ordinal) && finding.Id.StartsWith(entry + "|", StringComparison.Ordinal));
 
     public static string Describe(TamperingFinding finding) => $"{finding.Kind} in {finding.Location} ({finding.Member})";
 
