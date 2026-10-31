@@ -1,6 +1,7 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Routing;
+using Lockflight.Cli.Workspace;
 
 namespace Lockflight.Cli.Ci;
 
@@ -20,7 +21,15 @@ internal static class JudgePlanner
         EnvironmentVariables.PluginApi, EnvironmentVariables.PluginMinimumEngine, EnvironmentVariables.PluginRoot, EnvironmentVariables.Mascot,
     ];
 
-    public static async Task<JudgePlanning> PlanAsync(JudgeInputs inputs, EnvironmentReader environment, CancellationToken cancellationToken)
+    public static Task<JudgePlanning> PlanAsync(JudgeInputs inputs, EnvironmentReader environment, CancellationToken cancellationToken) =>
+        PlanAsync(inputs, environment, shell: null, cancellationToken);
+
+    /// <param name="shell">
+    /// The workspace shell's policy for this unit repository, read from its clone; null for a repository that is no unit. Its
+    /// routing is merged with the unit's as <c>gate run --shell</c> merges it (<see cref="ShellPolicyOverlay"/>), the stricter
+    /// value winning, so the class and its check levels are never lower than the shell's policy makes them.
+    /// </param>
+    public static async Task<JudgePlanning> PlanAsync(JudgeInputs inputs, EnvironmentReader environment, ShellPolicy? shell, CancellationToken cancellationToken)
     {
         string root = inputs.Root;
         string policyCommit = inputs.Base ?? inputs.Head;
@@ -65,7 +74,7 @@ internal static class JudgePlanner
         RequirementSet requirements = InterimRequirements.For(classification.Classification.Class, classification.Shape);
         if (inputs.Event == JudgeEvent.PullRequest && inputs.Base is not null)
         {
-            JudgeRouting routing = await RouteAsync(inputs, policy, cancellationToken);
+            JudgeRouting routing = await RouteAsync(inputs, RoutingPolicyOf(inputs, policy, shell), cancellationToken);
             if (routing is not { Class: InterimClassification routed, Requirements: RequirementSet routedRequirements })
             {
                 return JudgePlanning.Failed(ExitCode.Error, routing.Error!);
@@ -77,7 +86,34 @@ internal static class JudgePlanner
         IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.ProductionChanged, inputs.Event);
         IReadOnlyList<string> ignored = await IgnoredAsync(root, inputs.Head, environment, cancellationToken);
         JudgePlan plan = new(inputs, policy, mergeBase, others, reds, classification, requirements, levels, Steps(inputs, mergeBase, reds, levels), changed, ignored);
+        if (inputs.Event == JudgeEvent.PullRequest && inputs.Base is not null && policy.Manifest is Manifest baseManifest)
+        {
+            Dictionary<CheckId, CheckLevel> withPolicy = new(levels) { [CheckId.Policy] = CheckLevel.Required };
+            (IReadOnlyList<string> loosened, string? notCompared) = await LoosenedAsync(root, inputs.Head, baseManifest, cancellationToken);
+            plan = plan with { Levels = withPolicy, Loosened = loosened, PolicyNotCompared = notCompared };
+        }
+
         return JudgePlanning.Planned(plan);
+    }
+
+    /// <summary>
+    /// How the head's <c>lockflight.yaml</c> is looser than the base's: removed counts as loosened (later pull requests would be
+    /// judged by the defaults). One that does not parse is not compared: it may be written for a newer engine (a new key, a raised
+    /// <c>requiresEngine</c>, which is not checked here), so the check is NOT-EARNED, not FAIL.
+    /// </summary>
+    private static async Task<(IReadOnlyList<string> Loosened, string? NotCompared)> LoosenedAsync(
+        string root, string head, Manifest baseManifest, CancellationToken cancellationToken)
+    {
+        if (await JudgeGit.ShowFileAsync(root, head, Manifest.FileName, cancellationToken) is not string text)
+        {
+            return ([$"{Manifest.FileName} removed"], null);
+        }
+
+        ManifestParser parser = new(root, $"{Manifest.FileName} at {CommitIds.Short(head)}") { Engine = ManifestParser.LocalBuildVersion };
+        ManifestLoadResult parsed = parser.Parse(text);
+        return parsed.Manifest is Manifest headManifest
+            ? (PolicyLoosening.Between(baseManifest, headManifest), null)
+            : ([], $"the head's {Manifest.FileName} could not be compared with the base's: {parsed.Error?.Describe()}; a person checks what it changes");
     }
 
     /// <summary>
@@ -87,10 +123,8 @@ internal static class JudgePlanner
     /// The pull request's <c>lockflight:class/*</c> labels are not passed in yet: the action has no input for them, so CI does
     /// not read labels (docs/guides/risk-routing.md says so).
     /// </summary>
-    private static async Task<JudgeRouting> RouteAsync(JudgeInputs inputs, BasePolicy policy, CancellationToken cancellationToken)
+    private static async Task<JudgeRouting> RouteAsync(JudgeInputs inputs, RoutingPolicy routing, CancellationToken cancellationToken)
     {
-        string preset = RoutingPresetNames.ToName((policy.Manifest?.Routing ?? RoutingSettings.Default).Preset);
-        RoutingPolicy routing = RoutingPolicy.From(policy.Manifest, new PolicySource(inputs.Base!, policy.Commit, policy.ManifestBlob, preset));
         ChangeSetReading reading = await ChangeSetReader.ReadAsync(inputs.Root, inputs.Base!, inputs.Head, cancellationToken);
         if (reading.ChangeSet is not ChangeSet changeSet)
         {
@@ -99,6 +133,14 @@ internal static class JudgePlanner
 
         RaiseReading raises = await RaiseReader.ReadAsync(inputs.Root, changeSet, new RaiseInputs(inputs.Branch, Labels: [], Raise: null), cancellationToken);
         return Route(changeSet, routing, raises);
+    }
+
+    /// <summary>The base branch's routing policy, made at least as strict as the workspace shell's for a unit repository.</summary>
+    private static RoutingPolicy RoutingPolicyOf(JudgeInputs inputs, BasePolicy policy, ShellPolicy? shell)
+    {
+        Manifest? manifest = shell is not null && policy.Manifest is Manifest unit ? ShellPolicyOverlay.Apply(unit, shell) : policy.Manifest;
+        string preset = RoutingPresetNames.ToName((manifest?.Routing ?? RoutingSettings.Default).Preset);
+        return RoutingPolicy.From(manifest, new PolicySource(inputs.Base!, policy.Commit, policy.ManifestBlob, preset));
     }
 
     /// <summary>The routing result for a change set that was read and its raises; an error when the raises could not be read.</summary>

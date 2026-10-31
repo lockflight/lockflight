@@ -18,9 +18,10 @@ public sealed class CiPipelineTests
         string pipeline = JobFile(platform, OneChannel, CiTrigger.PullRequest);
 
         Assert.Contains($"for file in {CiShellScripts.PolicyFiles}; do", pipeline, StringComparison.Ordinal);
-        Assert.Contains("git checkout \"$BASE\" -- \"$file\"; else rm -f \"$file\"; fi", pipeline, StringComparison.Ordinal);
+        Assert.Contains("git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi", pipeline, StringComparison.Ordinal);
         Assert.Contains($"for directory in {CiShellScripts.PolicyDirectories}; do", pipeline, StringComparison.Ordinal);
-        Assert.Contains("git checkout \"$BASE\" -- \"$directory\"", pipeline, StringComparison.Ordinal);
+        Assert.Contains("git -c core.quotePath=false ls-tree -r --name-only \"$BASE\" -- \"$directory\" | while IFS= read -r file;", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("git checkout \"$BASE\" -- \"$directory\"", pipeline, StringComparison.Ordinal);
         Assert.Contains($"style={CiShellScripts.StylePattern}", pipeline, StringComparison.Ordinal);
         Assert.Contains("{ git ls-tree -r --name-only \"$BASE\"; git ls-files; }", pipeline, StringComparison.Ordinal);
     }
@@ -57,7 +58,8 @@ public sealed class CiPipelineTests
 
         Assert.Contains("--head \"$HEAD_COMMIT\"", pipeline, StringComparison.Ordinal);
         Assert.Contains("${BITBUCKET_BRANCH:+--branch \"$BITBUCKET_BRANCH\"}", pipeline, StringComparison.Ordinal);
-        Assert.Contains("lockflight ci report --evidence artifacts/lockflight-evidence --head \"$HEAD_COMMIT\" --context gates", pipeline, StringComparison.Ordinal);
+        Assert.Contains("lockflight ci report --evidence artifacts/lockflight-evidence --head \"$HEAD_COMMIT\" ${BASE:+--base \"$BASE\" --event \"$EVENT\" --platform bitbucket}", pipeline, StringComparison.Ordinal);
+        Assert.Contains("--context gates", pipeline, StringComparison.Ordinal);
         Assert.Contains("--context lockflight/judge", pipeline, StringComparison.Ordinal);
         Assert.Contains("- parallel:", pipeline, StringComparison.Ordinal);
         Assert.DoesNotContain("ANTHROPIC_API_KEY", pipeline, StringComparison.Ordinal);
@@ -66,12 +68,22 @@ public sealed class CiPipelineTests
 
     [Theory]
     [InlineData("azure", "SYSTEM_PULLREQUEST_TARGETBRANCH")]
-    [InlineData("azure", "git merge-base HEAD \"origin/$target\"")]
+    [InlineData("azure", "BASE=$(git rev-parse \"origin/$target\")")]
     [InlineData("bitbucket", "BITBUCKET_PR_DESTINATION_BRANCH")]
     [InlineData("bitbucket", "BASE=$(git rev-parse \"origin/$PULL_REQUEST\")")]
-    [InlineData("gitlab", "BASE=\"$CI_MERGE_REQUEST_DIFF_BASE_SHA\"")]
+    [InlineData("gitlab", "BASE=$(git rev-parse \"origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\")")]
     public void EachPlatformFindsTheBaseFromItsOwnPullRequestVariables(string platform, string expected) =>
         Assert.Contains(expected, JobFile(platform, OneChannel, CiTrigger.PullRequest), StringComparison.Ordinal);
+
+    [Theory]
+    [MemberData(nameof(OtherPlatforms))]
+    public void NoPlatformTakesThePolicyFromTheMergeBase(string platform)
+    {
+        string pipeline = JobFile(platform, OneChannel, CiTrigger.PullRequest);
+
+        Assert.DoesNotContain("CI_MERGE_REQUEST_DIFF_BASE_SHA", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("git merge-base", pipeline, StringComparison.Ordinal);
+    }
 
     [Theory]
     [MemberData(nameof(OtherPlatforms))]

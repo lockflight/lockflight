@@ -14,7 +14,7 @@ internal sealed class ManifestParser(string root, string path)
     private const string KnownKeys = "version, requiresEngine, protected, stop, gates, routing, approvals, autonomy, units, shell, review, ci";
 
     /// <summary>The version a local build reports (<c>0.0.0-local</c>), which is not held to <c>requiresEngine</c>.</summary>
-    private const string LocalBuildVersion = "0.0.0-local";
+    public const string LocalBuildVersion = "0.0.0-local";
 
     private readonly ManifestErrors errors = new(path);
 

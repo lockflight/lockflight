@@ -12,8 +12,11 @@ internal static class CiShellScripts
     public const string GitleaksVersion = "8.30.1";
     public const string GitleaksSha256 = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb";
 
-    /// <summary>The single policy files restored from the base commit, as the GitHub workflow's loop lists them.</summary>
-    public const string PolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .lockflight/engine.lock .gitleaks.toml .gitleaksignore nuget.config NuGet.config";
+    /// <summary>
+    /// The single policy files restored from the base commit, as the pipelines' loop lists them: the three spellings NuGet reads
+    /// on a case-sensitive file system each, so a PR's own <c>NuGet.Config</c> next to the base's <c>nuget.config</c> goes.
+    /// </summary>
+    public const string PolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .lockflight/engine.lock .gitleaks.toml .gitleaksignore nuget.config NuGet.config NuGet.Config";
 
     /// <summary>The policy directories restored from the base commit as a whole: accepted baselines and the vendored install script.</summary>
     public const string PolicyDirectories = ".lockflight/baselines .lockflight/ci";
@@ -48,16 +51,22 @@ internal static class CiShellScripts
     /// <summary>Where <see cref="SdkImage"/> keeps .NET; extra channels are installed next to its SDK.</summary>
     private const string SdkImageDotnetRoot = "/usr/share/dotnet";
 
-    /// <summary>Restores the policy from <c>$BASE</c>: a PR cannot loosen the checks that judge it.</summary>
+    /// <summary>
+    /// Restores the policy from <c>$BASE</c>: a PR cannot loosen the checks that judge it. The policy files are the committed bytes
+    /// (<c>git show</c>, as the GitHub action reads them), so a checkout's line-ending conversion cannot change the install script
+    /// CI hashes against the lock; a file is removed first, so a symbolic link the pull request put there is replaced, not written through.
+    /// </summary>
     public const string RestorePolicy = $$"""
         for file in {{PolicyFiles}}; do
-          if git cat-file -e "$BASE:$file" 2>/dev/null; then git checkout "$BASE" -- "$file"; else rm -f "$file"; fi
+          if git cat-file -e "$BASE:$file" 2>/dev/null; then mkdir -p "$(dirname "$file")"; rm -f "$file"; git show "$BASE:$file" > "$file"; else rm -f "$file"; fi
         done
         # Accepted baselines (known-failing tests, warnings, advisories) are policy too: a PR cannot accept its own failures. So is
         # the vendored engine install script: CI runs the base commit's copy, checked against the base commit's lock.
         for directory in {{PolicyDirectories}}; do
           rm -rf "$directory"
-          if git cat-file -e "$BASE:$directory" 2>/dev/null; then git checkout "$BASE" -- "$directory"; fi
+          if git cat-file -e "$BASE:$directory" 2>/dev/null; then
+            git -c core.quotePath=false ls-tree -r --name-only "$BASE" -- "$directory" | while IFS= read -r file; do mkdir -p "$(dirname "$file")"; rm -f "$file"; git show "$BASE:$file" > "$file"; done
+          fi
         done
         # Code-style and analyzer config (nested files too) decides what the build and format gates enforce: a PR is
         # judged by the base's rules, and its own rule changes apply after the merge.
@@ -95,21 +104,28 @@ internal static class CiShellScripts
           locked=$(sed -n 's/^  "version":[[:space:]]*"\([^"]*\)".*/\1/p' .lockflight/engine.lock)
           if [ -n "$pinned" ] && [ "$pinned" != "$locked" ]; then echo "lockflight: $manifest pins $pinned but .lockflight/engine.lock pins $locked; they must agree" >&2; exit 1; fi
           set --
-          if [ -z "${LOCKFLIGHT_NUGET_FEED:-}" ]; then for file in nuget.config NuGet.config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done; fi
+          if [ -z "${LOCKFLIGHT_NUGET_FEED:-}" ]; then for file in nuget.config NuGet.config NuGet.Config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done; fi
           sh .lockflight/ci/install.sh --lock .lockflight/engine.lock --dir "$LOCKFLIGHT_TEMP/lockflight" "$@"
           # A pull request that changes the lock: the proposed lock must match the hashes its release published, and where the
           # gh CLI has a token (GitHub) the release's attestation must verify. The reviewer reads "matches release vX".
           base="${BASE:-${LOCKFLIGHT_BASE:-}}"
           if [ -z "$base" ] && [ "${GITHUB_EVENT_NAME:-}" = pull_request ]; then base=$(git rev-parse --verify --quiet 'HEAD^1' || true); fi
           if [ -n "$base" ] && git cat-file -e "$base:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "HEAD:.lockflight/engine.lock" 2>/dev/null \
-            && ! git diff --quiet "$base" HEAD -- .lockflight/engine.lock; then
+            && ! git diff --quiet "$base"...HEAD -- .lockflight/engine.lock; then
             git show HEAD:.lockflight/engine.lock > "$LOCKFLIGHT_TEMP/proposed-engine.lock"
-            "$LOCKFLIGHT_TEMP/lockflight/lockflight" engine verify-lock "$LOCKFLIGHT_TEMP/proposed-engine.lock" ${GH_TOKEN:+--attestation}
+            git show "$base:.lockflight/engine.lock" > "$LOCKFLIGHT_TEMP/base-engine.lock"
+            # The pull request's own install script must be the one its lock pins: CI runs that script once it is merged.
+            if ! git show HEAD:.lockflight/ci/install.sh > "$LOCKFLIGHT_TEMP/proposed-install.sh" 2>/dev/null; then echo "lockflight: the changed .lockflight/engine.lock comes without .lockflight/ci/install.sh" >&2; exit 1; fi
+            "$LOCKFLIGHT_TEMP/lockflight/lockflight" engine verify-lock "$LOCKFLIGHT_TEMP/proposed-engine.lock" --base "$LOCKFLIGHT_TEMP/base-engine.lock" --script "$LOCKFLIGHT_TEMP/proposed-install.sh" ${GH_TOKEN:+--attestation}
           fi
+          # A pull request that removes the lock would have CI install the engine by version alone once it is merged.
+          if [ -n "$base" ] && git cat-file -e "$base:.lockflight/engine.lock" 2>/dev/null && ! git cat-file -e "HEAD:.lockflight/engine.lock" 2>/dev/null; then echo "lockflight: this pull request removes .lockflight/engine.lock, which pins the engine by hash; without it CI would install the engine by version only" >&2; exit 1; fi
         else
+          # The first lock (the move from a 0.2 tool pin) is judged by the base's 0.2 engine, which cannot check it against its release.
+          if git cat-file -e "HEAD:.lockflight/engine.lock" 2>/dev/null; then echo "lockflight: WARNING: this pull request adds the first .lockflight/engine.lock, which CI on this platform does not check against its release; run 'lockflight engine verify-lock .lockflight/engine.lock' before you accept it" >&2; fi
           if [ -z "$pinned" ]; then echo "lockflight: neither .lockflight/engine.lock nor $manifest pins the engine; run lockflight init and commit the pin" >&2; exit 1; fi
           config=""
-          for file in nuget.config NuGet.config; do if [ -f "$file" ]; then config="$PWD/$file"; fi; done
+          for file in nuget.config NuGet.config NuGet.Config; do if [ -f "$file" ]; then config="$PWD/$file"; fi; done
           (cd "$LOCKFLIGHT_TEMP" && dotnet tool install Lockflight.Cli --tool-path "$LOCKFLIGHT_TEMP/lockflight" --version "$pinned" ${config:+--configfile "$config"})
         fi
         # lockflight:install-engine:end
@@ -203,7 +219,7 @@ internal static class CiShellScripts
 
     /// <summary>
     /// A report step: installs the engine the base pins and runs <c>lockflight ci report</c> for <paramref name="statusContext"/>
-    /// over the judge step's evidence, as data. A pull request that commits files where the evidence goes is an ERROR (its files
+    /// over the judge step's evidence, as data, re-planning the run from git to check the evidence's levels. A pull request that commits files where the evidence goes is an ERROR (its files
     /// could not be told from the judge's). The <c>gates</c> step fails with its verdict; the <c>lockflight/judge</c> step only when
     /// the repository variable <c>LOCKFLIGHT_JUDGE_REQUIRED</c> is <c>true</c>, since the platform has one build status for the
     /// whole pipeline, not one per step.
@@ -215,7 +231,8 @@ internal static class CiShellScripts
               exit 4
             fi
             code=0
-            lockflight ci report --evidence {{EvidenceDirectory}} --head "$HEAD_COMMIT" --context {{statusContext}} --out {{VerdictDirectory}}/{{statusContext.Replace('/', '-')}} || code=$?
+            # With the base, the report re-plans the run from git and refuses evidence whose policy, class or check levels disagree.
+            lockflight ci report --evidence {{EvidenceDirectory}} --head "$HEAD_COMMIT" ${BASE:+--base "$BASE" --event "$EVENT" --platform bitbucket} ${BITBUCKET_BRANCH:+--branch "$BITBUCKET_BRANCH"} --context {{statusContext}} --out {{VerdictDirectory}}/{{statusContext.Replace('/', '-')}} || code=$?
             {{(statusContext == "gates" ? "exit \"$code\"" : """
             if [ "$code" -ne 0 ] && [ "${LOCKFLIGHT_JUDGE_REQUIRED:-}" != "true" ]; then
               echo "lockflight/judge is advisory in this pipeline (exit $code); set the repository variable LOCKFLIGHT_JUDGE_REQUIRED to 'true' to make it fail the build"

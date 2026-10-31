@@ -12,6 +12,8 @@ namespace Lockflight.Cli.Ci;
 /// (<c>verdict.json</c>), the PR comment (<c>comment.md</c>, within GitHub's limit) and the job summary (<c>summary.md</c>). The exit
 /// code is the verdict of <c>--context</c> (<c>gates</c> or <c>lockflight/judge</c>), else of the whole run. A missing judge
 /// artifact is NOT-EARNED ("the judge did not finish"); evidence about another head is ERROR; a review about another head is ignored.
+/// With <c>--base</c> (the target branch's tip, checked out, and the head fetched) the report re-plans the run from git and refuses
+/// evidence whose policy, engine, event, class, red commits or check levels disagree with it (<see cref="EvidenceCrossCheck"/>).
 /// </summary>
 internal sealed class CiReportCommand(CliContext context) : ICommand
 {
@@ -20,12 +22,16 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     public const string HeadOption = "--head";
     public const string ContextOption = "--context";
     public const string OutOption = "--out";
+    public const string BaseOption = "--base";
+    public const string BranchOption = "--branch";
+    public const string EventOption = "--event";
+    public const string PlatformOption = "--platform";
 
     public const string VerdictFileName = "verdict.json";
     public const string CommentFileName = "comment.md";
     public const string SummaryFileName = "summary.md";
 
-    /// <summary>The review job's result file the report joins: <c>lockflight.ci-review/v1</c>.</summary>
+    /// <summary>The review job's result file the report joins: <c>lockflight.ci-review/v1</c> (<see cref="CiReviewResult"/>).</summary>
     public const string ReviewFileName = "review-result.json";
 
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
@@ -54,9 +60,46 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             only = parsed;
         }
 
-        JsonObject verdict = Join(Read(Path.GetFullPath(Path.Combine(evidenceDirectory, CiEvidence.FileName), context.WorkingDirectory)), head,
-            options.Value(ReviewOption) is string review ? Read(Path.GetFullPath(Path.Combine(review, ReviewFileName), context.WorkingDirectory)) : null);
         string output = Path.GetFullPath(outDirectory, context.WorkingDirectory);
+        JsonObject? evidence = Read(Path.GetFullPath(Path.Combine(evidenceDirectory, CiEvidence.FileName), context.WorkingDirectory));
+        JsonObject verdict = Join(evidence, head,
+            options.Value(ReviewOption) is string review ? Read(Path.GetFullPath(Path.Combine(review, ReviewFileName), context.WorkingDirectory)) : null);
+        // Join returns the evidence itself only when it read it as the judge's; anything else is already an ERROR or NOT-EARNED.
+        if (options.Value(BaseOption) is string baseCommit && ReferenceEquals(verdict, evidence))
+        {
+            if (!CommitIds.IsFull(baseCommit) || JudgeEventNames.Parse(options.Value(EventOption) ?? "pr") is not JudgeEvent judgeEvent
+                || JudgePlatformNames.Parse(options.Value(PlatformOption) ?? JudgePlatformNames.ToName(JudgePlatform.GitHub)) is not JudgePlatform platform)
+            {
+                await context.Error.WriteLineAsync($"lockflight ci report: {BaseOption} must be a full commit id, {EventOption} pr, push or merge-group, {PlatformOption} {JudgePlatformNames.Accepted}");
+                return ExitCode.Config;
+            }
+
+            // A push without a usable previous commit was judged without a base: the policy step then names the head itself.
+            string? planBase = judgeEvent != JudgeEvent.PullRequest && baseCommit == head ? null : baseCommit;
+            JudgeInputs inputs = new(context.WorkingDirectory, head, planBase, options.Value(BranchOption), platform, judgeEvent, output, null, ReviewExpected: true);
+            // As the judge does in a CI clone: the pull request's own .gitattributes must not hide lines from routing.
+            if (platform != JudgePlatform.Local && await JudgeAttributes.NeutraliseAsync(context.WorkingDirectory, cancellationToken) is string attributesError)
+            {
+                await context.Error.WriteLineAsync($"lockflight ci report: {attributesError}");
+                return ExitCode.Error;
+            }
+
+            string? mismatch;
+            try
+            {
+                mismatch = await EvidenceCrossCheck.MismatchAsync(evidence!, inputs, context.Environment, cancellationToken);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or FormatException or JsonException or KeyNotFoundException)
+            {
+                mismatch = $"it does not have the expected shape ({exception.Message})";
+            }
+
+            if (mismatch is not null)
+            {
+                verdict = Missing(head, $"the judge's evidence does not match what the report works out from git: {mismatch}", CheckVerdict.Error);
+            }
+        }
+
         JsonFiles.Write(Path.Combine(output, VerdictFileName), verdict);
         string comment;
         string summary;
@@ -114,6 +157,11 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         if (evidence["head"]?.GetValue<string>() != head)
         {
             return Missing(head, $"the judge's evidence is about another head ({TerminalText.Clean(evidence["head"]?.GetValue<string>() ?? "none")}), not {head}: an artifact from another run", CheckVerdict.Error);
+        }
+
+        if (EvidenceShape.Problem(evidence) is string shape)
+        {
+            return Missing(head, $"the judge's evidence does not have the expected shape: {shape}", CheckVerdict.Error);
         }
 
         List<CheckResult> checks = [];
@@ -206,6 +254,11 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         if (review is null)
         {
             return check with { Verdict = CheckVerdict.Skipped, Why = "no review ran (no API key configured, a fork, or the review job was skipped)" };
+        }
+
+        if (CiReviewResult.Problem(review) is string problem)
+        {
+            return check with { Verdict = CheckVerdict.Error, Why = $"the review's result is not {CiReviewResult.Schema}: {problem}" };
         }
 
         if (review["head"]?.GetValue<string>() != head)

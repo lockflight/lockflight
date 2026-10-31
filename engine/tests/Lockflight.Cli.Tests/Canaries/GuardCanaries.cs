@@ -35,6 +35,7 @@ internal static class GuardCanaries
             await BlockedAsync(scratch, "guard: bash -ce \"rm lockflight.yaml\" is blocked", BashCall("bash -ce \"rm lockflight.yaml\"", scratch), ProtectedPathRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "guard: sed -i on lockflight.yaml is blocked", BashCall("sed -i 's/version/v/' lockflight.yaml", scratch), ProtectedPathRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "guard: a Bash call of 'lockflight approve spec' is blocked", BashCall("lockflight approve spec", scratch), HumanOnlyCommandRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "guard: a Bash call of 'lockflight init --speckit-preset' is blocked", BashCall("lockflight init --speckit-preset /tmp/lockflight-canary-preset", scratch), HumanOnlyCommandRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "approve relay: a CronCreate that sends /lockflight:approve is blocked", Call("CronCreate", new JsonObject
             {
                 ["cron"] = "*/5 * * * *",
@@ -54,6 +55,8 @@ internal static class GuardCanaries
             await BlockedAsync(scratch, "relay guard: a Bash claude -p that sends /lockflight:amend is blocked",
                 BashCall("claude -p '/lockflight:amend OrderTests.ArchivesTheOrder --reason flaky'", scratch), SessionRelayRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "relay guard: a Write of .claude/scheduled_tasks.json is blocked", FileCall("Write", scratch.PathOf(".claude/scheduled_tasks.json"), scratch), SessionRelayRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "guard: a Bash copy over the user's engine (~/.lockflight/bin/lockflight) is blocked",
+                BashCall("cp src/ok.txt ~/.lockflight/bin/lockflight", scratch), UserInstallRule.RuleId, cancellationToken),
             await PlantedAsync(scratch, "guard: in lockdown, a Write in src/ is blocked", LockdownPolicy.RelativeMarkerPath, "lockdown\n", LockdownRule.RuleId, cancellationToken),
             await PlantedAsync(scratch, "guard: an engine other than the pinned one blocks a Write in src/", PinFile, StalePin, EnginePinRule.RuleId, cancellationToken),
         ];

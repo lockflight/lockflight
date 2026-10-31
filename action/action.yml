@@ -53,8 +53,12 @@ inputs:
     description: "judge with shell-clone: a read-only token for a private shell; only the clone step sees it"
     required: false
     default: ""
+  replan:
+    description: "report: 'true' to re-plan the run from git (base, head, event) and refuse evidence whose policy, class, red commits or check levels disagree"
+    required: false
+    default: "false"
   github-token:
-    description: "report: the token that posts the comment (needs pull-requests: write)"
+    description: "report: the token that posts the comment (needs pull-requests: write) and fetches the head to re-plan (contents: read)"
     required: false
     default: ${{ github.token }}
 
@@ -113,7 +117,7 @@ runs:
         # The pin, the install script and the package sources are read from that commit, never from the pull request's tree.
         work="$RUNNER_TEMP/lockflight-policy"
         rm -rf "$work" && mkdir -p "$work/.lockflight/ci" "$work/.config"
-        for file in .lockflight/engine.lock .lockflight/ci/install.sh dotnet-tools.json .config/dotnet-tools.json nuget.config NuGet.config; do
+        for file in .lockflight/engine.lock .lockflight/ci/install.sh dotnet-tools.json .config/dotnet-tools.json nuget.config NuGet.config NuGet.Config; do
           if git cat-file -e "$policy:$file" 2>/dev/null; then git show "$policy:$file" > "$work/$file"; fi
         done
         cd "$work"
@@ -122,14 +126,14 @@ runs:
           actual=$(sha256sum < .lockflight/ci/install.sh)
           if [ -z "$expected" ] || [ "${actual%% *}" != "$expected" ]; then echo "::error::.lockflight/ci/install.sh is not the script .lockflight/engine.lock pins"; exit 4; fi
           set --
-          for file in nuget.config NuGet.config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done
+          for file in nuget.config NuGet.config NuGet.Config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done
           sh .lockflight/ci/install.sh --lock .lockflight/engine.lock --dir "$RUNNER_TEMP/lockflight" "$@"
         else
           if [ -f .config/dotnet-tools.json ]; then manifest=.config/dotnet-tools.json; else manifest=dotnet-tools.json; fi
           version=$(tr -d '\r\n' < "$manifest" 2>/dev/null | grep -oiE '"lockflight\.cli"[[:space:]]*:[[:space:]]*\{[^}]*\}' | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]*)"$/\1/' || true)
           if [ -z "$version" ]; then echo "::error::the target branch pins no engine (.lockflight/engine.lock or a lockflight.cli tool pin); run lockflight init there and commit the pin"; exit 4; fi
           config=()
-          for file in nuget.config NuGet.config; do if [ -f "$file" ]; then config=(--configfile "$PWD/$file"); fi; done
+          for file in nuget.config NuGet.config NuGet.Config; do if [ -f "$file" ]; then config=(--configfile "$PWD/$file"); fi; done
           dotnet tool install Lockflight.Cli --tool-path "$RUNNER_TEMP/lockflight" --version "$version" "${config[@]}"
         fi
         echo "LF_LOCKFLIGHT=$RUNNER_TEMP/lockflight/lockflight" >> "$GITHUB_ENV"
@@ -142,11 +146,41 @@ runs:
         LF_HEAD: ${{ inputs.head }}
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
-        if [ -n "$LF_BASE" ] && git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null \
-          && ! git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then
-          git show "$LF_HEAD:.lockflight/engine.lock" > "$RUNNER_TEMP/proposed-engine.lock"
-          "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" ${GH_TOKEN:+--attestation}
+        if [ -z "$LF_BASE" ]; then exit 0; fi
+        if ! git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null; then
+          # Without the lock, CI would install the engine by version alone once this is merged.
+          if git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null; then
+            echo "::error::this pull request removes .lockflight/engine.lock, which pins the engine by hash; without it CI would install the engine by version only"; exit 1
+          fi
+          exit 0
         fi
+        if git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null; then
+          if git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then exit 0; fi
+          git show "$LF_HEAD:.lockflight/engine.lock" > "$RUNNER_TEMP/proposed-engine.lock"
+          git show "$LF_BASE:.lockflight/engine.lock" > "$RUNNER_TEMP/base-engine.lock"
+          # The pull request's vendored install script is compared with the lock it proposes: CI runs that script next time.
+          if ! git show "$LF_HEAD:.lockflight/ci/install.sh" > "$RUNNER_TEMP/proposed-install.sh" 2>/dev/null; then
+            echo "::error::the changed engine lock comes without .lockflight/ci/install.sh"; exit 1
+          fi
+          "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" --base "$RUNNER_TEMP/base-engine.lock" \
+            --script "$RUNNER_TEMP/proposed-install.sh" ${GH_TOKEN:+--attestation}
+          exit 0
+        fi
+        # The first lock (the pull request that moves a 0.2 tool pin to the lock): the base's engine predates verify-lock, so the
+        # GitHub Release's attested engine-hashes.json is downloaded and compared here.
+        if [ -z "$GH_TOKEN" ]; then echo "::warning::the first engine lock was not release-checked (no token); run lockflight engine verify-lock .lockflight/engine.lock before you accept it"; exit 0; fi
+        work="$RUNNER_TEMP/lockflight-first-lock"
+        rm -rf "$work" && mkdir -p "$work"
+        git show "$LF_HEAD:.lockflight/engine.lock" > "$work/engine.lock"
+        if ! git show "$LF_HEAD:.lockflight/ci/install.sh" > "$work/install.sh" 2>/dev/null; then echo "::error::the first engine lock comes without .lockflight/ci/install.sh"; exit 1; fi
+        version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9A-Za-z.-]*\)".*/\1/p' "$work/engine.lock" | head -n 1)
+        if [ -z "$version" ]; then echo "::error::the first engine lock names no version"; exit 1; fi
+        gh release download "v$version" --repo lockflight/lockflight --pattern engine-hashes.json --dir "$work/release" \
+          || { echo "::error::the first engine lock pins $version, and the GitHub Release v$version has no engine-hashes.json"; exit 1; }
+        gh attestation verify "$work/release/engine-hashes.json" --repo lockflight/lockflight --source-ref "refs/tags/v$version" \
+          --signer-workflow lockflight/lockflight/.github/workflows/release-packages.yml > /dev/null \
+          || { echo "::error::the release workflow's attestation of engine-hashes.json for v$version did not verify"; exit 1; }
+        python3 -I "$GITHUB_ACTION_PATH/first-lock-check.py" "$work/engine.lock" "$work/release/engine-hashes.json" "$work/install.sh"
 
     - name: Clone the workspace shell (read-only)
       if: inputs.mode == 'judge' && inputs.shell-clone == 'true'
@@ -241,12 +275,31 @@ runs:
       shell: bash
       env:
         LF_HEAD: ${{ inputs.head }}
+        LF_BASE: ${{ inputs.base }}
+        LF_BRANCH: ${{ inputs.branch }}
+        LF_EVENT: ${{ inputs.event }}
+        LF_REPLAN: ${{ inputs.replan }}
+        LF_TOKEN: ${{ inputs.github-token }}
         LF_CONTEXT: ${{ inputs.context }}
       run: |
         out="$RUNNER_TEMP/lockflight-verdict"
+        args=()
+        if [ "$LF_REPLAN" = "true" ] && [ -n "$LF_BASE" ]; then
+          # Which checks are required needs no build: the report re-plans from git and refuses evidence that disagrees. The
+          # checkout holds the target branch's tip; the head and the full history are fetched as data, never checked out.
+          # The token reaches git through its environment, never its command line, and its encoded form is masked in the log.
+          encoded=$(printf 'x-access-token:%s' "$LF_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$encoded"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $encoded"
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then git fetch --quiet --no-tags --unshallow origin || true; fi
+          if ! git cat-file -e "$LF_HEAD^{commit}" 2>/dev/null; then git fetch --quiet --no-tags origin "$LF_HEAD" || true; fi
+          unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          args=(--base "$LF_BASE" --event "$LF_EVENT" --platform github)
+          if [ -n "$LF_BRANCH" ]; then args+=(--branch "$LF_BRANCH"); fi
+        fi
         set +e
         "$LF_LOCKFLIGHT" ci report --evidence "$RUNNER_TEMP/lockflight-evidence" --review "$RUNNER_TEMP/lockflight-review" \
-          --head "$LF_HEAD" --context "$LF_CONTEXT" --out "$out"
+          --head "$LF_HEAD" --context "$LF_CONTEXT" --out "$out" "${args[@]}"
         code=$?
         set -e
         if [ -f "$out/summary.md" ]; then cat "$out/summary.md" >> "$GITHUB_STEP_SUMMARY"; fi

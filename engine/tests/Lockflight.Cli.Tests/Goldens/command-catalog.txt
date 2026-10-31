@@ -1,7 +1,7 @@
 global: --help -h --version
 version: []
 link: [--installed]
-engine verify-lock: [--source --attestation] arguments
+engine verify-lock: [--source --base --script --attestation] arguments
 engine install: [--source]
 init: [--profile --preset --ci --ci-platform --unit-of --unit-path --speckit-preset --quality --architecture-tests --dry-run --native --ci-only --no-link --no-sandbox]
 doctor: [--self-test --canaries --canaries=full]
@@ -32,7 +32,7 @@ approve spec: [--feature]
 approve tasks: [--feature]
 approve verify: [--feature --base --require]
 ci: [--head --base --branch --platform --event --evidence --shell --no-review-expected --plan]
-ci report: [--evidence --review --head --context --out]
+ci report: [--evidence --review --head --context --out --base --branch --event --platform]
 ci review: [--head --base --branch --platform --out]
 route show: [--base --head --json]
 route record: [--feature --base]

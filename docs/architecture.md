@@ -165,6 +165,12 @@ unchanged tree is not rebuilt, and its block message names the failing tests. In
 units that changed since their last PASS: uncommitted changes, a commit, or a shared build input outside every unit.
 `lockflight gate run` of the `stop` profile over the stop target caches its PASS the same way.
 
+When red/green is refused because the feature's spec or tasks were never approved, the agent is waiting on a person, and its
+tests may be red on purpose. The refusal records the feature and the tree's inputs hash. While the tree is exactly that one,
+the feature being worked on resolves to it, and its approval is still missing, the Stop gate does not run: the agent stops
+with one message for the person naming what to approve, and the ledger records the skipped stop. Any edit, the approval, or a
+stale approval (one edit away for the agent) puts the gate back.
+
 With the Stop gate on, the `TaskCompleted` hook lets a task be marked completed only when that cache holds a PASS for the tree
 as it is now. It reads that evidence and never builds, so it answers within its 30 s timeout. When the Stop gate already sent
 the same tree back in this session, it does not block again: the agent is already fixing it, and the Stop gate judges the tree

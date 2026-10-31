@@ -3,6 +3,7 @@ using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Tests.Init;
 
 namespace Lockflight.Cli.Tests.Gates.Steps;
 
@@ -34,6 +35,26 @@ public sealed class SuppressionsStepTests : IDisposable
 
         """;
 
+    private const string MigrationWithItsAttributes = """
+        using Microsoft.EntityFrameworkCore.Infrastructure;
+        using Microsoft.EntityFrameworkCore.Migrations;
+
+        #nullable disable
+
+        namespace Shop.Migrations
+        {
+            [DbContext(typeof(ShopContext))]
+            [Migration("20260101000000_AddComment")]
+            public partial class AddComment : Migration
+            {
+                protected override void Up(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("COMMENT ON TABLE orders IS 'orders';");
+
+                protected override void Down(MigrationBuilder migrationBuilder) => migrationBuilder.Sql("COMMENT ON TABLE orders IS NULL;");
+            }
+        }
+
+        """;
+
     private readonly DirectoryInfo repository = Directory.CreateTempSubdirectory("lockflight-suppressions-");
 
     [Fact]
@@ -47,6 +68,31 @@ public sealed class SuppressionsStepTests : IDisposable
         Assert.Equal(Verdict.Fail, step.Verdict);
         Assert.StartsWith("1 new suppressions: src/Order.cs:3 CA1822 (#pragma warning disable);", step.Detail, StringComparison.Ordinal);
         Assert.Contains("/lockflight:baseline suppressions", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AtTheNativeLevelASuppressionIsAcceptedInATerminal()
+    {
+        await InitRepositoryAsync();
+        NativeLevelSettings.Write(repository.FullName, pluginEnabled: false);
+        Write("src/Order.cs", Order.Replace("public sealed", "#pragma warning disable CA1822\npublic sealed", StringComparison.Ordinal));
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Contains("baseline suppressions` in a separate terminal window", step.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("/lockflight:", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheBuildBaselineIsHandedToTheTerminalAtTheNativeLevelOnly()
+    {
+        string plugin = BuildStep.BaselineHandOff(repository.FullName);
+        NativeLevelSettings.Write(repository.FullName, pluginEnabled: false);
+
+        string native = BuildStep.BaselineHandOff(repository.FullName);
+
+        Assert.StartsWith("a person types /lockflight:baseline build in Claude Code", plugin, StringComparison.Ordinal);
+        Assert.StartsWith("a person opens a separate terminal window", native, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -171,6 +217,76 @@ public sealed class SuppressionsStepTests : IDisposable
 
         Assert.Equal(Verdict.Fail, step.Verdict);
         Assert.Contains("_Init.cs:1 nullable", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheNullableDisableInAMigrationThatCarriesItsOwnMigrationAttributeIsNotJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/20260101000000_AddComment.cs", MigrationWithItsAttributes);
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Pass, step.Verdict);
+    }
+
+    [Fact]
+    public async Task AMigrationWithItsOwnAttributesAndWindowsLineEndingsIsNotJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/20260101000000_AddComment.cs", MigrationWithItsAttributes.Replace("\n", "\r\n", StringComparison.Ordinal));
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Pass, step.Verdict);
+    }
+
+    [Fact]
+    public async Task MigrationAttributesOnlyInACommentDoNotMakeAFileAMigration()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/Helpers.cs", "#nullable disable\n\n/* [DbContext(typeof(ShopContext))] [Migration(\"1\")] partial class Fake : Migration */\nnamespace Shop.Migrations;\n\ninternal static class Helpers { }\n");
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Contains("Helpers.cs:1 nullable", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AMigrationThatAlsoDeclaresAnotherTypeIsJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/20260101000000_AddComment.cs", MigrationWithItsAttributes + "\ninternal static class Helpers { }\n");
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Contains("_AddComment.cs:4 nullable", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ANullableDisableInsideAMigrationsNamespaceIsJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/20260101000000_AddComment.cs", MigrationWithItsAttributes.Replace("    public partial class", "#nullable disable\n    public partial class", StringComparison.Ordinal));
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Contains("_AddComment.cs:10 nullable", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ANullableDisableInAMigrationsFolderFileThatIsNoEfMigrationIsJudged()
+    {
+        await InitRepositoryAsync();
+        Write("src/Migrations/Helpers.cs", "using System;\n\n#nullable disable\n\nnamespace Shop.Migrations;\n\ninternal static class Helpers { }\n");
+
+        GateStep step = await RunStepAsync(GateMode.Fail);
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Contains("Helpers.cs:3 nullable", step.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

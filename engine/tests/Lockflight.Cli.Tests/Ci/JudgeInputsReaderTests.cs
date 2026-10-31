@@ -13,7 +13,7 @@ public sealed class JudgeInputsReaderTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         repository = await GitHistoryFixture.CreateAsync(cancellationToken);
-        main = await repository.Write("README.md", "# shop\n").Write(".gitignore", ".lockflight/local/\n").CommitAsync("init", cancellationToken);
+        main = await repository.Write("README.md", "# shop\n").Write("lockflight.yaml", "version: 1\n").Write(".gitignore", ".lockflight/local/\n").CommitAsync("init", cancellationToken);
         await repository.CheckoutNewAsync("012-checkout", cancellationToken);
         head = await repository.Write("a.cs", "a").CommitAsync("feat: a", cancellationToken);
     }

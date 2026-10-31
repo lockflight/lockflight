@@ -22,8 +22,12 @@ internal sealed class ExistingChangedJudge(TreeBuilder trees, TimeProvider time)
         string root = plan.Inputs.Root;
         TestSide side = await TestSide.ReadAsync(root, plan.Inputs.Head, head, trees.Root, plan.Policy.Ci, cancellationToken);
         HashSet<string> atBase = [.. await JudgeGit.TreeFilesAsync(root, mergeBase, cancellationToken) ?? []];
-        string[] changedInputs = [.. (await JudgeGit.ChangedFilesAsync(root, mergeBase, plan.Inputs.Head, cancellationToken) ?? []).Where(atBase.Contains).Where(side.IsTestSide)];
-        IReadOnlySet<string> helpers = await side.HelperSourcesAsync(root, mergeBase, changedInputs, cancellationToken);
+
+        // Files the pull request adds and its test applications' project files are left out here (a helper project's file stays in): every base test passes on the base's code, so
+        // re-running them all for a new helper or a package reference would flag each one.
+        string[] changedInputs = [.. (await JudgeGit.ChangedFilesAsync(root, mergeBase, plan.Inputs.Head, cancellationToken) ?? [])
+            .Where(atBase.Contains).Where(side.IsTestSide).Where(path => !side.IsTestProjectFile(path))];
+        IReadOnlySet<string> helpers = await side.HelperSourcesAsync(root, mergeBase, plan.Inputs.Head, changedInputs, cancellationToken);
         HashSet<string> atHead = [.. headInventory.Select(test => test.Key)];
         string[] changed = [.. baseInventory.Select(test => test.Key).Where(atHead.Contains).Where(key =>
             baseListing.Fingerprints.GetValueOrDefault(key) is not string before
@@ -34,7 +38,7 @@ internal sealed class ExistingChangedJudge(TreeBuilder trees, TimeProvider time)
             return [];
         }
 
-        IReadOnlyList<RecheckResult> rechecked = await new OverlayRecheck(trees, time).RunAsync(plan, mergeBase, changed, side, head, "existing tests on base", cancellationToken);
+        IReadOnlyList<RecheckResult> rechecked = await new OverlayRecheck(trees, time).RunAsync(plan, mergeBase, changed, side, head, new HashSet<string>(StringComparer.Ordinal), "existing tests on base", cancellationToken);
         return [.. rechecked.Select(result => result.Outcome switch
         {
             RecheckOutcome.Red => new ExistingChangedTest(result.Key, ExistingChange.Rechecked, $"changed, and fails on the base's code: {result.Why}"),

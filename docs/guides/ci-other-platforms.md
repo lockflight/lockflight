@@ -34,7 +34,11 @@ The policy and install steps of the GitHub workflow, in the same order:
   outside the repository, so a `global.json` that pins SDK 8 or 9 does not matter: with `.lockflight/engine.lock`, by the
   vendored install script checked against the lock (no .NET SDK needed for it; the SDK image reads the package with `perl`),
   else by the version in the tool pin with `dotnet tool install --tool-path`. The same step as the GitHub workflow's, from the
-  same source in the engine.
+  same source in the engine. Policy files are restored with `git show` (the committed bytes, as the GitHub action reads them),
+  so a checkout that converts line endings cannot change the install script CI hashes. A pull request that changes the lock
+  runs `lockflight engine verify-lock` on it; the pull request that adds the **first** lock is not release-checked on these
+  platforms (the base's 0.2 engine cannot), so the job prints a warning and the reviewer runs
+  `lockflight engine verify-lock .lockflight/engine.lock` before accepting it.
 - **`lockflight gate run --profile pr --base <base sha>`**, with the result in `artifacts/lockflight/result.json` (Azure and
   GitLab); Bitbucket runs the [CI judge](#bitbucket-pipelines), which runs the same gates at head and adds the red/green
   evidence. Azure and GitLab run the gates only for now.
@@ -43,7 +47,7 @@ The policy and install steps of the GitHub workflow, in the same order:
 |---|---|---|---|
 | File `init` writes | `.azure-pipelines/lockflight-gates.yml`, a pipeline of its own | `bitbucket-pipelines.yml` | `.gitlab/ci/lockflight-gates.yml`, and a `.gitlab-ci.yml` that includes it |
 | When the team already has a pipeline file | untouched: this is a separate pipeline | untouched: the job goes to `.lockflight/ci/bitbucket-pipelines.yml` to merge by hand | `.gitlab-ci.yml` untouched: `init` prints the `include` to add |
-| Base on a pull request | merge base of `HEAD` and `origin/<System.PullRequest.TargetBranch>` | the tip of `origin/$BITBUCKET_PR_DESTINATION_BRANCH` (the judge works out the merge base) | `$CI_MERGE_REQUEST_DIFF_BASE_SHA` |
+| Base on a pull request | the tip of `origin/<System.PullRequest.TargetBranch>`, fetched (the gates work out the merge base) | the tip of `origin/$BITBUCKET_PR_DESTINATION_BRANCH` (the judge works out the merge base) | the tip of `origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME`, fetched (the gates work out the merge base) |
 | Base on a push to `main` | the previous commit | the previous commit | `$CI_COMMIT_BEFORE_SHA` |
 | .NET | `UseDotNet@2` for each channel the test projects need | the `mcr.microsoft.com/dotnet/sdk:10.0` image, older channels added with `dotnet-install.sh` | as Bitbucket |
 | `--ci manual` | `trigger: none`, `pr: none` | a `custom` pipeline | a rule for pipelines started from the web |
@@ -149,9 +153,11 @@ lists its own `stages:`, keep `test` among them.
    [paths below](#paths-to-route-to-a-reviewer), then protect `main` with **Code owner approval** required. Code owner
    approval is **GitLab Premium or Ultimate**; on Free, CODEOWNERS shows owners but blocks nothing.
 
-The base on a merge request is `CI_MERGE_REQUEST_DIFF_BASE_SHA`: the commit the merge request's diff starts from, on the
-target branch. It can be older than the target branch's tip, so a policy change merged after the merge request branched off
-applies once the branch is rebased.
+The base on a merge request is the target branch's tip, fetched when the job starts, not `CI_MERGE_REQUEST_DIFF_BASE_SHA`
+(the commit the merge request's diff starts from). The diff base can be older than the tip, and a branch cut from an old commit
+would bring that commit's engine pin, baselines and analyzer config. The gates work out the merge base for the diff themselves. A
+merge request pipeline that runs in a fork reads `origin` as the fork, so its target branch tip is the fork's copy; such a
+pipeline also runs the fork's own CI file, so it is a guardrail there, not a boundary.
 
 ## Paths to route to a reviewer
 

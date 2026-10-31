@@ -118,7 +118,7 @@ internal static class CiJudgeCanaries
     {
         using GitHistoryFixture repository = await GitHistoryFixture.CreateAsync(cancellationToken);
         using TemporaryEvidence evidence = new();
-        string main = await repository.Write("README.md", "# x\n").CommitAsync("init", cancellationToken);
+        string main = await repository.Write("README.md", "# x\n").Write("lockflight.yaml", "version: 1\n").CommitAsync("init", cancellationToken);
         await repository.CheckoutNewAsync("001-x", cancellationToken);
         string head = await repository.Write("a.cs", "a").CommitAsync("feat", cancellationToken);
         string[] args = ["ci", "--platform", "github", "--head", head, "--base", main, "--evidence", evidence.Folder, "--plan"];

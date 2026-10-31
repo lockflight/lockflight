@@ -143,7 +143,9 @@ Their engine is Lockflight 0.2, and the project's `lockflight.yaml` is now versi
 cannot read it, so its guard allows reading only, recovery commands included. In a separate terminal, in the project, they run
 `~/.lockflight/bin/lockflight update` once (a 0.2 `update` that says "not in a Lockflight project" installed the new engine
 anyway: run the same command again, now with the new engine), or `~/.lockflight/bin/lockflight engine install` once their
-user engine is new enough.
+user engine is new enough. The same holds when the hooks say the linked engine "is not the engine .lockflight/engine.lock pins"
+and `link --installed` or `engine install` answers "unknown command": that user engine is 0.2, which has neither, so run
+`~/.lockflight/bin/lockflight update`.
 
 ## `doctor` warns about gitleaks or the Claude Code version
 

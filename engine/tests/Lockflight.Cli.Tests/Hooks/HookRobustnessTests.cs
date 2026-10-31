@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Tests.Init;
 
 namespace Lockflight.Cli.Tests.Hooks;
 
@@ -104,6 +105,18 @@ public sealed class HookRobustnessTests : IDisposable
     }
 
     [Fact]
+    public async Task AtTheNativeLevelTheSessionBannerNamesNoPluginCommand()
+    {
+        NativeLevelSettings.Write(projectRoot.FullName, pluginEnabled: false);
+
+        (_, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName);
+        string banner = JsonNode.Parse(output)!["hookSpecificOutput"]!["additionalContext"]!.GetValue<string>();
+
+        Assert.Contains(SessionBanner.NativeHumanDecisionsNote, banner, StringComparison.Ordinal);
+        Assert.DoesNotContain("/lockflight:", banner, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task TheSessionBannerStaysShortWithAHugeManifest()
     {
         string globs = string.Concat(Enumerable.Range(0, 2000).Select(index => $"  - generated/{index}/**\n"));
@@ -143,6 +156,33 @@ public sealed class HookRobustnessTests : IDisposable
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Contains("hook API 99", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("stop")]
+    [InlineData("session-start")]
+    [InlineData("task-completed")]
+    public async Task AnIncompatiblePluginApiLetsAnEventThatIsNotAToolCallThroughAndSaysSo(string hookEvent)
+    {
+        Dictionary<string, string> environment = new() { [EnvironmentVariables.PluginApi] = "99" };
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["hook", hookEvent], BashPayload("true"), projectRoot.FullName, environment);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        string notice = JsonDocument.Parse(output).RootElement.GetProperty("systemMessage").GetString()!;
+        Assert.Contains("hook API 99", notice, StringComparison.Ordinal);
+        Assert.Contains("check did not run", notice, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("stop", false)]
+    [InlineData("pre-tool-use", true)]
+    public async Task UnreadableHookInputBlocksOnlyAToolCall(string hookEvent, bool blocks)
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", hookEvent], "{ not json", projectRoot.FullName);
+
+        Assert.Equal(blocks ? ExitCode.HookBlock : ExitCode.Pass, exitCode);
+        Assert.Contains("hook input is not valid JSON", error, StringComparison.Ordinal);
     }
 
     [Fact]

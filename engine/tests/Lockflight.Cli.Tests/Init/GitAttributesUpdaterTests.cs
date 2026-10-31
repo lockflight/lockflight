@@ -16,4 +16,15 @@ public sealed class GitAttributesUpdaterTests
         Assert.False(changedAgain);
         Assert.Equal(first, second);
     }
+
+    [Fact]
+    public void TheInstallScriptKeepsLfEndingsOnEveryCheckout()
+    {
+        (string first, bool changed) = GitAttributesUpdater.UpdateInstallScript(GitAttributesUpdater.Rule + "\n");
+        (_, bool changedAgain) = GitAttributesUpdater.UpdateInstallScript(first);
+
+        Assert.True(changed);
+        Assert.Contains(".lockflight/ci/install.sh text eol=lf", first.Split('\n'));
+        Assert.False(changedAgain);
+    }
 }

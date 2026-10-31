@@ -3,7 +3,7 @@ namespace Lockflight.Cli.Init;
 /// <summary>
 /// Adds Lockflight's <c>.gitattributes</c> rules: the standard profile's, so feature records are checked out byte-exact
 /// (<c>-text</c>) and the evidence a person reviews and CI reads is the same bytes on every OS despite <c>core.autocrlf</c>; and
-/// the native level's, for its hook shim.
+/// the native level's, for its hook shim; and the engine lock's, for the vendored install script whose hash the lock pins.
 /// </summary>
 internal static class GitAttributesUpdater
 {
@@ -16,9 +16,19 @@ internal static class GitAttributesUpdater
 
     private const string HookShimHeader = "# Lockflight hook shim: run by sh, LF on every OS";
 
+    /// <summary>
+    /// The engine lock's rule: the vendored install script keeps the LF bytes the lock's hash is of, so a Windows checkout with
+    /// <c>core.autocrlf</c> neither fails <c>doctor</c> nor makes <c>update</c> rewrite it, and CI hashes what was committed.
+    /// </summary>
+    public const string InstallScriptRule = EngineLocks.InstallScript.RelativePath + " text eol=lf";
+
+    private const string InstallScriptHeader = "# Lockflight engine install script: hashed by the engine lock, LF on every OS";
+
     public static (string Content, bool Changed) Update(string? existing) => Add(existing, BlockHeader, Rule);
 
     public static (string Content, bool Changed) UpdateHookShim(string? existing) => Add(existing, HookShimHeader, HookShimRule);
+
+    public static (string Content, bool Changed) UpdateInstallScript(string? existing) => Add(existing, InstallScriptHeader, InstallScriptRule);
 
     private static (string Content, bool Changed) Add(string? existing, string header, string rule)
     {

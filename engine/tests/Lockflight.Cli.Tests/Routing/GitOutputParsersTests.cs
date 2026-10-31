@@ -61,6 +61,56 @@ public sealed class GitOutputParsersTests
         Assert.Equal(["    return a+b;"], keptRemoved.Select(line => line.Text));
     }
 
+    [Fact]
+    public void WhitespacePairsKeepLinesThatSwapPlaces()
+    {
+        RoutedLine[] removed = [new(2, "    return Allow();", "    return Allow();"), new(3, "    return Deny();", "    return Deny();")];
+        RoutedLine[] added = [new(2, "    return Deny();", "    return Deny();"), new(3, "    return Allow();", "    return Allow();")];
+
+        (IReadOnlyList<RoutedLine> keptAdded, IReadOnlyList<RoutedLine> keptRemoved) = WhitespacePairs.Drop(added, removed);
+
+        Assert.Single(keptAdded);
+        Assert.Single(keptRemoved);
+    }
+
+    [Fact]
+    public void WhitespacePairsKeepALineDeletedInOneHunkAndAddedBackInAnother()
+    {
+        // git diff -U0 of "A\nB\nC" -> "B\nA\nC": @@ -1 +0,0 @@ -A and @@ -2,0 +2 @@ +A.
+        RoutedLine[] removed = [new(1, "app.UseAuthentication();", "app.UseAuthentication();")];
+        RoutedLine[] added = [new(2, "app.UseAuthentication();", "app.UseAuthentication();")];
+
+        (IReadOnlyList<RoutedLine> keptAdded, IReadOnlyList<RoutedLine> keptRemoved) = WhitespacePairs.Drop(added, removed);
+
+        Assert.Single(keptAdded);
+        Assert.Single(keptRemoved);
+    }
+
+    [Fact]
+    public void WhitespacePairsPairInsideAHunkWithUnequalCounts()
+    {
+        RoutedLine[] removed = [new(4, "  a();", "  a();"), new(5, "  b();", "  b();"), new(9, "  c();", "  c();")];
+        RoutedLine[] added = [new(4, "\ta();", "\ta();"), new(8, "\tc();", "\tc();")];
+
+        (IReadOnlyList<RoutedLine> keptAdded, IReadOnlyList<RoutedLine> keptRemoved) = WhitespacePairs.Drop(added, removed);
+
+        Assert.Empty(keptAdded);
+        Assert.Equal(["  b();"], keptRemoved.Select(line => line.Text));
+    }
+
+    [Fact]
+    public void WhitespacePairsDropAWholeReindentInOrder()
+    {
+        string[] lines = ["{", "    a();", "}", "{", "    b();", "}"];
+        RoutedLine[] removed = [.. lines.Select((text, index) => new RoutedLine(index + 1, text, text))];
+        RoutedLine[] added = [.. lines.Select((text, index) => new RoutedLine(index + 1, "\t" + text.Trim(), "\t" + text.Trim()))];
+
+        (IReadOnlyList<RoutedLine> keptAdded, IReadOnlyList<RoutedLine> keptRemoved) = WhitespacePairs.Drop(added, removed);
+
+        Assert.Empty(keptAdded);
+        Assert.Empty(keptRemoved);
+    }
+
     [Theory]
     [InlineData("<Project><ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17\" /></ItemGroup></Project>", true)]
     [InlineData("<PackageReference Include=\"NUnit\" Version=\"4\" />", true)]

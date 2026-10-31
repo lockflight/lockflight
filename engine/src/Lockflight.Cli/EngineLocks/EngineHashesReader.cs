@@ -5,7 +5,8 @@ namespace Lockflight.Cli.EngineLocks;
 
 /// <summary>
 /// Reads <c>lockflight.engine-hashes/v1</c>, evidence a release writes: unknown properties and platforms are ignored, but the
-/// schema, the package, a version, a 40-hex commit and a well-formed hash and path for every released platform are required.
+/// schema, the package, a version, a 40-hex commit and a well-formed hash and path for every released platform are required, a
+/// key may appear only once, and the install script's hash, when the file has one, must be well-formed.
 /// </summary>
 internal static partial class EngineHashesReader
 {
@@ -31,6 +32,12 @@ internal static partial class EngineHashesReader
             || !string.Equals(String(root, "package"), EngineLock.Package, StringComparison.OrdinalIgnoreCase))
         {
             problem = $"not a {EngineHashes.Schema} file for {EngineLock.Package}";
+            return null;
+        }
+
+        if (JsonDuplicateKeys.Find(root) is string duplicate)
+        {
+            problem = $"the key '{duplicate}' appears twice";
             return null;
         }
 
@@ -60,7 +67,18 @@ internal static partial class EngineHashesReader
             return null;
         }
 
-        return new EngineHashes(version, commit, binaries);
+        string? script = null;
+        if (root.TryGetProperty("installScript", out JsonElement installScript))
+        {
+            script = String(installScript, "sha256");
+            if (script is null || !Sha256().IsMatch(script))
+            {
+                problem = "'installScript' must be { \"sha256\": \"<64 lower-case hex>\" }";
+                return null;
+            }
+        }
+
+        return new EngineHashes(version, commit, binaries, script);
     }
 
     private static string? String(JsonElement element, string name) =>

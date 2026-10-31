@@ -65,7 +65,7 @@ public sealed class PhaseChecksTests : IDisposable
         ApprovalStore store = new(Feature);
         store.Save(ApprovalPhase.Spec, "dev@example.com", DateTimeOffset.UnixEpoch, "0.0.0-test");
 
-        Dictionary<string, PhaseCheckItem> items = PhaseChecks.Tasks(Feature, store.Check(ApprovalPhase.Spec), []).ToDictionary(item => item.Name);
+        Dictionary<string, PhaseCheckItem> items = PhaseChecks.Tasks(Feature, store.Check(ApprovalPhase.Spec), [], root.FullName).ToDictionary(item => item.Name);
 
         Assert.True(items["spec.approved"].Passed);
         Assert.Contains("FR-002", items["tasks.cover-requirements"].Detail, StringComparison.Ordinal);
@@ -87,7 +87,7 @@ public sealed class PhaseChecksTests : IDisposable
             - [ ] T020 [US2] (FR-002) Weight limits in src/Shop.Api/Limits.cs
             """);
 
-        PhaseCheckItem item = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), []).Single(check => check.Name == "tasks.tests-first");
+        PhaseCheckItem item = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), [], root.FullName).Single(check => check.Name == "tasks.tests-first");
 
         Assert.False(item.Passed);
         Assert.Contains("T011 line 3: implementation (no test heading, no test verb, no test file", item.Detail, StringComparison.Ordinal);
@@ -109,7 +109,7 @@ public sealed class PhaseChecksTests : IDisposable
             - [ ] T012 [US1] Cart total in web/src/cart/total.ts, covers FR-001 and FR-002
             """);
 
-        Dictionary<string, PhaseCheckItem> items = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), []).ToDictionary(item => item.Name);
+        Dictionary<string, PhaseCheckItem> items = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), [], root.FullName).ToDictionary(item => item.Name);
 
         Assert.True(items["tasks.cover-requirements"].Passed, items["tasks.cover-requirements"].Detail);
         Assert.True(items["tasks.cite-requirements"].Passed, items["tasks.cite-requirements"].Detail);
@@ -123,7 +123,7 @@ public sealed class PhaseChecksTests : IDisposable
         File.WriteAllText(Feature.SpecPath, Spec);
         File.WriteAllText(Feature.TasksPath, "- [ ] T010 [US1] (FR-001) [unit:services/orders] Order totals\n- [ ] T011 [US1] (FR-001) [unit:services/missing] Billing\n");
 
-        Dictionary<string, PhaseCheckItem> items = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), ["services/orders"]).ToDictionary(item => item.Name);
+        Dictionary<string, PhaseCheckItem> items = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), ["services/orders"], root.FullName).ToDictionary(item => item.Name);
 
         Assert.False(items["tasks.units"].Passed);
         Assert.Contains("services/missing", items["tasks.units"].Detail, StringComparison.Ordinal);
@@ -136,7 +136,7 @@ public sealed class PhaseChecksTests : IDisposable
         Directory.CreateDirectory(Feature.SpecDirectory);
         File.WriteAllText(Feature.SpecPath, Spec);
 
-        PhaseCheckItem approval = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), [])[0];
+        PhaseCheckItem approval = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), [], root.FullName)[0];
 
         Assert.False(approval.Passed);
         Assert.Contains("lockflight approve spec", approval.Detail, StringComparison.Ordinal);

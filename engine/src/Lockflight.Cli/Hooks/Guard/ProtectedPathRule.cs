@@ -57,11 +57,14 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
     /// The targets with <c>~</c>, <c>$HOME</c> and <c>$PWD</c> resolved, split into literal paths and wildcard patterns. A target
     /// with any other variable, or with the output of a command in it, is left out: the guard does not know what it names.
     /// </summary>
-    private (List<string> Literal, List<string> Patterns) Resolved(IReadOnlyList<string> paths, string workingDirectory)
+    private (List<string> Literal, List<string> Patterns) Resolved(IReadOnlyList<string> paths, string workingDirectory) =>
+        Resolved(paths, workingDirectory, environment.HomeDirectory());
+
+    /// <inheritdoc cref="Resolved(IReadOnlyList{string}, string)"/>
+    public static (List<string> Literal, List<string> Patterns) Resolved(IReadOnlyList<string> paths, string workingDirectory, string? home)
     {
         List<string> literal = [];
         List<string> patterns = [];
-        string? home = environment.HomeDirectory();
         foreach (string path in paths)
         {
             if (ShellVariables.Resolve(ExpandHome(path, home), workingDirectory, home).Path is string resolved)
@@ -73,10 +76,23 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
         return (literal, patterns);
     }
 
-    private static string ExpandHome(string path, string? home) =>
-        (path == "~" || path.StartsWith("~/", StringComparison.Ordinal) || path.StartsWith("~\\", StringComparison.Ordinal)) && home is not null
-            ? home + path[1..]
+    /// <summary>
+    /// <c>~</c> and <c>~name</c> where name is the home folder's own name (the user's, as the shell expands <c>~$USER</c>); another
+    /// user's <c>~name</c> is left as written.
+    /// </summary>
+    private static string ExpandHome(string path, string? home)
+    {
+        if (home is null || !path.StartsWith('~'))
+        {
+            return path;
+        }
+
+        int end = path.IndexOfAny(['/', '\\']);
+        string name = end < 0 ? path[1..] : path[1..end];
+        return name.Length == 0 || string.Equals(name, Path.GetFileName(Path.TrimEndingDirectorySeparator(home)), StringComparison.Ordinal)
+            ? home + (end < 0 ? string.Empty : path[end..])
             : path;
+    }
 
     /// <summary>
     /// A wildcard target (<c>rm tests/*.cs</c>, <c>rm -r bin/*</c>) is blocked when a protected or locked file that exists below
@@ -89,27 +105,41 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
     {
         foreach ((string pattern, bool asTree) in patterns)
         {
-            string[] segments = pattern.Replace('\\', '/').Split('/');
-            int firstWildcard = Array.FindIndex(segments, GlobOverlap.HasWildcard);
-            string prefix = firstWildcard == 0 ? ShellArguments.CurrentDirectory : string.Join('/', segments[..firstWildcard]);
-            if (relatives.Relative(prefix.Length == 0 ? "/" : prefix, workingDirectory) is not string directory)
+            (string prefix, string[] rest) = WildcardPatterns.Split(pattern);
+            string relativePattern;
+            string scanFrom;
+            if (relatives.Relative(prefix, workingDirectory) is string directory)
             {
-                // A wildcard below a folder above the project (rm -rf ../*) may name the project itself.
-                if (asTree && relatives.ContainsRoot(prefix.Length == 0 ? "/" : prefix, workingDirectory)
-                    && PathRules.ToRelative(PathRules.Canonicalize(prefix.Length == 0 ? "/" : prefix, workingDirectory), PathRules.Canonicalize(relatives.Root, baseDirectory: null)) is string rootBelow
-                    && GlobOverlap.CouldMatch(rootBelow, string.Join('/', segments[firstWildcard..]), asTree: true))
+                scanFrom = directory;
+                relativePattern = (directory.Length == 0 ? string.Empty : directory + "/") + string.Join('/', rest);
+            }
+            else if (relatives.ContainsRoot(prefix, workingDirectory)
+                && PathRules.ToRelative(PathRules.Canonicalize(prefix, workingDirectory), PathRules.Canonicalize(relatives.Root, baseDirectory: null)) is string rootBelow
+                && WildcardPatterns.Into(rest, rootBelow) is string inside)
+            {
+                // A wildcard below a folder above the project (rm -rf ../*, cp x ../p*/lockflight.yaml) may name the project or a
+                // path in it.
+                if (inside.Length == 0 && asTree)
                 {
                     return HookDecision.Block(
                         "protected-path:project-root",
                         $"lockflight: this command may rewrite or delete '{pattern}', which can name the folder that contains this project and every protected path in it. Name the files to change instead.");
                 }
 
+                if (inside.Length == 0)
+                {
+                    continue;
+                }
+
+                (scanFrom, relativePattern) = (string.Empty, inside);
+            }
+            else
+            {
                 continue;
             }
 
-            string relativePattern = (directory.Length == 0 ? string.Empty : directory + "/") + string.Join('/', segments[firstWildcard..]);
             List<string> lockGlobs = [.. testLocks.Select(testLock => testLock.Glob)];
-            string? matched = scan.FirstMatchOfPattern(directory, relativePattern, [.. lockGlobs, .. globs], asTree, (file, glob) => lockGlobs.Contains(glob) && !globs.Contains(glob) && IsAmended(amended, file));
+            string? matched = scan.FirstMatchOfPattern(scanFrom, relativePattern, [.. lockGlobs, .. globs], asTree, (file, glob) => lockGlobs.Contains(glob) && !globs.Contains(glob) && IsAmended(amended, file));
             if (matched is not null && testLocks.FirstOrDefault(testLock => testLock.Glob == matched) is { Glob: string lockedGlob, Reason: string reason })
             {
                 return HookDecision.Block(
@@ -209,7 +239,7 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
             {
                 return HookDecision.Block(
                     $"tests-locked:{lockedGlob}",
-                    $"lockflight: '{target}' is a test file and tests are locked during {reason}: make the tests pass by changing production code, then run '{EngineCommand.Linked} redgreen green'. If a test itself is wrong, stop and {HumanOnlyCommands.AskTheUser("redgreen amend <test> --reason \"<why>\"")}; never change it another way.");
+                    $"lockflight: '{target}' is a test file and tests are locked during {reason}: make the tests pass by changing production code, then run '{EngineCommand.Linked} redgreen green'. If a test itself is wrong, stop and {HumanOnlyCommands.AskTheUser("redgreen amend <test> --reason \"<why>\"", manifest.Root)}; never change it another way.");
             }
         }
 

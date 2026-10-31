@@ -57,9 +57,14 @@ internal static class RoutingGit
     /// A diff of <paramref name="range"/> (one commit: against the working tree; two: between them) in the given output format
     /// (<c>--raw -z --no-abbrev</c>, <c>--numstat -z</c> or <c>-U0</c>); null when git fails.
     /// </summary>
-    public static async Task<string?> DiffAsync(string directory, IReadOnlyList<string> range, IReadOnlyList<string> format, CancellationToken cancellationToken)
+    public static Task<string?> DiffAsync(string directory, IReadOnlyList<string> range, IReadOnlyList<string> format, CancellationToken cancellationToken) =>
+        DiffAsync(directory, range, format, [], cancellationToken);
+
+    /// <summary>As <see cref="DiffAsync(string, IReadOnlyList{string}, IReadOnlyList{string}, CancellationToken)"/>, limited to the given paths (taken literally).</summary>
+    public static async Task<string?> DiffAsync(
+        string directory, IReadOnlyList<string> range, IReadOnlyList<string> format, IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
-        ProcessResult diff = await RunAsync(directory, ["diff", .. DiffFlags, .. format, .. range, "--"], cancellationToken);
+        ProcessResult diff = await RunAsync(directory, ["diff", .. DiffFlags, .. format, .. range, "--", .. paths.Select(path => ":(literal)" + path)], cancellationToken);
         return diff.ExitCode == 0 ? diff.Output : null;
     }
 
@@ -123,6 +128,45 @@ internal static class RoutingGit
     /// The contents of <c>&lt;commit&gt;:&lt;path&gt;</c> for each path (relative to the repository root), read with one
     /// <c>git cat-file --batch</c>; a missing path or one that is not a blob is left out. Null when git fails.
     /// </summary>
+    /// <summary>
+    /// The sizes in bytes of <c>&lt;commit&gt;:&lt;path&gt;</c> (paths relative to the repository root), keyed by path; a path the
+    /// commit lacks is left out. Null when git fails.
+    /// </summary>
+    public static async Task<IReadOnlyDictionary<string, long>?> SizesAsync(
+        string directory, string commit, IReadOnlyList<string> repositoryPaths, CancellationToken cancellationToken)
+    {
+        string[] askable = [.. repositoryPaths.Where(path => !path.Contains('\n', StringComparison.Ordinal) && !path.Contains('\r', StringComparison.Ordinal))];
+        Dictionary<string, long> sizes = new(StringComparer.Ordinal);
+        if (askable.Length == 0)
+        {
+            return sizes;
+        }
+
+        byte[] requests = Encoding.UTF8.GetBytes(string.Concat(askable.Select(path => $"{commit}:{path}\n")));
+        BinaryProcessResult batch = await ProcessRunner.RunForBytesAsync(
+            Executable, [.. Pinned, "cat-file", "--batch-check=%(objectsize)"], directory, requests, TimeLimit, cancellationToken);
+        if (batch.ExitCode != 0)
+        {
+            return null;
+        }
+
+        string[] answers = Encoding.UTF8.GetString(batch.Output).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        if (answers.Length != askable.Length)
+        {
+            return null;
+        }
+
+        for (int index = 0; index < askable.Length; index++)
+        {
+            if (long.TryParse(answers[index].Trim(), out long size))
+            {
+                sizes[askable[index]] = size;
+            }
+        }
+
+        return sizes;
+    }
+
     public static async Task<IReadOnlyDictionary<string, byte[]>?> BlobsAsync(
         string directory, string commit, IReadOnlyList<string> repositoryPaths, CancellationToken cancellationToken)
     {

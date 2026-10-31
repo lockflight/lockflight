@@ -48,7 +48,9 @@ public sealed class TemplatesTests
     {
         string workflow = Templates.Workflow(["8.0.x", "10.0.x"]);
 
-        Assert.Matches(@"uses: lockflight/lockflight/action@[0-9a-f]{40} # ", workflow);
+        Assert.Matches("^[0-9a-f]{40}$", Templates.ActionCommit);
+        Assert.Contains($"uses: lockflight/lockflight/action@{Templates.ActionCommit} # v{ToolPin.RunningVersion}\n", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("# main", workflow, StringComparison.Ordinal);
         Assert.Contains("  judge:\n", workflow, StringComparison.Ordinal);
         Assert.Contains("  review:\n", workflow, StringComparison.Ordinal);
         Assert.Contains("  gates:\n", workflow, StringComparison.Ordinal);
@@ -87,6 +89,19 @@ public sealed class TemplatesTests
         Assert.Empty(interpolated);
         Assert.Equal(1, lines.Count(line => line.Trim() == "pull-requests: write"));
         Assert.Equal(1, lines.Count(line => line.Contains("secrets.ANTHROPIC_API_KEY", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void BothReportJobsReplanFromGitWithTheFullHistoryAndTheBranch()
+    {
+        string workflow = Templates.Workflow(["10.0.x"]);
+
+        Assert.Equal(2, workflow.Split("replan: \"true\"").Length - 1);
+        foreach (string job in workflow.Split("replan: \"true\"")[..^1].Select(before => before[before.LastIndexOf("runs-on:", StringComparison.Ordinal)..]))
+        {
+            Assert.Contains("fetch-depth: 0", job, StringComparison.Ordinal);
+            Assert.Contains("branch: ${{ github.head_ref }}", job, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

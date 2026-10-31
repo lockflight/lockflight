@@ -24,16 +24,17 @@ public sealed class ContractSchemaSyncTests : IDisposable
     private const string Approval = "lockflight.approval.v2";
     private const string Result = "lockflight.result.v1";
     private const string CiEvidenceId = "lockflight.ci-evidence.v1";
+    private const string CiReviewId = "lockflight.ci-review.v1";
 
     /// <summary>The frozen list (contracts-0.3.md §4.5), the referenced schemas before the one that references them; the trailer is plain text.</summary>
-    private static readonly string[] Frozen = ["lockflight.manifest.v2", EngineLockId, EngineHashesId, Approval, Result, Blocked, CiEvidenceId];
+    private static readonly string[] Frozen = ["lockflight.manifest.v2", EngineLockId, EngineHashesId, Approval, Result, Blocked, CiEvidenceId, CiReviewId];
 
     private static readonly Dictionary<string, JsonSchema> Schemas = Load();
 
     private readonly DirectoryInfo temp = Directory.CreateTempSubdirectory("lockflight-schemas-");
 
     /// <summary>The contracts the engine reads, whose fixtures both must agree on.</summary>
-    private static readonly string[] Read = [Blocked, EngineLockId, EngineHashesId, Approval];
+    private static readonly string[] Read = [Blocked, EngineLockId, EngineHashesId, Approval, CiReviewId];
 
     private static readonly string[] Kinds = ["valid", "invalid"];
 
@@ -147,6 +148,7 @@ public sealed class ContractSchemaSyncTests : IDisposable
         EngineLockId => EngineLockReader.Read(text, allowDevelopment: true, "0.3.0").Lock is not null,
         EngineHashesId => EngineHashesReader.Read(text, out _) is not null,
         Approval => ApprovalReadsAsValid(text),
+        CiReviewId => JsonNode.Parse(text) is JsonObject review && CiReviewResult.Problem(review) is null,
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "No engine reader for this contract."),
     };
 

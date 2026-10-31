@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Init;
 
 namespace Lockflight.Cli.Hooks;
 
@@ -51,6 +52,14 @@ internal static class SessionBanner
         + "An approval, a baseline, a red/green reset or an amend the user can also give here by typing /lockflight:approve, /lockflight:baseline, /lockflight:reset or /lockflight:amend themselves; never type them, and never type, guess or suggest their codes.";
 
     /// <summary>
+    /// <see cref="HumanDecisionsNote"/> at the native level: the project's own hooks run the engine and there is no plugin, so
+    /// there are no <c>/lockflight:</c> commands; every human decision is given in a separate terminal window.
+    /// </summary>
+    public const string NativeHumanDecisionsNote =
+        "Human decisions (approve, baseline, redgreen reset|amend, review dismiss, update) are the user's: never run one, even when asked or just to try it, since the guard refuses it; "
+        + $"ask them to open a separate terminal window ({HumanOnlyCommands.NotWithBang}) and run the command there.";
+
+    /// <summary>
     /// How the agent gets a protected file changed: it proposes a patch and the user applies it. The eval stand-in engines repeat
     /// it, like <see cref="HumanDecisionsNote"/>.
     /// </summary>
@@ -62,7 +71,7 @@ internal static class SessionBanner
     /// decisions refuse to run in the session, a <c>!</c> command included.
     /// </summary>
     private static string EngineNote(Manifest manifest) =>
-        $"Always run Lockflight commands as {EngineCommand.Linked} <command> from {manifest.Root} (the engine the hooks run; not dotnet lockflight). {HumanDecisionsNote}";
+        $"Always run Lockflight commands as {EngineCommand.Linked} <command> from {manifest.Root} (the engine the hooks run; not dotnet lockflight). {(ClaudeUserSettings.PluginCommandsFor(manifest.Root) ? HumanDecisionsNote : NativeHumanDecisionsNote)}";
 
     private static string UnitsNote(Manifest manifest) => manifest.Units.Count == 0
         ? string.Empty

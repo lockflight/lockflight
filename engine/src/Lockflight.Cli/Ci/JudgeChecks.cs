@@ -22,6 +22,12 @@ internal static class JudgeChecks
             level = CheckLevel.Required;
         }
 
+        if (check == CheckId.Policy && plan.Loosened is null)
+        {
+            string why = plan.Inputs.Event == JudgeEvent.PullRequest ? "no lockflight.yaml on the base to compare with" : "judged on the pull request";
+            return new CheckResult(check, CheckLevel.Off, CheckVerdict.NotApplicable, why);
+        }
+
         if (level == CheckLevel.Off)
         {
             return new CheckResult(check, level, CheckVerdict.NotApplicable, plan.Inputs.Event == JudgeEvent.PullRequest ? "off for this change class" : "judged on the pull request");
@@ -46,6 +52,10 @@ internal static class JudgeChecks
                 : new CheckResult(check, level, CheckVerdict.Pass, $"class {ChangeClassNames.ToName(plan.Class.Classification.Class)} ({plan.Class.Source})"
                     + (plan.Class.Classification.Signals is [ChangeSignal top, ..] ? $": {top.Id} in {top.Where}" : string.Empty)
                     + (plan.Class.ProductionChanged ? string.Empty : "; no production code lines changed, so no red/green or trace")),
+            CheckId.Policy when plan.PolicyNotCompared is string notCompared => new CheckResult(check, level, CheckVerdict.NotEarned, notCompared),
+            CheckId.Policy when plan.Loosened is not null => plan.Loosened.Count == 0
+                ? new CheckResult(check, level, CheckVerdict.Pass, "lockflight.yaml is no looser than the base's")
+                : new CheckResult(check, level, CheckVerdict.Fail, LoosenedWhy(plan.Loosened)),
             CheckId.Review => new CheckResult(check, level, CheckVerdict.Skipped, plan.Inputs.ReviewExpected ? "the report joins the review job's result" : "no review job runs for this pull request"),
             _ => new CheckResult(check, level, CheckVerdict.NotEarned, NotJudgedYet),
         };
@@ -62,7 +72,7 @@ internal static class JudgeChecks
             : new CheckResult(CheckId.Red, level, worst.Verdict, $"cycle {worst.Red.Label} ({CommitIds.Short(worst.Red.Commit)}): {worst.Why}");
     }
 
-    /// <summary>Any amend rejected or test missing fails; any amend that cannot be re-checked is NOT-EARNED; else PASS.</summary>
+    /// <summary>Any amend rejected or weakened fails; a test missing at head, or an amend that cannot be re-checked or changed the expectation, is NOT-EARNED; else PASS.</summary>
     private static CheckResult SinceRedCheck(CheckLevel level, IReadOnlyList<SinceRedTest> tests)
     {
         if (tests.Count == 0)
@@ -70,8 +80,8 @@ internal static class JudgeChecks
             return new CheckResult(CheckId.TestsSinceRed, level, CheckVerdict.NotEarned, "no accepted cycle to compare with");
         }
 
-        SinceRedTest? failed = tests.FirstOrDefault(test => test.State is SinceRed.AmendRejected or SinceRed.MissingAtHead);
-        SinceRedTest? uncheckable = tests.FirstOrDefault(test => test.State == SinceRed.AmendUncheckable);
+        SinceRedTest? failed = tests.FirstOrDefault(test => test.State is SinceRed.AmendRejected or SinceRed.AmendWeakened);
+        SinceRedTest? uncheckable = tests.FirstOrDefault(test => test.State is SinceRed.MissingAtHead or SinceRed.AmendUncheckable or SinceRed.AmendChangedExpectation);
         if ((failed ?? uncheckable) is SinceRedTest worst)
         {
             return new CheckResult(CheckId.TestsSinceRed, level, failed is null ? CheckVerdict.NotEarned : CheckVerdict.Fail, $"cycle {worst.Cycle}, {worst.Key}: {worst.Why}");
@@ -106,10 +116,14 @@ internal static class JudgeChecks
         return new CheckResult(CheckId.Trace, resolved, trace.Verdict, trace.Why);
     }
 
+    private static string LoosenedWhy(IReadOnlyList<string> loosened) =>
+        $"looser than the base ({loosened.Count}): {string.Join("; ", loosened)}; a person tightens it back or merges through the platform";
+
     private static string NoRedWhy(JudgePlan plan)
     {
         int malformed = plan.Reds.All.Count(red => red.Malformed is not null);
         string trailers = malformed > 0 ? $" ({malformed} commits carry a malformed Lockflight-Red trailer)" : string.Empty;
-        return $"no red commit in this pull request{trailers}; make each story's tests fail with 'lockflight redgreen red', which commits them with a 'Lockflight-Red: <cycle>' trailer, before the implementation";
+        return $"no red commit in this pull request{trailers}; before the implementation, commit each story's new tests (stub what does not exist yet) "
+            + "with git commit --trailer \"Lockflight-Red: 1\" (2 for the next story); 'redgreen red' does this in the lifecycle";
     }
 }

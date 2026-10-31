@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Ci;
+using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Tests.Goldens;
 
@@ -50,6 +51,39 @@ public sealed class CiReportTests : IDisposable
         evidence["checks"]![0]!["verdict"] = 3;
 
         Assert.Equal("ERROR", CiReportCommand.Join(evidence, Head, null)["verdict"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void AnEmbeddedBlockedReportThatIsNotValidIsAnError()
+    {
+        JsonObject evidence = Evidence();
+        evidence["blocked"] = new JsonObject();
+
+        JsonObject verdict = CiReportCommand.Join(evidence, Head, null);
+
+        Assert.Equal("ERROR", verdict["verdict"]!.GetValue<string>());
+        Assert.Contains("'blocked' is not a valid lockflight.blocked/v1 report", verdict["checks"]![0]!["why"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEmbeddedGateResultOfAnotherSchemaIsAnError()
+    {
+        JsonObject evidence = Evidence();
+        evidence["gates"] = new JsonObject { ["schema"] = "lockflight.result/v0" };
+
+        Assert.Equal("ERROR", CiReportCommand.Join(evidence, Head, null)["verdict"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void AReviewResultThatIsNotCiReviewV1IsAnErrorNotAPass()
+    {
+        JsonObject review = new() { ["schema"] = "lockflight.ci-review/v9", ["head"] = Head, ["verdict"] = "PASS" };
+
+        JsonObject verdict = CiReportCommand.Join(Evidence(reviewLevel: "required"), Head, review);
+
+        JsonNode check = verdict["checks"]!.AsArray().Single(node => node!["id"]!.GetValue<string>() == "review")!;
+        Assert.Equal("ERROR", check["verdict"]!.GetValue<string>());
+        Assert.Contains("is not lockflight.ci-review/v1", check["why"]!.GetValue<string>(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -176,7 +210,7 @@ public sealed class CiReportTests : IDisposable
     public void AVerdictThatIsNoLongerNotEarnedWaitsForNoPerson()
     {
         JsonObject evidence = Evidence(reviewLevel: "required");
-        evidence["blocked"] = new JsonObject { ["schema"] = "lockflight.blocked/v1" };
+        evidence["blocked"] = WaitingForReview();
         JsonObject review = new() { ["schema"] = "lockflight.ci-review/v1", ["head"] = Head, ["verdict"] = "FAIL", ["why"] = "1 confirmed blocker" };
 
         JsonObject failed = CiReportCommand.Join(evidence.DeepClone().AsObject(), Head, review);
@@ -205,7 +239,7 @@ public sealed class CiReportTests : IDisposable
     public void ANotEarnedThatWaitsForAPersonShowsTheBarrier()
     {
         JsonObject evidence = Evidence(reviewLevel: "required");
-        evidence["blocked"] = new JsonObject { ["schema"] = "lockflight.blocked/v1" };
+        evidence["blocked"] = WaitingForReview();
 
         string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
 
@@ -213,6 +247,9 @@ public sealed class CiReportTests : IDisposable
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(directory);
+
+    /// <summary>A valid blocked report, as the judge writes one when the class's review has no key to run.</summary>
+    private static JsonObject WaitingForReview() => BlockedReportJson.Render(JudgeBlocked.ForReview(new DateTimeOffset(2026, 10, 31, 0, 0, 0, TimeSpan.Zero), Head, "001-shipping"));
 
     private static JsonObject Evidence(string reviewLevel = "advisory", string redVerdict = "PASS", string testName = "Shop.Tests:Shop.Tests.PriceTests.Shipping") => new()
     {
@@ -242,7 +279,8 @@ public sealed class CiReportTests : IDisposable
             Check("tests.existingChanged", "lockflight/judge", "PASS", "advisory", "no existing test changed"),
             Check("tests.hostTampering", "lockflight/judge", "PASS", "required", "no code in the test assemblies that could tamper with the test host"),
             Check("trace", "lockflight/judge", "PASS", "required", "1/1 requirements of 001-shipping"),
-            Check("routing", "lockflight/judge", "PASS", "required", "class behaviour (routing)")),
+            Check("routing", "lockflight/judge", "PASS", "required", "class behaviour (routing)"),
+            Check("policy", "lockflight/judge", "PASS", "required", "lockflight.yaml is no looser than the base's")),
     };
 
     private static JsonObject Check(string id, string context, string verdict, string level, string why) =>

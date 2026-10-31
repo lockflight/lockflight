@@ -36,6 +36,29 @@ public sealed class InitInstallLevelTests : IDisposable
         Assert.Contains(ClaudeMdBlock.Begin, File.ReadAllText(Path.Combine(projectRoot.FullName, "CLAUDE.md")), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("session-start", true)]
+    [InlineData("stop", true)]
+    [InlineData("pre-tool-use", false)]
+    public async Task WithoutALinkedEngineTheNativeHooksSayTheChecksAreOff(string engineEvent, bool tells)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The hook command runs in a POSIX sh.");
+        Dictionary<string, string?> environment = new() { ["CLAUDE_PROJECT_DIR"] = projectRoot.FullName };
+
+        ProcessResult result = await ProcessRunner.RunAsync(
+            "sh", ["-c", NativeHooks.Command(engineEvent)], projectRoot.FullName, Timeout.InfiniteTimeSpan, environment, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, result.ExitCode);
+        if (tells)
+        {
+            Assert.Equal(NativeHooks.NoEngineMessage, JsonNode.Parse(result.Output)!["systemMessage"]!.GetValue<string>());
+        }
+        else
+        {
+            Assert.Empty(result.Output);
+        }
+    }
+
     [Fact]
     public async Task NativeTwiceChangesNothingTheSecondTime()
     {

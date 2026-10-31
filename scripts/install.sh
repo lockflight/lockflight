@@ -111,6 +111,9 @@ expected=""
 if [ -n "$lock" ]; then
   [ -f "$lock" ] || fail "no lock at $lock"
   input=$(cat "$lock")
+  # json_string does not decode escapes as JSON does ("\\b" reads as b), so a lock with a backslash could name to this script
+  # a key the engine and the first-lock check read as another; every reader refuses it instead.
+  case "$input" in *\\*) fail "$lock holds a backslash; a lock names its keys and values without escapes" ;; esac
   [ "$(json_string schema)" = "lockflight.engine-lock/v1" ] || fail "$lock is not a lockflight.engine-lock/v1 file"
   channel=$(json_string channel)
   [ "$channel" = release ] || fail "$lock is a '$channel' lock (a local development build); CI and this script install only release locks"

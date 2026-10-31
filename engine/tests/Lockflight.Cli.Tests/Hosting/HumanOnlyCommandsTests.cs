@@ -1,10 +1,13 @@
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Tests.Init;
 
 namespace Lockflight.Cli.Tests.Hosting;
 
-public sealed class HumanOnlyCommandsTests
+public sealed class HumanOnlyCommandsTests : IDisposable
 {
+    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-human-only-");
+
     [Theory]
     [InlineData("dotnet lockflight baseline build", "baseline build")]
     [InlineData("lockflight  baseline tests", "baseline tests")]
@@ -19,6 +22,9 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("bash -c \"lockflight approve spec\"", "approve spec")]
     [InlineData("eval 'dotnet lockflight approve tasks'", "approve tasks")]
     [InlineData("sh -ec 'cd src && lockflight baseline build'", "baseline build")]
+    [InlineData("dotnet lockflight init --speckit-preset ~/lockflight/plugins/lockflight/speckit-preset", "init --speckit-preset")]
+    [InlineData(".lockflight/bin/lockflight init --speckit-preset=/tmp/preset", "init --speckit-preset")]
+    [InlineData("bash -c 'lockflight init --profile standard --speckit-preset /tmp/preset'", "init --speckit-preset")]
     public void ReservedCommandsAreFoundWhateverTheSpelling(string command, string expected) =>
         Assert.Equal(expected, HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 
@@ -29,6 +35,8 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("lockflight review status --feature 001-orders")]
     [InlineData("lockflight gate run --profile pr")]
     [InlineData("echo approve && lockflight phase check tasks")]
+    [InlineData("lockflight init --profile standard")]
+    [InlineData("lockflight init --speckit-preset --help")]
     public void OtherCommandsPass(string command) => Assert.Null(HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 
     [Theory]
@@ -97,9 +105,41 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("update", "ask the user to open a separate terminal window")]
     public void AHandOffPutsTheSessionCommandOrTheSeparateTerminalFirst(string command, string start)
     {
-        string handOff = HumanOnlyCommands.AskTheUser(command);
+        string handOff = HumanOnlyCommands.AskTheUser(command, root.FullName);
 
         Assert.StartsWith(start, handOff, StringComparison.Ordinal);
         Assert.Contains($"(not with `!` in Claude Code: that runs inside the session and is refused) and run `{EngineCommand.Name} {command}` from the project root", handOff, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData("approve tasks")]
+    [InlineData("baseline tests")]
+    [InlineData("redgreen reset")]
+    public void AtTheNativeLevelAHandOffNamesOnlyTheTerminal(string command)
+    {
+        NativeLevelSettings.Write(root.FullName, pluginEnabled: false);
+
+        string handOff = HumanOnlyCommands.AskTheUser(command, root.FullName);
+
+        Assert.StartsWith("ask the user to open a separate terminal window", handOff, StringComparison.Ordinal);
+        Assert.DoesNotContain("/lockflight:", handOff, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AtTheNativeLevelTheRefusalNamesNoSessionCommand()
+    {
+        NativeLevelSettings.Write(root.FullName, pluginEnabled: false);
+
+        Assert.DoesNotContain("/lockflight:", HumanOnlyCommands.Refusal(["approve", "spec"], root.FullName, EngineCommand.Linked), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NativeHooksWithThePluginEnabledKeepTheSessionCommand()
+    {
+        NativeLevelSettings.Write(root.FullName, pluginEnabled: true);
+
+        Assert.Contains("type /lockflight:reset in Claude Code", HumanOnlyCommands.AskTheUser("redgreen reset", root.FullName), StringComparison.Ordinal);
+    }
+
+    public void Dispose() => root.Delete(recursive: true);
 }

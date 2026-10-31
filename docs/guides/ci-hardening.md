@@ -25,7 +25,7 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
     mirror, and the version pin of a project without a lock);
   - `lockflight.yaml`;
   - `.gitleaks.toml` and `.gitleaksignore`;
-  - `nuget.config` / `NuGet.config` at the root (package sources: a PR cannot make CI install an engine of its own choosing);
+  - `nuget.config`, `NuGet.config` and `NuGet.Config` at the root (package sources: a PR cannot make CI install an engine of its own choosing);
   - `.lockflight/baselines/` (accepted warnings, known-failing tests, advisories) and `.lockflight/ci/` (the vendored engine
     install script);
   - code-style and analyzer config anywhere in the tree: `.editorconfig`, `.globalconfig`/`*.globalconfig`, `*.ruleset`,
@@ -50,8 +50,17 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
   - **Without a lock** (a project pinned the way Lockflight 0.2 pins): the version in the tool pin, with
     `dotnet tool install --tool-path`.
   - **A pull request that changes the lock:** the judge job runs `lockflight engine verify-lock` on the proposed lock with the
-    base's engine; it fails unless every hash is the one the release of that version published, and unless the release's
-    attestation verifies (the workflow's token).
+    base's engine; it fails unless every platform's hash and the install script's hash are the ones the release of that version
+    published, unless the pull request's `.lockflight/ci/install.sh` is the script the proposed lock pins (`--script`), and unless
+    the release workflow's attestation verifies (the workflow's token). A lock that moves the engine to an older
+    version is named in the verdict ("moves the engine down"), so a downgrade is accepted only on purpose.
+  - **The first lock** (the pull request that moves a 0.2 tool pin to the lock): the base's 0.2 engine has no `verify-lock`, so
+    the action downloads the GitHub Release's `engine-hashes.json` for the lock's version, verifies its attestation with `gh`,
+    and compares every hash, the install script's included, and the vendored `.lockflight/ci/install.sh` with it. It reads the
+    lock as strictly as the engine does: an unknown or repeated key, or any backslash (which `install.sh`'s reader would not
+    decode as JSON does), is refused. Without a
+    token it only warns. On Azure, Bitbucket and GitLab the first lock is **not** release-checked: the job prints a warning, and
+    the person accepting the pull request runs `lockflight engine verify-lock .lockflight/engine.lock` first.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass
   `--ci pr`; see [CI with a development build](getting-started.md#ci-with-a-development-build).
@@ -289,8 +298,9 @@ branches) among the shell's `specs/`, read at the clone's commit, so only a merg
 for the requirements its red tests name, since one feature's spec can span several units. Until the shell's spec pull request
 merges, a unit pull request on a branch named like a feature is NOT-EARNED, with a blocked report naming the spec to merge; run
 the check again once it has merged. The approvals check reads the shell's CODEOWNERS (at any platform's location) and specs,
-and the evidence records the shell's URL and commit. The change class and which checks are required still come from the unit's
-own `lockflight.yaml` on its target branch; only the gates apply the shell's stricter policy. Locally, a unit checked out
+and the evidence records the shell's URL and commit. The change class and which checks are required come from the unit's own
+`lockflight.yaml` on its target branch with the shell's `routing:` for the unit merged in, the stricter value winning, as the
+gates apply the shell's stricter policy; approvals settings stay the unit's. Locally, a unit checked out
 inside its shell is judged against whatever commit the shell has checked out, merged or not.
 
 **Access.** The clone needs read access to the shell repository, and nothing else:

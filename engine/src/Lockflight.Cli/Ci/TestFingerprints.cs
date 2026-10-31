@@ -30,4 +30,26 @@ internal static class TestFingerprints
 
         return fingerprints;
     }
+
+    /// <summary>
+    /// The assertion count (<see cref="TestFingerprinter.Assertions"/>) of each of <paramref name="tests"/> in a built tree, by key; a
+    /// test whose walk cannot be read is left out. Names are not compared, so the repository's assemblies need not be known.
+    /// </summary>
+    public static IReadOnlyDictionary<string, int> Assertions(TestWorkspace workspace, IReadOnlyList<TestCase> tests)
+    {
+        Dictionary<string, int> counts = new(StringComparer.Ordinal);
+        foreach (TestApp app in workspace.Apps.Where(app => tests.Any(test => test.Assembly == app.AssemblyName)))
+        {
+            using TestFingerprinter fingerprinter = new(app.AssemblyPath, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            foreach (TestCase test in tests.Where(test => test.Assembly == app.AssemblyName))
+            {
+                if (fingerprinter.Assertions(test.Class, test.Method) is int count)
+                {
+                    counts[test.Key] = count;
+                }
+            }
+        }
+
+        return counts;
+    }
 }

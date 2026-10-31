@@ -58,21 +58,14 @@ internal static class ReadinessChecks
             checks.Add(developmentPin);
         }
 
-        checks.Add(await CheckLinkAsync(root, cancellationToken));
-        if (PluginEngineCheck.Check(root, userHome, environment) is DoctorCheck pluginEngine)
+        bool ciOnly = ClaudeUserSettings.CiOnlyFor(root, userHome);
+        if (ciOnly)
         {
-            checks.Add(pluginEngine);
+            checks.AddRange(await CiOnlyLevelChecksAsync(root, cancellationToken));
         }
-
-        checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root, userHome)]);
-        if (DenyRulesCheck.Check(root) is DoctorCheck denyRules)
+        else
         {
-            checks.Add(denyRules);
-        }
-
-        if (SandboxCheck.Check(root, userHome) is DoctorCheck sandbox)
-        {
-            checks.Add(sandbox);
+            checks.AddRange(await LocalLevelChecksAsync(root, userHome, environment, cancellationToken));
         }
 
         if (WorkflowTriggerCheck.Check(root) is DoctorCheck workflowTrigger)
@@ -85,7 +78,12 @@ internal static class ReadinessChecks
             checks.Add(workflowJudge);
         }
 
-        checks.AddRange([await CheckClaudeVersionAsync(root, Claude, cancellationToken), CheckGitleaks(gitleaks)]);
+        if (!ciOnly)
+        {
+            checks.Add(await CheckClaudeVersionAsync(root, Claude, cancellationToken));
+        }
+
+        checks.Add(CheckGitleaks(gitleaks));
         if (OperatingSystem.IsWindows())
         {
             checks.Add(await CheckGitBashAsync(root, Bash, cancellationToken));
@@ -120,6 +118,44 @@ internal static class ReadinessChecks
     }
 
     /// <summary>
+    /// The CI-only level: nothing is set up for Claude Code and no engine needs to be linked, so the plugin, hooks, deny rules,
+    /// sandbox and Claude Code lines are left out. A linked engine is still checked, because a person may run it by hand.
+    /// </summary>
+    private static async Task<IReadOnlyList<DoctorCheck>> CiOnlyLevelChecksAsync(string root, CancellationToken cancellationToken) =>
+    [
+        File.Exists(LinkCommand.BinaryPath(root))
+            ? await CheckLinkAsync(root, cancellationToken)
+            : new("linked engine", CheckStatus.Info, "CI-only level: no engine linked, and none is needed; CI installs the pinned engine", null),
+        CheckGitIgnore(root),
+        new("claude settings", CheckStatus.Info,
+            $"CI-only level (init --ci-only): nothing is set up for Claude Code, so no plugin, hooks, deny rules or sandbox are checked; {EngineCommand.Name} init or init --native adds the local checks",
+            null),
+    ];
+
+    /// <summary>The plugin and native levels: the linked engine the hooks run, the plugin's engine, and the project's Claude Code settings.</summary>
+    private static async Task<IReadOnlyList<DoctorCheck>> LocalLevelChecksAsync(string root, string? userHome, EnvironmentReader environment, CancellationToken cancellationToken)
+    {
+        List<DoctorCheck> checks = [await CheckLinkAsync(root, cancellationToken)];
+        if (PluginEngineCheck.Check(root, userHome, environment) is DoctorCheck pluginEngine)
+        {
+            checks.Add(pluginEngine);
+        }
+
+        checks.AddRange([CheckGitIgnore(root), CheckClaudeSettings(root, userHome)]);
+        if (DenyRulesCheck.Check(root) is DoctorCheck denyRules)
+        {
+            checks.Add(denyRules);
+        }
+
+        if (SandboxCheck.Check(root, userHome) is DoctorCheck sandbox)
+        {
+            checks.Add(sandbox);
+        }
+
+        return checks;
+    }
+
+    /// <summary>
     /// The project uses the standard lifecycle: the standard profile's init wrote the evidence rule into .gitattributes (the lite
     /// profile does not), or the Lockflight Spec Kit preset is installed and enabled (as <c>init --speckit-preset</c> does).
     /// </summary>
@@ -147,10 +183,10 @@ internal static class ReadinessChecks
     private static DoctorCheck CheckPin(string root) => ToolPin.ReadPin(root) switch
     {
         { Status: ToolPinStatus.Unreadable, Problem: string problem } =>
-            new("tool pin", CheckStatus.Fail, problem, $"fix the file by hand (a person's edit: it is protected), then {EngineCommand.Name} init"),
+            new("tool pin", CheckStatus.Fail, problem, $"fix the file by hand (a person's edit: it is protected), then {EngineCommand.Name} init in your own terminal"),
         { Version: string pinned } when ToolPin.Matches(pinned, ToolPin.RunningVersion) => new("tool pin", CheckStatus.Pass, $"pinned {pinned}", null),
         { Version: string pinned } => new("tool pin", CheckStatus.Fail, $"pinned {pinned}, running {ToolPin.RunningVersion}", Relink(pinned)),
-        _ => new("tool pin", CheckStatus.Fail, "dotnet-tools.json does not pin lockflight.cli", $"{EngineCommand.Name} init"),
+        _ => new("tool pin", CheckStatus.Fail, "dotnet-tools.json does not pin lockflight.cli", $"{EngineCommand.Name} init, in your own terminal (inside Claude Code init leaves the engine pin as it is)"),
     };
 
     /// <summary>

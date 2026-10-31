@@ -60,6 +60,29 @@ public sealed class EngineLockPlannerTests : IDisposable
     }
 
     [Fact]
+    public async Task AReleaseThatNamesAnotherInstallScriptPinsNothing()
+    {
+        Assert.SkipWhen(EngineRids.Current is null, "No released engine for this platform.");
+        byte[] hashes = WritePointer(EngineHash, script: new string('e', 64));
+
+        EngineLockPlan plan = await PlanAsync(Version, release: hashes);
+
+        Assert.Null(plan.Lock);
+        Assert.Contains("names another install script", plan.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReleaseThatNamesThisEnginesInstallScriptPinsIt()
+    {
+        Assert.SkipWhen(EngineRids.Current is null, "No released engine for this platform.");
+        byte[] hashes = WritePointer(EngineHash, script: InstallScript.Sha256);
+
+        EngineLockPlan plan = await PlanAsync(Version, release: hashes);
+
+        Assert.Equal(InstallScript.Sha256, plan.Lock!.InstallScriptSha256);
+    }
+
+    [Fact]
     public async Task AnUnreachableReleaseIsAWarningNotARefusal()
     {
         Assert.SkipWhen(EngineRids.Current is null, "No released engine for this platform.");
@@ -108,8 +131,9 @@ public sealed class EngineLockPlannerTests : IDisposable
             work.FullName, version, EngineBinary, new EnginePackageFeed(Path.Combine(work.FullName, "feed"), EnvironmentReader.Of(new Dictionary<string, string>())),
             (_, _) => Task.FromResult(release), NoGh, TestContext.Current.CancellationToken);
 
-    private byte[] WritePointer(string ownHash)
+    private byte[] WritePointer(string ownHash, string? script = null)
     {
+        string scriptEntry = script is null ? string.Empty : $$""", "installScript": { "sha256": "{{script}}" }""";
         string binaries = string.Join(",\n", EngineRids.Released.Select(rid =>
             $"    \"{rid}\": {{ \"sha256\": \"{(rid == EngineRids.Current ? ownHash : new string('9', 64))}\", \"path\": \"tools/any/{rid}/{EngineRids.ExecutableName(rid)}\" }}"));
         byte[] hashes = Encoding.UTF8.GetBytes($$"""
@@ -120,7 +144,7 @@ public sealed class EngineLockPlannerTests : IDisposable
               "commit": "{{new string('1', 40)}}",
               "binaries": {
             {{binaries}}
-              }
+              }{{scriptEntry}}
             }
 
             """);

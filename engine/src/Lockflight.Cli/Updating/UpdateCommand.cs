@@ -313,6 +313,13 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         {
             writes.Add(new PlannedWrite(InstallScript.RelativePath, scriptPath, existingScript, scriptText));
         }
+
+        string attributesPath = Path.Combine(root, ".gitattributes");
+        string? attributes = File.Exists(attributesPath) ? await File.ReadAllTextAsync(attributesPath, cancellationToken) : null;
+        if (GitAttributesUpdater.UpdateInstallScript(attributes) is (string withRule, true))
+        {
+            writes.Add(new PlannedWrite(".gitattributes", attributesPath, attributes, withRule));
+        }
     }
 
     /// <summary>
@@ -344,13 +351,13 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             string fallback = Path.Combine(root, ".lockflight", "local", "migration", relative.Replace('/', Path.DirectorySeparatorChar));
             if (dryRun)
             {
-                await context.Output.WriteLineAsync($"note: {relative} does not hold the engine install step as Lockflight wrote it; update would leave it alone and write the new step for you to merge");
+                await context.Output.WriteLineAsync($"note: {relative} does not hold the engine install step or the pull request's base as Lockflight wrote it; update would leave it alone and write the new step for you to merge");
                 continue;
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(fallback)!);
-            await File.WriteAllTextAsync(fallback, $"# Replace the engine install step of {relative} with this, and add .lockflight/engine.lock and .lockflight/ci to its policy restore:\n{CiShellScripts.InstallEngine}\n", cancellationToken);
-            await context.Output.WriteLineAsync($"note: {relative} does not hold the engine install step as Lockflight wrote it, so it was left alone; merge {Path.GetRelativePath(root, fallback).Replace('\\', '/')} into it by hand");
+            await File.WriteAllTextAsync(fallback, $"# Replace the engine install step of {relative} with this, and add .lockflight/engine.lock and .lockflight/ci to its policy restore; on Azure and GitLab take a pull request's base from the target branch's tip, as lockflight init writes it:\n{CiShellScripts.InstallEngine}\n", cancellationToken);
+            await context.Output.WriteLineAsync($"note: {relative} does not hold the engine install step or the pull request's base as Lockflight wrote it, so it was left alone; merge {Path.GetRelativePath(root, fallback).Replace('\\', '/')} into it by hand");
         }
     }
 

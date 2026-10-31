@@ -57,4 +57,31 @@ public sealed class EngineHashesReaderTests
         Assert.Null(EngineHashesReader.Read(Released().Replace("engine-hashes/v1", "engine-hashes/v2", StringComparison.Ordinal), out string? problem));
         Assert.Equal("not a lockflight.engine-hashes/v1 file for Lockflight.Cli", problem);
     }
+
+    [Fact]
+    public void TheInstallScriptHashReadsWhenTheReleasePublishedIt()
+    {
+        string text = Released().Replace("\"binaries\": {", $"\"installScript\": {{ \"sha256\": \"{new string('5', 64)}\" }},\n  \"binaries\": {{", StringComparison.Ordinal);
+
+        Assert.Equal(new string('5', 64), EngineHashesReader.Read(text, out _)!.InstallScriptSha256);
+        Assert.Null(EngineHashesReader.Read(Released(), out _)!.InstallScriptSha256);
+    }
+
+    [Fact]
+    public void AMalformedInstallScriptHashIsAProblem()
+    {
+        string text = Released().Replace("\"binaries\": {", "\"installScript\": { \"sha256\": \"abc\" },\n  \"binaries\": {", StringComparison.Ordinal);
+
+        Assert.Null(EngineHashesReader.Read(text, out string? problem));
+        Assert.Equal("'installScript' must be { \"sha256\": \"<64 lower-case hex>\" }", problem);
+    }
+
+    [Fact]
+    public void ARepeatedKeyIsAProblem()
+    {
+        string text = Released().Replace("\"commit\":", "\"version\": \"9.9.9\",\n  \"commit\":", StringComparison.Ordinal);
+
+        Assert.Null(EngineHashesReader.Read(text, out string? problem));
+        Assert.Equal("the key 'version' appears twice", problem);
+    }
 }

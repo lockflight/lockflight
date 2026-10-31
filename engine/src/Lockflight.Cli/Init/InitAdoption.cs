@@ -129,9 +129,9 @@ internal static class InitAdoption
     }
 
     /// <summary>The line that says how to upgrade the team's Spec Kit, when init left it as it is.</summary>
-    public static string SpecKitLine(string root, string? presetDirectory) =>
+    public static string SpecKitLine(string root, string? presetDirectory, string engine) =>
         $"Spec Kit was left as it is. To upgrade it to {SetupInventory.PinnedSpecKitVersion} with the Lockflight preset (customised files are kept and listed), run "
-        + $"`{EngineCommand.Linked} init --speckit-preset {(presetDirectory is null ? PresetPlaceholder : ShellQuoting.Quote(presetDirectory))}` in {ShellQuoting.Quote(root)}"
+        + $"`{engine} init --speckit-preset {(presetDirectory is null ? PresetPlaceholder : ShellQuoting.Quote(presetDirectory))}` in {ShellQuoting.Quote(root)}"
         + (presetDirectory is null ? $", with {PresetPlaceholder} the speckit-preset directory of the installed Lockflight plugin (under ~/.claude/plugins/cache/lockflight/lockflight/<version>/) or of a Lockflight checkout (plugins/lockflight/speckit-preset)." : ".");
 
     private static string Extend(string text, string key, IReadOnlyList<IReadOnlyList<string>> entries, List<string> manual)

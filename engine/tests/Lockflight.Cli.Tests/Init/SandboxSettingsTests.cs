@@ -49,15 +49,22 @@ public sealed class SandboxSettingsTests : IDisposable
     }
 
     [Fact]
-    public void OfTheLockflightDirectoryOnlyTheEngineAndTheBaselinesAreDenied()
+    public void OfTheLockflightDirectoryOnlyTheEngineTheBaselinesTheLocksAndTheInstallScriptAreDenied()
     {
         Write(".lockflight/baselines/known-failing-tests.json", "[]");
         Write(".lockflight/ledger/2026-10.jsonl", string.Empty);
+        Write(".lockflight/engine.lock", "{}");
+        Write(".lockflight/ci/install.sh", "exit 0");
+        Write(".lockflight/local/engine.lock", "{}");
 
         IReadOnlyList<string> denied = SandboxSettings.DenyWrite(root.FullName, DefaultProtectedPaths.Globs);
 
         Assert.Contains("./.lockflight/bin", denied);
         Assert.Contains("./.lockflight/baselines", denied);
+        Assert.Contains("./.lockflight/engine.lock", denied);
+        Assert.Contains("./.lockflight/ci", denied);
+        Assert.Contains("./.lockflight/local/engine.lock", denied);
+        Assert.DoesNotContain("./.lockflight/local", denied);
         Assert.DoesNotContain("./.lockflight", denied);
         Assert.DoesNotContain(denied, path => path.StartsWith("./.lockflight/ledger", StringComparison.Ordinal));
     }

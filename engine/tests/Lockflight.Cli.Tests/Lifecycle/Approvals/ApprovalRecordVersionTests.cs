@@ -63,7 +63,7 @@ public sealed class ApprovalRecordVersionTests : IDisposable
         ApprovalCheck check = store.Check(ApprovalPhase.Spec);
 
         Assert.Equal(ApprovalState.Invalid, check.State);
-        Assert.Contains(problem, check.Describe(), StringComparison.Ordinal);
+        Assert.Contains(problem, check.Describe(root.FullName), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class ApprovalRecordVersionTests : IDisposable
         string path = store.Save(ApprovalPhase.Spec, "Jane Doe", DateTimeOffset.UnixEpoch, "0.3.0");
         Rewrite(path, record => record["schema"] = "lockflight.approval/v3");
 
-        Assert.Contains("its schema is 'lockflight.approval/v3'", store.Check(ApprovalPhase.Spec).Describe(), StringComparison.Ordinal);
+        Assert.Contains("its schema is 'lockflight.approval/v3'", store.Check(ApprovalPhase.Spec).Describe(root.FullName), StringComparison.Ordinal);
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(root);

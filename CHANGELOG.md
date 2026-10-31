@@ -5,6 +5,153 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-31
+
+0.3.0 makes a CI check the judge of record and the plugin the local assistant. The CI judge re-runs each red commit,
+checks green at head, traces the spec, runs the pull-request gates, compares the policy with the base's, and reports the
+`gates` and `lockflight/judge` statuses. Its red/green, tests-since-red and trace results are a strong guardrail, not a boundary: the
+judge runs the pull request's code in the same job (judge isolation comes after 0.3.0). The manifest, evidence,
+`engine.lock` and CI comment formats are frozen from this release: until 1.0 they take additions only.
+
+### Breaking changes
+- **`adopt`, backups and undo are removed.** `lockflight init` adopts an existing Claude Code and Spec Kit setup itself
+  (`--dry-run`, `--unit-of`); git is the undo (#153).
+- **SSH-signed approvals are removed:** `approve spec|tasks --sign [--key]`, `/lockflight:approve … --sign`, the `.sig`
+  files and `approve verify --allowed-signers`. The approval of record is the platform's review (CODEOWNERS on `specs/**`).
+  A `.sig` file an 0.2 engine wrote is ignored (#138).
+- **`rules audit` and `ledger retro` leave the engine** and become the crew's `rules-audit` and `retro` skills, which read
+  `lockflight facts --json` (`lockflight.facts/v1`) (#142).
+- **Manifest version 2** (`routing:`, `approvals:`, the reserved `autonomy:`, `shell:`, gate toggles, `requiresEngine`).
+  `init` writes version 2; `update` moves a version 1 `lockflight.yaml` once, editing its text so comments and order stay
+  (#144, #161).
+- **Evidence formats:** approval records `lockflight.approval/v2` (`state: person`; a v1 record still counts), the blocked
+  report `lockflight.blocked/v1`, gate results v1 (#150); the CI judge's evidence, verdict and review result in the frozen
+  formats, with a published schema for each in `schemas/` (#186, #210).
+- **The engine is pinned by hash** in `.lockflight/engine.lock` (`lockflight.engine-lock/v1`), with the install script
+  vendored beside it (`.lockflight/ci/install.sh`); the `dotnet-tools.json` pin stays as a mirror of the lock's version.
+  The CI pipelines install the engine the target branch's lock pins, and CI checks a changed lock against its release
+  (#163, #169, #171, #198). A development build keeps its lock in the git-ignored `.lockflight/local/engine.lock`.
+- **The guard parses only common shell writes** and allows a command whose writes it does not parse; test-file hashes, the
+  review and the CI gates catch what it misses (#137).
+- **The plugin needs engine 0.3.0** (`min-engine-version`): it runs `ci`, `route`, `facts`, `engine install` and
+  `link --installed`.
+
+### What to do after upgrading
+- **Update the engine and the project, in this order.** In a separate terminal window (not with `!` in Claude Code), from
+  the project root, run `~/.lockflight/bin/lockflight update` and commit what it lists, in one commit. It installs engine
+  0.3.0, moves `lockflight.yaml` to version 2 (listing each new check and how to make it fail), writes
+  `.lockflight/engine.lock` and `.lockflight/ci/install.sh`, and moves the CI file's engine install to the lock. Until
+  then, Claude Code says at session start that the plugin needs a newer engine. Without the .NET SDK, install the engine
+  with `scripts/install.sh --version 0.3.0` (or `install.ps1 -Version 0.3.0`), which prints the engine's path
+  (`~/.lockflight/tools/0.3.0/lockflight`), and run that engine's `update --project` from the project root instead.
+- **Run `lockflight init` again**, with your level's flag (`--native`, `--ci-only`) if you use one, for the new deny rules
+  and sandbox write denials for `.lockflight/engine.lock` and `.lockflight/ci/**`, and an `Edit` deny rule for your user
+  install `~/.lockflight/**`; `doctor` names what is missing until then.
+- **Add the CI judge.** `init` never replaces a CI file that exists, and `update` only moves its engine install, so an
+  0.2 `lockflight-gates.yml` keeps running the gates alone. To judge, delete it and run `lockflight init` (or
+  `init --ci-only` for CI without the plugin), which writes the judge's workflow on GitHub or pipeline on Bitbucket (the
+  Azure and GitLab jobs run the gates only). Merge it with a person's review, and make `lockflight/judge` a required status check once the team produces
+  red commits (a commit with a `Lockflight-Red: <cycle>` trailer; `gates` keeps its name and meaning). Route
+  `.github/workflows/**`, `.github/actions/**`, `lockflight.yaml`, `.lockflight/**` and `specs/**` to a code owner;
+  `doctor` names what CODEOWNERS leaves uncovered.
+- **Approvals move to the platform.** Delete any `.sig` files and `allowed_signers` setup; put `specs/**` under CODEOWNERS
+  with required code-owner review. `approve verify` still checks the records and hashes.
+- **If you used `adopt`**: nothing to undo; run `init` for new setups. Old backup refs (`refs/lockflight/backup/*`) and
+  tarballs are no longer read; delete them when you no longer need them.
+- **If you used `rules audit` or `ledger retro`**: install the `lockflight-crew` plugin and use its `rules-audit` and
+  `retro` skills.
+- **Pick an install level** ([install levels](docs/guides/install-levels.md)): the plugin (default), `init --native`
+  (project hooks, no plugin) or `init --ci-only`. CI runs at every level.
+- **Update the crew plugin too** (0.3.0 adds the spec writer and the planner); it moves with this release.
+- **Keep a cycle test's name until the pull request merges.** The judge reports a cycle test renamed or deleted after its
+  red commit as NOT-EARNED, and an amended test whose red version no longer passes on the head's code as NOT-EARNED until a
+  new red commit for that cycle proves the new expectation.
+
+### Added
+- **The CI judge** (`lockflight ci`, `ci report`, `ci review`, and the composite action `lockflight/lockflight/action`):
+  re-runs each red commit (#158) and checks green at head (#159); checks that cycle tests are the ones that went red, with a
+  per-method fingerprint of each listed test (#160, #162); re-checks existing tests a pull request changed (advisory,
+  #165); lists test-assembly code that could tamper with the test host (#175); traces the spec, runs the gates, keeps a
+  time budget and runs the review in its own job (#180); checks approvals and judges a unit with its workspace shell's spec
+  (#183); reads red commits and the change class from git (#145, #185); shows Levi's verdict badges in the comment and job
+  summary (#187).
+- **The `policy` check** ("Policy vs base"): a pull request that loosens `lockflight.yaml` against the target branch's
+  (gate modes, protected or critical paths, routing thresholds, approvals, the judge's limits, the `shell:` pointer and
+  more) FAILs, and the comment names each loosened setting (#209).
+- **The report re-plans the run from git** and refuses evidence (ERROR) whose policy commit, engine, event, class, red
+  commits or check levels disagree with the plan, or whose shape is not the schema's; `lockflight.ci-review/v1` is
+  published (#210).
+- **Generated CI for four platforms:** the GitHub workflow and the Bitbucket pipeline run the judge through the action
+  (#182); Azure Pipelines and GitLab CI/CD jobs run the gates (#119), with the policy from the target branch's tip (#199).
+- **Risk routing** (guardrails): a pull request's change class from size, project, test, policy and structure signals
+  (#147, #156); API surface and database signals (#164); the analyzer's public API files (#174); raising the class from a
+  spec's class line, the recorded class (`route record`), labels and `--raise` (#170); what each class requires, the
+  comment lines, the evidence block and `route show` (#168); a unit repository's routing is the shell's, made stricter by
+  its own (#172).
+- **Approvals of record:** CI checks in git what the approval rests on (#166).
+- **Three install levels:** `init --native` and `init --ci-only` (#178).
+- **Engine install without the .NET SDK**, checked against its hash (`scripts/install.sh`, `install.ps1`,
+  `lockflight engine install`, `link --installed`) (#151, #152, #163); the release publishes per-platform executable hashes
+  and the install script's hash (#146, #198).
+- **Workspaces:** a unit repository's CI judges with its shell's policy through the `shell:` pointer (#167).
+- **Red/green and trace for NUnit (#141) and MSTest (#149)**; `test.stopFilter` filters red/green's regression passes
+  (#155).
+- **Gates:** the stop profile builds and tests only the projects a change affects (#154); `pr` steps for suppressions a
+  change adds (#136), references a change breaks in instruction files (#139) and an EF Core model changed without a
+  migration (#143).
+- **The crew:** a spec writer and a planner on a public spec contract, Spec Kit optional (#131); `crew/v*` releases with a
+  trust-boundary check (#176).
+- **`init`:** an opt-in code-quality pack and architecture tests (#121).
+- **`doctor --self-test`**; the canary suite moves to the engine tests (#140). `doctor` checks CODEOWNERS (#171) and
+  recognises the CI-only level (#195).
+- **Release:** the marketplace pins each plugin to its own release tag (#179).
+
+### Changed
+- **The guard protects your user install** (`~/.lockflight/**`, with an `Edit` deny rule), parses `ln` like `cp`, and judges
+  writes into another checkout of a Lockflight project; `link --installed` reads only the checkout's committed lock (#205).
+- **A hook precondition failure never blocks Stop, SessionStart or TaskCompleted**; it blocks a tool call and a typed
+  human command, and says so to the person. `init` inside a Claude Code session keeps the engine of a project that
+  already has a `lockflight.yaml` (#212).
+- **An agent waiting on a person's first approval stops cleanly**: the Stop gate is skipped, with one message for the
+  person, while the tree and the missing approval are unchanged (#201).
+- At the native level, messages and next steps name terminal commands, not `/lockflight:*` (#195).
+- `init`'s Spec Kit line names the preset of this engine's plugin version and an engine that exists at the chosen level
+  (#211).
+- The generated workflows pin the action by commit, labelled with the engine release that wrote them (`# v0.3.0`) (#191).
+- Release: each release file is uploaded once, a dry run rehearses the release step, and releases start only from `main`
+  (#188); the version files are checked against the release, the crew's included (#190).
+- Docs: a README around the CI judge and a QUICKSTART to a first green verdict (#184); the architecture with the CI judge
+  as the verdict of record, honest labels and the shell pointer (#181); the judge as it is in 0.3.0 (#189); the feature
+  skill commits the feature and its evidence before the review (#126).
+
+### Removed
+- `adopt plan|apply|undo`, backup refs and tarballs (#153).
+- `approve … --sign [--key]`, `approve verify --allowed-signers` and the `.sig` files (#138).
+- `rules audit` and `ledger retro` from the engine (#142).
+
+### Fixed
+- The marketplace describes the plugins at its pinned tag (#133).
+- Doctor checks the plugin the session loaded, and names the copy (#125); Spec Kit is optional, reported as info (#173).
+- `init` adds no adopt step when the preset is already installed (#124).
+- The guard lets the agent ask a human-only command for `--help` (#123).
+- The active feature is found the way Spec Kit finds it, branch included (#122).
+- The secrets step no longer reads the engine's own hashes as API keys (#120).
+- `quality.suppressions` no longer fails the `#nullable disable` atop an EF Core migration written without a designer
+  (#196).
+- The CI judge, from the 0.3.0 review and end-to-end runs: swapped production lines are a change (#192); a pure rename or a
+  comment-only edit of production code needs no red (#193); host tampering accepts writes into a fixture's temporary folder
+  (#194); a pull request's own `.gitattributes` hides no lines, `NuGet.Config` is restored from the target branch, and
+  `ci --shell` routes under the shell's routing (#197); one definition of a shared test-helper project, and test-side files
+  added after red are compared (#200); compiled non-C# files, central package removals and unreadable files route as they
+  should (#202); an amend after red is accepted only when the red commit's version still passes on the head's code, and a
+  weakened one FAILs (#203); a target branch without `lockflight.yaml` is refused, and the red hint names the manual
+  trailer (#204); merges of the target branch after a red are no amend (#206); the test fingerprint follows generic bases,
+  type arguments and attribute types and ignores the compiler's attributes (#207); a base test the base skips at run time
+  with the same message is no new skip (#208).
+- The engine lock: every reader agrees on a lock, the first lock is release-checked in the action, and `engine
+  verify-lock` checks the install script (`--script`) and names a downgrade (`--base`) (#198). The action's policy restore
+  reads `NuGet.Config` too (#213).
+
 ## [0.2.0-alpha.9] — 2026-10-28
 
 ### What to do after upgrading
@@ -387,7 +534,8 @@ The first public release. Earlier versions were private previews; this entry sum
 - Levi, the pixel lock-keeper, in your terminal and, if you like, in Claude Code's status line (`lockflight statusline`). Only
   people see him.
 
-[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.9...HEAD
+[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.9...v0.3.0
 [0.2.0-alpha.9]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.8...v0.2.0-alpha.9
 [0.2.0-alpha.8]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.7...v0.2.0-alpha.8
 [0.2.0-alpha.7]: https://github.com/lockflight/lockflight/compare/70afe89...v0.2.0-alpha.7

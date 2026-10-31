@@ -1,7 +1,7 @@
 namespace Lockflight.Cli.Hooks;
 
 /// <summary>
-/// <c>cp</c>, <c>mv</c> and <c>install</c>. The destination may be a file or a directory, so it counts as written and so does
+/// <c>cp</c>, <c>mv</c>, <c>install</c> and <c>ln</c> (a link replaces its destination as a copy does). The destination may be a file or a directory, so it counts as written and so does
 /// <c>DEST/&lt;name of each source&gt;</c> (also with <c>-t DIR</c>/<c>--target-directory=DIR</c>). A copy that can create a directory
 /// tree (<c>cp -r</c>, every <c>mv</c>) makes the destination a tree; <c>mv</c> also removes its sources.
 /// </summary>
@@ -10,7 +10,7 @@ internal static class CopyCommandTargets
     private static readonly string[] OptionsWithValue =
         ["-t", "--target-directory", "-S", "--suffix", "-m", "--mode", "-o", "--owner", "-g", "--group"];
 
-    public static IReadOnlySet<string> Programs { get; } = new HashSet<string>(["cp", "mv", "install"]);
+    public static IReadOnlySet<string> Programs { get; } = new HashSet<string>(["cp", "mv", "install", "ln"]);
 
     public static CommandWrites Of(string program, IReadOnlyList<string> arguments)
     {

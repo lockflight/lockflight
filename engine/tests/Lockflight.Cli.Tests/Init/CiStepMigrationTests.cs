@@ -50,12 +50,57 @@ public sealed class CiStepMigrationTests
         Assert.Equal(judge, CiStepMigration.Migrate(judge));
     }
 
+    [Theory]
+    [MemberData(nameof(Platforms))]
+    public void APipelineWithoutTheThirdNuGetConfigSpellingGetsIt(string platform)
+    {
+        Assert.True(CiPlatformNames.TryParse(platform, out CiPlatform parsed));
+        string current = CiPipeline.Files(parsed, Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+        string previous = current.Replace(" NuGet.config NuGet.Config; do", " NuGet.config; do", StringComparison.Ordinal);
+
+        Assert.NotEqual(current, previous);
+        Assert.Equal(current, CiStepMigration.Migrate(previous));
+    }
+
+    [Theory]
+    [MemberData(nameof(Platforms))]
+    public void APipelineWithTheCurrentListsThatRestoresByCheckoutRestoresTheCommittedBytes(string platform)
+    {
+        Assert.True(CiPlatformNames.TryParse(platform, out CiPlatform parsed));
+        string expected = CiPipeline.Files(parsed, Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+        string checkedOut = CheckedOut(expected);
+        Assert.Contains("git checkout \"$BASE\" -- \"$directory\"", checkedOut, StringComparison.Ordinal);
+        Assert.Contains("git checkout \"$BASE\" -- \"$file\"", checkedOut, StringComparison.Ordinal);
+
+        Assert.Equal(expected, CiStepMigration.Migrate(checkedOut));
+    }
+
+    [Fact]
+    public void AHandEditedCheckoutRestoreOfThePolicyDirectoriesIsLeftAlone()
+    {
+        string current = CiPipeline.Files(CiPlatform.GitLab, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+        string edited = CheckedOut(current).Replace("rm -rf \"$directory\"", "rm -rf \"$directory\" # kept", StringComparison.Ordinal);
+
+        Assert.Null(CiStepMigration.Migrate(edited));
+    }
+
     [Fact]
     public void AHandEditedInstallStepIsLeftAlone()
     {
         string edited = File.ReadAllText(Path.Combine(CasesDirectory(), "github.yml")).Replace("--tool-path \"$RUNNER_TEMP/lockflight\"", "--tool-path /opt/lockflight", StringComparison.Ordinal);
 
         Assert.Null(CiStepMigration.Migrate(edited));
+    }
+
+    [Theory]
+    [InlineData("azure", "BASE=$(git merge-base HEAD \"origin/$target\")", "BASE=$(git merge-base HEAD \"origin/$target\" || true)")]
+    [InlineData("gitlab", "BASE=\"$CI_MERGE_REQUEST_DIFF_BASE_SHA\" ;;", "BASE=\"${CI_MERGE_REQUEST_DIFF_BASE_SHA}\" ;;")]
+    public void AHandEditedPullRequestBaseIsLeftAlone(string platform, string written, string edited)
+    {
+        string legacy = File.ReadAllText(Path.Combine(CasesDirectory(), $"{platform}.yml"));
+        Assert.Contains(written, legacy, StringComparison.Ordinal);
+
+        Assert.Null(CiStepMigration.Migrate(legacy.Replace(written, edited, StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -75,6 +120,28 @@ public sealed class CiStepMigrationTests
 
         Assert.DoesNotContain("\n", migrated.Replace("\r\n", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
         Assert.Contains(CiShellScripts.InstallBeginMarker, migrated, StringComparison.Ordinal);
+    }
+
+    /// <summary>The policy restore as an earlier 0.3 pre-release wrote it: the current lists, each file and directory checked out.</summary>
+    private static string CheckedOut(string pipeline)
+    {
+        List<string> lines = [.. pipeline.Split('\n')];
+        for (int index = 0; index < lines.Count; index++)
+        {
+            string indent = lines[index][..(lines[index].Length - lines[index].TrimStart().Length)];
+            string line = lines[index].Trim();
+            if (line == "if git cat-file -e \"$BASE:$file\" 2>/dev/null; then mkdir -p \"$(dirname \"$file\")\"; rm -f \"$file\"; git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi")
+            {
+                lines[index] = indent + "if git cat-file -e \"$BASE:$file\" 2>/dev/null; then git checkout \"$BASE\" -- \"$file\"; else rm -f \"$file\"; fi";
+            }
+            else if (line == "if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then")
+            {
+                lines[index] = indent + "if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then git checkout \"$BASE\" -- \"$directory\"; fi";
+                lines.RemoveRange(index + 1, 2);
+            }
+        }
+
+        return string.Join('\n', lines);
     }
 
     private static string CasesDirectory([CallerFilePath] string path = "") => Path.Combine(Path.GetDirectoryName(path)!, "CiMigrationCases");

@@ -52,7 +52,7 @@ public sealed class ApprovalStoreTests : IDisposable
         ApprovalCheck check = store.Check(ApprovalPhase.Tasks);
 
         Assert.Equal(ApprovalState.Invalid, check.State);
-        Assert.Contains("recorded for phase 'spec', not 'tasks'", check.Describe(), StringComparison.Ordinal);
+        Assert.Contains("recorded for phase 'spec', not 'tasks'", check.Describe(root.FullName), StringComparison.Ordinal);
     }
 
     [Theory]
