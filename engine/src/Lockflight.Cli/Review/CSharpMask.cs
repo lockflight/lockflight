@@ -54,7 +54,8 @@ internal static class CSharpMask
 
         if (current is '"' or '$' or '@' && StringStart(source, position) is (int quote, bool verbatim, bool interpolated))
         {
-            int quotes = QuoteRun(source, quote);
+            // A raw string never takes @: @"""" is a verbatim string holding one quote.
+            int quotes = verbatim ? 1 : QuoteRun(source, quote);
             int end = quotes >= 3 ? RawEnd(source, quote, quotes)
                 : verbatim ? VerbatimEnd(source, quote)
                 : RegularEnd(source, quote, interpolated);

@@ -127,6 +127,18 @@ public sealed class JudgeRoutingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ACommentEditBelowAVerbatimStringHoldingAQuoteIsNoProductionChange()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string Text(string comment) => $"namespace Shop;\n\npublic static class Quotes\n{{\n    public const string One = @\"\"\"\";\n\n    // {comment}\n    public static int Two => 2;\n}}\n";
+        await repository.Write("src/Shop/Quotes.cs", Text("one quote")).CommitAsync("feat: quotes", cancellationToken);
+        baseCommit = await repository.HeadAsync(cancellationToken);
+        await repository.Write("src/Shop/Quotes.cs", Text("a single quote")).CommitAsync("docs: quotes", cancellationToken);
+
+        Assert.False((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
     public async Task AWhitespaceEditInsideAOneLineStringIsAProductionChange()
     {
         await repository.Write("src/Shop/Price.cs", BasePrice.Replace("public int Two => 2;", "public string Two => \"a b\";", StringComparison.Ordinal))
