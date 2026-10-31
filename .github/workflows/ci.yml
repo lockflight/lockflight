@@ -298,6 +298,9 @@ jobs:
       # Once the release pull request raises the versions, the version files must be the release's, min-engine-version
       # included (docs/engineering/releasing.md); release-packages.yml runs the same check on the tag.
       - name: The version files agree with the release being cut
+        env:
+          # The tags of the repository, not of a fork (a fork may have none).
+          LOCKFLIGHT_RELEASE_REMOTE: https://github.com/lockflight/lockflight.git
         run: scripts/release-versions.sh
       - name: No citations of records outside the repository
         run: scripts/check-public-tree.sh

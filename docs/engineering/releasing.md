@@ -105,8 +105,8 @@ push to `main`) fails unless:
 - the judge (`lockflight`) names a `vX.Y.Z` tag and its commit. The crew (`lockflight-crew`) names its own `crew/vX.Y.Z` tag,
   or the judge's tag and commit until its first crew release. Each tag exists on GitHub and points at the commit named;
 - at the judge's tag, `plugins/lockflight/.claude-plugin/plugin.json` has the tag's version, and its `min-engine-version` is
-  at most that version; so does the crew's `plugin.json` while the crew is served from the judge's tag. At a crew tag, the
-  crew's `plugin.json` has the crew tag's version;
+  at most that version. While the crew is served from the judge's tag, the crew's `plugin.json` has the tag's version too. At
+  a crew tag, the crew's `plugin.json` has the crew tag's version;
 - nuget.org lists `Lockflight.Cli` at the judge tag's version and at each plugin's `min-engine-version`;
 - the marketplace's own fields are those of the development marketplace,
   [`plugins/.claude-plugin/marketplace.json`](../../plugins/.claude-plugin/marketplace.json), at the judge's tag, and each
@@ -121,8 +121,10 @@ throughout and users stay on the previous release until the last step below.
 ## Cutting a release
 
 1. Raise the version in both `plugin.json` files (the crew's while it has no release of its own: Claude Code replaces an
-   installed plugin only when its version changes) and in the Spec Kit preset's `preset.yml`, check
-   `plugins/lockflight/min-engine-version` (an engine of the new `MAJOR.MINOR` line, at most the release), and draft the
+   installed plugin only when its version changes) and in the Spec Kit preset's `preset.yml`, raise
+   `plugins/lockflight/min-engine-version` to an engine of the new `MAJOR.MINOR` line, at most the release (it stays at the
+   last release on `main` in between, so development builds from `scripts/dev-install.sh`, which sort below the next
+   release, satisfy it), and draft the
    CHANGELOG entries in a release pull request. Leave `.claude-plugin/marketplace.json` alone. Merge it. From the moment the
    versions are raised, CI's `scripts/release-versions.sh` (without an argument: the version `plugin.json` declares, while
    it has no tag) runs the release's full version check on every pull request.

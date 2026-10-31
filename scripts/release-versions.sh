@@ -50,7 +50,10 @@ def preset_version():
     return None
 
 def minimum(name):
-    return open(f"plugins/{name}/min-engine-version", encoding="utf-8").read().strip()
+    try:
+        return open(f"plugins/{name}/min-engine-version", encoding="utf-8").read().strip()
+    except FileNotFoundError:
+        return None
 
 if not VERSION.match(version):
     print(f"release-versions: '{version}' is not a SemVer version", file=sys.stderr)
@@ -72,6 +75,10 @@ for path, found in files.items():
 for name in ("lockflight", "lockflight-crew"):
     value = minimum(name)
     path = f"plugins/{name}/min-engine-version"
+    if value is None:
+        if name == "lockflight":
+            problems.append(f"{path} is missing")
+        continue
     if not VERSION.match(value):
         problems.append(f"{path} holds '{value}', not a version")
     elif mode == "release" and (name == "lockflight" or crew_follows):

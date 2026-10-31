@@ -53,6 +53,11 @@ expect_fail "a crew minimum engine above the release" "lockflight-crew/min-engin
   "$(checkout a 0.3.0 0.3.0 0.3.0 0.3.0 0.4.0)" 0.3.0
 expect_fail "a minimum engine that is not a version" "holds 'next', not a version" "$(checkout a 0.3.0 0.3.0 0.3.0 next 0.3.0)" 0.3.0
 
+dir=$(checkout a 0.3.0 0.3.0 0.3.0 0.3.0 0.3.0) && rm "$dir/plugins/lockflight-crew/min-engine-version"
+expect_ok "a crew without a minimum engine" "$dir" 0.3.0
+dir=$(checkout a 0.3.0 0.3.0 0.3.0 0.3.0 0.3.0) && rm "$dir/plugins/lockflight/min-engine-version"
+expect_fail "a judge plugin without a minimum engine" "plugins/lockflight/min-engine-version is missing" "$dir" 0.3.0
+
 # Without an argument: the version plugin.json declares; full once the remote has no tag for it.
 remote="$work/remote"
 git init -q --bare "$remote"
