@@ -174,7 +174,10 @@ internal static partial class HostTamperingScanner
             }
             else if (code == SwitchOpCode)
             {
-                il.Offset += il.ReadInt32() * sizeof(int);
+                // The count is read first: `il.Offset += il.ReadInt32() * 4` would take the offset before the read moved it,
+                // land four bytes short of the jump table's end, and read its last entry as code.
+                int targets = il.ReadInt32();
+                il.Offset += targets * sizeof(int);
             }
             else
             {

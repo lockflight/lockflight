@@ -18,6 +18,9 @@ public sealed class OtherCheckoutGuardTests : IDisposable
 
     private string Home => Path.Combine(work.FullName, "home");
 
+    // How an agent writes a path in Git Bash on Windows: forward slashes keep it literal (backslashes would be escapes).
+    private static string ShellPath(string path) => path.Replace('\\', '/');
+
     public OtherCheckoutGuardTests()
     {
         foreach (string root in new[] { Project, Other })
@@ -37,7 +40,7 @@ public sealed class OtherCheckoutGuardTests : IDisposable
 
     [Fact]
     public async Task AShellWriteIntoAnotherCheckoutIsJudgedAtItsRoot() =>
-        Assert.Equal(ExitCode.HookBlock, await GuardAsync("Bash", filePath: null, $"echo x > {Other}/lockflight.yaml"));
+        Assert.Equal(ExitCode.HookBlock, await GuardAsync("Bash", filePath: null, $"echo x > {ShellPath(Other)}/lockflight.yaml"));
 
     [Fact]
     public async Task OrdinaryCodeInAnotherCheckoutCanBeEdited() =>
