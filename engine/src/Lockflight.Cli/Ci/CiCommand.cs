@@ -51,6 +51,9 @@ internal sealed class CiCommand(CliContext context) : ICommand
                 plan.Inputs.Event == JudgeEvent.PullRequest
                     ? $"lockflight ci: the target branch ({CommitIds.Short(plan.Policy.Commit)}) has no {Manifest.FileName}, so there is no policy to judge with; "
                       + "commit 'lockflight init --ci-only' (or 'lockflight init') to the target branch first, then branch from it or merge it in"
+                    : plan.Inputs.Event == JudgeEvent.MergeGroup
+                    ? $"lockflight ci: the merge queue's target branch ({CommitIds.Short(plan.Policy.Commit)}) has no {Manifest.FileName}, so there is no policy to judge with; "
+                      + "commit 'lockflight init --ci-only' (or 'lockflight init') to the target branch first"
                     : $"lockflight ci: {CommitIds.Short(plan.Policy.Commit)}, whose policy judges this push, has no {Manifest.FileName}, so there is no policy "
                       + "to judge with; the judge runs from the first push after 'lockflight init --ci-only' is on the branch");
             return ExitCode.Config;
