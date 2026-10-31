@@ -1,4 +1,6 @@
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
+using Lockflight.Cli.Linking;
 
 namespace Lockflight.Cli.Tests.Init;
 
@@ -7,12 +9,12 @@ public sealed class InitNextStepsTests
     [Fact]
     public void TheLiteProfileCommitsAndRunsDoctor() =>
         Assert.Equal(["Next: commit these files, then run `.lockflight/bin/lockflight doctor` from the project root."],
-            InitNextSteps.For(InitProfile.Lite, SpecKitSetup.None, presetDirectory: null, InstallLevel.Plugin));
+            InitNextSteps.For(InitProfile.Lite, SpecKitSetup.None, presetDirectory: null, InstallLevel.Plugin, EngineCommand.Linked));
 
     [Fact]
     public void TheStandardProfileSetsUpSpecKitWithThePresetAndAcceptsFailingTests()
     {
-        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: "/home/me/lockflight/plugins/lockflight/speckit-preset", InstallLevel.Plugin));
+        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: "/home/me/lockflight/plugins/lockflight/speckit-preset", InstallLevel.Plugin, EngineCommand.Linked));
 
         Assert.Contains("specify init --here --force --integration claude --script sh", text, StringComparison.Ordinal);
         Assert.Contains("specify preset add --dev '/home/me/lockflight/plugins/lockflight/speckit-preset'", text, StringComparison.Ordinal);
@@ -24,7 +26,7 @@ public sealed class InitNextStepsTests
     [Fact]
     public void AnExistingSpecKitGetsThePresetThroughInitNotANewSpecKit()
     {
-        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithoutPreset, presetDirectory: null, InstallLevel.Plugin));
+        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithoutPreset, presetDirectory: null, InstallLevel.Plugin, EngineCommand.Linked));
 
         Assert.Contains("init --speckit-preset", text, StringComparison.Ordinal);
         Assert.DoesNotContain("specify init", text, StringComparison.Ordinal);
@@ -33,7 +35,7 @@ public sealed class InitNextStepsTests
     [Fact]
     public void SpecKitWithThePresetAlreadyInstalledNeedsNoSpecKitStep()
     {
-        IReadOnlyList<string> steps = InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithPreset, presetDirectory: null, InstallLevel.Plugin);
+        IReadOnlyList<string> steps = InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithPreset, presetDirectory: null, InstallLevel.Plugin, EngineCommand.Linked);
         string text = string.Join('\n', steps);
 
         Assert.DoesNotContain("adopt", text, StringComparison.Ordinal);
@@ -46,7 +48,7 @@ public sealed class InitNextStepsTests
     [Fact]
     public void AnUnknownPresetDirectoryIsAPlaceholder() =>
         Assert.Contains("preset add --dev <plugin>/speckit-preset",
-            string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: null, InstallLevel.Plugin)), StringComparison.Ordinal);
+            string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: null, InstallLevel.Plugin, EngineCommand.Linked)), StringComparison.Ordinal);
 
     [Fact]
     public void AtTheNativeLevelTheBaselineIsGivenInATerminalAndNoSkillIsNamed() => AssertTerminalOnly(InstallLevel.Native);
@@ -54,9 +56,37 @@ public sealed class InitNextStepsTests
     [Fact]
     public void AtTheCiOnlyLevelTheBaselineIsGivenInATerminalAndNoSkillIsNamed() => AssertTerminalOnly(InstallLevel.CiOnly);
 
+    [Fact]
+    public void WithNothingLinkedTheStepsNameTheEngineThatRan()
+    {
+        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithoutPreset, presetDirectory: null, InstallLevel.CiOnly, EngineCommand.UserInstall));
+
+        Assert.Contains("`~/.lockflight/bin/lockflight init --speckit-preset", text, StringComparison.Ordinal);
+        Assert.Contains("`~/.lockflight/bin/lockflight doctor`", text, StringComparison.Ordinal);
+        Assert.Contains("`~/.lockflight/bin/lockflight baseline tests`", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AProjectWithALinkedEngineIsToldThatOneAndWithoutItAnother()
+    {
+        DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-next-");
+        try
+        {
+            Assert.NotEqual(EngineCommand.Linked, InitNextSteps.EngineIn(root.FullName));
+            Directory.CreateDirectory(Path.GetDirectoryName(LinkCommand.BinaryPath(root.FullName))!);
+            File.WriteAllText(LinkCommand.BinaryPath(root.FullName), string.Empty);
+
+            Assert.Equal(EngineCommand.Linked, InitNextSteps.EngineIn(root.FullName));
+        }
+        finally
+        {
+            TempDirectories.DeleteRecursively(root);
+        }
+    }
+
     private static void AssertTerminalOnly(InstallLevel level)
     {
-        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: null, level));
+        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: null, level, EngineCommand.Linked));
 
         Assert.DoesNotContain("/lockflight:", text, StringComparison.Ordinal);
         Assert.DoesNotContain("init skill", text, StringComparison.Ordinal);

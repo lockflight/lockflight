@@ -176,7 +176,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
         if (init.SpecKitPreset is string requested && HumanOnlyCommands.RunsUnderAgent(context.Environment))
         {
             // The upgrade rewrites the team's protected Spec Kit skills and runs a preset from the directory named: a person's decision.
-            string line = $"cd {ShellQuoting.Quote(root)} && {EngineCommand.Linked} init --speckit-preset {ShellQuoting.Quote(Path.GetFullPath(requested, context.WorkingDirectory))}";
+            string line = $"cd {ShellQuoting.Quote(root)} && {InitNextSteps.EngineIn(root)} init --speckit-preset {ShellQuoting.Quote(Path.GetFullPath(requested, context.WorkingDirectory))}";
             await context.Error.WriteLineAsync($"lockflight: 'init --speckit-preset' upgrades the team's Spec Kit and is a person's decision, so it does not run inside a Claude Code session. Ask the user to {HumanOnlyCommands.OpenATerminalAndRun(line)}.");
             return ExitCode.HookBlock;
         }
@@ -296,7 +296,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
             }
             else
             {
-                manual.Add(InitAdoption.SpecKitLine(root, PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root)));
+                manual.Add(InitAdoption.SpecKitLine(root, PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root), init.Link ? EngineCommand.Linked : InitNextSteps.EngineIn(root)));
             }
         }
 
@@ -344,7 +344,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
                 : LockflightPresetRegistry.IsInstalled(root) ? SpecKitSetup.WithPreset
                 : SpecKitSetup.WithoutPreset;
             string? foundPreset = init.Profile == InitProfile.Standard && specKit != SpecKitSetup.WithPreset ? PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root) : null;
-            foreach (string line in InitNextSteps.For(init.Profile, specKit, foundPreset, init.Level))
+            foreach (string line in InitNextSteps.For(init.Profile, specKit, foundPreset, init.Level, InitNextSteps.EngineIn(root)))
             {
                 await context.Output.WriteLineAsync(line);
             }
