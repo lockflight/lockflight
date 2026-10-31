@@ -9,20 +9,60 @@ namespace Lockflight.Cli.Ci;
 /// read counts); a changed production or markup file git treats as binary (a <c>.gitattributes</c> line in the pull request can make it so, and a
 /// binary file has no lines to judge); or a changed line of a test project that a production project references, because that
 /// code ships, or of a project that was a production project at base. Project,
-/// build-wide and config files do not count (a dependency bump needs no red); they raise their own routing signals.
+/// build-wide and config files do not count (a dependency bump needs no red); they raise their own routing signals. A file whose
+/// code lines, in order, are the same at base and head changes no code: a pure rename (the moved file's old text against its new
+/// text), a comment or XML doc edit, a reindent. Preprocessor lines count as code there, and a reorder is a change.
 /// </summary>
 internal static class ProductionChange
 {
     public static bool Of(ChangeAnalysis analysis)
     {
         HashSet<string> shipped = ShippedTestProjects(analysis);
-        return analysis.Files.Any(file => (file.Change.Binary || file.Added.Count + file.Removed.Count > 0) && file.Role switch
+        return analysis.Files.Any(file => (file.Change.Binary || ChangesCode(analysis, file)) && file.Role switch
         {
             FileRole.Production => true,
             FileRole.Markup => file.Change.Binary || InLogic(file, analysis.ChangeSet),
             FileRole.Test => file.Project is string project && (shipped.Contains(project) || WasProduction(analysis, project)),
             _ => false,
         });
+    }
+
+    /// <summary>
+    /// Whether the file's diff changes code: its code lines in order differ between its text at base (at the old path for a move)
+    /// and at head (at the new path). The comparison is ordered, so lines the whitespace pairing dropped as a reorder still count.
+    /// A text that cannot be read counts as a change.
+    /// </summary>
+    private static bool ChangesCode(ChangeAnalysis analysis, RoutedFile file)
+    {
+        string basePath = file.Move?.OldPath ?? file.Path;
+        string headPath = file.Move?.NewPath ?? file.Path;
+        string? before = analysis.ChangeSet.Base.Contains(basePath) ? analysis.ChangeSet.Base.TextOf(basePath) : string.Empty;
+        string? after = analysis.ChangeSet.Head.Contains(headPath) ? analysis.ChangeSet.Head.TextOf(headPath) : string.Empty;
+        return before is null || after is null || !CodeLines(file.Path, before).SequenceEqual(CodeLines(file.Path, after), StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The file's non-blank code lines with whitespace runs collapsed: for C#, comments blanked (<see cref="CommentMask"/>) but a
+    /// preprocessor line kept as written, since it decides what compiles; other files line by line as written.
+    /// </summary>
+    private static IEnumerable<string> CodeLines(string path, string text)
+    {
+        string[] lines = text.Split('\n');
+        string[] code = ChangeAnalyzer.IsCSharp(path) ? CommentMask.Of(text).Split('\n') : lines;
+        for (int index = 0; index < lines.Length; index++)
+        {
+            string line = index < code.Length ? code[index] : lines[index];
+            if (line.AsSpan().Trim().IsEmpty && lines[index].AsSpan().TrimStart().StartsWith("#", StringComparison.Ordinal))
+            {
+                line = lines[index];
+            }
+
+            string collapsed = WhitespacePairs.Collapse(line);
+            if (collapsed.Length > 0)
+            {
+                yield return collapsed;
+            }
+        }
     }
 
     /// <summary>A project the pull request turned into a test project: its new files are still the production code they were.</summary>

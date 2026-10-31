@@ -11,6 +11,7 @@ namespace Lockflight.Cli.Tests.Ci;
 public sealed class JudgeRoutingTests : IAsyncLifetime
 {
     private const string TestProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"xunit.v3\" Version=\"3.0.0\" />\n  </ItemGroup>\n</Project>\n";
+    private const string BasePrice = "namespace Shop;\n\npublic sealed class Price\n{\n    public int One => 1;\n\n    public int Two => 2;\n}\n";
     private const string Page = "<h1>Prices</h1>\n<p>@price</p>\n\n@code {\n    private decimal price = 2m;\n}\n";
 
     private GitHistoryFixture repository = null!;
@@ -21,7 +22,7 @@ public sealed class JudgeRoutingTests : IAsyncLifetime
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         repository = await GitHistoryFixture.CreateAsync(cancellationToken);
         baseCommit = await repository.Write("src/Shop/Shop.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n")
-            .Write("src/Shop/Price.cs", "namespace Shop;\n\npublic sealed class Price\n{\n}\n")
+            .Write("src/Shop/Price.cs", BasePrice)
             .Write("src/Shop/Prices.razor", Page)
             .Write("tests/Shop.Tests/Shop.Tests.csproj", TestProject)
             .Write("tests/Shop.Tests/PriceTests.cs", "namespace Shop.Tests;\n\npublic sealed class PriceTests\n{\n}\n")
@@ -59,6 +60,73 @@ public sealed class JudgeRoutingTests : IAsyncLifetime
 
         Assert.True(plan.Class.ProductionChanged);
         Assert.Equal(CheckLevel.Required, plan.Levels[CheckId.Red]);
+    }
+
+    [Fact]
+    public async Task APureRenameOfAProductionFileIsNoProductionChange()
+    {
+        repository.Delete("src/Shop/Price.cs");
+        await repository.Write("src/Shop/Pricing/Price.cs", BasePrice).CommitAsync("refactor: move price", TestContext.Current.CancellationToken);
+
+        JudgePlan plan = await PlanAsync();
+
+        Assert.False(plan.Class.ProductionChanged);
+        Assert.Equal(CheckLevel.Off, plan.Levels[CheckId.Red]);
+    }
+
+    [Fact]
+    public async Task ACommentOnlyEditOfAProductionFileIsNoProductionChange()
+    {
+        string documented = BasePrice.Replace("    public int One", "    /// <summary>One, as an <see cref=\"int\"/>.</summary>\n    // Kept for callers.\n    public int One", StringComparison.Ordinal);
+        await repository.Write("src/Shop/Price.cs", documented).CommitAsync("docs: price", TestContext.Current.CancellationToken);
+
+        Assert.False((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task AReindentOfAProductionFileIsNoProductionChange()
+    {
+        await repository.Write("src/Shop/Price.cs", BasePrice.Replace("    public", "  public", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal))
+            .CommitAsync("style: indent", TestContext.Current.CancellationToken);
+
+        Assert.False((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task ReorderedProductionLinesAreAProductionChange()
+    {
+        string reordered = "namespace Shop;\n\npublic sealed class Price\n{\n    public int Two => 2;\n\n    public int One => 1;\n}\n";
+        await repository.Write("src/Shop/Price.cs", reordered).CommitAsync("refactor: order", TestContext.Current.CancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task AMovedFileWithAChangedNamespaceIsAProductionChange()
+    {
+        repository.Delete("src/Shop/Price.cs");
+        await repository.Write("src/Shop/Pricing/Price.cs", BasePrice.Replace("namespace Shop;", "namespace Shop.Pricing;", StringComparison.Ordinal))
+            .CommitAsync("refactor: move price", TestContext.Current.CancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task AChangedPreprocessorLineIsAProductionChange()
+    {
+        string conditional = BasePrice.Replace("    public int Two => 2;", "#if DEBUG\n    public int Two => 2;\n#endif", StringComparison.Ordinal);
+        await repository.Write("src/Shop/Price.cs", conditional).CommitAsync("feat: debug only", TestContext.Current.CancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task ACommentInARazorCodeBlockStillCountsAsProductionCode()
+    {
+        await repository.Write("src/Shop/Prices.razor", Page.Replace("2m;", "2m; // the base price", StringComparison.Ordinal))
+            .CommitAsync("docs: price", TestContext.Current.CancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
     }
 
     [Fact]
