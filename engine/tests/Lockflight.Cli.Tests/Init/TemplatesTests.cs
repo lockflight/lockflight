@@ -90,6 +90,19 @@ public sealed class TemplatesTests
     }
 
     [Fact]
+    public void BothReportJobsReplanFromGitWithTheFullHistoryAndTheBranch()
+    {
+        string workflow = Templates.Workflow(["10.0.x"]);
+
+        Assert.Equal(2, workflow.Split("replan: \"true\"").Length - 1);
+        foreach (string job in workflow.Split("replan: \"true\"")[..^1].Select(before => before[before.LastIndexOf("runs-on:", StringComparison.Ordinal)..]))
+        {
+            Assert.Contains("fetch-depth: 0", job, StringComparison.Ordinal);
+            Assert.Contains("branch: ${{ github.head_ref }}", job, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void TheReviewRunsOnlyForSameRepositoryPullRequestsWithTheVariableSetAndNotAfterAJudgeFail()
     {
         string workflow = Templates.Workflow(["10.0.x"]);

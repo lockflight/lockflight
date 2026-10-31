@@ -62,7 +62,7 @@ internal sealed class CiReviewCommand(CliContext context) : ICommand
         };
         JsonFiles.Write(Path.Combine(output, CiReportCommand.ReviewFileName), new JsonObject
         {
-            ["schema"] = "lockflight.ci-review/v1",
+            ["schema"] = CiReviewResult.Schema,
             ["head"] = inputs.Head,
             ["verdict"] = CheckVerdictNames.ToName(verdict),
             ["why"] = CiEvidence.Cap(why),

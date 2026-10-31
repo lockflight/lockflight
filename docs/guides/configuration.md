@@ -253,7 +253,8 @@ without credentials) are checked by the engine only, and the schema's descriptio
 The files the engine writes for other tools to read have published schemas too, named after their ids under
 [`schemas/`](../../schemas/): the engine lock (`lockflight.engine-lock/v1`), a release's hashes
 (`lockflight.engine-hashes/v1`), an approval record (`lockflight.approval/v2`), the gate result (`lockflight.result/v1`), the
-CI judge's evidence (`lockflight.ci-evidence/v1`) and a blocked report (`lockflight.blocked/v1`). From 0.3.0 to 1.0 they change
+CI judge's evidence (`lockflight.ci-evidence/v1`), the CI review's result (`lockflight.ci-review/v1`) and a blocked report
+(`lockflight.blocked/v1`). From 0.3.0 to 1.0 they change
 by addition only: read them tolerantly, ignore properties you do not know, and key on ids (a gate step's `id`, a check's
 `id`), never on display text.
 

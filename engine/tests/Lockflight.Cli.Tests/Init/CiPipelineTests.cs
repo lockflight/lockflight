@@ -58,7 +58,8 @@ public sealed class CiPipelineTests
 
         Assert.Contains("--head \"$HEAD_COMMIT\"", pipeline, StringComparison.Ordinal);
         Assert.Contains("${BITBUCKET_BRANCH:+--branch \"$BITBUCKET_BRANCH\"}", pipeline, StringComparison.Ordinal);
-        Assert.Contains("lockflight ci report --evidence artifacts/lockflight-evidence --head \"$HEAD_COMMIT\" --context gates", pipeline, StringComparison.Ordinal);
+        Assert.Contains("lockflight ci report --evidence artifacts/lockflight-evidence --head \"$HEAD_COMMIT\" ${BASE:+--base \"$BASE\" --event \"$EVENT\" --platform bitbucket}", pipeline, StringComparison.Ordinal);
+        Assert.Contains("--context gates", pipeline, StringComparison.Ordinal);
         Assert.Contains("--context lockflight/judge", pipeline, StringComparison.Ordinal);
         Assert.Contains("- parallel:", pipeline, StringComparison.Ordinal);
         Assert.DoesNotContain("ANTHROPIC_API_KEY", pipeline, StringComparison.Ordinal);

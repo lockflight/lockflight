@@ -219,7 +219,7 @@ internal static class CiShellScripts
 
     /// <summary>
     /// A report step: installs the engine the base pins and runs <c>lockflight ci report</c> for <paramref name="statusContext"/>
-    /// over the judge step's evidence, as data. A pull request that commits files where the evidence goes is an ERROR (its files
+    /// over the judge step's evidence, as data, re-planning the run from git to check the evidence's levels. A pull request that commits files where the evidence goes is an ERROR (its files
     /// could not be told from the judge's). The <c>gates</c> step fails with its verdict; the <c>lockflight/judge</c> step only when
     /// the repository variable <c>LOCKFLIGHT_JUDGE_REQUIRED</c> is <c>true</c>, since the platform has one build status for the
     /// whole pipeline, not one per step.
@@ -231,7 +231,8 @@ internal static class CiShellScripts
               exit 4
             fi
             code=0
-            lockflight ci report --evidence {{EvidenceDirectory}} --head "$HEAD_COMMIT" --context {{statusContext}} --out {{VerdictDirectory}}/{{statusContext.Replace('/', '-')}} || code=$?
+            # With the base, the report re-plans the run from git and refuses evidence whose policy, class or check levels disagree.
+            lockflight ci report --evidence {{EvidenceDirectory}} --head "$HEAD_COMMIT" ${BASE:+--base "$BASE" --event "$EVENT" --platform bitbucket} ${BITBUCKET_BRANCH:+--branch "$BITBUCKET_BRANCH"} --context {{statusContext}} --out {{VerdictDirectory}}/{{statusContext.Replace('/', '-')}} || code=$?
             {{(statusContext == "gates" ? "exit \"$code\"" : """
             if [ "$code" -ne 0 ] && [ "${LOCKFLIGHT_JUDGE_REQUIRED:-}" != "true" ]; then
               echo "lockflight/judge is advisory in this pipeline (exit $code); set the repository variable LOCKFLIGHT_JUDGE_REQUIRED to 'true' to make it fail the build"
