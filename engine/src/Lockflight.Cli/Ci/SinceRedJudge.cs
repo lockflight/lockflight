@@ -15,6 +15,10 @@ namespace Lockflight.Cli.Ci;
 /// (<see cref="SinceRed.AmendWeakened"/>). A weakened amend with as many rows and assertions is accepted when the head's code
 /// still meets the red commit's version: the bar held, though the test now guards less.
 /// Test files added for later cycles are not compared, unless they hold an assembly-wide hook: adding tests is what later cycles do.
+/// A file the pull request never changed, the same at head as on the target branch and the same at the red as where the red
+/// forked from it, came from the target ("Update branch", a merge of the target): it is no amend, and the re-check keeps the red
+/// commit's version of it. This trusts the target branch: a shared helper it weakened is not re-checked here, its own pull
+/// request was judged.
 /// </summary>
 internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
 {
@@ -34,7 +38,9 @@ internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
         foreach (CycleJudgement cycle in cycles.Where(cycle => cycle.Accepted))
         {
             string red = cycle.Red.Commit;
-            string[] changedInputs = [.. (await JudgeGit.ChangedFilesAsync(root, red, plan.Inputs.Head, cancellationToken) ?? []).Where(side.IsTestSide)];
+            IReadOnlySet<string> fromTarget = await FromTargetAsync(plan, cycle.Red, cancellationToken);
+            string[] changedInputs = [.. (await JudgeGit.ChangedFilesAsync(root, red, plan.Inputs.Head, cancellationToken) ?? [])
+                .Where(side.IsTestSide).Where(path => !fromTarget.Contains(path))];
             IReadOnlySet<string> helpers = await side.HelperSourcesAsync(root, red, plan.Inputs.Head, changedInputs, cancellationToken);
             List<RedGreenTest> amended = [];
             foreach (RedGreenTest test in cycle.Tests)
@@ -44,7 +50,7 @@ internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
                 string[] inputs = [.. changedInputs.Where(path => side.Affects(path, assembly, helpers))];
                 if (atHead is null)
                 {
-                    results.Add(new SinceRedTest(test.Key, cycle.Red.Label!, SinceRed.MissingAtHead, "deleted or renamed after its red", [], null));
+                    results.Add(new SinceRedTest(test.Key, cycle.Red.Label!, SinceRed.MissingAtHead, MissingWhy, [], null));
                 }
                 else if (cycle.FingerprintsAtRed.GetValueOrDefault(test.Key) is string before && head.Fingerprints.GetValueOrDefault(test.Key) == before && inputs.Length == 0)
                 {
@@ -58,21 +64,49 @@ internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
 
             if (amended.Count > 0)
             {
-                results.AddRange(await RecheckAsync(plan, cycle, amended, side, head, headResults, changedInputs, cancellationToken));
+                results.AddRange(await RecheckAsync(plan, cycle, amended, side, head, headResults, changedInputs, fromTarget, cancellationToken));
             }
         }
 
         return results;
     }
 
+    /// <summary>Why a cycle test missing at head is not earned, and the way out.</summary>
+    public const string MissingWhy = "deleted or renamed after its red, so the red that proved it is gone; keep the name it went red with until the pull request merges (rename it after), restore it, or drop a wrong one with a new red commit for its cycle";
+
+    /// <summary>
+    /// The paths the pull request never changed: the same at head as at the merge base, and the same at the red as at its fork
+    /// point. Every difference between the red and head in them came from the target branch.
+    /// </summary>
+    private static async Task<IReadOnlySet<string>> FromTargetAsync(JudgePlan plan, RedCommit red, CancellationToken cancellationToken)
+    {
+        string root = plan.Inputs.Root;
+        if (plan.MergeBase is not string mergeBase)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        string forkPoint = red.ForkPoint ?? mergeBase;
+        if (await JudgeGit.ChangedFilesAsync(root, forkPoint, plan.Inputs.Head, cancellationToken) is not IReadOnlyList<string> sinceFork
+            || await JudgeGit.ChangedFilesAsync(root, mergeBase, plan.Inputs.Head, cancellationToken) is not IReadOnlyList<string> byPullRequest
+            || await JudgeGit.ChangedFilesAsync(root, forkPoint, red.Commit, cancellationToken) is not IReadOnlyList<string> byRed)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        HashSet<string> changed = [.. byPullRequest, .. byRed];
+        return sinceFork.Where(path => !changed.Contains(path)).ToHashSet(StringComparer.Ordinal);
+    }
+
     private async Task<IEnumerable<SinceRedTest>> RecheckAsync(
         JudgePlan plan, CycleJudgement cycle, List<RedGreenTest> amended, TestSide side, TreeListing head, IReadOnlyList<ExecutedTest>? headResults, string[] changedInputs,
-        CancellationToken cancellationToken)
+        IReadOnlySet<string> fromTarget, CancellationToken cancellationToken)
     {
         string label = cycle.Red.Label!;
-        string[] changedFiles = [.. (await JudgeGit.ChangedFilesAsync(plan.Inputs.Root, cycle.Red.Commit, plan.Inputs.Head, cancellationToken) ?? []).Where(side.IsTestSide).Take(MaxFilesListed)];
+        string[] changedFiles = [.. (await JudgeGit.ChangedFilesAsync(plan.Inputs.Root, cycle.Red.Commit, plan.Inputs.Head, cancellationToken) ?? [])
+            .Where(side.IsTestSide).Where(path => !fromTarget.Contains(path)).Take(MaxFilesListed)];
         IReadOnlyList<RecheckResult> rechecked = await new OverlayRecheck(trees, time).RunAsync(
-            plan, cycle.Red.Commit, [.. amended.Select(test => test.Key)], side, head, $"re-check {label}", cancellationToken);
+            plan, cycle.Red.Commit, [.. amended.Select(test => test.Key)], side, head, fromTarget, $"re-check {label}", cancellationToken);
         string changed = changedInputs.Length > 0 ? string.Join(", ", changedInputs.Take(3)) : "its code";
         string[] stillRed = [.. rechecked.Where(result => result.Outcome == RecheckOutcome.Red).Select(result => result.Key)];
         Dictionary<string, OriginalCheck> originals = stillRed.Length == 0

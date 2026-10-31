@@ -235,6 +235,40 @@ public sealed class TestsSinceRedTests : IAsyncLifetime
 
         """;
 
+    [Fact]
+    public async Task HelperChangesAndTestsMergedFromTheTargetAfterARedAreNoAmend()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await repository.CheckoutAsync("main", cancellationToken);
+        main = await repository.Write("tests/Shop.Tests/Expect.cs", Helper("Assert.Equal(expected, actual);") + "\ninternal static class Near\n{\n    public static bool Enough(decimal left, decimal right) => Math.Abs(left - right) < 0.01m;\n}\n")
+            .Write("src/Shop/Discount.cs", "namespace Shop;\n\npublic static class Discount\n{\n    public static decimal Off(decimal value) => value / 10m;\n}\n")
+            .Write("tests/Shop.Tests/DiscountTests.cs", "namespace Shop.Tests;\n\npublic sealed class DiscountTests\n{\n    [Fact]\n    public void TenPercent() => Assert.True(Near.Enough(1m, Discount.Off(10m)));\n}\n")
+            .CommitAsync("feat: discount", cancellationToken);
+        await repository.CheckoutAsync("001-shipping", cancellationToken);
+        string head = await repository.MergeAsync("main", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head);
+
+        Assert.Equal("PASS", Verdict(document));
+        Assert.Equal("unchanged", document["cycles"]![0]!["tests"]![0]!["sinceRed"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ACycleTestRenamedAfterItsRedIsNotEarnedWithTheWayOut()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string head = await repository.WriteCode(Implementation, Test.Replace("ShippingIsTwiceTheWeight", "ShippingDoublesTheWeight", StringComparison.Ordinal))
+            .CommitAsync("test: rename", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head);
+
+        Assert.Equal("NOT-EARNED", Verdict(document));
+        Assert.Contains("keep the name", Why(document), StringComparison.Ordinal);
+        JsonNode green = document["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == "green")!;
+        Assert.Equal("NOT-EARNED", green["verdict"]!.GetValue<string>());
+        Assert.Contains("ShippingIsTwiceTheWeight", green["why"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
     private static string Helper(string body) => $$"""
         namespace Shop.Tests;
 
