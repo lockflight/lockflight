@@ -34,6 +34,8 @@ jobs:
       publish: ${{ steps.version.outputs.publish }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: Check the tag, the crew version and the engine it needs
         id: version
         env:
@@ -70,6 +72,12 @@ jobs:
           git fetch --no-tags origin "+$REF:$REF"
           if [ "$(git rev-parse "$REF^{commit}")" != "$(git rev-parse HEAD)" ]; then
             echo "::error::the checkout is not the commit tagged $TAG"; exit 1
+          fi
+          # A release is cut from main. A guardrail against tagging another commit: a tagged commit with an edited workflow
+          # skips it, so the tag ruleset (docs/engineering/releasing.md) is what limits who can start a release.
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$TAG is not on main: tag a commit of main"; exit 1
           fi
           declared=$(jq -r .version "$manifest")
           if [ "$declared" != "$version" ]; then
@@ -157,5 +165,6 @@ jobs:
         run: |
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
+          (cd release && sha256sum -c SHA256SUMS)
           gh release create "$TAG" --verify-tag --latest=false $prerelease --title "Lockflight crew $VERSION" \
             --notes-file release-notes.md release/*.tar.gz release/SHA256SUMS

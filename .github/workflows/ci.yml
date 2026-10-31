@@ -266,7 +266,7 @@ jobs:
       - name: Shellcheck the hook shim and test scripts
         run: |
           shellcheck --version
-          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/marketplace-ref.sh scripts/user-path.sh scripts/crew-trust-boundary.sh
+          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/marketplace-ref.sh scripts/user-path.sh scripts/crew-trust-boundary.sh scripts/release-assets.sh
       - name: The install puts its folder on PATH once, for each shell
         run: sh tests/install/user-path.sh
       # The crew gives advice and the engine judges: the crew plugin ships no hooks, executables, policy files or
@@ -279,6 +279,8 @@ jobs:
         run: bash tests/install/marketplace-ref.sh
       - name: The release's engine hashes describe the packages
         run: bash tests/release/engine-hashes.sh
+      - name: The release uploads each file once, and the files its checksums name
+        run: bash tests/release/release-assets.sh
       # dash, bash and BusyBox sh on the runner, then inside the .NET SDK image, whose only zip reader is perl; and the
       # Windows install script with PowerShell 7.
       - name: The engine install script checks the hash before anything runs it
