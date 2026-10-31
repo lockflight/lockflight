@@ -69,7 +69,7 @@ git init -q --bare "$remote"
 git -C "$remote" config uploadpack.allowReachableSHA1InWant true
 git_quiet -C "$repo" push -q "$remote" main
 other="$work/other"
-git clone -q "$remote" "$other"
+git clone -q -b main "$remote" "$other"
 echo "v4" > "$other/action/action.yml"
 git_quiet -C "$other" commit -q -am "the pull request's action change"
 pull=$(git -C "$other" rev-parse HEAD)
