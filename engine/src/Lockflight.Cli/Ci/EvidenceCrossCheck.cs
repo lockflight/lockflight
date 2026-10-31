@@ -10,7 +10,8 @@ namespace Lockflight.Cli.Ci;
 /// What the report job works out from git itself before it trusts the judge's evidence: the evidence was written in the job that
 /// ran the pull request's code, but which checks are required needs no build. With the target branch's tip checked out and the
 /// head fetched, the report re-plans (step P0: policy, class, red commits, levels) and refuses evidence that names another policy
-/// commit, another engine version or event, another class, other red commits, or a check at a lower level than the plan's floor.
+/// commit, another engine version or event, a lower class, other red commits, a check at a lower level than the plan's floor, or a verdict git alone decides
+/// otherwise.
 /// The floor allows what the judge may lower after planning: trace when its requirement is "when applicable" (off without a
 /// spec), approvals with <c>approvals.check: report</c> (advisory). Raising a level is allowed.
 /// </summary>
@@ -44,10 +45,12 @@ internal static class EvidenceCrossCheck
             return $"the report could not plan the run from git to compare with ({planning.Error}); fetch the head and the target branch";
         }
 
+        // The class may be raised (a workspace shell's routing merges in, the stricter value winning), never lowered.
         string planned = ChangeClassNames.ToName(plan.Class.Classification.Class);
-        if (Text(evidence["changeClass"]?["class"]) != planned)
+        string? written = Text(evidence["changeClass"]?["class"]);
+        if (!ChangeClassNames.TryParse(written, out ChangeClass judged) || judged < plan.Class.Classification.Class)
         {
-            return $"its change class is {TerminalText.Clean(Text(evidence["changeClass"]?["class"]) ?? "none")}, and git gives {planned}";
+            return $"its change class is {TerminalText.Clean(written ?? "none")}, and git gives {planned}";
         }
 
         string[] reds = [.. plan.Reds.All.Select(red => red.Commit)];
@@ -71,9 +74,9 @@ internal static class EvidenceCrossCheck
                 return $"it has {CheckIdNames.ToName(id)} {CheckLevelNames.ToName(level)}, and the plan makes it {CheckLevelNames.ToName(floor)}";
             }
 
-            if (level != CheckLevel.Off && PlannedVerdict(plan, id) is CheckVerdict planned && CheckVerdictNames.Parse(Text(node?["verdict"]) ?? string.Empty) != planned)
+            if (level != CheckLevel.Off && PlannedVerdict(plan, id) is CheckVerdict verdict && CheckVerdictNames.Parse(Text(node?["verdict"]) ?? string.Empty) != verdict)
             {
-                return $"it has {CheckIdNames.ToName(id)} {TerminalText.Clean(Text(node?["verdict"]) ?? "none")}, and git alone makes it {CheckVerdictNames.ToName(planned)}";
+                return $"it has {CheckIdNames.ToName(id)} {TerminalText.Clean(Text(node?["verdict"]) ?? "none")}, and git alone makes it {CheckVerdictNames.ToName(verdict)}";
             }
         }
 
@@ -82,12 +85,13 @@ internal static class EvidenceCrossCheck
 
     /// <summary>
     /// The verdict git alone decides, before anything is built: red and tests since red are NOT-EARNED without a red commit or
-    /// over the cap, and routing FAILs on a broken routing rule and passes otherwise. Null when the verdict needs a build.
+    /// over the cap, and routing FAILs on a broken routing rule (a shell's stricter routing can fail where the unit's
+    /// passes, so a pass is not checked). Null when the verdict needs a build.
     /// </summary>
     public static CheckVerdict? PlannedVerdict(JudgePlan plan, CheckId id) => id switch
     {
         CheckId.Red or CheckId.TestsSinceRed when plan.Reds.OverCap || plan.Reds.Cycles.Count == 0 => CheckVerdict.NotEarned,
-        CheckId.Routing => plan.Class.Classification.Failures.Count > 0 ? CheckVerdict.Fail : CheckVerdict.Pass,
+        CheckId.Routing when plan.Class.Classification.Failures.Count > 0 => CheckVerdict.Fail,
         _ => null,
     };
 

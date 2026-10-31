@@ -77,6 +77,13 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             // A push without a usable previous commit was judged without a base: the policy step then names the head itself.
             string? planBase = judgeEvent != JudgeEvent.PullRequest && baseCommit == head ? null : baseCommit;
             JudgeInputs inputs = new(context.WorkingDirectory, head, planBase, options.Value(BranchOption), platform, judgeEvent, output, null, ReviewExpected: true);
+            // As the judge does in a CI clone: the pull request's own .gitattributes must not hide lines from routing.
+            if (platform != JudgePlatform.Local && await JudgeAttributes.NeutraliseAsync(context.WorkingDirectory, cancellationToken) is string attributesError)
+            {
+                await context.Error.WriteLineAsync($"lockflight ci report: {attributesError}");
+                return ExitCode.Error;
+            }
+
             string? mismatch;
             try
             {
