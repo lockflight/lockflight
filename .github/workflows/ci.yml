@@ -266,7 +266,7 @@ jobs:
       - name: Shellcheck the hook shim and test scripts
         run: |
           shellcheck --version
-          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/marketplace-ref.sh scripts/user-path.sh scripts/crew-trust-boundary.sh scripts/release-assets.sh scripts/release-versions.sh
+          find tests -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/marketplace-ref.sh scripts/user-path.sh scripts/crew-trust-boundary.sh scripts/release-assets.sh scripts/release-versions.sh scripts/action-pin.sh
       - name: The install puts its folder on PATH once, for each shell
         run: sh tests/install/user-path.sh
       # The crew gives advice and the engine judges: the crew plugin ships no hooks, executables, policy files or
@@ -283,6 +283,11 @@ jobs:
         run: bash tests/release/release-assets.sh
       - name: The version check refuses version files the release left behind
         run: bash tests/release/release-versions.sh
+      # Generated workflows pin the CI judge's action by Templates.ActionCommit; it must hold this tree's action/.
+      - name: The generated workflows' action pin has this tree's action
+        run: |
+          bash tests/release/action-pin.sh
+          scripts/action-pin.sh
       # dash, bash and BusyBox sh on the runner, then inside the .NET SDK image, whose only zip reader is perl; and the
       # Windows install script with PowerShell 7.
       - name: The engine install script checks the hash before anything runs it

@@ -10,7 +10,8 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
    against it: the `version` of `plugins/lockflight/.claude-plugin/plugin.json` and of the Spec Kit preset
    (`plugins/lockflight/speckit-preset/preset.yml`) is the release's, and so is the crew's `plugin.json` version while the
    crew is served from the judge's tag; `plugins/lockflight/min-engine-version` names an engine of the release's
-   `MAJOR.MINOR` line, at most the release; the crew's `min-engine-version` is at most the release.
+   `MAJOR.MINOR` line, at most the release; the crew's `min-engine-version` is at most the release. `scripts/action-pin.sh
+   --release` checks the CI judge's action pin (below).
 2. **Builds and tests every platform** (osx-arm64, osx-x64, linux-x64, linux-arm64, win-x64), each on its own runner: build
    with warnings as errors, `dotnet test`, pack the Native AOT package, install it with `dotnet tool install` from a local
    feed, check that `lockflight version` prints the version, `lockflight link` it into a scratch project, run the linked
@@ -119,6 +120,19 @@ The release pull request raises the versions on `main` while the pin still names
 throughout and users stay on the previous release until the last step below.
 
 ## Cutting a release
+
+The workflow `lockflight init` generates calls the CI judge's action as
+`uses: lockflight/lockflight/action@<ActionCommit> # vX.Y.Z`. `ActionCommit` is a constant in
+[`Templates.cs`](../../engine/src/Lockflight.Cli/Init/Templates.cs); the `# vX.Y.Z` label is the engine's own version, which
+the release sets when it builds with the tag's version, so there is nothing to edit for it. `scripts/action-pin.sh` fails CI
+while `action/` differs from `action/` at `ActionCommit`, and the release also while `ActionCommit` is not in the tagged
+commit's history.
+
+A pull request that changes `action/` pins its own action in two commits: the first changes `action/`, the second sets
+`ActionCommit` to the first (do not rebase or squash the branch afterwards, or the pinned commit disappears from it). Once it
+is squash-merged, that commit is on no branch, but GitHub still serves it by SHA, so CI on `main` stays green. Before the
+release, after the last change to `action/` has merged, set `ActionCommit` to its commit on `main` in a pull request of its
+own: the release refuses a pin outside the tagged commit's history.
 
 1. Raise the version in both `plugin.json` files (the crew's while it has no release of its own: Claude Code replaces an
    installed plugin only when its version changes) and in the Spec Kit preset's `preset.yml`, raise
