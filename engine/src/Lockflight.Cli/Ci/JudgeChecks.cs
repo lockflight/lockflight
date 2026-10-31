@@ -62,7 +62,7 @@ internal static class JudgeChecks
             : new CheckResult(CheckId.Red, level, worst.Verdict, $"cycle {worst.Red.Label} ({CommitIds.Short(worst.Red.Commit)}): {worst.Why}");
     }
 
-    /// <summary>Any amend rejected or test missing fails; any amend that cannot be re-checked is NOT-EARNED; else PASS.</summary>
+    /// <summary>Any amend rejected fails; a test missing at head or an amend that cannot be re-checked is NOT-EARNED; else PASS.</summary>
     private static CheckResult SinceRedCheck(CheckLevel level, IReadOnlyList<SinceRedTest> tests)
     {
         if (tests.Count == 0)
@@ -70,8 +70,8 @@ internal static class JudgeChecks
             return new CheckResult(CheckId.TestsSinceRed, level, CheckVerdict.NotEarned, "no accepted cycle to compare with");
         }
 
-        SinceRedTest? failed = tests.FirstOrDefault(test => test.State is SinceRed.AmendRejected or SinceRed.MissingAtHead);
-        SinceRedTest? uncheckable = tests.FirstOrDefault(test => test.State == SinceRed.AmendUncheckable);
+        SinceRedTest? failed = tests.FirstOrDefault(test => test.State == SinceRed.AmendRejected);
+        SinceRedTest? uncheckable = tests.FirstOrDefault(test => test.State is SinceRed.MissingAtHead or SinceRed.AmendUncheckable);
         if ((failed ?? uncheckable) is SinceRedTest worst)
         {
             return new CheckResult(CheckId.TestsSinceRed, level, failed is null ? CheckVerdict.NotEarned : CheckVerdict.Fail, $"cycle {worst.Cycle}, {worst.Key}: {worst.Why}");

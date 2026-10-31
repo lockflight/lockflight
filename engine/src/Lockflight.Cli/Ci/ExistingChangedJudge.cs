@@ -34,7 +34,7 @@ internal sealed class ExistingChangedJudge(TreeBuilder trees, TimeProvider time)
             return [];
         }
 
-        IReadOnlyList<RecheckResult> rechecked = await new OverlayRecheck(trees, time).RunAsync(plan, mergeBase, changed, side, head, "existing tests on base", cancellationToken);
+        IReadOnlyList<RecheckResult> rechecked = await new OverlayRecheck(trees, time).RunAsync(plan, mergeBase, changed, side, head, new HashSet<string>(StringComparer.Ordinal), "existing tests on base", cancellationToken);
         return [.. rechecked.Select(result => result.Outcome switch
         {
             RecheckOutcome.Red => new ExistingChangedTest(result.Key, ExistingChange.Rechecked, $"changed, and fails on the base's code: {result.Why}"),

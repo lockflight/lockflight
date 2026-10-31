@@ -19,13 +19,23 @@ public sealed class GreenJudgeTests
     }
 
     [Fact]
-    public void ACycleTestDeletedAfterItsRedFails()
+    public void ACycleTestDeletedOrRenamedAfterItsRedIsNotEarned()
     {
         GreenJudgement green = Decide([BaseTest], [Pass(BaseTest)]);
 
+        Assert.Equal(CheckVerdict.NotEarned, green.Verdict);
+        Assert.Contains("cycle tests missing at head", green.Why, StringComparison.Ordinal);
+        Assert.Contains("keep the name it went red with", green.Why, StringComparison.Ordinal);
+        Assert.Equal("missing", green.AtHead[CycleTest.Key]);
+    }
+
+    [Fact]
+    public void ABaseTestDeletedAtHeadStillFails()
+    {
+        GreenJudgement green = Decide([CycleTest], [Pass(CycleTest)]);
+
         Assert.Equal(CheckVerdict.Fail, green.Verdict);
         Assert.Contains("tests deleted", green.Why, StringComparison.Ordinal);
-        Assert.Equal("missing", green.AtHead[CycleTest.Key]);
     }
 
     [Fact]

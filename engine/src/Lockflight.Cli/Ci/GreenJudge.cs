@@ -7,7 +7,8 @@ namespace Lockflight.Cli.Ci;
 /// Green at head over the record the judge synthesizes from what it re-ran (the base's inventory, the accepted cycles), never the
 /// tree's <c>redgreen.json</c>: every cycle test present and passing every row; no other failure beyond the base's known-failing
 /// baseline; nothing deleted, skipped or made explicit since the base; the runner finished and every listed test that is not
-/// explicit is in its report. A non-cycle test that passes only on a re-run is a warning; a cycle test that does is FLAKY, which
+/// explicit is in its report. A cycle test missing at head (deleted or renamed after its red) is NOT-EARNED, not a deleted test:
+/// the proof is gone, and tests since red says how to keep it. A non-cycle test that passes only on a re-run is a warning; a cycle test that does is FLAKY, which
 /// NOT-EARNS the check.
 /// </summary>
 internal static class GreenJudge
@@ -32,15 +33,23 @@ internal static class GreenJudge
             return Verdict(CheckVerdict.Error, $"the test runner produced no report for {listing.Workspace.FailedApp}");
         }
 
-        RedGreenTest[] cycleTests = [.. cycles.Where(cycle => cycle.Accepted).SelectMany(cycle => cycle.Tests)];
-        RedGreenRecord record = Synthesized(baseInventory ?? inventory, cycles);
+        HashSet<string> listed = [.. inventory.Select(test => test.Key)];
+        string[] missingCycle = [.. cycles.Where(cycle => cycle.Accepted).SelectMany(cycle => cycle.Tests).Select(test => test.Key).Where(key => !listed.Contains(key)).Order(StringComparer.Ordinal)];
+        IReadOnlyList<CycleJudgement> present = [.. cycles.Select(cycle => cycle with { Tests = [.. cycle.Tests.Where(test => listed.Contains(test.Key))] })];
+        RedGreenTest[] cycleTests = [.. present.Where(cycle => cycle.Accepted).SelectMany(cycle => cycle.Tests)];
+        RedGreenRecord record = Synthesized(baseInventory ?? inventory, present);
         RedGreenCycle all = new(0, DateTimeOffset.UnixEpoch, GreenAt: null, cycleTests);
         List<string> problems = [.. Incomplete(inventory, results, head.AbnormalExit)];
         problems.AddRange(SuiteChecks.GreenProblems(record, all, inventory, results, head.KnownFailing));
         HashSet<string> cycleKeys = [.. cycleTests.Select(test => test.Key)];
         string[] flakyCycle = [.. head.PassedOnRetry.Where(cycleKeys.Contains).Order(StringComparer.Ordinal)];
         string[] flakyOther = [.. head.PassedOnRetry.Where(key => !cycleKeys.Contains(key)).Order(StringComparer.Ordinal)];
-        Dictionary<string, string> atHead = cycleTests.ToDictionary(test => test.Key, test => AtHead(test.Key, inventory, results, head.PassedOnRetry), StringComparer.Ordinal);
+        Dictionary<string, string> atHead = missingCycle.ToDictionary(key => key, _ => "missing", StringComparer.Ordinal);
+        foreach (RedGreenTest test in cycleTests)
+        {
+            atHead[test.Key] = AtHead(test.Key, inventory, results, head.PassedOnRetry);
+        }
+
         HashSet<string> introduced = [.. cycles.SelectMany(cycle => cycle.Tests).Select(test => test.Key)];
         string[] withoutRed = baseInventory is null
             ? []
@@ -48,6 +57,7 @@ internal static class GreenJudge
         int failed = results.Count(result => result.Outcome == TestOutcome.Fail);
 
         (CheckVerdict verdict, string why) = problems.Count > 0 ? (CheckVerdict.Fail, string.Join("; ", problems))
+            : missingCycle.Length > 0 ? (CheckVerdict.NotEarned, $"cycle tests missing at head: {string.Join(", ", missingCycle.Take(MaxListed))}; {SinceRedJudge.MissingWhy}")
             : flakyCycle.Length > 0 ? (CheckVerdict.NotEarned, $"cycle tests passed only when run again (FLAKY): {string.Join(", ", flakyCycle.Take(MaxListed))}")
             : results.Count == 0 ? (CheckVerdict.NotEarned, "no test ran at head")
             : (CheckVerdict.Pass, $"{inventory.Count} tests, {results.Count} test cases run, {failed} failed"
