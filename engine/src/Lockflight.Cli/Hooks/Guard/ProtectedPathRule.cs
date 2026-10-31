@@ -57,11 +57,14 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
     /// The targets with <c>~</c>, <c>$HOME</c> and <c>$PWD</c> resolved, split into literal paths and wildcard patterns. A target
     /// with any other variable, or with the output of a command in it, is left out: the guard does not know what it names.
     /// </summary>
-    private (List<string> Literal, List<string> Patterns) Resolved(IReadOnlyList<string> paths, string workingDirectory)
+    private (List<string> Literal, List<string> Patterns) Resolved(IReadOnlyList<string> paths, string workingDirectory) =>
+        Resolved(paths, workingDirectory, environment.HomeDirectory());
+
+    /// <inheritdoc cref="Resolved(IReadOnlyList{string}, string)"/>
+    public static (List<string> Literal, List<string> Patterns) Resolved(IReadOnlyList<string> paths, string workingDirectory, string? home)
     {
         List<string> literal = [];
         List<string> patterns = [];
-        string? home = environment.HomeDirectory();
         foreach (string path in paths)
         {
             if (ShellVariables.Resolve(ExpandHome(path, home), workingDirectory, home).Path is string resolved)

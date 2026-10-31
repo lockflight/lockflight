@@ -46,6 +46,10 @@ public sealed class PermissionDenyRulesTests : IDisposable
     }
 
     [Fact]
+    public void TheUsersLockflightInstallIsDenied() =>
+        Assert.Contains("Edit(~/.lockflight/**)", PermissionDenyRules.For(root.FullName, DefaultProtectedPaths.Globs));
+
+    [Fact]
     public void MergeAddsMissingRulesAfterTheTeamsOwn()
     {
         JsonObject settings = JsonNode.Parse("""{ "permissions": { "allow": ["Bash(dotnet build)"], "deny": ["Read(./.env)", "Edit(/lockflight.yaml)"] } }""")!.AsObject();

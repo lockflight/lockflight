@@ -54,6 +54,8 @@ internal static class GuardCanaries
             await BlockedAsync(scratch, "relay guard: a Bash claude -p that sends /lockflight:amend is blocked",
                 BashCall("claude -p '/lockflight:amend OrderTests.ArchivesTheOrder --reason flaky'", scratch), SessionRelayRule.RuleId, cancellationToken),
             await BlockedAsync(scratch, "relay guard: a Write of .claude/scheduled_tasks.json is blocked", FileCall("Write", scratch.PathOf(".claude/scheduled_tasks.json"), scratch), SessionRelayRule.RuleId, cancellationToken),
+            await BlockedAsync(scratch, "guard: a Bash copy over the user's engine (~/.lockflight/bin/lockflight) is blocked",
+                BashCall("cp src/ok.txt ~/.lockflight/bin/lockflight", scratch), UserInstallRule.RuleId, cancellationToken),
             await PlantedAsync(scratch, "guard: in lockdown, a Write in src/ is blocked", LockdownPolicy.RelativeMarkerPath, "lockdown\n", LockdownRule.RuleId, cancellationToken),
             await PlantedAsync(scratch, "guard: an engine other than the pinned one blocks a Write in src/", PinFile, StalePin, EnginePinRule.RuleId, cancellationToken),
         ];

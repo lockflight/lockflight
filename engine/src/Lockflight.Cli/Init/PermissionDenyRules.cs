@@ -8,7 +8,7 @@ namespace Lockflight.Cli.Init;
 /// <c>permissions.deny</c> rules Lockflight writes into a project's <c>.claude/settings.json</c>: an <c>Edit(…)</c> rule for each
 /// protected path, so Claude Code itself refuses the built-in file tools there, before and apart from the guard. In Claude Code an
 /// <c>Edit</c> rule covers every built-in tool that edits files (a <c>Write(path)</c> rule never matches), and <c>/path</c> is
-/// relative to the session's primary working directory in project settings.
+/// relative to the session's primary working directory in project settings; <c>~/</c> is the user's home.
 /// </summary>
 internal static class PermissionDenyRules
 {
@@ -18,6 +18,12 @@ internal static class PermissionDenyRules
     private const string TreeSuffix = "/**";
     private const string LockflightTree = ".lockflight/**";
     private const string LinkedEngine = ".lockflight/bin";
+
+    /// <summary>
+    /// The user's Lockflight install: the engine the recovery command <c>~/.lockflight/bin/lockflight link --installed</c> runs and
+    /// the engines it links. Only the user's own commands (<c>update</c>, <c>engine install</c>) write there.
+    /// </summary>
+    public const string UserInstallRule = "Edit(~/.lockflight/**)";
 
     /// <summary>
     /// The parts of <c>.lockflight/</c> a rule names. Claude Code also adds <c>Edit</c> deny paths to the sandbox's write denials,
@@ -33,7 +39,7 @@ internal static class PermissionDenyRules
     /// </summary>
     public static IReadOnlyList<string> For(string root, IEnumerable<string> protectedGlobs)
     {
-        SortedSet<string> rules = new(StringComparer.Ordinal);
+        SortedSet<string> rules = new(StringComparer.Ordinal) { UserInstallRule };
         foreach (string glob in protectedGlobs.Select(glob => glob.Replace('\\', '/').TrimStart('/')))
         {
             if (glob.EndsWith(LockflightTree, StringComparison.Ordinal))

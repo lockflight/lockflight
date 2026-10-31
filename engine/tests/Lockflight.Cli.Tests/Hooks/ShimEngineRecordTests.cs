@@ -183,6 +183,34 @@ public sealed class ShimEngineRecordTests : IDisposable
     }
 
     [Fact]
+    public async Task AReplacedEngineIsNotRunThroughTheRecoveryCommandEither()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        LinkEngine(AllowingEngine);
+        EngineRecord.Write(project.FullName, new string('b', 64), "linux-x64");
+
+        (int linked, string error) = await RunShimAsync("""{"tool_name":"Bash","tool_input":{"command":".lockflight/bin/lockflight link --installed"}}""");
+        (int user, _) = await RunShimAsync("""{"tool_name":"Bash","tool_input":{"command":"~/.lockflight/bin/lockflight link --installed"}}""");
+
+        Assert.Equal(2, linked);
+        Assert.Contains("it was replaced after linking", error, StringComparison.Ordinal);
+        Assert.Equal(0, user);
+    }
+
+    [Fact]
+    public async Task ATeammateOnAnOlderEngineIsToldAboutUpdate()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        string hash = EngineRecord.HashOf(LinkEngine(AllowingEngine));
+        EngineRecord.Write(project.FullName, hash, "linux-x64");
+        WriteLock(".lockflight/engine.lock", "linux-x64", new string('a', 64));
+
+        (_, string error) = await RunShimAsync(Write);
+
+        Assert.Contains("with a Lockflight 0.2 install, which has neither command, `~/.lockflight/bin/lockflight update`", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AnEngineRecordedWithoutAPlatformIsNotTheLockedOne()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");

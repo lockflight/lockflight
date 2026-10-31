@@ -132,8 +132,17 @@ internal sealed class LinkCommand(CliContext context) : ICommand
             return ExitCode.Config;
         }
 
-        EngineLockReading reading = EngineLockFiles.ReadForClone(manifest.Root);
+        // The agent may run this command, so it trusts only the committed lock, which a person reviewed; the git-ignored local lock
+        // of a development build is a person's to link (`lockflight link` with that build).
         string install = $"ask the user to {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} engine install")}";
+        if (File.Exists(EngineLockFiles.LocalPath(manifest.Root)))
+        {
+            await context.Error.WriteLineAsync(
+                $"lockflight: link {InstalledFlag} links only the engine the committed {EngineLock.RelativePath} pins, and this clone has a development lock ({EngineLock.LocalRelativePath}) that the hooks read first; ask the user to link the development build with `lockflight link`, or to remove {EngineLock.LocalRelativePath} and {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} engine install")}");
+            return ExitCode.Config;
+        }
+
+        EngineLockReading reading = EngineLockFiles.ReadCommitted(manifest.Root);
         if (reading.Lock is not EngineLock engineLock || EngineRids.Current is not string rid || engineLock.HashFor(rid) is not string locked)
         {
             await context.Error.WriteLineAsync($"lockflight: link {InstalledFlag} needs an engine lock with an entry for this platform ({reading.Problem ?? "none"}); {install}");
