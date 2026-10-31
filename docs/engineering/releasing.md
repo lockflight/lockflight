@@ -128,7 +128,6 @@ throughout and users stay on the previous release until the last step below.
    CHANGELOG entries in a release pull request. Leave `.claude-plugin/marketplace.json` alone. Merge it. From the moment the
    versions are raised, CI's `scripts/release-versions.sh` (without an argument: the version `plugin.json` declares, while
    it has no tag) runs the release's full version check on every pull request.
-2. Tag the merge commit and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
 2. Once the release pull request has merged, tag its commit on `main` (not the pull request's head) and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
 3. Approve the `publish` job when the build and smoke tests are green.
 4. Edit the notes of the GitHub Release the workflow published.
