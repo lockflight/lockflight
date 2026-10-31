@@ -150,7 +150,7 @@ judge runs the pull request's code in the same job (judge isolation comes after 
   with the same message is no new skip (#208).
 - The engine lock: every reader agrees on a lock, the first lock is release-checked in the action, and `engine
   verify-lock` checks the install script (`--script`) and names a downgrade (`--base`) (#198). The action's policy restore
-  reads `NuGet.Config` too (#PRNUM).
+  reads `NuGet.Config` too (#213).
 
 ## [0.2.0-alpha.9] — 2026-10-28
 
