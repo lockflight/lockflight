@@ -49,7 +49,7 @@ internal static class NativeHooks
     /// <summary>What the person reads when the hooks do nothing for want of an engine.</summary>
     public const string NoEngineMessage =
         "Lockflight is OFF in this session: no engine is linked (.lockflight/bin/lockflight), so there is no guard, no test lock and no Stop gate. "
-        + "Run ~/.lockflight/bin/lockflight engine install (or dotnet tool restore && dotnet lockflight link) in the project to turn it on.";
+        + "Run ~/.lockflight/bin/lockflight engine install (or dotnet tool restore && dotnet lockflight link) in the project, in a separate terminal window (not with ! in Claude Code), to turn it on.";
 
     /// <summary>
     /// At session start and at every stop, the no-engine path tells the person (a <c>systemMessage</c>, never the model) that the

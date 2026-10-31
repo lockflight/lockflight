@@ -212,18 +212,20 @@ if [ -x "$engine" ] && [ -z "$untrusted" ]; then
   if [ "$event" != "pre-tool-use" ] && [ "$event" != "user-prompt-expansion" ]; then
     [ -n "$input" ] || input=$(cat)
     # stderr is captured to look for the refusal; stdout (the SessionStart banner, a Stop reason) goes out through fd 3 as it is.
+    # status stays 1 (a hook error that blocks nothing here) when fd 3 cannot be opened because stdout is closed.
     status=1
     { refusal=$(printf '%s' "$input" | "$engine" hook "$event" 2>&1 1>&3 3>&-); status=$?; } 3>&1
-    case "$refusal" in
-      *"does not know the hook event"*) exit 0 ;;
-      *"the plugin speaks hook API"*)
+    # Only a refusal (exit 2) whose first words are the engine's own: a Stop gate's failure text can quote anything.
+    case "$status:$refusal" in
+      "2:lockflight: this engine does not know the hook event"*) exit 0 ;;
+      "2:lockflight: the plugin speaks hook API "*)
         printf '%s\n' "$refusal" >&2
         reason=$(printf '%s' "$refusal" | tr -d '"\\' | tr '\001-\037' ' ')
         printf '{"systemMessage":"%s Lockflight%ss %s check did not run, so this event was let through."}\n' "$reason" "'" "$event"
         exit 0 ;;
     esac
     [ -z "$refusal" ] || printf '%s\n' "$refusal" >&2
-    exit "${status:-1}"
+    exit "$status"
   fi
   # Not `printf | exec`: in a pipeline exec only replaces the subshell and the script would fall through.
   if [ -n "$input" ]; then printf '%s' "$input" | "$engine" hook "$event"; else "$engine" hook "$event"; fi
