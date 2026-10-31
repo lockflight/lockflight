@@ -25,6 +25,20 @@ internal static partial class ProjectFileLines
         ];
     }
 
+    /// <summary>
+    /// Whether an MSBuild file's edit only re-versions packages or adds package entries: every changed code line is half of a
+    /// version-only pair, or an added package line. A removed package line (a package taken out, or swapped for another) is not.
+    /// </summary>
+    public static bool OnlyVersionsOrAdditions(IReadOnlyList<RoutedLine> added, IReadOnlyList<RoutedLine> removed)
+    {
+        List<RoutedLine> addedCode = [.. added.Where(IsCode)];
+        List<RoutedLine> removedCode = [.. removed.Where(IsCode)];
+        HashSet<RoutedLine> versionOnly = VersionOnlyPairs(addedCode, removedCode);
+        return addedCode.Count + removedCode.Count > 0
+            && removedCode.All(versionOnly.Contains)
+            && addedCode.All(line => versionOnly.Contains(line) || KindOf(line.Text) == ProjectLineKind.Package);
+    }
+
     /// <summary>The text with every version value blanked, so two lines that differ only in a version compare equal.</summary>
     public static string WithoutVersions(string text) =>
         VersionElement().Replace(VersionAttribute().Replace(WhitespacePairs.Collapse(text), $"$1=\"{VersionPlaceholder}\""), $"<$1>{VersionPlaceholder}</$1>");

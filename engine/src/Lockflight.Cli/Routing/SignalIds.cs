@@ -10,6 +10,7 @@ internal static class SignalIds
     public const string FileDeleted = "file.deleted";
     public const string ConfigChanged = "config.changed";
     public const string BinaryChanged = "binary.changed";
+    public const string ContentUnreadable = "content.unreadable";
     public const string Moved = "moved";
     public const string DepsChanged = "deps.changed";
     public const string ProjectChanged = "project.changed";

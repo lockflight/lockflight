@@ -5,7 +5,10 @@ namespace Lockflight.Cli.Routing;
 
 /// <summary>
 /// Size and shape: how many lines and files of production behaviour the change touches, and whether it adds or deletes production
-/// files, changes configuration or binary content. Moves are listed (<c>moved</c>) and raise nothing. All heuristics.
+/// files, changes configuration or binary content. Moves are listed (<c>moved</c>) and raise nothing. A production or markup file
+/// whose text cannot be read on a side where it exists (binary to git, a NUL byte, above <see cref="RevisionText.MaxBytes"/>) hides
+/// every content signal (types, endpoints, the database model), so it raises to <c>feature</c> on its own
+/// (<c>content.unreadable</c>). All heuristics.
 /// </summary>
 internal sealed class SizeSignals : IChangeSignalSource
 {
@@ -40,6 +43,11 @@ internal sealed class SizeSignals : IChangeSignalSource
             foreach (ChangeSignal signal in FileSignals(file))
             {
                 yield return signal;
+            }
+
+            if (Unreadable(analysis.ChangeSet, file) is string side)
+            {
+                yield return Signal(SignalIds.ContentUnreadable, ChangeClass.Feature, file.Path, $"the {side} text cannot be read (binary, a NUL byte or above {Count(RevisionText.MaxBytes / (1024 * 1024))} MB), so no content signal can see it");
             }
         }
     }
@@ -80,6 +88,25 @@ internal sealed class SizeSignals : IChangeSignalSource
         {
             yield return Signal(SignalIds.BinaryChanged, ChangeClass.Behaviour, file.Path, "binary content cannot be read");
         }
+    }
+
+    /// <summary>Which side of a production or markup file has no readable text, or null when every side it exists on does.</summary>
+    private static string? Unreadable(ChangeSet changeSet, RoutedFile file)
+    {
+        if (file.Role is not (FileRole.Production or FileRole.Markup))
+        {
+            return null;
+        }
+
+        bool head = file.Change.ExistsAtHead && (file.Change.Binary || changeSet.Head.TextOf(file.Path) is null);
+        bool atBase = file.Change.ExistsAtBase && (file.Change.Binary || changeSet.Base.TextOf(file.Path) is null);
+        return (head, atBase) switch
+        {
+            (true, true) => "base and head",
+            (true, false) => "head",
+            (false, true) => "base",
+            _ => null,
+        };
     }
 
     private static string RoleName(FileRole role) => role switch
