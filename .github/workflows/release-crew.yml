@@ -150,6 +150,8 @@ jobs:
         with:
           name: crew-release
           path: release
+      - name: The archive is the one packed
+        run: (cd release && sha256sum -c SHA256SUMS)
       - name: Draft the notes from the crew's commits since the previous crew tag
         uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         with:
@@ -165,6 +167,5 @@ jobs:
         run: |
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
-          (cd release && sha256sum -c SHA256SUMS)
           gh release create "$TAG" --verify-tag --latest=false $prerelease --title "Lockflight crew $VERSION" \
             --notes-file release-notes.md release/*.tar.gz release/SHA256SUMS

@@ -5,7 +5,8 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
 
 ## What the workflow does
 
-1. **Checks the version.** The workflow runs only from a tag `vX.Y.Z[-pre]` on a commit of `main`. The version is the tag
+1. **Checks the version.** The workflow publishes only from a tag `vX.Y.Z[-pre]` on a commit of `main` (a dispatch from a
+   branch is a dry run, below). The version is the tag
    without the `v`, must be SemVer 2.0 without build metadata, and must equal the `version` of `plugins/lockflight/.claude-plugin/plugin.json` and of
    the Spec Kit preset (`plugins/lockflight/speckit-preset/preset.yml`).
 2. **Builds and tests every platform** (osx-arm64, osx-x64, linux-x64, linux-arm64, win-x64), each on its own runner: build
@@ -38,7 +39,8 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
 
 A manual dispatch from the tag (Actions → release-packages → Run workflow → "Use workflow from": the tag) with `publish` off
 is a dry run: steps 1 to 4, then the `release-dry-run` job, which writes `SHA256SUMS` and assembles the release files with
-the same script into a throw-away folder on the runner, and drafts the notes. Nothing is pushed or published. A dispatch from
+the same script into a throw-away folder on the runner, checks that the tag has no GitHub Release yet, and drafts the
+notes. Nothing is pushed or published. A dispatch from
 a branch is a dry run of version `0.0.0-ci.<run number>`; its artifacts (packages and `engine-hashes.json`) can fill a test
 feed.
 
@@ -118,7 +120,7 @@ throughout and users stay on the previous release until the last step below.
 1. Raise the version in both `plugin.json` files and in the Spec Kit preset's `preset.yml` (and
    `plugins/lockflight/min-engine-version` when the plugin needs the new engine), and draft the CHANGELOG entries in a release
    pull request. Leave `.claude-plugin/marketplace.json` alone. Merge it.
-2. Tag the merge commit and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
+2. Once the release pull request has merged, tag its commit on `main` (not the pull request's head) and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
 3. Approve the `publish` job when the build and smoke tests are green.
 4. Edit the notes of the GitHub Release the workflow published.
 5. Once nuget.org lists the packages, move the marketplace to the release in a pull request of its own:

@@ -406,6 +406,16 @@ jobs:
             ls -1 "$RUNNER_TEMP/assets"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      # gh release create fails for a tag that already has a release, after the packages are on nuget.org.
+      - name: No GitHub Release exists for the tag yet
+        if: ${{ github.ref_type == 'tag' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::$TAG already has a GitHub Release: a release of this version would fail after the push"; exit 1
+          fi
       - name: Draft the notes, as the release job does
         uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         with:
