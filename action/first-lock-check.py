@@ -23,6 +23,7 @@ import sys
 RIDS = ("linux-arm64", "linux-x64", "osx-arm64", "osx-x64", "win-x64")
 LOCK_KEYS = ("schema", "package", "version", "channel", "installScript", "binaries")
 SHA256 = re.compile(r"[0-9a-f]{64}")
+RID_NAME = re.compile(r"[a-z0-9]+(-[a-z0-9]+)+")
 
 
 def fail(message):
@@ -39,13 +40,17 @@ def unique(pairs):
     return seen
 
 
+def refuse_constant(name):
+    raise ValueError(f"{name} is not JSON")
+
+
 def load(path, what, escapes_allowed):
     try:
         with open(path, encoding="utf-8") as stream:
             text = stream.read()
         if not escapes_allowed and "\\" in text:
             fail(f"the {what} holds a backslash; a lock names its keys and values without escapes, so every reader reads it alike")
-        return json.loads(text, object_pairs_hook=unique)
+        return json.loads(text, object_pairs_hook=unique, parse_constant=refuse_constant)
     except (OSError, ValueError) as error:
         fail(f"the {what} cannot be read: {error}")
 
@@ -74,8 +79,10 @@ def strict_lock(lock):
     if not isinstance(binaries, dict):
         fail("'binaries' must map each platform to { \"sha256\": … }")
     for rid in binaries:
-        if rid in RIDS:
-            hash_entry(binaries, rid, f"binaries.{rid}")
+        # A platform this checker does not know is skipped by every reader, but it must look like one and hold only a hash.
+        if not RID_NAME.fullmatch(rid):
+            fail(f"'binaries.{rid}' is not a platform name (such as linux-x64)")
+        hash_entry(binaries, rid, f"binaries.{rid}")
     missing = [rid for rid in RIDS if rid not in binaries]
     if missing:
         fail(f"a release lock needs a hash for every released platform; missing: {', '.join(missing)}")

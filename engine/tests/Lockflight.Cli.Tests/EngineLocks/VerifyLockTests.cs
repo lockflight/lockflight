@@ -121,6 +121,35 @@ public sealed class VerifyLockTests : IDisposable
     }
 
     [Fact]
+    public async Task AMissingVendoredScriptFails()
+    {
+        WriteRelease(rid => Hash(rid));
+        string lockFile = WriteLock(rid => Hash(rid));
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed, "--script", Path.Combine(work.FullName, "none.sh")], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains("there is no install script at", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnUnknownPlatformThatHoldsMoreThanAHashIsUnreadable()
+    {
+        WriteRelease(rid => Hash(rid));
+        string lockFile = WriteLock(rid => Hash(rid));
+        string text = File.ReadAllText(lockFile);
+        File.WriteAllText(lockFile, text.Replace("\"binaries\": {", $$"""
+            "binaries": {
+                "zzz-x64": { "installScript": { "sha256": "{{new string('0', 64)}}" } },
+            """, StringComparison.Ordinal));
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains("unknown key 'zzz-x64.installScript'", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AnUnreadableBaseLockIsNamed()
     {
         WriteRelease(rid => Hash(rid));

@@ -113,6 +113,13 @@ expect_failure "the first-lock check refuses a lock with a backslash, which inst
 grep -q "backslash" "$work/out" && ok "it names the backslash" || bad "backslash message: $(cat "$work/out")"
 sed 's/^{/{\n  "comment": "x",/' "$work/first.lock" > "$work/unknown.lock"
 expect_failure "the first-lock check refuses an unknown key, as the engine does" python3 -I "$check" "$work/unknown.lock" "$work/engine-hashes.json" "$work/install.sh"
+grep -q "unknown key 'comment'" "$work/out" && ok "it names the unknown key" || bad "unknown key message: $(cat "$work/out")"
+# A platform no reader knows is skipped, but holds only a hash: a line-oriented reader must not find another key's value in it.
+sed 's/"binaries": {/"binaries": {\n    "zzz-x64": { "installScript": { "sha256": "'"$zero"'" } },/' "$work/first.lock" > "$work/odd-rid.lock"
+expect_failure "the first-lock check refuses an unknown platform that holds more than a hash" python3 -I "$check" "$work/odd-rid.lock" "$work/engine-hashes.json" "$work/install.sh"
+grep -q "binaries.zzz-x64" "$work/out" && ok "it names the platform entry" || bad "platform entry message: $(cat "$work/out")"
+sed 's/"binaries": {/"binaries": {\n    "zzz-x64": NaN,/' "$work/first.lock" > "$work/nan.lock"
+expect_failure "the first-lock check refuses NaN, which is not JSON" python3 -I "$check" "$work/nan.lock" "$work/engine-hashes.json" "$work/install.sh"
 sed 's/"sha256": "'"$script_hash"'"/"sha256": "'"$script_hash"'", "path": "x"/' "$work/first.lock" > "$work/extra.lock"
 expect_failure "the first-lock check refuses an install script entry with more than its hash" python3 -I "$check" "$work/extra.lock" "$work/engine-hashes.json" "$work/install.sh"
 

@@ -8,7 +8,7 @@ namespace Lockflight.Cli.EngineLocks;
 /// The strict reader of <c>lockflight.engine-lock/v1</c>: a lock is policy a person commits, so a backslash anywhere, an unknown or repeated key, a wrong type, a hash
 /// that is not 64 lower-case hex, a release lock without every released platform, or a development lock where only release
 /// locks belong is an error naming the problem. A RID this engine does not know is ignored, so a later platform does not break
-/// an older engine.
+/// an older engine, but it must be a platform name holding only a well-formed hash.
 /// </summary>
 internal static partial class EngineLockReader
 {
@@ -105,9 +105,11 @@ internal static partial class EngineLockReader
         Dictionary<string, string> hashes = new(StringComparer.Ordinal);
         foreach (JsonProperty entry in binaries.EnumerateObject())
         {
-            if (!EngineRids.Released.Contains(entry.Name, StringComparer.Ordinal))
+            // A platform this engine does not know is skipped, but it must look like one and hold only a hash, so no reader of the
+            // lock (CI's line-oriented ones included) can find another key's value in it.
+            if (!RidName().IsMatch(entry.Name))
             {
-                continue;
+                return Problem($"'binaries.{entry.Name}' is not a platform name (such as linux-x64)");
             }
 
             if (HashOf(binaries, entry.Name, out string? entryProblem) is not string hash)
@@ -115,7 +117,10 @@ internal static partial class EngineLockReader
                 return Problem(entryProblem!);
             }
 
-            hashes[entry.Name] = hash;
+            if (EngineRids.Released.Contains(entry.Name, StringComparer.Ordinal))
+            {
+                hashes[entry.Name] = hash;
+            }
         }
 
         string[] missing = [.. EngineRids.Released.Where(rid => !hashes.ContainsKey(rid))];
@@ -164,4 +169,8 @@ internal static partial class EngineLockReader
 
     [GeneratedRegex("^[0-9a-f]{64}$")]
     private static partial Regex Sha256();
+
+    /// <summary>A .NET runtime identifier as a lock names it: lower-case words joined by hyphens.</summary>
+    [GeneratedRegex("^[a-z0-9]+(-[a-z0-9]+)+$")]
+    private static partial Regex RidName();
 }

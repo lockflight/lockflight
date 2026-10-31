@@ -76,6 +76,15 @@ public sealed class CiStepMigrationTests
     }
 
     [Fact]
+    public void AHandEditedCheckoutRestoreOfThePolicyDirectoriesIsLeftAlone()
+    {
+        string current = CiPipeline.Files(CiPlatform.GitLab, Path.GetTempPath(), ["10.0.x"], CiTrigger.PullRequest, developmentPin: false)[0].Content;
+        string edited = CheckedOut(current).Replace("rm -rf \"$directory\"", "rm -rf \"$directory\" # kept", StringComparison.Ordinal);
+
+        Assert.Null(CiStepMigration.Migrate(edited));
+    }
+
+    [Fact]
     public void AHandEditedInstallStepIsLeftAlone()
     {
         string edited = File.ReadAllText(Path.Combine(CasesDirectory(), "github.yml")).Replace("--tool-path \"$RUNNER_TEMP/lockflight\"", "--tool-path /opt/lockflight", StringComparison.Ordinal);
@@ -110,7 +119,7 @@ public sealed class CiStepMigrationTests
         {
             string indent = lines[index][..(lines[index].Length - lines[index].TrimStart().Length)];
             string line = lines[index].Trim();
-            if (line == "if git cat-file -e \"$BASE:$file\" 2>/dev/null; then mkdir -p \"$(dirname \"$file\")\"; git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi")
+            if (line == "if git cat-file -e \"$BASE:$file\" 2>/dev/null; then mkdir -p \"$(dirname \"$file\")\"; rm -f \"$file\"; git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi")
             {
                 lines[index] = indent + "if git cat-file -e \"$BASE:$file\" 2>/dev/null; then git checkout \"$BASE\" -- \"$file\"; else rm -f \"$file\"; fi";
             }

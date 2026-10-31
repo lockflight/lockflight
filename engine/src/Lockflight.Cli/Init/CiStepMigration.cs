@@ -36,7 +36,7 @@ internal static class CiStepMigration
         $"for directory in {CiShellScripts.PolicyDirectories}; do",
         "  rm -rf \"$directory\"",
         "  if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then",
-        "    git -c core.quotePath=false ls-tree -r --name-only \"$BASE\" -- \"$directory\" | while IFS= read -r file; do mkdir -p \"$(dirname \"$file\")\"; git show \"$BASE:$file\" > \"$file\"; done",
+        "    git -c core.quotePath=false ls-tree -r --name-only \"$BASE\" -- \"$directory\" | while IFS= read -r file; do mkdir -p \"$(dirname \"$file\")\"; rm -f \"$file\"; git show \"$BASE:$file\" > \"$file\"; done",
         "  fi",
         "done",
     ];
@@ -50,9 +50,11 @@ internal static class CiStepMigration
         "done",
     ];
 
-    /// <summary>How 0.2 restored each policy file (a checkout, which converts line endings), and how it is restored now.</summary>
+    /// <summary>How 0.2 restored each policy file: a checkout, which converts line endings.</summary>
     private const string LegacyFileRestore = "  if git cat-file -e \"$BASE:$file\" 2>/dev/null; then git checkout \"$BASE\" -- \"$file\"; else rm -f \"$file\"; fi";
-    private const string FileRestore = "  if git cat-file -e \"$BASE:$file\" 2>/dev/null; then mkdir -p \"$(dirname \"$file\")\"; git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi";
+
+    /// <summary>How each policy file is restored now: its committed bytes, in place of whatever the pull request put there.</summary>
+    private const string FileRestore = "  if git cat-file -e \"$BASE:$file\" 2>/dev/null; then mkdir -p \"$(dirname \"$file\")\"; rm -f \"$file\"; git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi";
 
     /// <summary>The migrated text; null when the file must be left alone. The file's own text when it is current already.</summary>
     public static string? Migrate(string text)
@@ -135,7 +137,8 @@ internal static class CiStepMigration
                 lines.InsertRange(at, Directories[2..].Select(line => directoryIndent + line));
             }
 
-            return true;
+            // A checkout restore left that is not the block Lockflight wrote (hand-edited) is not half migrated: the person merges it.
+            return !lines.Any(line => line.Contains("git checkout \"$BASE\" -- \"$directory\"", StringComparison.Ordinal));
         }
 
         int[] previous = [.. Indexes(lines, line => line.Trim() == $"for file in {PreviousPolicyFiles}; do")];

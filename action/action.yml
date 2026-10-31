@@ -142,7 +142,14 @@ runs:
         LF_HEAD: ${{ inputs.head }}
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
-        if [ -z "$LF_BASE" ] || ! git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null; then exit 0; fi
+        if [ -z "$LF_BASE" ]; then exit 0; fi
+        if ! git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null; then
+          # Without the lock, CI would install the engine by version alone once this is merged.
+          if git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null; then
+            echo "::error::this pull request removes .lockflight/engine.lock, which pins the engine by hash; without it CI would install the engine by version only"; exit 1
+          fi
+          exit 0
+        fi
         if git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null; then
           if git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then exit 0; fi
           git show "$LF_HEAD:.lockflight/engine.lock" > "$RUNNER_TEMP/proposed-engine.lock"
