@@ -48,6 +48,8 @@ jobs:
           PUBLISH_INPUT: ${{ inputs.publish }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
+          # The workflows this engine's init writes pin the CI judge's action by a commit of this history with this action/.
+          scripts/action-pin.sh --release
           if [ "$REF_TYPE" != tag ]; then
             # A dry run from a branch: never publishes, and its version cannot collide with a release.
             if [ "$EVENT" != workflow_dispatch ] || [ "$PUBLISH_INPUT" = true ]; then
