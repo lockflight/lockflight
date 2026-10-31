@@ -53,17 +53,17 @@ Posix install . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}]
 Posix install checkout -- f: writer=True files=[f, f/checkout]
 Posix install format --include f.cs: writer=True files=[f.cs, f.cs/format]
 Posix xargs install: writer=True
-Posix ln a b: writer=False
-Posix ln -o out in: writer=False
-Posix ln -i x: writer=False
-Posix ln -r dir: writer=False
-Posix ln -Path p -Destination d: writer=False
-Posix ln of=o if=i: writer=False
-Posix ln . -name *.tmp -delete: writer=False
-Posix ln . -exec rm {} ;: writer=False
-Posix ln checkout -- f: writer=False
-Posix ln format --include f.cs: writer=False
-Posix xargs ln: writer=False
+Posix ln a b: writer=True files=[b, b/a]
+Posix ln -o out in: writer=True files=[in]
+Posix ln -i x: writer=True files=[x]
+Posix ln -r dir: writer=True files=[dir]
+Posix ln -Path p -Destination d: writer=True files=[d, d/p]
+Posix ln of=o if=i: writer=True files=[if=i, if=i/of=o]
+Posix ln . -name *.tmp -delete: writer=True files=[*.tmp]
+Posix ln . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}]
+Posix ln checkout -- f: writer=True files=[f, f/checkout]
+Posix ln format --include f.cs: writer=True files=[f.cs, f.cs/format]
+Posix xargs ln: writer=True
 Posix rsync a b: writer=False
 Posix rsync -o out in: writer=False
 Posix rsync -i x: writer=False
@@ -878,17 +878,17 @@ PowerShell install . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}]
 PowerShell install checkout -- f: writer=True files=[f, f/checkout]
 PowerShell install format --include f.cs: writer=True files=[f.cs, f.cs/format]
 PowerShell xargs install: writer=True
-PowerShell ln a b: writer=False
-PowerShell ln -o out in: writer=False
-PowerShell ln -i x: writer=False
-PowerShell ln -r dir: writer=False
-PowerShell ln -Path p -Destination d: writer=False
-PowerShell ln of=o if=i: writer=False
-PowerShell ln . -name *.tmp -delete: writer=False
-PowerShell ln . -exec rm {} ;: writer=False
-PowerShell ln checkout -- f: writer=False
-PowerShell ln format --include f.cs: writer=False
-PowerShell xargs ln: writer=False
+PowerShell ln a b: writer=True files=[b, b/a]
+PowerShell ln -o out in: writer=True files=[in]
+PowerShell ln -i x: writer=True files=[x]
+PowerShell ln -r dir: writer=True files=[dir]
+PowerShell ln -Path p -Destination d: writer=True files=[d, d/p]
+PowerShell ln of=o if=i: writer=True files=[if=i, if=i/of=o]
+PowerShell ln . -name *.tmp -delete: writer=True files=[*.tmp]
+PowerShell ln . -exec rm {} ;: writer=True files=[;, ;/rm, ;/{}]
+PowerShell ln checkout -- f: writer=True files=[f, f/checkout]
+PowerShell ln format --include f.cs: writer=True files=[f.cs, f.cs/format]
+PowerShell xargs ln: writer=True
 PowerShell rsync a b: writer=False
 PowerShell rsync -o out in: writer=False
 PowerShell rsync -i x: writer=False

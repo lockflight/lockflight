@@ -12,7 +12,7 @@ internal static class WildcardPatterns
     private const string AnyDepth = "**";
 
     /// <summary>The folder before the first wildcard (the working directory when the pattern starts with one, <c>/</c> for the filesystem root) and the segments from it on.</summary>
-    public static (string Prefix, string[] Rest) Split(string pattern)
+    public static (string Prefix, string[] Remainder) Split(string pattern)
     {
         string[] segments = pattern.Replace('\\', '/').Split('/');
         int firstWildcard = Array.FindIndex(segments, GlobOverlap.HasWildcard);

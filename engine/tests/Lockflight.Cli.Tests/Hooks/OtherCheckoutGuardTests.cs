@@ -52,7 +52,7 @@ public sealed class OtherCheckoutGuardTests : IDisposable
     [InlineData("cp src/x $HOME/.lockflight/tools/9.9.9/lockflight")]
     [InlineData("rm -rf ~/.lockflight")]
     [InlineData("rm -rf ~/.lock*")]
-    [InlineData("cp src/x ~/.lockflig?/bin/lockflight")]
+    [InlineData("cp src/x ~/.lockfligh?/bin/lockflight")]
     [InlineData("cp src/x ~/.*/bin/lockflight")]
     [InlineData("ln -sf /tmp/evil ~/.lockflight/bin/lockflight")]
     [InlineData("cp src/x ~home/.lockflight/bin/lockflight")]
