@@ -5,7 +5,8 @@ namespace Lockflight.Cli.Init;
 /// install step (between its markers, or as Lockflight 0.2 wrote it), and in the base-branch policy restore the file list (now
 /// with <c>.lockflight/engine.lock</c>) and the baselines lines (now the policy directories, the vendored install script too),
 /// and on Azure and GitLab the pull request's base (now the target branch's tip, not the merge base or the diff base).
-/// Each edited block must be found exactly once with the expected text; otherwise the file is left alone and the caller writes
+/// Each edited block must be found exactly once with the expected text, and an Azure or GitLab file must end up taking its base
+/// from the target branch's tip; otherwise the file is left alone and the caller writes
 /// the new step for a person to merge.
 /// </summary>
 internal static class CiStepMigration
@@ -90,6 +91,9 @@ internal static class CiStepMigration
             ["# come from the target branch's tip on pull requests, so a PR cannot loosen the checks that judge it. Create a pipeline from this"]),
     ];
 
+    /// <summary>The lines that take an Azure or GitLab pull request's base from the target branch's tip.</summary>
+    private static readonly string[] TipBases = ["BASE=$(git rev-parse \"origin/$target\")", "BASE=$(git rev-parse \"origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\")"];
+
     /// <summary>The migrated text; null when the file must be left alone. The file's own text when it is current already.</summary>
     public static string? Migrate(string text)
     {
@@ -113,6 +117,13 @@ internal static class CiStepMigration
                 lines.RemoveRange(start, legacy.Length);
                 lines.InsertRange(start, current.Select(line => indent + line));
             }
+        }
+
+        // A hand-edited base on Azure or GitLab would keep taking the policy from the merge base: leave the file to a person.
+        bool pullRequestBase = text.Contains("SYSTEM_PULLREQUEST_TARGETBRANCH", StringComparison.Ordinal) || text.Contains("merge_request_event", StringComparison.Ordinal);
+        if (pullRequestBase && !lines.Any(line => TipBases.Any(tip => line.Contains(tip, StringComparison.Ordinal))))
+        {
+            return null;
         }
 
         return string.Join(newline, lines);

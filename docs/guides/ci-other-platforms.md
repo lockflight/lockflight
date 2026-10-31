@@ -148,7 +148,9 @@ lists its own `stages:`, keep `test` among them.
 
 The base on a merge request is the target branch's tip, fetched when the job starts, not `CI_MERGE_REQUEST_DIFF_BASE_SHA`
 (the commit the merge request's diff starts from). The diff base can be older than the tip, and a branch cut from an old commit
-would bring that commit's engine pin, baselines and analyzer config. The gates work out the merge base for the diff themselves.
+would bring that commit's engine pin, baselines and analyzer config. The gates work out the merge base for the diff themselves. A
+merge request pipeline that runs in a fork reads `origin` as the fork, so its target branch tip is the fork's copy; such a
+pipeline also runs the fork's own CI file, so it is a guardrail there, not a boundary.
 
 ## Paths to route to a reviewer
 
