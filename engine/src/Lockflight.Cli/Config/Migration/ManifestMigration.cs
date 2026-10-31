@@ -93,7 +93,7 @@ internal static partial class ManifestMigration
         string written = (byteOrderMark ? "﻿" : string.Empty) + edited.Replace("\n", newline, StringComparison.Ordinal);
         List<string> checks = [.. missing.Select(toggle => $"gates.{toggle.Section}.{toggle.Key}: {toggle.Value} ({toggle.Note})")];
         checks.Add("approvals.check: report (fail: a missing CODEOWNERS coverage or spec-first violation fails the CI check)");
-        checks.Add("routing: preset default with every value written down (no check judges by it yet)");
+        checks.Add("routing: preset default with every value written down (the CI judge routes by it)");
         return new ManifestMigrationResult(ManifestMigrationStatus.Migrated, written, $"{Manifest.FileName}: version 1 → 2") { NewChecks = checks };
     }
 

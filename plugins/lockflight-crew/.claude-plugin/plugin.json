@@ -1,6 +1,6 @@
 {
   "name": "lockflight-crew",
-  "version": "0.2.0-alpha.9",
+  "version": "0.3.0",
   "description": "Optional Lockflight agents briefed for the gated lifecycle: a spec writer and a planner that write spec.md, plan.md and tasks.md in the spec contract until `lockflight phase check` passes, and a test author that writes a user story's failing tests against the declared stubs until `lockflight redgreen red` accepts them; and two advice skills, a rules audit and a retro over the local ledger, that read `lockflight facts --json`. An aid only: the Lockflight gates still judge every step.",
   "author": { "name": "Bohdan Ivaniichuk" },
   "repository": "https://github.com/lockflight/lockflight",

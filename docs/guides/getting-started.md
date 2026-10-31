@@ -1,10 +1,20 @@
 # Getting started
 
-Lockflight runs deterministic checks around a Claude Code agent working in a .NET repository: a guard on every tool call, gates
-at the end of a turn and in CI, and — in the standard profile — a spec-driven lifecycle with human approvals and red/green
-evidence. This page takes you from nothing to a first green gate with the plugin, the default of the three
-[install levels](install-levels.md); `init --native` (project hooks, no plugin) and `init --ci-only` (nothing on the
-machine) are the other two.
+Lockflight's verdict of record is a CI check: the CI judge re-runs a pull request's red commits and its head under the
+target branch's policy. The shortest path to it is the CI-only level (`init --ci-only`); [QUICKSTART](../../QUICKSTART.md)
+goes from a clone to a first verdict, every command included.
+
+This page sets up the rest, on top of the judge: the engine on your machine, and, for Claude Code, the plugin (a guard on
+every tool call, gates at the end of a turn, and in the standard profile a spec-driven lifecycle with human approvals and
+red/green evidence). Three settings choose how much you get:
+
+| Setting | Chooses | Values |
+|---|---|---|
+| Install level ([install levels](install-levels.md)) | what runs on a developer's machine | `init --ci-only` (nothing), `init --native` (project hooks, no plugin), `init` (the plugin) |
+| Profile | how deep the local lifecycle goes | `--profile lite` (guard and gates), `--profile standard` (specs, approvals, red/green) |
+| Preset ([risk routing](risk-routing.md)) | how much evidence each change class needs in CI | `--preset relaxed`, `default`, `strict` |
+
+The sections below use the plugin level.
 
 **On this page:** [Requirements](#requirements) · [Install from source](#install-from-source) ·
 [Install on Windows](#install-on-windows) · [Install from a package](#install-from-a-package) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
@@ -17,10 +27,10 @@ machine) are the other two.
 | For | You need |
 |---|---|
 | Your machine | macOS (Apple silicon or Intel), Linux (x64 or arm64), or Windows (x64) with [Git for Windows](https://git-scm.com/download/win): Claude Code and the plugin's hooks run under Git Bash. See [Install on Windows](#install-on-windows). |
-| The engine | The .NET 10 SDK, plus the SDK your project needs (the engine runs whatever SDK the project's `global.json` pins). git. |
+| The engine | From source or as a `dotnet tool`: the .NET 10 SDK. The install script ([without the .NET SDK](#install-from-a-package)) needs none. To build and test your project: the SDK it needs (the engine runs whatever SDK the project's `global.json` pins), and git. |
 | Claude Code | 2.1.295 or newer: from that version a guard hook that times out blocks the tool call. `doctor` checks it. |
 | Your project | SDK-style .NET 8, 9 or 10. .NET Framework projects are not supported. |
-| Tests | xUnit v3 (Microsoft.Testing.Platform): everything. xUnit v2 (VSTest), NUnit and MSTest (VSTest, or Microsoft.Testing.Platform with its TRX report): red/green and trace included; tag tests with `[Trait("Requirement", "FR-001")]` (xUnit), `[Property("Requirement", "FR-001")]` (NUnit) or `[TestProperty("Requirement", "FR-001")]` (MSTest). Review reproductions are written as xUnit tests. |
+| Tests | xUnit v3 (Microsoft.Testing.Platform): everything. xUnit v2 (VSTest), NUnit and MSTest (VSTest, or Microsoft.Testing.Platform with its TRX report): red/green and trace included, locally and in the CI judge; tag tests with `[Trait("Requirement", "FR-001")]` (xUnit), `[Property("Requirement", "FR-001")]` (NUnit) or `[TestProperty("Requirement", "FR-001")]` (MSTest). Review reproductions are written as xUnit tests. |
 | The `pr` profile's secrets step | [gitleaks](https://github.com/gitleaks/gitleaks) on `PATH` (or `LOCKFLIGHT_GITLEAKS`); without it the step is NOT-EARNED. The generated CI workflow downloads its own. |
 | Spec Kit, if you use it (optional in the standard profile) | `uv` and Python 3 with PyYAML. |
 
@@ -342,7 +352,7 @@ skips the PyYAML check; neither counts against readiness.
    | `lockflight trace`, `lockflight review`, `gate run --profile pr` | agent | every requirement covered; review findings confirmed by reproductions |
    | PR and merge | **you** | CI runs the same gates with the base branch's policy |
 
-   Approvals are your decision: the agent cannot give them. Inside Claude Code only what you type yourself counts
+   Approvals are your decision, not the agent's. Inside Claude Code only what you type yourself counts
    (`/lockflight:approve`); the engine refuses `lockflight approve` run from the session, a `!` command included.
    Optional: the `lockflight-crew` plugin adds a spec writer and a planner for the first steps, and a test author that
    writes each story's failing tests at the red step (`/plugin install lockflight-crew@lockflight`). They are an aid; the
@@ -353,7 +363,7 @@ skips the PyYAML check; neither counts against readiness.
 
 The workflow `init` writes installs the engine version the project pins, from nuget.org or the package sources in the
 repository's `nuget.config`. A project set up from a package pins a release that nuget.org has, so its workflow runs on every
-pull request. An engine built from source is a development build (`0.2.0-alpha.9.dev.<commit time>`) that exists only in
+pull request. An engine built from source is a development build (`0.3.1-0.dev.<commit time>` after the 0.3.0 release) that exists only in
 your local feed (`~/.lockflight/feed`), so a workflow that ran on every pull request would fail at the engine install every
 time. So:
 

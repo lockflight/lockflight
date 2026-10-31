@@ -21,7 +21,7 @@ internal static class HostTamperingJudge
     {
         if (head.Outcome == TreeOutcome.NoTestApps)
         {
-            return new TamperingJudgement(CheckVerdict.Pass, "no test assembly red/green runs (xUnit or NUnit) to scan", [], []);
+            return new TamperingJudgement(CheckVerdict.Pass, "no test assembly red/green runs (xUnit, NUnit or MSTest) to scan", [], []);
         }
 
         if (head.Inventory is null)

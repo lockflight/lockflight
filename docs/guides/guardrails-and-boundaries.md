@@ -62,7 +62,8 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | `review dismiss` human-only | G | refused inside Claude Code like `approve` (`CLAUDECODE=1`); the variable can be unset |
 | Ledger, and the crew's advice skills (`retro`, `rules-audit`) | G | the ledger is local and fail-open, never an audit log; the skills give advice and judge nothing |
 | Proposals (`lockflight propose`) | G | it changes nothing by itself: it writes a patch and the person reads and applies it; the guard keeps blocking the agent's own `git apply` |
-| **CI gates with the base branch's policy** | **B** where the check is **required** (rulesets/branch protection); otherwise advisory | runs on GitHub, with policy the PR cannot change; the Azure Pipelines, Bitbucket and GitLab templates are not yet verified live, and their plan limits differ: see [CI on other platforms](ci-other-platforms.md#guardrail-or-boundary). With the CI judge, the `gates` verdict is read from the judge's evidence, which the next row limits |
+| **CI gates: the policy, baselines and style config they run with** | **B** where the check is **required** (rulesets/branch protection) and its workflow is under code-owner review; otherwise advisory | read from the target branch, so the PR cannot change them; the Azure Pipelines, Bitbucket and GitLab templates are not yet verified live, and their plan limits differ: see [CI on other platforms](ci-other-platforms.md#guardrail-or-boundary) |
+| CI gates: their results (build, format, tests, coverage) | **G, strong** — not a boundary | the build and tests run the pull request's code (project files, `Directory.Build.*`, an MSBuild `<Exec>`) in the judge job, the same as red/green; with the CI judge the `gates` verdict is read from the judge's evidence, which the next row limits |
 | CI judge's evidence (`lockflight ci` writes it in the job that builds and runs the pull request's code; the `gates` and `lockflight/judge` report jobs read it as data) | **G, strong** — not a boundary | the policy and engine come from the base branch, but in 0.3.0 the judge writes its evidence in the same job as the pull request's code, which runs as the same user: a process that code leaves running could rewrite the evidence before it is uploaded. The engine keeps the runner's file-command variables (`GITHUB_ENV`, `GITHUB_OUTPUT` and the like) from the processes it starts, which the files' paths on disk do not stop. Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0 |
 | Local approval records checked in CI (`approve verify --base`) | G | the records are written on your machine, where the agent has your credentials; not in the generated workflow ([CI hardening](ci-hardening.md#approvals-of-record-the-platforms-review)) |
 | **Approval of record: the platform's review**, with CODEOWNERS on `specs/**` and *Require review from Code Owners* | **B, delegated** to the platform where the ruleset requires it | the platform enforces it and Lockflight does not read platform reviews; "author ≠ approver" is a platform setting. The CI judge's `approvals` check verifies the git facts: that the base's CODEOWNERS covers `approvals.specPaths` and, where spec-first applies, that the spec merged first and is unchanged (in a unit of a workspace shell, the shell's). The platform's review fires only on a spec a pull request **changes**: without spec-first (`approvals.default: same-pr` and no `specFirstFrom`) the `approvals` check is off on a pull request, and one that changes no spec, a later pull request of a feature whose spec merged earlier included, asks no person to approve anything |
@@ -284,7 +285,7 @@ does not lift a block. Instead it writes the complete new file in its scratch di
 `lockflight propose <path> --from <file>`, which writes one patch per file to `.lockflight/local/proposals/` and prints the
 command for you, `git apply --check <patch> && git apply <patch>`. Read the patch first, especially when it is marked **high
 risk**: one line in build, analyzer, hook, CI or package configuration can switch a control off. The command itself changes
-nothing in the project, and the agent cannot apply the patch: `git apply` rewrites the working tree, so the guard blocks it.
+nothing in the project, and the guard blocks the agent's own `git apply`, which rewrites the working tree.
 
 ## GitHub plan limits
 
@@ -350,6 +351,6 @@ agent safe on your machine. For that, run the agent in an isolated environment w
 
 ## Next
 
-- [CI hardening](ci-hardening.md): turn CI into the boundary with CODEOWNERS and required checks
+- [CI hardening](ci-hardening.md): make CI's policy and check a boundary with CODEOWNERS and required checks
 - [Troubleshooting](troubleshooting.md): when the guard blocks a command you expected to run
 - [Security policy](../../SECURITY.md): how to report a way around a control

@@ -13,6 +13,7 @@
 #   - each ref is a tag that exists on that repository and points at the sha (so a ref is never served before its tag);
 #   - at the judge's tag, plugins/lockflight/.claude-plugin/plugin.json has the tag's version and
 #     plugins/lockflight/min-engine-version is at most it; nuget.org lists both (a plugin is never served before its engine);
+#   - a crew served from the judge's tag has the tag's version in its plugin.json too;
 #   - at a crew tag, plugins/lockflight-crew/.claude-plugin/plugin.json has the tag's version, and nuget.org lists the engine
 #     plugins/lockflight-crew/min-engine-version names;
 #   - the marketplace's name, description and owner are those of the development marketplace
@@ -221,11 +222,15 @@ check() {
       minimum=$(minimum_at "$ref" "$crew")
       python_check minimum "$minimum" - "the crew's min-engine-version" || fail "$ref is not a coherent crew release"
       engines+=("$minimum")
-    elif [ "$name" = "$crew" ] && git -C "$work/repo" cat-file -e "FETCH_HEAD:plugins/$crew/min-engine-version" 2> /dev/null; then
-      # A crew still served from the judge's tag is never served before the engine it asks for either.
-      minimum=$(minimum_at "$ref" "$crew")
-      python_check minimum "$minimum" - "the crew's min-engine-version" || fail "$ref is not a coherent release"
-      engines+=("$minimum")
+    elif [ "$name" = "$crew" ]; then
+      # A crew still served from the judge's tag carries the tag's version too: Claude Code replaces an installed plugin only
+      # when its version changes. It is never served before the engine it asks for either.
+      python_check versions "$version" "$work/$crew.json" || fail "$ref is not a coherent release"
+      if git -C "$work/repo" cat-file -e "FETCH_HEAD:plugins/$crew/min-engine-version" 2> /dev/null; then
+        minimum=$(minimum_at "$ref" "$crew")
+        python_check minimum "$minimum" - "the crew's min-engine-version" || fail "$ref is not a coherent release"
+        engines+=("$minimum")
+      fi
     fi
   done <<< "$pins"
 

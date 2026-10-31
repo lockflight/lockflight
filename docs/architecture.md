@@ -62,19 +62,23 @@ request's `lockflight.yaml`, and judges the pull request's commits:
   per-method fingerprint shows whether each cycle test changed since its red.
 - **Changed tests and host tampering.** Existing tests the pull request changed are re-checked (advisory for now), and code
   in test assemblies that could tamper with the test host is listed.
-- **Change class.** Today the judge uses an interim classification from git (low-risk paths, dependency-only changes,
-  everything else a behaviour change). In 0.3.0 it moves to [risk routing](guides/risk-routing.md), which computes a class
-  from the diff (`fix`, `behaviour`, `feature`, `critical`) under the base branch's thresholds (`lockflight route show`);
-  the class then sets what the pull request must prove. A class can be raised, never lowered.
+- **Change class.** [Risk routing](guides/risk-routing.md) computes a class from the diff (`fix`, `behaviour`, `feature`,
+  `critical`) under the base branch's thresholds, as `lockflight route show` does; the class sets what the pull request must
+  prove: red→green, spec and trace, the review and its API key, spec-first approvals. A class can be raised, never lowered.
+  A push with no previous commit falls back to simpler rules from git.
+- **Trace, gates, review and approvals.** The spec's requirements are traced to tests that went red, the `pr` gates run at
+  head, a review runs in a separate job with an API key when it is turned on, and the approvals check reads CODEOWNERS and
+  spec-first facts from the base branch.
 
-Trace, the gates, the report and a review in a separate job with an API key, the GitHub Action and the CI templates that run
-the judge are being added in 0.3.0; until they land, the generated workflow runs the `pr` gates. The judge reports under two
-status contexts: `gates` (the `pr` gates and green at head) and `lockflight/judge` (the rest), so a team can make the full
-verdict required when it is ready. Every step is listed in [commands](guides/commands.md).
+The GitHub Action and the Bitbucket pipeline template run the judge; the GitLab and Azure Pipelines templates run the gates
+only, for now. It reports under two status contexts: `gates`
+(the `pr` gates and green at head) and `lockflight/judge` (the rest), so a team can make the full verdict required when it is
+ready. Every step is listed in [commands](guides/commands.md).
 
 The judge runs the pull request's code in its own job. That code (a test, production code, a build file) could therefore
-forge the results, with deliberate code in the pull request's diff; the host-tampering check lists the plain forms, and an
-obfuscated one evades it. So the red/green verdict is a **strong guardrail, not a boundary**. What a pull request cannot
+forge the results, with deliberate code in the pull request's diff; the host-tampering check lists the plain forms in test
+assemblies (production code and MSBuild files are not scanned), and an obfuscated one evades it. So the red/green verdict is
+a **strong guardrail, not a boundary**. What a pull request cannot
 change is the policy, the engine lock and CODEOWNERS, read from the base branch. The check itself is a boundary only where the
 platform enforces it: a required check whose workflow files are under CODEOWNERS with required review, or a workflow a
 ruleset requires ([CI hardening](guides/ci-hardening.md)).
@@ -253,11 +257,11 @@ keeps the summary and SHA-256 of each amend's diff since the red.
 
 | On your machine (guardrails) | Outside the agent's reach (boundaries) |
 |---|---|
-| The guard, the Stop gate, red/green evidence, trace, the review of record, local approvals | CI running the pinned engine with the base branch's policy as a required check; the spec approved in the pull request (CODEOWNERS on `specs/**`, enforced by the platform); merge by a person, when the agent has its own identity (otherwise it can merge with your token) |
+| The guard, the Stop gate, red/green evidence, trace, the review of record, local approvals | CI running the pinned engine with the base branch's policy as a required check (its workflow under CODEOWNERS with required review); the spec approved in the pull request (CODEOWNERS on `specs/**`, enforced by the platform); merge by a person, when the agent has its own identity (otherwise it can merge with your token) |
 
 The in-session controls make the right path the easy one and catch accidents early. The pull request is where the verdict
-counts. Within CI, the judge's red/green results are a strong guardrail, not a boundary, because the pull request's test code
-runs in the judge's job ([the CI judge](#the-ci-judge)).
+counts. Within CI, the judge's red/green results and its evidence are a strong guardrail, not a boundary, because the pull
+request's code runs in the judge's job ([the CI judge](#the-ci-judge)).
 
 ## Extending the engine
 

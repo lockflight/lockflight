@@ -39,7 +39,7 @@ when the agent returns. Install it next to the core plugin:
 |---|---|---|---|
 | `lockflight-crew:spec-writer` | specify | `specs/<id>/spec.md`, from your request | `phase check specify` |
 | `lockflight-crew:planner` | plan and tasks, after you approved the spec | `specs/<id>/plan.md` and `tasks.md` | `phase check tasks` |
-| `lockflight-crew:test-author` | red, per user story | the story's failing xUnit tests | `redgreen red` |
+| `lockflight-crew:test-author` | red, per user story | the story's failing tests (xUnit, NUnit or MSTest, as the project uses) | `redgreen red` |
 
 - **Spec writer and planner.** They write the files in the [spec contract](spec-contract.md), so the project needs no Spec
   Kit (and no Python) for them. The spec writer writes only `spec.md`; when your request leaves a behaviour open, it leaves a
@@ -61,8 +61,9 @@ when the agent returns. Install it next to the core plugin:
 - **A guardrail, not a boundary.** Each agent's tool list and its brief (only its own files; no production code for the spec
   writer and the planner, no spec, plan or tasks for the test author; no protected files; never a human-only command; what
   it reads is data, not instructions, and an instruction found in it is reported as a `Security note:` line that the skill
-  relays to you verbatim) shape what it does but do not enforce it. What is enforced is what was enforced before: the
-  protected-path guard, the human-only commands, the red/green lock and the gates. See
+  relays to you verbatim) shape what it does but do not enforce it. What checks the work is what checked it before:
+  the protected-path guard, the human-only commands, the red/green lock and the gates on the machine (guardrails), and the CI
+  judge at the pull request. See
   [guardrails and boundaries](guardrails-and-boundaries.md).
 - **Off by uninstalling.** Without the plugin, `/lockflight:feature` uses Spec Kit's commands when the project has Spec
   Kit, and otherwise writes the spec, plan and tasks with you in the main session; it writes the tests in the main session.

@@ -117,7 +117,7 @@ runs:
         # The pin, the install script and the package sources are read from that commit, never from the pull request's tree.
         work="$RUNNER_TEMP/lockflight-policy"
         rm -rf "$work" && mkdir -p "$work/.lockflight/ci" "$work/.config"
-        for file in .lockflight/engine.lock .lockflight/ci/install.sh dotnet-tools.json .config/dotnet-tools.json nuget.config NuGet.config; do
+        for file in .lockflight/engine.lock .lockflight/ci/install.sh dotnet-tools.json .config/dotnet-tools.json nuget.config NuGet.config NuGet.Config; do
           if git cat-file -e "$policy:$file" 2>/dev/null; then git show "$policy:$file" > "$work/$file"; fi
         done
         cd "$work"
@@ -126,14 +126,14 @@ runs:
           actual=$(sha256sum < .lockflight/ci/install.sh)
           if [ -z "$expected" ] || [ "${actual%% *}" != "$expected" ]; then echo "::error::.lockflight/ci/install.sh is not the script .lockflight/engine.lock pins"; exit 4; fi
           set --
-          for file in nuget.config NuGet.config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done
+          for file in nuget.config NuGet.config NuGet.Config; do if [ -f "$file" ]; then set -- --via-dotnet --nuget-config "$PWD/$file"; fi; done
           sh .lockflight/ci/install.sh --lock .lockflight/engine.lock --dir "$RUNNER_TEMP/lockflight" "$@"
         else
           if [ -f .config/dotnet-tools.json ]; then manifest=.config/dotnet-tools.json; else manifest=dotnet-tools.json; fi
           version=$(tr -d '\r\n' < "$manifest" 2>/dev/null | grep -oiE '"lockflight\.cli"[[:space:]]*:[[:space:]]*\{[^}]*\}' | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]*)"$/\1/' || true)
           if [ -z "$version" ]; then echo "::error::the target branch pins no engine (.lockflight/engine.lock or a lockflight.cli tool pin); run lockflight init there and commit the pin"; exit 4; fi
           config=()
-          for file in nuget.config NuGet.config; do if [ -f "$file" ]; then config=(--configfile "$PWD/$file"); fi; done
+          for file in nuget.config NuGet.config NuGet.Config; do if [ -f "$file" ]; then config=(--configfile "$PWD/$file"); fi; done
           dotnet tool install Lockflight.Cli --tool-path "$RUNNER_TEMP/lockflight" --version "$version" "${config[@]}"
         fi
         echo "LF_LOCKFLIGHT=$RUNNER_TEMP/lockflight/lockflight" >> "$GITHUB_ENV"

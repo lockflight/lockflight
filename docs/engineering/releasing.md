@@ -5,9 +5,13 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
 
 ## What the workflow does
 
-1. **Checks the version.** The workflow runs only from a tag `vX.Y.Z[-pre]`. The version is the tag without the `v`, must be
-   SemVer 2.0 without build metadata, and must equal the `version` of `plugins/lockflight/.claude-plugin/plugin.json` and of
-   the Spec Kit preset (`plugins/lockflight/speckit-preset/preset.yml`).
+1. **Checks the version.** The workflow publishes only from a tag `vX.Y.Z[-pre]` on a commit of `main` (a dispatch from a
+   branch is a dry run, below). The version is the tag without the `v`, must be SemVer 2.0 without build metadata, and `scripts/release-versions.sh` checks the version files
+   against it: the `version` of `plugins/lockflight/.claude-plugin/plugin.json` and of the Spec Kit preset
+   (`plugins/lockflight/speckit-preset/preset.yml`) is the release's, and so is the crew's `plugin.json` version while the
+   crew is served from the judge's tag; `plugins/lockflight/min-engine-version` names an engine of the release's
+   `MAJOR.MINOR` line, at most the release; the crew's `min-engine-version` is at most the release. `scripts/action-pin.sh
+   --release` checks the CI judge's action pin (below).
 2. **Builds and tests every platform** (osx-arm64, osx-x64, linux-x64, linux-arm64, win-x64), each on its own runner: build
    with warnings as errors, `dotnet test`, pack the Native AOT package, install it with `dotnet tool install` from a local
    feed, check that `lockflight version` prints the version, `lockflight link` it into a scratch project, run the linked
@@ -22,20 +26,29 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
    the pointer's copy must be byte-identical, and so must the bare executables. The file that ships describes the packages
    that ship.
 5. **Publishes, after approval.** The `publish` job runs in the `nuget` environment, so it waits for a required reviewer. It
-   writes `SHA256SUMS` of the packages, the bare executables, `engine-hashes.json` and the install scripts
+   writes `SHA256SUMS` (`scripts/release-assets.sh checksums`) of the packages, the bare executables, `engine-hashes.json` and the install scripts
    (`scripts/install.sh`, `scripts/install.ps1`), records a build provenance attestation
    for all of them, signs in to nuget.org with Trusted Publishing (a short-lived key from GitHub's OIDC token, no stored API
    key) and pushes the RID packages first and the pointer last. A RID package that already exists on nuget.org fails the
    push: Native AOT builds are not guaranteed reproducible, so a re-run must not leave older packages beside hashes of new
    bytes (a partial push needs a new version). It then downloads every package back from nuget.org (polling for up to 30
    minutes while nuget.org validates them) and verifies them against `engine-hashes.json` again.
-6. **Publishes the GitHub Release** for the tag, with notes from git-cliff (the commits since the previous tag) and the
-   packages, the bare executables, `engine-hashes.json`, `install.sh`, `install.ps1`, `SHA256SUMS` and the SBOM attached. It is published at once, not
-   drafted, so the hashes are downloadable as soon as the packages are on nuget.org; edit the notes afterwards.
+6. **Publishes the GitHub Release** for the tag, with notes from git-cliff (the commits since the previous tag) and sixteen
+   files attached, each named once by `scripts/release-assets.sh assemble`: the six packages, the five bare executables,
+   `engine-hashes.json`, `install.sh`, `install.ps1`, `SHA256SUMS` and the SBOM (`lockflight-<version>.cdx.json`). The
+   script checks the files against `SHA256SUMS` first; GitHub refuses a second asset of the same name, and by then the packages
+   are on nuget.org. The release is published at once, not drafted, so the hashes are downloadable as soon as the packages are
+   on nuget.org; edit the notes afterwards.
 
 A manual dispatch from the tag (Actions → release-packages → Run workflow → "Use workflow from": the tag) with `publish` off
-runs steps 1 to 4 only: a dry run. A dispatch from a branch is a dry run of version `0.0.0-ci.<run number>`; its artifacts
-(packages and `engine-hashes.json`) can fill a test feed.
+is a dry run: steps 1 to 4, then the `release-dry-run` job, which writes `SHA256SUMS` and assembles the release files with
+the same script into a throw-away folder on the runner, checks that the tag has no GitHub Release yet, and drafts the
+notes. Nothing is pushed or published. A dispatch from
+a branch is a dry run of version `0.0.0-ci.<run number>`; its artifacts (packages and `engine-hashes.json`) can fill a test
+feed.
+
+Both release workflows refuse a tag whose commit is not on `main`. That check runs in the tagged commit's own workflow file,
+so it is a guardrail against tagging the wrong commit; the tag rulesets below decide who can start a release.
 
 ## One-time setup
 
@@ -48,8 +61,8 @@ In GitHub (repository **Settings**):
      use the environment, even when its workflow file was changed.
    - **Environment variables:** `NUGET_USER` = the nuget.org account name (the profile name, not the email address) that
      owns the package.
-2. **Rules → Rulesets → New tag ruleset** for `v*`: restrict creation, update and deletion to maintainers, so only they can
-   start a release.
+2. **Rules → Rulesets → New tag ruleset** for `v*` and `crew/v*` (`v*` does not match crew tags): restrict creation, update
+   and deletion to maintainers, so only they can start a release.
 
 On nuget.org (signed in as `NUGET_USER`):
 
@@ -93,7 +106,8 @@ push to `main`) fails unless:
 - the judge (`lockflight`) names a `vX.Y.Z` tag and its commit. The crew (`lockflight-crew`) names its own `crew/vX.Y.Z` tag,
   or the judge's tag and commit until its first crew release. Each tag exists on GitHub and points at the commit named;
 - at the judge's tag, `plugins/lockflight/.claude-plugin/plugin.json` has the tag's version, and its `min-engine-version` is
-  at most that version. At a crew tag, the crew's `plugin.json` has the crew tag's version;
+  at most that version. While the crew is served from the judge's tag, the crew's `plugin.json` has the tag's version too. At
+  a crew tag, the crew's `plugin.json` has the crew tag's version;
 - nuget.org lists `Lockflight.Cli` at the judge tag's version and at each plugin's `min-engine-version`;
 - the marketplace's own fields are those of the development marketplace,
   [`plugins/.claude-plugin/marketplace.json`](../../plugins/.claude-plugin/marketplace.json), at the judge's tag, and each
@@ -107,10 +121,28 @@ throughout and users stay on the previous release until the last step below.
 
 ## Cutting a release
 
-1. Raise the version in both `plugin.json` files and in the Spec Kit preset's `preset.yml` (and
-   `plugins/lockflight/min-engine-version` when the plugin needs the new engine), and draft the CHANGELOG entries in a release
-   pull request. Leave `.claude-plugin/marketplace.json` alone. Merge it.
-2. Tag the merge commit and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
+The workflow `lockflight init` generates calls the CI judge's action as
+`uses: lockflight/lockflight/action@<ActionCommit> # vX.Y.Z`. `ActionCommit` is a constant in
+[`Templates.cs`](../../engine/src/Lockflight.Cli/Init/Templates.cs); the `# vX.Y.Z` label is the engine's own version, which
+the release sets when it builds with the tag's version, so there is nothing to edit for it. `scripts/action-pin.sh` fails CI
+while `action/` differs from `action/` at `ActionCommit`, and the release also while `ActionCommit` is not in the tagged
+commit's history.
+
+A pull request that changes `action/` pins its own action in two commits: the first changes `action/`, the second sets
+`ActionCommit` to the first (do not rebase or squash the branch afterwards, or the pinned commit disappears from it). Once it
+is squash-merged, that commit is on no branch, but GitHub still serves it by SHA, so CI on `main` stays green. Before the
+release, after the last change to `action/` has merged, set `ActionCommit` to its commit on `main` in a pull request of its
+own: the release refuses a pin outside the tagged commit's history.
+
+1. Raise the version in both `plugin.json` files (the crew's while it has no release of its own: Claude Code replaces an
+   installed plugin only when its version changes) and in the Spec Kit preset's `preset.yml`, raise
+   `plugins/lockflight/min-engine-version` to an engine of the new `MAJOR.MINOR` line, at most the release (it stays at the
+   last release on `main` in between, so development builds from `scripts/dev-install.sh`, which sort below the next
+   release, satisfy it), and draft the
+   CHANGELOG entries in a release pull request. Leave `.claude-plugin/marketplace.json` alone. Merge it. From the moment the
+   versions are raised, CI's `scripts/release-versions.sh` (without an argument: the version `plugin.json` declares, while
+   it has no tag) runs the release's full version check on every pull request.
+2. Once the release pull request has merged, tag its commit on `main` (not the pull request's head) and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
 3. Approve the `publish` job when the build and smoke tests are green.
 4. Edit the notes of the GitHub Release the workflow published.
 5. Once nuget.org lists the packages, move the marketplace to the release in a pull request of its own:
@@ -132,7 +164,7 @@ The `lockflight-crew` plugin is released on its own, from the same repository. I
 `tag_pattern` (`^v[0-9].*`) never reads a crew tag as a judge release.
 [`.github/workflows/release-crew.yml`](../../.github/workflows/release-crew.yml) runs for a pushed crew tag, and does this:
 
-1. **Checks the version.** It checks that the tag without `crew/v` equals the `version` in
+1. **Checks the version.** It checks that the tag is on a commit of `main` and that the tag without `crew/v` equals the `version` in
    `plugins/lockflight-crew/.claude-plugin/plugin.json`. It also checks that `plugins/lockflight-crew/min-engine-version`
    names an engine that nuget.org lists: the crew calls the engine (`phase check`, `redgreen red`, `facts --json`), so it is
    never released before the engine it needs.
@@ -156,8 +188,9 @@ The `lockflight-crew` plugin is released on its own, from the same repository. I
    archived.
 4. **Publishes a GitHub Release** named `Lockflight crew <version>`. The release is never marked latest, because the latest
    release is the judge's, which the install script and the docs point at. Its notes come from the commits that touched
-   the crew since the previous crew tag. There is no NuGet package and no approval environment: pushing the tag is the
-   maintainer's decision.
+   the crew since the previous crew tag. Before it uploads, it checks the archive against `SHA256SUMS` again. There is no
+   NuGet package and no approval environment: pushing the tag is the maintainer's decision, and the `crew/v*` tag ruleset
+   decides who can push one.
 
 A dispatch from a branch is a dry run, which checks and packs `0.0.0-ci.<run number>` and publishes nothing.
 

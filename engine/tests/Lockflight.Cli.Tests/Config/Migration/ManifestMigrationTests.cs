@@ -65,7 +65,7 @@ public sealed class ManifestMigrationTests
                 "gates.docs.references: report (fail: references the change breaks fail the pr profile)",
                 "gates.ef.pendingModelChanges: auto (auto: fails when the repository pins dotnet-ef; fail forces it)",
                 "approvals.check: report (fail: a missing CODEOWNERS coverage or spec-first violation fails the CI check)",
-                "routing: preset default with every value written down (no check judges by it yet)",
+                "routing: preset default with every value written down (the CI judge routes by it)",
             ],
             result.NewChecks);
     }
