@@ -44,6 +44,34 @@ public sealed class ApprovalsAndShellTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AFeaturePullRequestThatChangesNoSpecAndHasNoneMergedWaitsForAnApproval()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string main = await repository.Write("lockflight.yaml", "version: 2\n").Write(".github/CODEOWNERS", Owners).Write("src/A.cs", "class A;\n").CommitAsync("init", cancellationToken);
+        await repository.CheckoutNewAsync("001-shipping", cancellationToken);
+        string head = await repository.Write("src/B.cs", "class B;\n").CommitAsync("feat(001-shipping): US1", cancellationToken);
+        JudgePlan plan = await PlanAsync(head, main, "001-shipping", shellPath: null);
+
+        ApprovalsJudgement approvals = await DecideAsync(plan);
+        JsonObject blocked = Blocked(plan, approvals)!;
+
+        Assert.Equal(CheckVerdict.NotEarned, approvals.Verdict);
+        Assert.Contains("no person approved this behaviour", approvals.Why, StringComparison.Ordinal);
+        Assert.Equal("approval-missing", blocked["reason"]!["code"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task AFeaturePullRequestThatChangesNoSpecPassesOnTheSpecMergedBeforeAndSaysSo()
+    {
+        JudgePlan plan = await FeaturePullRequestAsync("version: 2\n", Owners, specOnBase: true, editSpec: false);
+
+        ApprovalsJudgement approvals = await DecideAsync(plan);
+
+        Assert.Equal(CheckVerdict.Pass, approvals.Verdict);
+        Assert.Contains("changes no spec and relies on specs/001-shipping/spec.md, approved when it merged", approvals.Why, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task WithoutCodeownersTheApprovalsCheckWaitsForAMaintainer()
     {
         JudgePlan plan = await FeaturePullRequestAsync("version: 2\n", owners: null, specOnBase: false, editSpec: false);

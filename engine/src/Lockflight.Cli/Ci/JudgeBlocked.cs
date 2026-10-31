@@ -25,7 +25,13 @@ internal static class JudgeBlocked
         if (Waits(run, CheckId.Approvals) && run.Findings.Approvals is { Blocked: BlockedReasonCode code } approvals
             && OnlyWaitingOn(run.Checks, check => check.Id == CheckId.Approvals || (check.Id == CheckId.Trace && shellSpecPending)))
         {
-            return code == BlockedReasonCode.SpecNotOnBase ? SpecFirst(run, approvals.Facts, approvals.Why) : Codeowners(run, approvals.Facts, approvals.Why);
+            return code switch
+            {
+                BlockedReasonCode.SpecNotOnBase => SpecFirst(run, approvals.Facts, approvals.Why),
+                BlockedReasonCode.ApprovalMissing => Report(run, code, approvals.Why, BlockedNeed.Of(BlockedWho.Person, BlockedAction.Approve,
+                    "Add or change the feature's spec (specs/<id>/spec.md, the branch named after the feature) in this pull request so its code owner approves it, or merge the spec first, then run this check again", humanOnly: false)),
+                _ => Codeowners(run, approvals.Facts, approvals.Why),
+            };
         }
 
         if (Waits(run, CheckId.Trace) && shellSpecPending && run.Findings.Trace!.Spec is { FeatureId: string feature, Problem: string problem } spec

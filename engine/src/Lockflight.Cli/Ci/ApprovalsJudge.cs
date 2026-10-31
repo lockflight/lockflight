@@ -1,6 +1,7 @@
 using Lockflight.Cli.ApprovalsOfRecord;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Evidence.Blocked;
+using Lockflight.Cli.Paths;
 using Lockflight.Cli.Workspace;
 
 namespace Lockflight.Cli.Ci;
@@ -11,7 +12,10 @@ namespace Lockflight.Cli.Ci;
 /// platform's required review and is never read. Missing CODEOWNERS coverage or a spec not merged first (also one this pull request
 /// adds) is NOT-EARNED: a person must act. A pull request that changes a spec already merged where spec-first applies FAILs; git that
 /// cannot show the facts is an ERROR. Where spec-first applies the check is required whatever the class's level; a workspace shell's
-/// CODEOWNERS is looked for at every platform's location (the shell may live on another platform than the unit).
+/// CODEOWNERS is looked for at every platform's location (the shell may live on another platform than the unit). The platform's
+/// code-owner review fires only on a spec the pull request changes: so where approvals are required and spec-first does not apply,
+/// a pull request that changes no spec passes only on the feature's spec merged before (approved when it merged, as spec-first
+/// would accept); with neither, no person approved anything, and the check is NOT-EARNED until a spec is added or changed.
 /// </summary>
 internal static class ApprovalsJudge
 {
@@ -35,6 +39,21 @@ internal static class ApprovalsJudge
         };
         ApprovalsFacts facts = await ApprovalsChecker.CheckAsync(request, cancellationToken);
         string why = string.Join("; ", facts.Problems);
+        string? merged = feature is null ? null : $"specs/{feature}/spec.md";
+        bool samePrWithoutSpec = facts.Satisfied && !facts.SpecFirst.Applies && plan.Shell is null && plan.Levels.GetValueOrDefault(CheckId.Approvals) == CheckLevel.Required
+            && !plan.ChangedFiles.Any(path => settings.SpecPaths.Any(glob => PathRules.Matches(glob, path)));
+        if (samePrWithoutSpec && (merged is null || await JudgeGit.BlobOfAsync(plan.Inputs.Root, baseCommit, merged, cancellationToken) is null))
+        {
+            return new ApprovalsJudgement(facts, CheckVerdict.NotEarned,
+                $"the class {ChangeClassNames.ToName(plan.Class.Classification.Class)} needs an approved spec, and this pull request changes none{(merged is null ? " and names no feature" : $" while {merged} is not on the base branch")}: the platform's code-owner review covers spec changes only, so no person approved this behaviour",
+                BlockedReasonCode.ApprovalMissing);
+        }
+
+        if (samePrWithoutSpec)
+        {
+            return new ApprovalsJudgement(facts, CheckVerdict.Pass, $"{Passed(facts, inShell: false)}; this pull request changes no spec and relies on {merged}, approved when it merged", Blocked: null);
+        }
+
         return facts switch
         {
             { Codeowners.GitError: not null } => new ApprovalsJudgement(facts, CheckVerdict.Error, why, Blocked: null),
