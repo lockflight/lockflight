@@ -192,7 +192,7 @@ untrusted_message="lockflight: the engine at $engine was not run because $untrus
 # linked again, so the fix is update: it installs the newest engine, re-pins the project to it and links it.
 update_in_terminal="open a separate terminal window (not with \`!\` in Claude Code: that runs inside the session and is refused) and run \`~/.lockflight/bin/lockflight update\` in the project: it links the engine again and records its hash"
 if [ -n "$unlocked" ]; then
-  untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Run exactly: ~/.lockflight/bin/lockflight link --installed (it links the locked engine when it is installed); otherwise ask the user to open a separate terminal window (not with \`!\` in Claude Code) and run \`~/.lockflight/bin/lockflight engine install\` in the project"
+  untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Run exactly: ~/.lockflight/bin/lockflight link --installed (it links the locked engine when it is installed); otherwise ask the user to open a separate terminal window (not with \`!\` in Claude Code) and run \`~/.lockflight/bin/lockflight engine install\` in the project (with a Lockflight 0.2 install, which has neither command, \`~/.lockflight/bin/lockflight update\`)"
 fi
 if [ -n "$unrecorded" ]; then
   untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Ask the user to $update_in_terminal"
@@ -254,10 +254,11 @@ if [ -f "$root/.lockflight/lockdown" ]; then
 fi
 if [ "$tool" = "Bash" ]; then
   command=$(json_string tool_input.command)
-  # The ~ is compared as typed, not expanded: the agent's command line is what is matched.
+  # The ~ is compared as typed, not expanded: the agent's command line is what is matched. None of them runs the project's
+  # linked engine, which may be the one just refused; the user's install is guarded against the agent's writes by the engine.
   # shellcheck disable=SC2088
   case "$command" in
-    "dotnet tool restore"|"dotnet tool restore && dotnet lockflight link"|"dotnet lockflight link"|"~/.lockflight/bin/lockflight link --installed"|".lockflight/bin/lockflight link --installed") exit 0 ;;
+    "dotnet tool restore"|"dotnet tool restore && dotnet lockflight link"|"dotnet lockflight link"|"~/.lockflight/bin/lockflight link --installed") exit 0 ;;
   esac
 fi
 if [ -n "$untrusted" ]; then
