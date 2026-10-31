@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lockflight/lockflight/main/schemas/lockflight.ci-review.v1.json",
+  "title": "lockflight.ci-review/v1",
+  "description": "The CI review job's result (review-result.json in the lockflight-review artifact), which the report job joins as data into the review check of lockflight.ci-evidence/v1. The review job runs the reviewer's reproductions of the pull request's code, so the report checks this shape before it uses the verdict, and a result about another head is stale.",
+  "type": "object",
+  "required": ["schema", "head", "verdict"],
+  "properties": {
+    "schema": { "const": "lockflight.ci-review/v1" },
+    "head": { "type": "string", "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$", "description": "The head commit the review read." },
+    "verdict": { "enum": ["PASS", "FAIL", "NOT-EARNED", "ERROR"] },
+    "why": { "type": "string", "description": "One line for the check, at most 300 characters." }
+  }
+}
