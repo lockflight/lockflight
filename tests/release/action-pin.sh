@@ -59,9 +59,26 @@ expect_fail "the release refuses a pin outside its history" "not in the history 
 
 pin 1111111111111111111111111111111111111111
 commit "pin a missing commit" > /dev/null
-expect_fail "a pin missing from the clone fails" "is not in this clone"
+expect_fail "a pin missing from the clone and origin fails" "neither in this clone nor fetchable"
 printf '    public const string ActionCommit = "main";\n' > "$templates"
-expect_fail "a pin that is not a SHA fails" "no ActionCommit of 40 hex digits"
+expect_fail "a pin that is not a SHA fails" "exactly one ActionCommit of 40 hex digits"
+
+# A squash-merged pull request's own commit: on no branch, served by SHA from refs/pull/<n>/head (as GitHub does).
+remote="$work/remote.git"
+git init -q --bare "$remote"
+git -C "$remote" config uploadpack.allowReachableSHA1InWant true
+git_quiet -C "$repo" push -q "$remote" main
+other="$work/other"
+git clone -q "$remote" "$other"
+echo "v4" > "$other/action/action.yml"
+git_quiet -C "$other" commit -q -am "the pull request's action change"
+pull=$(git -C "$other" rev-parse HEAD)
+git_quiet -C "$other" push -q origin "HEAD:refs/pull/1/head"
+git -C "$repo" remote add origin "$remote"
+echo "v4" > "$repo/action/action.yml"
+pin "$pull"
+commit "the squashed change, pinned to the pull request's commit" > /dev/null
+expect_ok "a pin served only from a pull request ref is fetched by SHA"
 
 if [ "$failures" -gt 0 ]; then echo "$failures failure(s)"; exit 1; fi
 echo "all action-pin checks passed"

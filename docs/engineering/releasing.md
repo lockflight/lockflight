@@ -128,9 +128,12 @@ the release sets when it builds with the tag's version, so there is nothing to e
 while `action/` differs from `action/` at `ActionCommit`, and the release also while `ActionCommit` is not in the tagged
 commit's history.
 
-0. If `action/` changed since the last release: after the change merges, set `ActionCommit` to its commit on `main` in a pull
-   request of its own, before the release pull request. (The pull request that changes `action/` passes CI with its own
-   commit as the pin; the release refuses that commit, because a squash merge leaves it out of `main`.)
+A pull request that changes `action/` pins its own action in two commits: the first changes `action/`, the second sets
+`ActionCommit` to the first (do not rebase or squash the branch afterwards, or the pinned commit disappears from it). Once it
+is squash-merged, that commit is on no branch, but GitHub still serves it by SHA, so CI on `main` stays green. Before the
+release, after the last change to `action/` has merged, set `ActionCommit` to its commit on `main` in a pull request of its
+own: the release refuses a pin outside the tagged commit's history.
+
 1. Raise the version in both `plugin.json` files (the crew's while it has no release of its own: Claude Code replaces an
    installed plugin only when its version changes) and in the Spec Kit preset's `preset.yml`, raise
    `plugins/lockflight/min-engine-version` to an engine of the new `MAJOR.MINOR` line, at most the release (it stays at the
