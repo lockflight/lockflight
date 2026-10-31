@@ -105,11 +105,17 @@ It recognises:
   (`rm "$FILE"`, `> "logs/$(date).log"`) is not judged.
 - **Agent worktrees.** Claude Code runs a subagent with `isolation: worktree` in `.claude/worktrees/<name>`, a full checkout of
   the project. The guard applies every rule there too, anchored at the worktree's root.
-- **Other checkouts.** A target outside the session's root whose nearest folder above it holds a `lockflight.yaml` (a
-  `git worktree add /tmp/wt`, a second clone) gets the same rules, anchored at that folder, with this session's manifest.
-- **The user's install.** Writes to `~/.lockflight` (the engine `~/.lockflight/bin/lockflight link --installed` runs, and the
-  engines in `tools/<version>` it links) are blocked, and `init` writes the `Edit(~/.lockflight/**)` deny rule. Only your own
-  `update` and `engine install` write there.
+- **Other checkouts.** A target whose nearest folder above it holding a `lockflight.yaml` is not the session's root (a
+  `git worktree add /tmp/wt`, a second clone, a checkout nested in the project) gets the same rules, anchored at that folder,
+  with this session's manifest: that checkout's own extra `protected:` entries are not read. A wildcard is judged from the
+  folder before its first wildcard, so one above several checkouts (`rm -rf /tmp/*`) is not judged at theirs.
+- **The user's install.** Parsed writes to `~/.lockflight` (the engine `~/.lockflight/bin/lockflight link --installed` runs,
+  and the engines in `tools/<version>` it links) are blocked, links (`ln`) included, and `init` writes the
+  `Edit(~/.lockflight/**)` deny rule. Only your own `update` and `engine install` write there. It is a guardrail: the recovery
+  command is matched as text, and what `~` means when it runs depends on the shell's state, which the agent can change for
+  later commands (an `export HOME=…` in a file the Bash tool sources), so an agent that does so runs a program of its own
+  under that name.
+  `scripts/dev-install.sh` run from a sandboxed session now fails there; run it in your own terminal.
 
 A relative path is checked against the session's working directory, as written: a `cd` earlier in the same command line is not
 followed. A command that may rewrite a whole directory (`git restore .`, `git checkout -- <dir>`, `rm -r`, `git clean`) is

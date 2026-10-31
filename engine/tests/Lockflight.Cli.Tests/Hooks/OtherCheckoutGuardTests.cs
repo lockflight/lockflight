@@ -52,8 +52,34 @@ public sealed class OtherCheckoutGuardTests : IDisposable
     [InlineData("cp src/x $HOME/.lockflight/tools/9.9.9/lockflight")]
     [InlineData("rm -rf ~/.lockflight")]
     [InlineData("rm -rf ~/.lock*")]
+    [InlineData("cp src/x ~/.lockflig?/bin/lockflight")]
+    [InlineData("cp src/x ~/.*/bin/lockflight")]
+    [InlineData("ln -sf /tmp/evil ~/.lockflight/bin/lockflight")]
+    [InlineData("cp src/x ~home/.lockflight/bin/lockflight")]
     public async Task AShellWriteToTheUsersInstallIsBlocked(string command) =>
         Assert.Equal(ExitCode.HookBlock, await GuardAsync("Bash", filePath: null, command));
+
+    [Fact]
+    public async Task AWildcardInAnotherCheckoutIsJudgedFromTheWorkingDirectoryThere() =>
+        Assert.Equal(ExitCode.HookBlock, await GuardAsync("Bash", filePath: null, "rm -f *.yaml", Other));
+
+    [Fact]
+    public async Task ACheckoutNestedInTheProjectIsJudgedAtItsOwnRoot()
+    {
+        string nested = Path.Combine(Project, "wt2");
+        Directory.CreateDirectory(Path.Combine(nested, ".lockflight"));
+        File.WriteAllText(Path.Combine(nested, Manifest.FileName), "version: 1\n");
+
+        Assert.Equal(ExitCode.HookBlock, await GuardAsync("Write", Path.Combine(nested, ".lockflight", "engine.lock"), command: null));
+    }
+
+    [Fact]
+    public async Task AWildcardFromAboveThatReachesAProtectedFileIsBlocked() =>
+        Assert.Equal(ExitCode.HookBlock, await GuardAsync("Bash", filePath: null, "cp src/x ../p*/lockflight.yaml"));
+
+    [Fact]
+    public async Task AWildcardFromAboveThatReachesOrdinaryCodeIsAllowed() =>
+        Assert.Equal(ExitCode.Pass, await GuardAsync("Bash", filePath: null, "cp src/x ../p*/src/App.cs"));
 
     [Fact]
     public async Task AnEditOfTheUsersEngineIsBlocked() =>
@@ -66,7 +92,7 @@ public sealed class OtherCheckoutGuardTests : IDisposable
         Assert.Equal(ExitCode.Pass, await GuardAsync("Bash", filePath: null, "~/.lockflight/bin/lockflight link --installed"));
     }
 
-    private async Task<ExitCode> GuardAsync(string tool, string? filePath, string? command)
+    private async Task<ExitCode> GuardAsync(string tool, string? filePath, string? command, string? workingDirectory = null)
     {
         Dictionary<string, string> toolInput = [];
         if (filePath is not null)
@@ -80,7 +106,7 @@ public sealed class OtherCheckoutGuardTests : IDisposable
             toolInput["command"] = command;
         }
 
-        string payload = JsonSerializer.Serialize(new Dictionary<string, object> { ["cwd"] = Project, ["tool_name"] = tool, ["tool_input"] = toolInput });
+        string payload = JsonSerializer.Serialize(new Dictionary<string, object> { ["cwd"] = workingDirectory ?? Project, ["tool_name"] = tool, ["tool_input"] = toolInput });
         (ExitCode exitCode, _, _) = await TestConsole.RunAsync(
             ["hook", "pre-tool-use"], payload, Project,
             new Dictionary<string, string> { [EnvironmentVariables.ClaudeProjectDirectory] = Project, [EnvironmentVariables.Home] = Home, [EnvironmentVariables.UserProfile] = Home });

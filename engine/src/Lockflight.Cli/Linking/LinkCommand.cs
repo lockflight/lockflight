@@ -132,8 +132,9 @@ internal sealed class LinkCommand(CliContext context) : ICommand
             return ExitCode.Config;
         }
 
-        // The agent may run this command, so it trusts only the committed lock, which a person reviewed; the git-ignored local lock
-        // of a development build is a person's to link (`lockflight link` with that build).
+        // The agent may run this command, so it reads only the lock in the checkout, never the git-ignored local lock of a
+        // development build, which is a person's to link (`lockflight link` with that build). A branch switch can still move the
+        // checkout's lock to an older engine the user has installed: the user's install bounds what can be linked.
         string install = $"ask the user to {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} engine install")}";
         if (File.Exists(EngineLockFiles.LocalPath(manifest.Root)))
         {

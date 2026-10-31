@@ -83,7 +83,7 @@ public sealed class EngineLockInUseTests : IDisposable
     }
 
     [Fact]
-    public async Task LinkInstalledIgnoresTheLocalDevelopmentLock()
+    public async Task LinkInstalledRefusesWhileALocalDevelopmentLockExists()
     {
         Assert.SkipWhen(EngineRids.Current is null, "No released engine for this platform.");
         WriteLock(new string('a', 64));

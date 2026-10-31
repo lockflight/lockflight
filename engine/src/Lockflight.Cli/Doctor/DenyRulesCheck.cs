@@ -37,7 +37,8 @@ internal static class DenyRulesCheck
         if (missing.Length > 0)
         {
             string names = string.Join(", ", missing.Take(MaxListed)) + (missing.Length > MaxListed ? ", …" : string.Empty);
-            return new(Name, CheckStatus.Warn, $"{missing.Length} protected paths have no Edit deny rule: {names}", $"{EngineCommand.Name} init (it adds them)");
+            string install = missing.Contains(PermissionDenyRules.UserInstallRule, StringComparer.Ordinal) ? " (the user's Lockflight install among them)" : string.Empty;
+            return new(Name, CheckStatus.Warn, $"{missing.Length} protected paths{install} have no Edit deny rule: {names}", $"{EngineCommand.Name} init (it adds them)");
         }
 
         return new(Name, CheckStatus.Pass, $"Claude Code refuses its file tools on the protected paths ({expected.Count} Edit deny rules)", null);
