@@ -8,15 +8,16 @@ namespace Lockflight.Cli.Ci;
 /// project); a changed line of a <c>markup</c> file inside its C# logic (<see cref="RazorCodeBlocks"/>; a file whose text cannot be
 /// read counts); a changed production or markup file git treats as binary (a <c>.gitattributes</c> line in the pull request can make it so, and a
 /// binary file has no lines to judge); or a changed line of a test project that a production project references, because that
-/// code ships, or of a project that was a production project at base. Project,
-/// build-wide and config files do not count (a dependency bump needs no red); they raise their own routing signals.
+/// code ships, or of a project that was a production project at base; or code a project compiles from a file that is not C# by
+/// its name (<see cref="CompiledFiles"/>). Other project, build-wide and config changes do not count (a dependency bump needs no
+/// red); they raise their own routing signals.
 /// </summary>
 internal static class ProductionChange
 {
     public static bool Of(ChangeAnalysis analysis)
     {
         HashSet<string> shipped = ShippedTestProjects(analysis);
-        return analysis.Files.Any(file => (file.Change.Binary || file.Added.Count + file.Removed.Count > 0) && file.Role switch
+        return CompiledFiles.Changed(analysis) || analysis.Files.Any(file => (file.Change.Binary || file.Added.Count + file.Removed.Count > 0) && file.Role switch
         {
             FileRole.Production => true,
             FileRole.Markup => file.Change.Binary || InLogic(file, analysis.ChangeSet),
