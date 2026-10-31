@@ -17,7 +17,8 @@ namespace Lockflight.Cli.Ci;
 /// Test files added for later cycles are not compared, unless they hold an assembly-wide hook: adding tests is what later cycles do.
 /// A file the pull request never changed, the same at head as on the target branch and the same at the red as where the red
 /// forked from it, came from the target ("Update branch", a merge of the target): it is no amend, and the re-check keeps the red
-/// commit's version of it.
+/// commit's version of it. This trusts the target branch: a shared helper it weakened is not re-checked here, its own pull
+/// request was judged.
 /// </summary>
 internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
 {
@@ -71,7 +72,7 @@ internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
     }
 
     /// <summary>Why a cycle test missing at head is not earned, and the way out.</summary>
-    public const string MissingWhy = "deleted or renamed after its red, so the red that proved it is gone; keep the name it went red with until the pull request merges (rename it after), or restore it";
+    public const string MissingWhy = "deleted or renamed after its red, so the red that proved it is gone; keep the name it went red with until the pull request merges (rename it after), restore it, or drop a wrong one with a new red commit for its cycle";
 
     /// <summary>
     /// The paths the pull request never changed: the same at head as at the merge base, and the same at the red as at its fork
