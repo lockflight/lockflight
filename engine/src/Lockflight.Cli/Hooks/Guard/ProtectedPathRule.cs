@@ -209,7 +209,7 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
             {
                 return HookDecision.Block(
                     $"tests-locked:{lockedGlob}",
-                    $"lockflight: '{target}' is a test file and tests are locked during {reason}: make the tests pass by changing production code, then run '{EngineCommand.Linked} redgreen green'. If a test itself is wrong, stop and {HumanOnlyCommands.AskTheUser("redgreen amend <test> --reason \"<why>\"")}; never change it another way.");
+                    $"lockflight: '{target}' is a test file and tests are locked during {reason}: make the tests pass by changing production code, then run '{EngineCommand.Linked} redgreen green'. If a test itself is wrong, stop and {HumanOnlyCommands.AskTheUser("redgreen amend <test> --reason \"<why>\"", manifest.Root)}; never change it another way.");
             }
         }
 

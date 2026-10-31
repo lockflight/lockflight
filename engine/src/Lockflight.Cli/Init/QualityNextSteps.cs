@@ -11,7 +11,8 @@ internal static class QualityNextSteps
     /// <param name="steps">Every file init looked after.</param>
     /// <param name="proposals">The changes proposed to files the team already has.</param>
     /// <param name="architectureProject">The architecture test project's path; null when it was not asked for.</param>
-    public static IReadOnlyList<string> For(InitQuality quality, IReadOnlyList<InitStep> steps, IReadOnlyList<QualityFile> proposals, string? architectureProject)
+    /// <param name="level">The install level: only the plugin brings the <c>/lockflight:</c> commands the hand-off may name.</param>
+    public static IReadOnlyList<string> For(InitQuality quality, IReadOnlyList<InitStep> steps, IReadOnlyList<QualityFile> proposals, string? architectureProject, InstallLevel level)
     {
         List<string> lines = [];
         bool packChanged = steps.Any(step => step.Outcome != FileOutcome.Unchanged && IsPackFile(step.RelativePath))
@@ -20,7 +21,7 @@ internal static class QualityNextSteps
         {
             lines.Add(
                 "Quality pack: the recommended analyzers and the code metrics rules add build warnings, and the build gate fails on every new one. "
-                + $"Before you commit it, apply any patch above, then accept today's warnings: {HumanOnlyCommands.HandOff("baseline build")}. "
+                + $"Before you commit it, apply any patch above, then accept today's warnings: {HumanOnlyCommands.HandOff("baseline build", level == InstallLevel.Plugin)}. "
                 + $"Merge that baseline in its own pull request first (CI takes baselines from the base branch), then the pack: {GuideUrl}");
         }
 

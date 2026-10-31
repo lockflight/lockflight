@@ -70,10 +70,15 @@ internal static class TestFileHashes
         TestFileChanges changes = Compare(open.TestFiles, Compute(root, record.TestProjects));
         return changes.Any
             ? $"{changes.Describe()} changed after red cycle {open.Number} was accepted, without a recorded amend. A locked test file changes only with a "
-                + $"person's amend: ask them to run /lockflight:amend <Class.Method> in the session, or '{EngineCommand.Linked} redgreen amend <Class.Method> --reason \"<why>\"' "
-                + $"in a terminal, and then run '{EngineCommand.Linked} redgreen red' to re-check the test; or restore the file as it was at red"
+                + $"person's amend: ask them to run {AmendHandOff(root)}, and then run '{EngineCommand.Linked} redgreen red' to re-check the test; or restore the file as it was at red"
                 + (open.Snapshot is null ? string.Empty : $" (the red-time snapshot {RedGreenSession.Short(open.Snapshot)} holds it)")
             : null;
+    }
+
+    private static string AmendHandOff(string root)
+    {
+        string terminal = $"'{EngineCommand.Linked} redgreen amend <Class.Method> --reason \"<why>\"' in a terminal";
+        return HumanOnlyCommands.InSessionFor("redgreen amend", root) is null ? terminal : $"/lockflight:amend <Class.Method> in the session, or {terminal}";
     }
 
     private static IEnumerable<string> Files(string directory, bool insideOutput)

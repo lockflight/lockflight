@@ -325,7 +325,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
             return proposeFailure;
         }
 
-        foreach (string line in QualityNextSteps.For(init.Quality, steps, proposals, architectureProject))
+        foreach (string line in QualityNextSteps.For(init.Quality, steps, proposals, architectureProject, init.Level))
         {
             await context.Output.WriteLineAsync(line);
         }
@@ -344,7 +344,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
                 : LockflightPresetRegistry.IsInstalled(root) ? SpecKitSetup.WithPreset
                 : SpecKitSetup.WithoutPreset;
             string? foundPreset = init.Profile == InitProfile.Standard && specKit != SpecKitSetup.WithPreset ? PresetLocator.Find(context.Environment.Get(EnvironmentVariables.Home), root) : null;
-            foreach (string line in InitNextSteps.For(init.Profile, specKit, foundPreset))
+            foreach (string line in InitNextSteps.For(init.Profile, specKit, foundPreset, init.Level))
             {
                 await context.Output.WriteLineAsync(line);
             }

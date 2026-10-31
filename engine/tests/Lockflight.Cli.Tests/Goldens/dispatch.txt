@@ -413,7 +413,7 @@ Human decisions (approve, redgreen reset|amend, review dismiss, baseline and upd
 Claude Code session, a `!` command included: run them in a separate terminal window)
   approve spec|tasks [--feature <id>]           approve the feature's artifacts (a local record; the
                                                 approval of record is the pull request's review);
-                                                in Claude Code, type /lockflight:approve spec|tasks instead
+                                                with the plugin, type /lockflight:approve spec|tasks instead
   redgreen reset [--feature <id>]               discard the feature's red/green evidence
   redgreen amend <test> --reason "<text>" [--feature <id>]
                                                 let one test of the open red cycle change: its file is

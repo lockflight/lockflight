@@ -274,9 +274,34 @@ public sealed class ReadinessChecksTests : IDisposable
     }
 
     [Fact]
+    public async Task TheCiOnlyLevelReportsNoMissingPluginHooksOrEngineAsAProblem()
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--ci-only"], string.Empty, root.FullName);
+        Assert.True(exitCode == ExitCode.Pass, error);
+
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CheckStatus.Info, Assert.Single(checks, check => check.Name == "linked engine").Status);
+        DoctorCheck settings = Assert.Single(checks, check => check.Name == "claude settings");
+        Assert.Equal(CheckStatus.Info, settings.Status);
+        Assert.StartsWith("CI-only level", settings.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain(checks, check => check.Name is "deny rules" or "sandbox" or "claude code");
+    }
+
+    [Fact]
+    public async Task SettingsWithLockflightDenyRulesAreNotTheCiOnlyLevel()
+    {
+        Write(".claude/settings.json", """{ "permissions": { "deny": ["Edit(/lockflight.yaml)"] } }""");
+
+        DoctorCheck check = await CheckAsync("claude settings");
+
+        Assert.Equal(CheckStatus.Warn, check.Status);
+    }
+
+    [Fact]
     public async Task SettingsWithoutEditDenyRulesWarnWithTheFix()
     {
-        Write(".claude/settings.json", "{}");
+        Write(".claude/settings.json", """{ "enabledPlugins": { "lockflight@lockflight": true } }""");
 
         DoctorCheck check = await CheckAsync("deny rules");
 
@@ -288,7 +313,7 @@ public sealed class ReadinessChecksTests : IDisposable
     [Fact]
     public async Task SettingsWithoutSandboxWriteDenialsWarnWithTheFix()
     {
-        Write(".claude/settings.json", "{}");
+        Write(".claude/settings.json", """{ "enabledPlugins": { "lockflight@lockflight": true } }""");
 
         DoctorCheck check = await CheckAsync("sandbox");
 

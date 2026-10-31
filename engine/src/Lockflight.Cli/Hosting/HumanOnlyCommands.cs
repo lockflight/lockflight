@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Init;
 
 namespace Lockflight.Cli.Hosting;
 
@@ -58,28 +59,40 @@ internal static partial class HumanOnlyCommands
     };
 
     /// <summary>
-    /// What the agent is told when a reserved command is due: the session command the person types when there is one, else a
-    /// separate terminal window, and only then the command line.
+    /// The slash command for <paramref name="command"/> when the project at <paramref name="root"/> has the plugin's commands
+    /// (<see cref="ClaudeUserSettings.PluginCommandsFor"/>); null at the native level or for a terminal-only command.
     /// </summary>
-    public static string AskTheUser(string command) => $"ask the user to {HandOff(command)}";
+    public static string? InSessionFor(string command, string root) => ClaudeUserSettings.PluginCommandsFor(root) ? InSession(command) : null;
 
-    /// <summary>What the person does, as it follows "ask the user to": <c>type /lockflight:… in Claude Code, or open a separate terminal window …</c>.</summary>
-    public static string HandOff(string command)
+    /// <summary>
+    /// What the agent is told when a reserved command is due: the session command the person types when the project has one,
+    /// else a separate terminal window, and only then the command line.
+    /// </summary>
+    public static string AskTheUser(string command, string root) => $"ask the user to {HandOff(command, root)}";
+
+    /// <summary>
+    /// What the person does, as it follows "ask the user to": <c>type /lockflight:… in Claude Code, or open a separate terminal
+    /// window …</c>; at the native level, where there is no plugin, only the terminal.
+    /// </summary>
+    public static string HandOff(string command, string root) => HandOff(command, ClaudeUserSettings.PluginCommandsFor(root));
+
+    /// <summary>As <see cref="HandOff(string, string)"/>, for a caller that knows whether the plugin's commands exist.</summary>
+    public static string HandOff(string command, bool pluginCommands)
     {
         string terminal = $"{OpenATerminalAndRun($"{EngineCommand.Name} {command}")} from the project root";
-        return InSession(command) is string slash ? $"type {slash} in Claude Code, or {terminal}" : terminal;
+        return pluginCommands && InSession(command) is string slash ? $"type {slash} in Claude Code, or {terminal}" : terminal;
     }
 
     /// <summary>
     /// The engine's refusal of a reserved command run inside a Claude Code session. It names the separate terminal window before
     /// the command line to copy (<c>cd</c> to <paramref name="directory"/>, then <paramref name="engine"/> with the same arguments),
-    /// and the session command when there is one.
+    /// and the session command when the project has one.
     /// </summary>
     public static string Refusal(IReadOnlyList<string> args, string directory, string engine)
     {
         string command = string.Join(' ', args.Take(CommandWords));
         string commandLine = $"cd {ShellQuoting.Quote(directory)} && {engine} {string.Join(' ', args.Select(ShellQuoting.QuoteIfNeeded))}";
-        string slash = InSession(command) is string inSession ? $" Or type {inSession} in Claude Code." : string.Empty;
+        string slash = InSessionFor(command, directory) is string inSession ? $" Or type {inSession} in Claude Code." : string.Empty;
         return $"lockflight: '{command}' records a human decision and does not run inside a Claude Code session. "
             + $"{Sentence(OpenATerminalAndRun(commandLine))}.{slash}";
     }

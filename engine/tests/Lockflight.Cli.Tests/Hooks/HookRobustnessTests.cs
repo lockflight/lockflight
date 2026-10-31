@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Tests.Init;
 
 namespace Lockflight.Cli.Tests.Hooks;
 
@@ -101,6 +102,18 @@ public sealed class HookRobustnessTests : IDisposable
 
         Assert.Contains($"Always run Lockflight commands as .lockflight/bin/lockflight <command> from {projectRoot.FullName}", banner, StringComparison.Ordinal);
         Assert.Contains("not with `!` in Claude Code", banner, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AtTheNativeLevelTheSessionBannerNamesNoPluginCommand()
+    {
+        NativeLevelSettings.Write(projectRoot.FullName, pluginEnabled: false);
+
+        (_, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName);
+        string banner = JsonNode.Parse(output)!["hookSpecificOutput"]!["additionalContext"]!.GetValue<string>();
+
+        Assert.Contains(SessionBanner.NativeHumanDecisionsNote, banner, StringComparison.Ordinal);
+        Assert.DoesNotContain("/lockflight:", banner, StringComparison.Ordinal);
     }
 
     [Fact]

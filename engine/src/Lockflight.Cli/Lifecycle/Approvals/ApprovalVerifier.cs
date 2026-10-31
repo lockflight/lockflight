@@ -108,7 +108,7 @@ internal sealed class ApprovalVerifier(CliContext context, string root)
             ApprovalCheck check = store.Check(phase);
             bool valid = check.State == ApprovalState.Valid;
             allGood &= valid;
-            await context.Output.WriteLineAsync($"{(valid ? "PASS" : "FAIL")} {feature.Id}: {check.Describe()}");
+            await context.Output.WriteLineAsync($"{(valid ? "PASS" : "FAIL")} {feature.Id}: {check.Describe(root)}");
         }
 
         return allGood;

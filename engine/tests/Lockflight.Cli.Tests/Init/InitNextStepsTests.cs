@@ -7,12 +7,12 @@ public sealed class InitNextStepsTests
     [Fact]
     public void TheLiteProfileCommitsAndRunsDoctor() =>
         Assert.Equal(["Next: commit these files, then run `.lockflight/bin/lockflight doctor` from the project root."],
-            InitNextSteps.For(InitProfile.Lite, SpecKitSetup.None, presetDirectory: null));
+            InitNextSteps.For(InitProfile.Lite, SpecKitSetup.None, presetDirectory: null, InstallLevel.Plugin));
 
     [Fact]
     public void TheStandardProfileSetsUpSpecKitWithThePresetAndAcceptsFailingTests()
     {
-        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: "/home/me/lockflight/plugins/lockflight/speckit-preset"));
+        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: "/home/me/lockflight/plugins/lockflight/speckit-preset", InstallLevel.Plugin));
 
         Assert.Contains("specify init --here --force --integration claude --script sh", text, StringComparison.Ordinal);
         Assert.Contains("specify preset add --dev '/home/me/lockflight/plugins/lockflight/speckit-preset'", text, StringComparison.Ordinal);
@@ -24,7 +24,7 @@ public sealed class InitNextStepsTests
     [Fact]
     public void AnExistingSpecKitGetsThePresetThroughInitNotANewSpecKit()
     {
-        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithoutPreset, presetDirectory: null));
+        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithoutPreset, presetDirectory: null, InstallLevel.Plugin));
 
         Assert.Contains("init --speckit-preset", text, StringComparison.Ordinal);
         Assert.DoesNotContain("specify init", text, StringComparison.Ordinal);
@@ -33,7 +33,7 @@ public sealed class InitNextStepsTests
     [Fact]
     public void SpecKitWithThePresetAlreadyInstalledNeedsNoSpecKitStep()
     {
-        IReadOnlyList<string> steps = InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithPreset, presetDirectory: null);
+        IReadOnlyList<string> steps = InitNextSteps.For(InitProfile.Standard, SpecKitSetup.WithPreset, presetDirectory: null, InstallLevel.Plugin);
         string text = string.Join('\n', steps);
 
         Assert.DoesNotContain("adopt", text, StringComparison.Ordinal);
@@ -46,5 +46,20 @@ public sealed class InitNextStepsTests
     [Fact]
     public void AnUnknownPresetDirectoryIsAPlaceholder() =>
         Assert.Contains("preset add --dev <plugin>/speckit-preset",
-            string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: null)), StringComparison.Ordinal);
+            string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: null, InstallLevel.Plugin)), StringComparison.Ordinal);
+
+    [Fact]
+    public void AtTheNativeLevelTheBaselineIsGivenInATerminalAndNoSkillIsNamed() => AssertTerminalOnly(InstallLevel.Native);
+
+    [Fact]
+    public void AtTheCiOnlyLevelTheBaselineIsGivenInATerminalAndNoSkillIsNamed() => AssertTerminalOnly(InstallLevel.CiOnly);
+
+    private static void AssertTerminalOnly(InstallLevel level)
+    {
+        string text = string.Join('\n', InitNextSteps.For(InitProfile.Standard, SpecKitSetup.None, presetDirectory: null, level));
+
+        Assert.DoesNotContain("/lockflight:", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("init skill", text, StringComparison.Ordinal);
+        Assert.Contains("accept the tests that already fail: you open a separate terminal window", text, StringComparison.Ordinal);
+    }
 }

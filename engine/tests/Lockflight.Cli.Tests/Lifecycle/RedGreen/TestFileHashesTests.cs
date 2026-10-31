@@ -3,6 +3,7 @@ using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.Approvals;
 using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Tests.Init;
 
 namespace Lockflight.Cli.Tests.Lifecycle.RedGreen;
 
@@ -139,6 +140,20 @@ public sealed class TestFileHashesTests : IDisposable
         Assert.Contains($"{HelperFile} (changed) changed after red cycle 1 was accepted, without a recorded amend", output, StringComparison.Ordinal);
         Assert.Contains("/lockflight:amend", output, StringComparison.Ordinal);
         Assert.Contains("redgreen amend", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AtTheNativeLevelTheAmendIsHandedToATerminalOnly()
+    {
+        Approve();
+        SaveRecord(TestFileHashes.Compute(root.FullName, [Project]));
+        Write(HelperFile, "static class Prices { public const decimal Rate = 0m; }\n");
+        NativeLevelSettings.Write(root.FullName, pluginEnabled: false);
+
+        (_, string output, _) = await RunAsync("redgreen", "green", "--feature", "f1");
+
+        Assert.Contains("redgreen amend <Class.Method>", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("/lockflight:amend", output, StringComparison.Ordinal);
     }
 
     [Fact]

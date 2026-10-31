@@ -1,10 +1,13 @@
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Tests.Init;
 
 namespace Lockflight.Cli.Tests.Hosting;
 
-public sealed class HumanOnlyCommandsTests
+public sealed class HumanOnlyCommandsTests : IDisposable
 {
+    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-human-only-");
+
     [Theory]
     [InlineData("dotnet lockflight baseline build", "baseline build")]
     [InlineData("lockflight  baseline tests", "baseline tests")]
@@ -97,9 +100,41 @@ public sealed class HumanOnlyCommandsTests
     [InlineData("update", "ask the user to open a separate terminal window")]
     public void AHandOffPutsTheSessionCommandOrTheSeparateTerminalFirst(string command, string start)
     {
-        string handOff = HumanOnlyCommands.AskTheUser(command);
+        string handOff = HumanOnlyCommands.AskTheUser(command, root.FullName);
 
         Assert.StartsWith(start, handOff, StringComparison.Ordinal);
         Assert.Contains($"(not with `!` in Claude Code: that runs inside the session and is refused) and run `{EngineCommand.Name} {command}` from the project root", handOff, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData("approve tasks")]
+    [InlineData("baseline tests")]
+    [InlineData("redgreen reset")]
+    public void AtTheNativeLevelAHandOffNamesOnlyTheTerminal(string command)
+    {
+        NativeLevelSettings.Write(root.FullName, pluginEnabled: false);
+
+        string handOff = HumanOnlyCommands.AskTheUser(command, root.FullName);
+
+        Assert.StartsWith("ask the user to open a separate terminal window", handOff, StringComparison.Ordinal);
+        Assert.DoesNotContain("/lockflight:", handOff, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AtTheNativeLevelTheRefusalNamesNoSessionCommand()
+    {
+        NativeLevelSettings.Write(root.FullName, pluginEnabled: false);
+
+        Assert.DoesNotContain("/lockflight:", HumanOnlyCommands.Refusal(["approve", "spec"], root.FullName, EngineCommand.Linked), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NativeHooksWithThePluginEnabledKeepTheSessionCommand()
+    {
+        NativeLevelSettings.Write(root.FullName, pluginEnabled: true);
+
+        Assert.Contains("type /lockflight:reset in Claude Code", HumanOnlyCommands.AskTheUser("redgreen reset", root.FullName), StringComparison.Ordinal);
+    }
+
+    public void Dispose() => root.Delete(recursive: true);
 }

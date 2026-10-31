@@ -1,5 +1,6 @@
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Gates.Parsers;
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Gates.Steps;
@@ -42,7 +43,7 @@ internal sealed class BuildStep : IGateStep
         DiagnosticsBaseline baseline = new(run.ProjectRoot, run.UnitPath);
         if (!baseline.Exists)
         {
-            string note = diagnostics.Count == 0 ? string.Empty : $"{diagnostics.Count} warnings, no baseline yet (a person types /lockflight:baseline build in Claude Code, or opens a separate terminal window and runs `.lockflight/bin/lockflight baseline build`)";
+            string note = diagnostics.Count == 0 ? string.Empty : $"{diagnostics.Count} warnings, no baseline yet ({BaselineHandOff(run.ProjectRoot)})";
             return new GateStep(StepName, buildRun.ExitCode, Verdict.Pass, buildRun.DurationMs, note);
         }
 
@@ -50,6 +51,13 @@ internal sealed class BuildStep : IGateStep
         return fresh.Count == 0
             ? new GateStep(StepName, buildRun.ExitCode, Verdict.Pass, buildRun.DurationMs, string.Empty)
             : new GateStep(StepName, buildRun.ExitCode, Verdict.Fail, buildRun.DurationMs, DescribeNew(fresh));
+    }
+
+    /// <summary>How a person accepts today's warnings: the plugin's command where the project has it, else the terminal.</summary>
+    internal static string BaselineHandOff(string root)
+    {
+        const string Terminal = "opens a separate terminal window and runs `.lockflight/bin/lockflight baseline build`";
+        return HumanOnlyCommands.InSessionFor("baseline build", root) is string slash ? $"a person types {slash} in Claude Code, or {Terminal}" : $"a person {Terminal}";
     }
 
     private static string DescribeNew(IReadOnlyList<BuildDiagnostic> fresh)
