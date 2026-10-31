@@ -141,6 +141,93 @@ public sealed class TestFingerprinterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ATestInheritedFromAGenericBaseHasAFingerprintThatFollowsTheBaseAndItsTypeArgument()
+    {
+        static string Base(string length) => $$"""
+            namespace Shop.Tests;
+
+            public abstract class PriceTestsBase<T>
+            {
+                [Fact]
+                public void Inherited() => Assert.True(typeof(T).Name.Length > {{length}});
+            }
+
+            """;
+        repository.WriteCode(Production, string.Empty, "PriceTestsBase<decimal>").Write("tests/Shop.Tests/PriceTestsBase.cs", Base("1"));
+        string original = await FingerprintAsync("Inherited");
+
+        repository.Write("tests/Shop.Tests/PriceTestsBase.cs", Base("2"));
+        string body = await FingerprintAsync("Inherited");
+        Assert.NotEqual(original, body);
+
+        repository.WriteCode(Production, string.Empty, "PriceTestsBase<int>");
+        Assert.NotEqual(body, await FingerprintAsync("Inherited"));
+    }
+
+    [Fact]
+    public async Task ExceptionClausesLocalTypesFixturesAndClassAndAssemblyAttributesCountToo()
+    {
+        static string Tests(string trait, string collection, string caught, string local) => $$"""
+            using Shop;
+
+            [assembly: AssemblyFixture(typeof(Shop.Tests.Warehouse))]
+
+            namespace Shop.Tests;
+
+            [Trait("Area", "{{trait}}")]
+            [Collection("{{collection}}")]
+            public sealed class PriceTests
+            {
+                [Fact]
+                public void ShippingFollowsTheWeight()
+                {
+                    {{local}} weight = "2";
+                    Assert.NotNull(weight);
+                    try { Assert.Equal(4m, new Price().Shipping(2m)); }
+                    catch ({{caught}}) { }
+                }
+            }
+
+            [CollectionDefinition("db")]
+            public sealed class DbCollection : ICollectionFixture<DbFixture>;
+
+            """;
+        static string Fixtures(string db, string warehouse) => $$"""
+            namespace Shop.Tests;
+
+            public sealed class DbFixture
+            {
+                public DbFixture() => Console.WriteLine({{db}});
+            }
+
+            public sealed class Warehouse
+            {
+                public Warehouse() => Console.WriteLine({{warehouse}});
+            }
+
+            """;
+        repository.Write(CiSolution.TestsFile, Tests("prices", "db", "ArgumentException", "object")).Write("tests/Shop.Tests/Fixtures.cs", Fixtures("1", "1"));
+        List<string> fingerprints = [await FingerprintAsync()];
+
+        repository.Write(CiSolution.TestsFile, Tests("prices", "db", "InvalidOperationException", "object"));
+        fingerprints.Add(await FingerprintAsync());
+        repository.Write(CiSolution.TestsFile, Tests("prices", "db", "InvalidOperationException", "string"));
+        fingerprints.Add(await FingerprintAsync());
+        repository.Write(CiSolution.TestsFile, Tests("shipping", "db", "InvalidOperationException", "string"));
+        fingerprints.Add(await FingerprintAsync());
+        repository.Write("tests/Shop.Tests/Fixtures.cs", Fixtures("2", "1"));
+        fingerprints.Add(await FingerprintAsync());
+        repository.Write("tests/Shop.Tests/Fixtures.cs", Fixtures("2", "2"));
+        fingerprints.Add(await FingerprintAsync());
+
+        string[] steps = ["caught type", "local type", "class attribute", "collection fixture", "assembly fixture"];
+        for (int step = 0; step < steps.Length; step++)
+        {
+            Assert.True(fingerprints[step] != fingerprints[step + 1], $"the {steps[step]} did not change the fingerprint");
+        }
+    }
+
+    [Fact]
     public async Task ATestThatIsNotInTheAssemblyHasNoFingerprint()
     {
         await BuildAsync();
