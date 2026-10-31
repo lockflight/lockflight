@@ -26,6 +26,7 @@ internal static class SandboxSettings
     private const string Baselines = ".lockflight/baselines";
     private const string EngineLock = ".lockflight/engine.lock";
     private const string VendoredScripts = ".lockflight/ci";
+    private const string LocalLock = ".lockflight/local/engine.lock";
 
     /// <summary>
     /// Where <c>dotnet</c> writes outside the project during a restore and build: the global packages folder, NuGet's HTTP and
@@ -42,8 +43,8 @@ internal static class SandboxSettings
     /// and WSL2 the sandbox holds a denial on a missing file by placing an empty read-only file there while a command runs, and
     /// an empty <c>global.json</c> or <c>Directory.Build.props</c> would break the build. A pattern such as
     /// <c>**/Directory.Build.props</c> is written as each file it matches, because Linux supports no other wildcard in these lists.
-    /// Of <c>.lockflight/</c> only the linked engine, the baselines, the engine lock and the vendored install script are listed
-    /// (the last two are written by <c>init</c> and <c>update</c> only): evidence, the ledger and the Stop cache are written by the
+    /// Of <c>.lockflight/</c> only the linked engine, the baselines, the engine lock, the vendored install script and the local
+    /// development lock are listed (written by <c>init</c>, <c>update</c> and a person's <c>link</c> only): evidence, the ledger and the Stop cache are written by the
     /// commands the agent runs (gate and test runs). Run <c>init</c> again to add files created since.
     /// </summary>
     public static IReadOnlyList<string> DenyWrite(string root, IEnumerable<string> protectedGlobs)
@@ -56,7 +57,7 @@ internal static class SandboxSettings
             if (glob.EndsWith(LockflightTree, StringComparison.Ordinal))
             {
                 string unit = glob[..^LockflightTree.Length];
-                paths.UnionWith(new[] { unit + LinkedEngine, unit + Baselines, unit + EngineLock, unit + VendoredScripts }.Where(path => Exists(root, path) || path == LinkedEngine));
+                paths.UnionWith(new[] { unit + LinkedEngine, unit + Baselines, unit + EngineLock, unit + VendoredScripts, unit + LocalLock }.Where(path => Exists(root, path) || path == LinkedEngine));
             }
             else if (glob.EndsWith(TreeSuffix, StringComparison.Ordinal) && !PathWildcards.HasWildcard(glob[..^TreeSuffix.Length]))
             {

@@ -38,6 +38,7 @@ public sealed class PermissionDenyRulesTests : IDisposable
         Write(".lockflight/baselines/known-failing-tests.json", "[]");
         Write(".lockflight/engine.lock", "{}");
         Write(".lockflight/ci/install.sh", "exit 0");
+        Write(".lockflight/local/engine.lock", "{}");
 
         IReadOnlyList<string> rules = PermissionDenyRules.For(root.FullName, DefaultProtectedPaths.Globs);
 
@@ -45,10 +46,15 @@ public sealed class PermissionDenyRulesTests : IDisposable
         Assert.Contains("Edit(/.lockflight/baselines/**)", rules);
         Assert.Contains("Edit(/.lockflight/engine.lock)", rules);
         Assert.Contains("Edit(/.lockflight/ci/**)", rules);
+        Assert.Contains("Edit(/.lockflight/local/engine.lock)", rules);
         Assert.DoesNotContain("Edit(/.lockflight/local/**)", rules);
         Assert.Contains("Edit(/.lockflight/features/*/approvals/**)", rules);
         Assert.DoesNotContain("Edit(/.lockflight/**)", rules);
     }
+
+    [Fact]
+    public void TheUsersLockflightInstallIsDenied() =>
+        Assert.Contains("Edit(~/.lockflight/**)", PermissionDenyRules.For(root.FullName, DefaultProtectedPaths.Globs));
 
     [Fact]
     public void MergeAddsMissingRulesAfterTheTeamsOwn()
