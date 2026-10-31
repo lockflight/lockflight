@@ -81,7 +81,7 @@ internal static class Templates
         # repository variable LOCKFLIGHT_REVIEW is 'true' and the secret ANTHROPIC_API_KEY is set (its key can be reached by the
         # pull request's code: use a spend-limited key scoped to CI); `gates` and `lockflight/judge` read their results as data
         # and set one status context each. `gates` keeps its meaning (the pr gates and green at head); make `lockflight/judge`
-        # required when the team produces red commits (redgreen red commits them). The engine version and policy come from the
+        # required when the team produces red commits (a commit with a Lockflight-Red: <n> trailer). The engine version and policy come from the
         # target branch, so a PR cannot loosen the checks that judge it. Route .github/workflows/** and .github/actions/** to a
         # code owner: GitHub runs the pull request's own copy of this file. judge's timeout is ci.timeoutMinutes (45) + 10.
         name: lockflight-gates
