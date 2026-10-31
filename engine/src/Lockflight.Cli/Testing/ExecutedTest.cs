@@ -9,4 +9,7 @@ internal sealed record ExecutedTest(string Key, string Name, TestOutcome Outcome
 {
     /// <summary>The line of <see cref="TopFrameFile"/> the top frame points at; null without symbols.</summary>
     public int? TopFrameLine { get; init; }
+
+    /// <summary>The runner's message for a skipped row (<c>Assert.Skip("no Docker here")</c>); null when it gave none or the row was not skipped.</summary>
+    public string? SkipReason { get; init; }
 }

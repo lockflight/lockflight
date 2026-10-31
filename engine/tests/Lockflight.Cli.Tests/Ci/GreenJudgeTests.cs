@@ -48,6 +48,77 @@ public sealed class GreenJudgeTests
     }
 
     [Fact]
+    public void ABaseTestSkippedAtRunTimeOnTheBaseTooIsNoNewSkip()
+    {
+        GreenJudgement green = Decide([BaseTest, CycleTest], [Skip(BaseTest), Pass(CycleTest)], baseSkips: new BaseSkipCheck(new Dictionary<string, int> { [BaseTest.Key] = 1 }, [], null));
+
+        Assert.Equal(CheckVerdict.Pass, green.Verdict);
+    }
+
+    [Fact]
+    public void ARunTimeSkipMatchesTheBaseOnlyWithTheSameMessage()
+    {
+        ExecutedTest[] head = [Skip(BaseTest) with { SkipReason = "no Docker here" }, Skip(BaseTest) with { SkipReason = "later" }];
+        ExecutedTest[] onBase = [Skip(BaseTest) with { SkipReason = " no Docker here " }, Pass(BaseTest)];
+
+        IReadOnlyDictionary<string, int> matched = GreenJudge.MatchedSkips(head, onBase);
+
+        Assert.Equal(1, matched[BaseTest.Key]);
+        GreenJudgement green = Decide([BaseTest, CycleTest], [.. head, Pass(CycleTest)], baseSkips: new BaseSkipCheck(matched, [], null));
+        Assert.Equal(CheckVerdict.Fail, green.Verdict);
+        Assert.Contains("new skipped tests", green.Why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATestMissingFromTheBaseReportOrSkippedWithoutAMessageIsNotCompared()
+    {
+        TestCase other = Test("Other");
+        ExecutedTest[] head = [Skip(BaseTest) with { SkipReason = "no Docker here" }, Skip(other)];
+        ExecutedTest[] onBase = [Skip(other)];
+
+        BaseSkipCheck check = GreenJudge.CompareSkips(head, onBase, [BaseTest.Key, other.Key]);
+
+        Assert.Equal([BaseTest.Key, other.Key], check.Unchecked);
+        Assert.Empty(check.MatchedRows);
+        Assert.Equal("not in the base run's report", check.Failure);
+    }
+
+    [Fact]
+    public void ABaseThatCouldNotRunTheRunTimeSkipsLeavesGreenNotEarned()
+    {
+        GreenJudgement green = Decide([BaseTest, CycleTest], [Skip(BaseTest), Pass(CycleTest)], baseSkips: new BaseSkipCheck(new Dictionary<string, int>(), [BaseTest.Key], "the runner did not finish on the base (exit 3)"));
+
+        Assert.Equal(CheckVerdict.NotEarned, green.Verdict);
+        Assert.Contains("could not be run on the base", green.Why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnotherFailureStillFailsWhenTheBaseCouldNotRunTheRunTimeSkips()
+    {
+        GreenJudgement green = Decide([BaseTest, CycleTest], [Skip(BaseTest), Fail(CycleTest)], baseSkips: new BaseSkipCheck(new Dictionary<string, int>(), [BaseTest.Key], "out of time"));
+
+        Assert.Equal(CheckVerdict.Fail, green.Verdict);
+    }
+
+    [Fact]
+    public void ABaseTestSkippedAtRunTimeOnlyAtHeadFails()
+    {
+        GreenJudgement green = Decide([BaseTest, CycleTest], [Skip(BaseTest), Pass(CycleTest)]);
+
+        Assert.Equal(CheckVerdict.Fail, green.Verdict);
+        Assert.Contains("new skipped tests", green.Why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OnlyTheBaseTestsSkippedAtRunTimeAtHeadAreRunAgainOnTheBase()
+    {
+        TestCase attributeSkipped = Test("Later") with { SkipReason = "later" };
+        HeadRun head = new(new TreeListing("h", TreeOutcome.Ok, Workspace(), [BaseTest, CycleTest, attributeSkipped], null), [Skip(BaseTest), Skip(CycleTest), Skip(attributeSkipped)], new HashSet<string>(), null, new HashSet<string>());
+
+        Assert.Equal([BaseTest.Key], GreenJudge.SkippedAtRunTime(head, [BaseTest, attributeSkipped]).Select(test => test.Key));
+    }
+
+    [Fact]
     public void AFailureOnTheBasesKnownFailingListDoesNotFail()
     {
         GreenJudgement green = Decide([BaseTest, CycleTest], [Fail(BaseTest), Pass(CycleTest)], knownFailing: [BaseTest.MethodFilter]);
@@ -97,11 +168,15 @@ public sealed class GreenJudgeTests
     {
         TreeListing broken = new("h", TreeOutcome.CompileFailed, Workspace(), null, "error CS1002");
 
-        Assert.Equal(CheckVerdict.Fail, GreenJudge.Decide(new HeadRun(broken, null, new HashSet<string>(), null, new HashSet<string>()), [BaseTest], []).Verdict);
+        Assert.Equal(CheckVerdict.Fail, GreenJudge.Decide(new HeadRun(broken, null, new HashSet<string>(), null, new HashSet<string>()), [BaseTest], BaseSkipCheck.None, []).Verdict);
     }
 
     private static GreenJudgement Decide(
-        IReadOnlyList<TestCase> inventory, IReadOnlyList<ExecutedTest> results, string[]? passedOnRetry = null, string[]? knownFailing = null)
+        IReadOnlyList<TestCase> inventory,
+        IReadOnlyList<ExecutedTest> results,
+        string[]? passedOnRetry = null,
+        string[]? knownFailing = null,
+        BaseSkipCheck? baseSkips = null)
     {
         TreeListing listing = new("h", TreeOutcome.Ok, Workspace(), inventory, null);
         HeadRun head = new(listing, results, new HashSet<string>(passedOnRetry ?? []), null, new HashSet<string>(knownFailing ?? []));
@@ -112,7 +187,7 @@ public sealed class GreenJudgeTests
             new Dictionary<string, RedVerdict>(),
             CheckVerdict.Pass,
             "accepted");
-        return GreenJudge.Decide(head, [BaseTest], [cycle]);
+        return GreenJudge.Decide(head, [BaseTest], baseSkips ?? BaseSkipCheck.None, [cycle]);
     }
 
     private static TestWorkspace Workspace() => new("/repo", [], TimeSpan.FromMinutes(1), TimeProvider.System);

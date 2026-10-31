@@ -15,7 +15,7 @@ public sealed class NativeTestRunnerTests
                at Shop.Tests.ProbeTests.Stub() in /tests/ProbeTests.cs:line 9</stack-trace></failure>
               </test>
               <test name="Shop.Tests.ProbeTests.Rows(value: 1)" type="Shop.Tests.ProbeTests" method="Rows" result="Pass" />
-              <test name="Shop.Tests.ProbeTests.Skipped" type="Shop.Tests.ProbeTests" method="Skipped" result="Skip" />
+              <test name="Shop.Tests.ProbeTests.Skipped" type="Shop.Tests.ProbeTests" method="Skipped" result="Skip"><reason><![CDATA[no Docker here]]></reason></test>
             </collection></assembly></assemblies>
             """;
 
@@ -27,5 +27,7 @@ public sealed class NativeTestRunnerTests
         Assert.Equal("Shop.Api.PriceCalculator.ShippingCost(Decimal weightKg)", results[0].TopFrame);
         Assert.Equal("Shop.Tests:Shop.Tests.ProbeTests.Rows", results[1].Key);
         Assert.Equal(TestOutcome.Skip, results[2].Outcome);
+        Assert.Equal("no Docker here", results[2].SkipReason);
+        Assert.Null(results[0].SkipReason);
     }
 }

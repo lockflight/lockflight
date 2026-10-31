@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Ci;
 
@@ -40,10 +41,11 @@ internal static class JudgeExecutor
             TreeBuilder trees = new(worktree, plan.Policy, root, budget, time);
             HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);
             TreeListing? baseListing = plan.MergeBase is string mergeBase ? await trees.ListAsync(mergeBase, "base", fresh: false, cancellationToken) : null;
+            BaseSkipCheck baseSkips = await BaseSkipsAsync(trees, head, baseListing, cancellationToken);
             IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, cancellationToken) : null;
             GreenJudgement greenAtHead = baseListing is { AsBaseline: null }
                 ? new GreenJudgement(CheckVerdict.NotEarned, $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
-                : GreenJudge.Decide(head, baseListing?.AsBaseline, cycles ?? []);
+                : GreenJudge.Decide(head, baseListing?.AsBaseline, baseSkips, cycles ?? []);
             IReadOnlyList<SinceRedTest>? sinceRed = cycles is not null && plan.Levels[CheckId.TestsSinceRed] != CheckLevel.Off
                 ? await new SinceRedJudge(trees, time).JudgeAsync(plan, head.Listing, head.Results, cycles, cancellationToken)
                 : null;
@@ -90,6 +92,32 @@ internal static class JudgeExecutor
         {
             await worktree.RemoveAsync();
         }
+    }
+
+    /// <summary>
+    /// Runs the base tests head skipped at run time on the base's build, still in the worktree after the base was listed, within the
+    /// budget and the per-process limit, and matches their skipped rows with head's by skip message. A guardrail: a test that skips
+    /// for the same reason on both sides (no Docker on the runner) is not a new skip; one that skips with another message is.
+    /// </summary>
+    private static async Task<BaseSkipCheck> BaseSkipsAsync(TreeBuilder trees, HeadRun head, TreeListing? baseListing, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<TestCase> again = GreenJudge.SkippedAtRunTime(head, baseListing?.Inventory);
+        if (again.Count == 0 || baseListing?.Inventory is null || head.Results is not IReadOnlyList<ExecutedTest> headResults)
+        {
+            return BaseSkipCheck.None;
+        }
+
+        string[] keys = [.. again.Select(test => test.Key)];
+        if (!trees.Budget.TryStart("base run of the tests skipped at run time"))
+        {
+            return new BaseSkipCheck(new Dictionary<string, int>(StringComparer.Ordinal), keys, trees.Budget.Why(trees.Builds.Count));
+        }
+
+        TestWorkspace workspace = baseListing.Workspace;
+        IReadOnlyList<ExecutedTest>? results = await workspace.RunAsync(again, trees.ProcessLimit, cancellationToken);
+        return results is null || workspace.AbnormalExit is not null
+            ? new BaseSkipCheck(new Dictionary<string, int>(StringComparer.Ordinal), keys, $"the runner did not finish on the base ({workspace.AbnormalExit ?? "no report"})")
+            : GreenJudge.CompareSkips(headResults, results, keys);
     }
 
     private static async Task<string> ParentAsync(JudgeInputs inputs, EnvironmentReader environment, CancellationToken cancellationToken)

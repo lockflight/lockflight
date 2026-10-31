@@ -48,6 +48,7 @@ internal static class TrxTestResults
             results.Add(new ExecutedTest($"{assembly}:{method}", result.GetAttribute("testName"), outcome, message is null ? null : exceptionTypeOf(message), frame, file)
             {
                 TopFrameLine = NativeTestRunner.TopFrameLine(stackTrace),
+                SkipReason = outcome == TestOutcome.Skip ? (result["Output"]?["ErrorInfo"]?["Message"])?.InnerText : null,
             });
         }
 

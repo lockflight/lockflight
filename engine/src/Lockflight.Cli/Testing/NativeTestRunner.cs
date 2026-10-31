@@ -119,6 +119,7 @@ internal static class NativeTestRunner
                 failure is null ? null : TopFrame(failure["stack-trace"]?.InnerText).File)
             {
                 TopFrameLine = failure is null ? null : TopFrameLine(failure["stack-trace"]?.InnerText),
+                SkipReason = outcome == TestOutcome.Skip ? test["reason"]?.InnerText : null,
             });
         }
 

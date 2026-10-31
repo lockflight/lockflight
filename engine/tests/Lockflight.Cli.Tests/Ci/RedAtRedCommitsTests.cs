@@ -165,6 +165,30 @@ public sealed class RedAtRedCommitsTests : IAsyncLifetime
         Assert.Equal("FAIL", document["contexts"]!["gates"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task ABaseTestSkippedAtRunTimeOnTheBaseTooIsNoNewSkipButOneSkippedOnlyAtHeadFails()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string Docker = "tests/Shop.Tests/DockerTests.cs";
+        const string NeedsDocker = "namespace Shop.Tests;\n\npublic sealed class DockerTests\n{\n    [Fact]\n    public void NeedsDocker() => Assert.Skip(\"no Docker here\");\n\n    [Fact]\n    public void Other() => Assert.True(true);\n}\n";
+        await repository.CheckoutAsync("main", cancellationToken);
+        main = await repository.Write(Docker, NeedsDocker).CommitAsync("test: docker", cancellationToken);
+        await repository.GitAsync(["checkout", "-q", "-B", "001-shipping"], cancellationToken);
+        await repository.WriteCode(Stub, ShippingTest).CommitAsync("test: red for US1", cancellationToken, null, "Lockflight-Red: 1");
+        string head = await repository.WriteCode(Implementation, ShippingTest).CommitAsync("feat: US1", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head);
+
+        Assert.Equal("PASS", Check(document, "green")["verdict"]!.GetValue<string>());
+
+        string skipped = await repository.Write(Docker, NeedsDocker.Replace("public void Other() => Assert.True(true);", "public void Other() => Assert.Skip(\"later\");", StringComparison.Ordinal))
+            .CommitAsync("test: skip other", cancellationToken);
+        document = await JudgeAsync(skipped);
+
+        Assert.Equal("FAIL", Check(document, "green")["verdict"]!.GetValue<string>());
+        Assert.Contains("new skipped tests: Shop.Tests:Shop.Tests.DockerTests.Other", Check(document, "green")["why"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
     private async Task<JsonNode> JudgeAsync(string head)
     {
         (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(
