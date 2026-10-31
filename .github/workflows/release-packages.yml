@@ -75,17 +75,9 @@ jobs:
           if [ "$TAG" = "$version" ] || ! printf '%s\n' "$version" | grep -Eq "$semver"; then
             echo "::error::tag $TAG is not v<SemVer>"; exit 1
           fi
-          # The judge plugin follows the engine's version; the crew has its own (crew/v* tags, release-crew.yml).
-          plugin=plugins/lockflight/.claude-plugin/plugin.json
-          declared=$(jq -r .version "$plugin")
-          if [ "$declared" != "$version" ]; then
-            echo "::error::$plugin declares $declared, the tag is $TAG"; exit 1
-          fi
-          preset=plugins/lockflight/speckit-preset/preset.yml
-          declared=$(sed -n 's/^  version: *"\([^"]*\)".*/\1/p' "$preset" | head -n 1)
-          if [ "$declared" != "$version" ]; then
-            echo "::error::$preset declares ${declared:-no version}, the tag is $TAG"; exit 1
-          fi
+          # The judge plugin and the Spec Kit preset have the release's version, and so does the crew while it is served from
+          # the judge's tag; min-engine-version names an engine of the release's line (the crew's own tags: release-crew.yml).
+          scripts/release-versions.sh "$version"
           publish=false
           if [ "$EVENT" = push ] || [ "$PUBLISH_INPUT" = true ]; then publish=true; fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
