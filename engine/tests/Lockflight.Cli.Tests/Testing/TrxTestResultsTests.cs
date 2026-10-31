@@ -20,7 +20,7 @@ public sealed class TrxTestResultsTests
               </ErrorInfo></Output>
             </UnitTestResult>
             <UnitTestResult testId="t3" testName="Tracks" outcome="Passed" />
-            <UnitTestResult testId="t4" testName="Tracks" outcome="NotExecuted" />
+            <UnitTestResult testId="t4" testName="Tracks" outcome="NotExecuted"><Output><ErrorInfo><Message>no Docker here</Message></ErrorInfo></Output></UnitTestResult>
           </Results>
           <TestDefinitions>
             <UnitTest id="t1"><TestMethod className="Shop.Tests.Prices" name="Costs(1,2)" /></UnitTest>
@@ -41,6 +41,7 @@ public sealed class TrxTestResultsTests
             results.Select(result => result.Key));
         Assert.Equal(("Costs(2,2)", TrxFailureMessages.NUnitAssertion, "Shop.Tests.Prices.Costs(Int32 a, Int32 b)"), (results[1].Name, results[1].ExceptionType, results[1].TopFrame));
         Assert.Equal(TestOutcome.Skip, results[3].Outcome);
+        Assert.Equal("no Docker here", results[3].SkipReason);
     }
 
     [Theory]
