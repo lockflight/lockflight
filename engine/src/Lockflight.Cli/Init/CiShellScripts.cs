@@ -111,7 +111,7 @@ internal static class CiShellScripts
           base="${BASE:-${LOCKFLIGHT_BASE:-}}"
           if [ -z "$base" ] && [ "${GITHUB_EVENT_NAME:-}" = pull_request ]; then base=$(git rev-parse --verify --quiet 'HEAD^1' || true); fi
           if [ -n "$base" ] && git cat-file -e "$base:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "HEAD:.lockflight/engine.lock" 2>/dev/null \
-            && ! git diff --quiet "$base" HEAD -- .lockflight/engine.lock; then
+            && ! git diff --quiet "$base"...HEAD -- .lockflight/engine.lock; then
             git show HEAD:.lockflight/engine.lock > "$LOCKFLIGHT_TEMP/proposed-engine.lock"
             git show "$base:.lockflight/engine.lock" > "$LOCKFLIGHT_TEMP/base-engine.lock"
             # The pull request's own install script must be the one its lock pins: CI runs that script once it is merged.

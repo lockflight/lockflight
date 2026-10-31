@@ -42,7 +42,8 @@ internal sealed class EnginePinRule : IGuardRule
                 : new GuardBlock(
                     "stale-engine",
                     $"lockflight: the linked engine ({ToolPin.RunningVersion}) is not the one {EngineLock.RelativePath} pins ({engineLock.Version}). Run exactly: {RecoveryCommands.LinkInstalled} "
-                    + $"(it links that engine when it is installed); otherwise ask the user to {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} engine install")}.");
+                    + $"(it links that engine when it is installed); otherwise ask the user to {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} engine install")}"
+                    + $" (with a Lockflight 0.2 install, which has neither command, `{EngineCommand.UserInstall} update`).");
         }
 
         ToolPinReading pin = ToolPin.ReadPin(manifest.Root);

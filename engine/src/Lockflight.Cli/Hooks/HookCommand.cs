@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks.Adapters;
 using Lockflight.Cli.Hooks.Events;
@@ -10,8 +11,9 @@ namespace Lockflight.Cli.Hooks;
 
 /// <summary>
 /// <c>lockflight hook &lt;event&gt;</c> with the hook JSON on stdin. Outside a Lockflight project every event is a silent no-op,
-/// so an install never blocks unrelated work. Fails closed: an engine error blocks a tool call, and is reported but
-/// does not block the events that must never brick a session (Stop, SessionStart, …). A typed in-session human command
+/// so an install never blocks unrelated work. Fails closed: an engine error, a hook API mismatch or unreadable input blocks a
+/// tool call, and is reported (to the person, as a <c>systemMessage</c>) but does not block the events that must never brick a
+/// session (Stop, SessionStart, …). A typed in-session human command
 /// (<c>/lockflight:approve</c>, <c>/lockflight:baseline</c>, <c>/lockflight:reset</c>, <c>/lockflight:amend</c>) is never passed on
 /// to the agent after an error either.
 /// </summary>
@@ -65,7 +67,7 @@ internal sealed class HookCommand(CliContext context) : ICommand
 
         if (input is null)
         {
-            return await ReportAsync(HookDecision.Block("invalid-hook-input", "lockflight: hook input is not valid JSON"), hookEvent, projectRoot: null, input: null, cancellationToken);
+            return await FailAsync(HookDecision.Block("invalid-hook-input", "lockflight: hook input is not valid JSON"), hookEvent, projectRoot: null, input: null, cancellationToken);
         }
 
         // Every typed slash command expands through UserPromptExpansion; only the in-session human commands are the engine's business.
@@ -89,7 +91,7 @@ internal sealed class HookCommand(CliContext context) : ICommand
         Manifest manifest = loadResult.Manifest!;
         if (PreconditionFailure(hookEvent) is HookDecision precondition)
         {
-            return await ReportAsync(precondition, hookEvent, manifest.Root, input, cancellationToken);
+            return await FailAsync(precondition, hookEvent, manifest.Root, input, cancellationToken);
         }
 
         // The preconditions block every event this engine does not know, so a handler exists from here on.
@@ -127,6 +129,25 @@ internal sealed class HookCommand(CliContext context) : ICommand
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// A failure before the event is decided (a plugin that speaks another hook API, input that cannot be read) is handled as an
+    /// engine error is: it blocks a tool call and a typed human command, and for the events that must never brick a session (Stop,
+    /// SessionStart, TaskCompleted, …) it lets the event through and tells the person, loudly, that Lockflight's check did not run.
+    /// </summary>
+    private async Task<ExitCode> FailAsync(HookDecision failure, HookEvent hookEvent, string? projectRoot, HookRequest? input, CancellationToken cancellationToken)
+    {
+        HookFailurePolicy policy = HookHandlers.For(hookEvent)?.OnEngineError(new HookFailureState(expanding is not null)) ?? HookFailurePolicy.Block;
+        if (policy == HookFailurePolicy.Block)
+        {
+            return await ReportAsync(failure, hookEvent, projectRoot, input, cancellationToken);
+        }
+
+        string message = $"{failure.Reason} Lockflight's {HookEventNames.ToName(hookEvent)} check did not run, so this event was let through.";
+        await context.Error.WriteLineAsync(message);
+        await context.Output.WriteLineAsync(new JsonObject { ["systemMessage"] = message }.ToJsonString());
+        return ExitCode.Pass;
     }
 
     /// <summary>The session's root (Claude Code: CLAUDE_PROJECT_DIR) stays put after `cd` or entering a worktree; the payload cwd does not.</summary>

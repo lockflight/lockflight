@@ -225,6 +225,36 @@ public sealed class JudgeRoutingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SwappingTwoProductionLinesNeedsRedGreen()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string Guard = "namespace Shop;\n\npublic sealed class Price\n{\n    public bool Allowed(bool admin)\n    {\n        if (admin)\n            return true;\n        return false;\n    }\n}\n";
+        baseCommit = await repository.Write("src/Shop/Price.cs", Guard).CommitAsync("feat: guard", cancellationToken);
+        await repository.Write("src/Shop/Price.cs", Guard.Replace("return true;\n        return false;", "return false;\n        return true;", StringComparison.Ordinal))
+            .CommitAsync("refactor: swap", cancellationToken);
+
+        JudgePlan plan = await PlanAsync();
+
+        Assert.True(plan.Class.ProductionChanged);
+        Assert.Equal(CheckLevel.Required, plan.Levels[CheckId.Red]);
+    }
+
+    [Fact]
+    public async Task SwappingTwoProductionLinesOfTheSameIndentNeedsRedGreen()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string Pipeline = "namespace Shop;\n\npublic static class Pipeline\n{\n    public static void Use(App app)\n    {\n        app.UseAuthentication();\n        app.UseAuthorization();\n    }\n}\n";
+        baseCommit = await repository.Write("src/Shop/Pipeline.cs", Pipeline).CommitAsync("feat: pipeline", cancellationToken);
+        await repository.Write("src/Shop/Pipeline.cs", Pipeline.Replace("app.UseAuthentication();\n        app.UseAuthorization();", "app.UseAuthorization();\n        app.UseAuthentication();", StringComparison.Ordinal))
+            .CommitAsync("refactor: swap", cancellationToken);
+
+        JudgePlan plan = await PlanAsync();
+
+        Assert.True(plan.Class.ProductionChanged);
+        Assert.Equal(CheckLevel.Required, plan.Levels[CheckId.Red]);
+    }
+
+    [Fact]
     public async Task CodeCompiledFromAFileThatIsNotCSharpNeedsRedGreen()
     {
         await repository.Write("src/Shop/Pricing.logic", "namespace Shop;\n\npublic static class Pricing\n{\n    public static decimal Shipping(decimal kilograms) => 0m;\n}\n")
