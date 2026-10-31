@@ -66,12 +66,22 @@ public sealed class CiPipelineTests
 
     [Theory]
     [InlineData("azure", "SYSTEM_PULLREQUEST_TARGETBRANCH")]
-    [InlineData("azure", "git merge-base HEAD \"origin/$target\"")]
+    [InlineData("azure", "BASE=$(git rev-parse \"origin/$target\")")]
     [InlineData("bitbucket", "BITBUCKET_PR_DESTINATION_BRANCH")]
     [InlineData("bitbucket", "BASE=$(git rev-parse \"origin/$PULL_REQUEST\")")]
-    [InlineData("gitlab", "BASE=\"$CI_MERGE_REQUEST_DIFF_BASE_SHA\"")]
+    [InlineData("gitlab", "BASE=$(git rev-parse \"origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\")")]
     public void EachPlatformFindsTheBaseFromItsOwnPullRequestVariables(string platform, string expected) =>
         Assert.Contains(expected, JobFile(platform, OneChannel, CiTrigger.PullRequest), StringComparison.Ordinal);
+
+    [Theory]
+    [MemberData(nameof(OtherPlatforms))]
+    public void NoPlatformTakesThePolicyFromTheMergeBase(string platform)
+    {
+        string pipeline = JobFile(platform, OneChannel, CiTrigger.PullRequest);
+
+        Assert.DoesNotContain("CI_MERGE_REQUEST_DIFF_BASE_SHA", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("git merge-base", pipeline, StringComparison.Ordinal);
+    }
 
     [Theory]
     [MemberData(nameof(OtherPlatforms))]
