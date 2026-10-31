@@ -92,6 +92,29 @@ public sealed class JudgeRoutingTests : IAsyncLifetime
         Assert.False((await PlanAsync()).Class.ProductionChanged);
     }
 
+    [Theory]
+    [InlineData("\"\"\"\"")]
+    [InlineData("\"\"\"")]
+    public async Task AnEditInsideARawStringLiteralIsAProductionChange(string quotes)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string Sql(string value) => $"namespace Shop;\n\npublic static class Queries\n{{\n    public const string Sql = {quotes}\n        SELECT * FROM t WHERE x = {value}\n        {quotes};\n}}\n";
+        await repository.Write("src/Shop/Queries.cs", Sql("1")).CommitAsync("feat: query", cancellationToken);
+        baseCommit = await repository.HeadAsync(cancellationToken);
+        await repository.Write("src/Shop/Queries.cs", Sql("2")).CommitAsync("fix: query", cancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
+    [Fact]
+    public async Task AMovedRazorFileIsAProductionChange()
+    {
+        repository.Delete("src/Shop/Prices.razor");
+        await repository.Write("src/Shop/Pages/Prices.razor", Page).CommitAsync("refactor: move page", TestContext.Current.CancellationToken);
+
+        Assert.True((await PlanAsync()).Class.ProductionChanged);
+    }
+
     [Fact]
     public async Task ReorderedProductionLinesAreAProductionChange()
     {
