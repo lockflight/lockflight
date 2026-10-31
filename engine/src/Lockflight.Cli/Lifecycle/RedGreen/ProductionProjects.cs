@@ -6,31 +6,29 @@ using Lockflight.Cli.Testing;
 namespace Lockflight.Cli.Lifecycle.RedGreen;
 
 /// <summary>
-/// Finds the production code under a root: every C# project that is not one of the test applications and does not reference
-/// xUnit, NUnit or MSTest (a shared test-helper library is test code too). Its assembly name is the project's <c>&lt;AssemblyName&gt;</c> when that is
+/// Finds the production code under a root: every C# project that is not one of the test applications and not a shared
+/// test-helper project (<see cref="TestHelperProjects"/>). Its assembly name is the project's <c>&lt;AssemblyName&gt;</c> when that is
 /// a literal, else the project file's name; its types are read from the copies of those assemblies in the test applications'
 /// output directories.
 /// </summary>
 internal static partial class ProductionProjects
 {
-    /// <summary>What a test project's file names (its package references): <c>xunit…</c>, <c>NUnit</c>, <c>MSTest…</c>.</summary>
-    private static readonly string[] TestFrameworkMarkers = ["xunit", "nunit", "mstest"];
-
     public static ProductionCode Find(string root, IReadOnlyList<TestApp> apps)
     {
         HashSet<string> testDirectories = new(apps.Select(app => Normalize(app.ProjectDirectory)), StringComparer.OrdinalIgnoreCase);
-        List<string> directories = [];
-        HashSet<string> assemblies = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> projects = new(StringComparer.OrdinalIgnoreCase);
         foreach (string project in Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Where(path => !IsBuildOutput(root, path)))
         {
-            string directory = Path.GetDirectoryName(project)!;
-            string text = File.ReadAllText(project);
-            if (testDirectories.Contains(Normalize(directory)) || TestFrameworkMarkers.Any(marker => text.Contains(marker, StringComparison.OrdinalIgnoreCase)))
-            {
-                continue;
-            }
+            projects[Path.GetRelativePath(root, project).Replace('\\', '/')] = File.ReadAllText(project);
+        }
 
-            directories.Add(directory);
+        HashSet<string> appProjects = new(projects.Keys.Where(path => testDirectories.Contains(Normalize(Path.GetDirectoryName(Path.Combine(root, path))!))), StringComparer.OrdinalIgnoreCase);
+        IReadOnlySet<string> helpers = TestHelperProjects.Find(projects, appProjects);
+        List<string> directories = [];
+        HashSet<string> assemblies = new(StringComparer.OrdinalIgnoreCase);
+        foreach ((string project, string text) in projects.Where(entry => !appProjects.Contains(entry.Key) && !helpers.Contains(entry.Key)))
+        {
+            directories.Add(Path.GetDirectoryName(Path.Combine(root, project))!);
             Match name = AssemblyNamePattern().Match(text);
             assemblies.Add(name.Success && !name.Groups[1].Value.Contains('$', StringComparison.Ordinal) ? name.Groups[1].Value.Trim() : Path.GetFileNameWithoutExtension(project));
         }

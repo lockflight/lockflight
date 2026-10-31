@@ -103,6 +103,87 @@ public sealed class TestsSinceRedTests : IAsyncLifetime
         Assert.Contains("do not build on", Why(document), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AnAssemblyFixtureAddedAfterRedIsPartOfTheRecheck()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string Seam = "    public static decimal? Override { get; set; }\n";
+        await repository.WriteCode(Seam + "    public decimal Shipping(decimal kilograms) => Override ?? throw new NotImplementedException();", Test)
+            .CommitAsync("test: red for US1 again", cancellationToken, null, "Lockflight-Red: 1");
+        string head = await repository.WriteCode(Seam + "    public decimal Shipping(decimal kilograms) => Override ?? 0m;", Test)
+            .Write("tests/Shop.Tests/Patch.cs", "[assembly: AssemblyFixture(typeof(Shop.Tests.Patch))]\n\nnamespace Shop.Tests;\n\npublic sealed class Patch\n{\n    public Patch() => Shop.Price.Override = 4m;\n}\n")
+            .CommitAsync("feat: US1", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head);
+
+        Assert.Equal("FAIL", Verdict(document));
+        Assert.Contains("GREEN_BEFORE", Why(document), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFrameworkFreeSupportProjectChangedAfterRedIsCompared()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string Stub = "    public decimal Shipping(decimal kilograms) => throw new NotImplementedException();";
+        string supportTest = Test.Replace("Expect.Same", "Shop.Support.Check.Same", StringComparison.Ordinal);
+        await repository.Write("tests/Shop.Support/Shop.Support.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>\n")
+            .Write("tests/Shop.Support/Check.cs", Support("if (expected != actual) throw new System.InvalidOperationException($\"{expected} != {actual}\");"))
+            .Write("tests/Shop.Tests/Shop.Tests.csproj", (await File.ReadAllTextAsync(Path.Combine(repository.Root, "tests/Shop.Tests/Shop.Tests.csproj"), cancellationToken))
+                .Replace("<ProjectReference Include=\"../../src/Shop/Shop.csproj\" />", "<ProjectReference Include=\"../../src/Shop/Shop.csproj\" />\n    <ProjectReference Include=\"../Shop.Support/Shop.Support.csproj\" />", StringComparison.Ordinal))
+            .WriteCode(Stub, supportTest).CommitAsync("test: red for US1 again", cancellationToken, null, "Lockflight-Red: 1");
+        string head = await repository.Write("tests/Shop.Support/Check.cs", Support("_ = expected; _ = actual;"))
+            .WriteCode("    public decimal Shipping(decimal kilograms) => 0m;", supportTest).CommitAsync("feat: US1", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head);
+
+        Assert.NotEqual("unchanged", document["cycles"]![0]!["tests"]![0]!["sinceRed"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ALaterCyclesTestFileIsLeftOutOfTheRecheck()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string changed = Test.Replace("Same(4m, new Price().Shipping(2m))", "Same(6m, new Price().Shipping(3m))", StringComparison.Ordinal);
+        const string TaxTests = "namespace Shop.Tests;\n\npublic sealed class TaxTests\n{\n    [Fact]\n    public void TaxIsAFifth() => Expect.Same(20m, new Shop.Price().Tax(100m));\n}\n";
+        await repository.WriteCode(Implementation + "\n    public decimal Tax(decimal net) => 0m;", changed).Write("tests/Shop.Tests/TaxTests.cs", TaxTests)
+            .CommitAsync("test: red for US2", cancellationToken, null, "Lockflight-Red: 2");
+        string head = await repository.WriteCode(Implementation + "\n    public decimal Tax(decimal net) => net / 5m;", changed).CommitAsync("feat: US2", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head);
+
+        Assert.Equal("PASS", Verdict(document));
+        Assert.Equal("amend-accepted", document["cycles"]![0]!["tests"]![0]!["sinceRed"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task AHelperFileALaterCycleAddsLeavesEarlierTestsUnchanged()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        const string TaxCheck = "namespace Shop.Tests;\n\ninternal static class TaxCheck\n{\n    public static void Fifth(decimal net) => Expect.Same(net / 5m, new Shop.Price().Tax(net));\n}\n";
+        const string TaxTests = "namespace Shop.Tests;\n\npublic sealed class TaxTests\n{\n    [Fact]\n    public void TaxIsAFifth() => TaxCheck.Fifth(100m);\n}\n";
+        await repository.WriteCode(Implementation + "\n    public decimal Tax(decimal net) => 0m;", Test).Write("tests/Shop.Tests/TaxCheck.cs", TaxCheck).Write("tests/Shop.Tests/TaxTests.cs", TaxTests)
+            .CommitAsync("test: red for US2", cancellationToken, null, "Lockflight-Red: 2");
+        string head = await repository.WriteCode(Implementation + "\n    public decimal Tax(decimal net) => net / 5m;", Test).CommitAsync("feat: US2", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head);
+
+        Assert.Equal("PASS", Verdict(document));
+        Assert.Equal("unchanged", document["cycles"]![0]!["tests"]![0]!["sinceRed"]!.GetValue<string>());
+    }
+
+    private static string Support(string body) => $$"""
+        namespace Shop.Support;
+
+        public static class Check
+        {
+            public static void Same(decimal expected, decimal actual)
+            {
+                {{body}}
+            }
+        }
+
+        """;
+
     private static string Helper(string body) => $$"""
         namespace Shop.Tests;
 

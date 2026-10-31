@@ -5,11 +5,11 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// Tests since red (step P4): each accepted cycle's tests compared from the red commit to head. A test whose fingerprint is the
-/// same, with no test input, shared test-helper project or runner setting it depends on changed in a file that existed at red, is
-/// unchanged: the red at that commit is the proof. Any other test was amended, and the head's version must fail again on the red
+/// same, with no test input, shared test-helper project, helper or hook source, project file or runner setting it depends on
+/// changed, deleted or added since red (<see cref="TestSide"/>), is unchanged: the red at that commit is the proof. Any other test was amended, and the head's version must fail again on the red
 /// commit's code: the red commit is built with the head's whole test side laid over it (not only the test's own file, so a helper
 /// gutted elsewhere is part of the re-check), the test's fingerprint there must be the head's, and it is classified as a red is.
-/// A test files added for later cycles are not compared: adding tests is what later cycles do.
+/// Test files added for later cycles are not compared, unless they hold an assembly-wide hook: adding tests is what later cycles do.
 /// </summary>
 internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
 {
@@ -28,9 +28,8 @@ internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
         foreach (CycleJudgement cycle in cycles.Where(cycle => cycle.Accepted))
         {
             string red = cycle.Red.Commit;
-            HashSet<string> atRed = [.. await JudgeGit.TreeFilesAsync(root, red, cancellationToken) ?? []];
-            string[] changedInputs = [.. (await JudgeGit.ChangedFilesAsync(root, red, plan.Inputs.Head, cancellationToken) ?? []).Where(atRed.Contains).Where(side.IsTestSide)];
-            IReadOnlySet<string> helpers = await side.HelperSourcesAsync(root, red, changedInputs, cancellationToken);
+            string[] changedInputs = [.. (await JudgeGit.ChangedFilesAsync(root, red, plan.Inputs.Head, cancellationToken) ?? []).Where(side.IsTestSide)];
+            IReadOnlySet<string> helpers = await side.HelperSourcesAsync(root, red, plan.Inputs.Head, changedInputs, cancellationToken);
             List<RedGreenTest> amended = [];
             foreach (RedGreenTest test in cycle.Tests)
             {
