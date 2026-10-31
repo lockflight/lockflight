@@ -51,16 +51,22 @@ internal static class CiShellScripts
     /// <summary>Where <see cref="SdkImage"/> keeps .NET; extra channels are installed next to its SDK.</summary>
     private const string SdkImageDotnetRoot = "/usr/share/dotnet";
 
-    /// <summary>Restores the policy from <c>$BASE</c>: a PR cannot loosen the checks that judge it.</summary>
+    /// <summary>
+    /// Restores the policy from <c>$BASE</c>: a PR cannot loosen the checks that judge it. The policy files are the committed bytes
+    /// (<c>git show</c>, as the GitHub action reads them), so a checkout's line-ending conversion cannot change the install script
+    /// CI hashes against the lock.
+    /// </summary>
     public const string RestorePolicy = $$"""
         for file in {{PolicyFiles}}; do
-          if git cat-file -e "$BASE:$file" 2>/dev/null; then git checkout "$BASE" -- "$file"; else rm -f "$file"; fi
+          if git cat-file -e "$BASE:$file" 2>/dev/null; then mkdir -p "$(dirname "$file")"; git show "$BASE:$file" > "$file"; else rm -f "$file"; fi
         done
         # Accepted baselines (known-failing tests, warnings, advisories) are policy too: a PR cannot accept its own failures. So is
         # the vendored engine install script: CI runs the base commit's copy, checked against the base commit's lock.
         for directory in {{PolicyDirectories}}; do
           rm -rf "$directory"
-          if git cat-file -e "$BASE:$directory" 2>/dev/null; then git checkout "$BASE" -- "$directory"; fi
+          if git cat-file -e "$BASE:$directory" 2>/dev/null; then
+            git ls-tree -r --name-only "$BASE" -- "$directory" | while IFS= read -r file; do mkdir -p "$(dirname "$file")"; git show "$BASE:$file" > "$file"; done
+          fi
         done
         # Code-style and analyzer config (nested files too) decides what the build and format gates enforce: a PR is
         # judged by the base's rules, and its own rule changes apply after the merge.
@@ -107,9 +113,11 @@ internal static class CiShellScripts
           if [ -n "$base" ] && git cat-file -e "$base:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "HEAD:.lockflight/engine.lock" 2>/dev/null \
             && ! git diff --quiet "$base" HEAD -- .lockflight/engine.lock; then
             git show HEAD:.lockflight/engine.lock > "$LOCKFLIGHT_TEMP/proposed-engine.lock"
-            "$LOCKFLIGHT_TEMP/lockflight/lockflight" engine verify-lock "$LOCKFLIGHT_TEMP/proposed-engine.lock" ${GH_TOKEN:+--attestation}
+            "$LOCKFLIGHT_TEMP/lockflight/lockflight" engine verify-lock "$LOCKFLIGHT_TEMP/proposed-engine.lock" --base .lockflight/engine.lock ${GH_TOKEN:+--attestation}
           fi
         else
+          # The first lock (the move from a 0.2 tool pin) is judged by the base's 0.2 engine, which cannot check it against its release.
+          if git cat-file -e "HEAD:.lockflight/engine.lock" 2>/dev/null; then echo "lockflight: WARNING: this pull request adds the first .lockflight/engine.lock, which CI on this platform does not check against its release; run 'lockflight engine verify-lock .lockflight/engine.lock' before you accept it" >&2; fi
           if [ -z "$pinned" ]; then echo "lockflight: neither .lockflight/engine.lock nor $manifest pins the engine; run lockflight init and commit the pin" >&2; exit 1; fi
           config=""
           for file in nuget.config NuGet.config NuGet.Config; do if [ -f "$file" ]; then config="$PWD/$file"; fi; done

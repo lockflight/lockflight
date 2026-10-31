@@ -18,9 +18,10 @@ public sealed class CiPipelineTests
         string pipeline = JobFile(platform, OneChannel, CiTrigger.PullRequest);
 
         Assert.Contains($"for file in {CiShellScripts.PolicyFiles}; do", pipeline, StringComparison.Ordinal);
-        Assert.Contains("git checkout \"$BASE\" -- \"$file\"; else rm -f \"$file\"; fi", pipeline, StringComparison.Ordinal);
+        Assert.Contains("git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi", pipeline, StringComparison.Ordinal);
         Assert.Contains($"for directory in {CiShellScripts.PolicyDirectories}; do", pipeline, StringComparison.Ordinal);
-        Assert.Contains("git checkout \"$BASE\" -- \"$directory\"", pipeline, StringComparison.Ordinal);
+        Assert.Contains("git ls-tree -r --name-only \"$BASE\" -- \"$directory\" | while IFS= read -r file;", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("git checkout \"$BASE\" -- \"$directory\"", pipeline, StringComparison.Ordinal);
         Assert.Contains($"style={CiShellScripts.StylePattern}", pipeline, StringComparison.Ordinal);
         Assert.Contains("{ git ls-tree -r --name-only \"$BASE\"; git ls-files; }", pipeline, StringComparison.Ordinal);
     }

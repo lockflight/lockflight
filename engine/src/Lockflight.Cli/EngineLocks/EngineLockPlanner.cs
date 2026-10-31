@@ -8,8 +8,9 @@ namespace Lockflight.Cli.EngineLocks;
 /// Works out the engine lock for the running engine. A release takes every platform's hash from the release's
 /// <c>engine-hashes.json</c> in the pointer package on the feed, after checking that it describes this very engine (its own
 /// platform's executable), that GitHub's attestation of the file verifies when the <c>gh</c> CLI is there, and that the GitHub
-/// Release serves the same bytes when it can be reached. The first lock trusts the feed and the attestation; the person who
-/// commits it, with CI confirming it matches a release, makes it policy. A development build writes a git-ignored local lock
+/// Release serves the same bytes when it can be reached, and that the release's install script is the one this engine vendors.
+/// The first lock trusts the feed and the attestation; the person who commits it makes it policy (the GitHub action checks it
+/// against the release; on the other platforms the reviewer runs <c>engine verify-lock</c>). A development build writes a git-ignored local lock
 /// with its own hash only; a local build (<c>0.0.0-local</c>, the test builds) writes none.
 /// </summary>
 internal static class EngineLockPlanner
@@ -50,6 +51,11 @@ internal static class EngineLockPlanner
         if (hashes.Binaries[rid].Sha256 != ownHash)
         {
             return EngineLockPlan.None($"the feed's {EngineHashes.FileName} for {version} does not describe this engine ({rid} is {ownHash}, the file says {hashes.Binaries[rid].Sha256}); nothing was pinned");
+        }
+
+        if (hashes.InstallScriptSha256 is string releasedScript && releasedScript != InstallScript.Sha256)
+        {
+            return EngineLockPlan.None($"the feed's {EngineHashes.FileName} for {version} names another install script ({releasedScript}) than this engine carries ({InstallScript.Sha256}); nothing was pinned");
         }
 
         List<string> notes = [$"{EngineHashes.FileName} of {version} from the feed describes this engine ({rid})"];

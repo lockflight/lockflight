@@ -35,9 +35,15 @@ internal static class CiStepMigration
         "# the vendored engine install script: CI runs the base commit's copy, checked against the base commit's lock.",
         $"for directory in {CiShellScripts.PolicyDirectories}; do",
         "  rm -rf \"$directory\"",
-        "  if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then git checkout \"$BASE\" -- \"$directory\"; fi",
+        "  if git cat-file -e \"$BASE:$directory\" 2>/dev/null; then",
+        "    git ls-tree -r --name-only \"$BASE\" -- \"$directory\" | while IFS= read -r file; do mkdir -p \"$(dirname \"$file\")\"; git show \"$BASE:$file\" > \"$file\"; done",
+        "  fi",
         "done",
     ];
+
+    /// <summary>How 0.2 restored each policy file (a checkout, which converts line endings), and how it is restored now.</summary>
+    private const string LegacyFileRestore = "  if git cat-file -e \"$BASE:$file\" 2>/dev/null; then git checkout \"$BASE\" -- \"$file\"; else rm -f \"$file\"; fi";
+    private const string FileRestore = "  if git cat-file -e \"$BASE:$file\" 2>/dev/null; then mkdir -p \"$(dirname \"$file\")\"; git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi";
 
     /// <summary>The migrated text; null when the file must be left alone. The file's own text when it is current already.</summary>
     public static string? Migrate(string text)
@@ -128,7 +134,13 @@ internal static class CiStepMigration
             return false;
         }
 
-        lines[legacy[0]] = Indent(lines[legacy[0]]) + $"for file in {CiShellScripts.PolicyFiles}; do";
+        string loopIndent = Indent(lines[legacy[0]]);
+        lines[legacy[0]] = loopIndent + $"for file in {CiShellScripts.PolicyFiles}; do";
+        if (legacy[0] + 1 < lines.Count && lines[legacy[0] + 1] == loopIndent + LegacyFileRestore)
+        {
+            lines[legacy[0] + 1] = loopIndent + FileRestore;
+        }
+
         // The GitHub workflow's style loop failed under bash -e on a base without style files; it now tolerates none, as the others do.
         int[] styleLoop = [.. Indexes(lines, line => line.Trim() == LegacyGitHubStyleLoop)];
         if (styleLoop.Length == 1)

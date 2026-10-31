@@ -313,6 +313,13 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         {
             writes.Add(new PlannedWrite(InstallScript.RelativePath, scriptPath, existingScript, scriptText));
         }
+
+        string attributesPath = Path.Combine(root, ".gitattributes");
+        string? attributes = File.Exists(attributesPath) ? await File.ReadAllTextAsync(attributesPath, cancellationToken) : null;
+        if (GitAttributesUpdater.UpdateInstallScript(attributes) is (string withRule, true))
+        {
+            writes.Add(new PlannedWrite(".gitattributes", attributesPath, attributes, withRule));
+        }
     }
 
     /// <summary>

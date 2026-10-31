@@ -543,14 +543,20 @@ internal sealed class InitCommand(CliContext context) : ICommand
     {
         if (File.Exists(EngineLockFiles.CommittedPath(root)))
         {
-            return [new InitStep(EngineLock.RelativePath, FileOutcome.Unchanged)];
+            return [new InitStep(EngineLock.RelativePath, FileOutcome.Unchanged), await TransformAsync(root, ".gitattributes", GitAttributesUpdater.UpdateInstallScript, write, cancellationToken)];
         }
 
         EngineLockPlan plan = await EngineLockPlanner.PlanAsync(
             root, ToolPin.RunningVersion, context.Engine.Path, EnginePackageFeed.FromEnvironment(context.Environment), GitHubReleaseHashes.FetchAsync, context.Processes, cancellationToken);
         if (plan.Lock is not EngineLock engineLock)
         {
+            await context.Output.WriteLineAsync($"note: no engine lock written ({plan.Reason}); the project stays pinned by version in dotnet-tools.json");
             return [];
+        }
+
+        foreach (string note in plan.Notes)
+        {
+            await context.Output.WriteLineAsync($"engine lock: {note}");
         }
 
         string lockRelative = Path.GetRelativePath(root, plan.LockPath!).Replace('\\', '/');
@@ -559,6 +565,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
         {
             string script = Encoding.UTF8.GetString(InstallScript.Bytes);
             steps.Add(await TransformAsync(root, InstallScript.RelativePath, existing => (script, existing != script), write, cancellationToken));
+            steps.Add(await TransformAsync(root, ".gitattributes", GitAttributesUpdater.UpdateInstallScript, write, cancellationToken));
         }
 
         return steps;

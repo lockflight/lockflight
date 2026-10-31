@@ -345,13 +345,16 @@ each platform's executable, the file `link` copies, and of the vendored install 
 - **Read by** `link` (links only the locked engine), the hook shim and the guard (an engine that is not the locked one for this
   platform runs only reads and the recovery `~/.lockflight/bin/lockflight link --installed`), and `doctor` (the linked engine,
   the `dotnet-tools.json` mirror of its version, the vendored script).
-- **Strict:** an unknown key, a hash that is not 64 lower-case hex or a release lock without every platform is an error; a
-  platform a later engine adds is ignored by this one.
+- **Strict:** an unknown or repeated key, a hash that is not 64 lower-case hex or a release lock without every platform is an
+  error; a platform a later engine adds is ignored by this one. `init` and `update` add `.lockflight/ci/install.sh text eol=lf`
+  to `.gitattributes`, so a Windows checkout keeps the bytes the lock's hash is of.
 - **Development builds** (`scripts/dev-install.sh`) pin themselves in the git-ignored `.lockflight/local/engine.lock`, which the
   shim and the guard read first; CI never reads it, so a development build cannot become a repository's pin by accident.
 - **Honest label:** the shim's and the guard's check is a guardrail (the agent can change the working tree in ways the guard
   misses); it catches a stale or swapped engine. The first lock trusts the feed and, when verified, the release's attestation;
-  a person reviewing the lock change is what makes it policy.
+  a person reviewing the lock change is what makes it policy. CI checks a changed lock against its release; the first lock is
+  release-checked only by the GitHub action (see [ci-hardening](ci-hardening.md)), so on other platforms run
+  `lockflight engine verify-lock .lockflight/engine.lock` before you accept it.
 
 ### Built-in protected paths
 

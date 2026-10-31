@@ -142,11 +142,28 @@ runs:
         LF_HEAD: ${{ inputs.head }}
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
-        if [ -n "$LF_BASE" ] && git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null && git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null \
-          && ! git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then
+        if [ -z "$LF_BASE" ] || ! git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null; then exit 0; fi
+        if git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null; then
+          if git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then exit 0; fi
           git show "$LF_HEAD:.lockflight/engine.lock" > "$RUNNER_TEMP/proposed-engine.lock"
-          "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" ${GH_TOKEN:+--attestation}
+          git show "$LF_BASE:.lockflight/engine.lock" > "$RUNNER_TEMP/base-engine.lock"
+          "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" --base "$RUNNER_TEMP/base-engine.lock" ${GH_TOKEN:+--attestation}
+          exit 0
         fi
+        # The first lock (the pull request that moves a 0.2 tool pin to the lock): the base's engine predates verify-lock, so the
+        # GitHub Release's attested engine-hashes.json is downloaded and compared here.
+        if [ -z "$GH_TOKEN" ]; then echo "::warning::the first engine lock was not release-checked (no token); run lockflight engine verify-lock .lockflight/engine.lock before you accept it"; exit 0; fi
+        work="$RUNNER_TEMP/lockflight-first-lock"
+        rm -rf "$work" && mkdir -p "$work"
+        git show "$LF_HEAD:.lockflight/engine.lock" > "$work/engine.lock"
+        if ! git show "$LF_HEAD:.lockflight/ci/install.sh" > "$work/install.sh" 2>/dev/null; then echo "::error::the first engine lock comes without .lockflight/ci/install.sh"; exit 1; fi
+        version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9A-Za-z.-]*\)".*/\1/p' "$work/engine.lock" | head -n 1)
+        if [ -z "$version" ]; then echo "::error::the first engine lock names no version"; exit 1; fi
+        gh release download "v$version" --repo lockflight/lockflight --pattern engine-hashes.json --dir "$work/release" \
+          || { echo "::error::the first engine lock pins $version, and the GitHub Release v$version has no engine-hashes.json"; exit 1; }
+        gh attestation verify "$work/release/engine-hashes.json" --repo lockflight/lockflight --source-ref "refs/tags/v$version" > /dev/null \
+          || { echo "::error::the release workflow's attestation of engine-hashes.json for v$version did not verify"; exit 1; }
+        python3 -I "$GITHUB_ACTION_PATH/first-lock-check.py" "$work/engine.lock" "$work/release/engine-hashes.json" "$work/install.sh"
 
     - name: Clone the workspace shell (read-only)
       if: inputs.mode == 'judge' && inputs.shell-clone == 'true'

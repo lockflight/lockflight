@@ -5,7 +5,7 @@ using Lockflight.Cli.Config;
 namespace Lockflight.Cli.EngineLocks;
 
 /// <summary>
-/// The strict reader of <c>lockflight.engine-lock/v1</c>: a lock is policy a person commits, so an unknown key, a wrong type, a hash
+/// The strict reader of <c>lockflight.engine-lock/v1</c>: a lock is policy a person commits, so an unknown or repeated key, a wrong type, a hash
 /// that is not 64 lower-case hex, a release lock without every released platform, or a development lock where only release
 /// locks belong is an error naming the problem. A RID this engine does not know is ignored, so a later platform does not break
 /// an older engine.
@@ -46,6 +46,11 @@ internal static partial class EngineLockReader
         if (root.ValueKind != JsonValueKind.Object)
         {
             return Problem("the lock must be a JSON object");
+        }
+
+        if (JsonDuplicateKeys.Find(root) is string duplicate)
+        {
+            return Problem($"the key '{duplicate}' appears twice; CI's script reads the first and the engine the last, so a lock names each key once");
         }
 
         foreach (JsonProperty property in root.EnumerateObject())

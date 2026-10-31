@@ -27,7 +27,11 @@ The same steps as the GitHub workflow, in the same order:
   outside the repository, so a `global.json` that pins SDK 8 or 9 does not matter: with `.lockflight/engine.lock`, by the
   vendored install script checked against the lock (no .NET SDK needed for it; the SDK image reads the package with `perl`),
   else by the version in the tool pin with `dotnet tool install --tool-path`. The same step as the GitHub workflow's, from the
-  same source in the engine.
+  same source in the engine. Policy files are restored with `git show` (the committed bytes, as the GitHub action reads them),
+  so a checkout that converts line endings cannot change the install script CI hashes. A pull request that changes the lock
+  runs `lockflight engine verify-lock` on it; the pull request that adds the **first** lock is not release-checked on these
+  platforms (the base's 0.2 engine cannot), so the job prints a warning and the reviewer runs
+  `lockflight engine verify-lock .lockflight/engine.lock` before accepting it.
 - **`lockflight gate run --profile pr --base <base sha>`**, with the result in `artifacts/lockflight/result.json` (Azure and
   GitLab); Bitbucket runs the [CI judge](#bitbucket-pipelines), which runs the same gates at head and adds the red/green
   evidence. Azure and GitLab run the gates only for now.

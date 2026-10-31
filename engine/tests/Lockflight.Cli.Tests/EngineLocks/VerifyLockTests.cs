@@ -10,6 +10,8 @@ public sealed class VerifyLockTests : IDisposable
 {
     private const string Version = "0.0.0-ci.7";
 
+    private const string Script = "5555555555555555555555555555555555555555555555555555555555555555";
+
     private readonly DirectoryInfo work = Directory.CreateTempSubdirectory("lockflight-verify-lock-");
 
     [Fact]
@@ -37,6 +39,57 @@ public sealed class VerifyLockTests : IDisposable
     }
 
     [Fact]
+    public async Task ALockWhoseInstallScriptIsNotTheReleasesFails()
+    {
+        WriteRelease(rid => Hash(rid), script: new string('e', 64));
+        string lockFile = WriteLock(rid => Hash(rid));
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains("its install script hash is not the one release v0.0.0-ci.7 published", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReleaseThatPublishedNoInstallScriptHashCannotVouchForTheLock()
+    {
+        WriteRelease(rid => Hash(rid), script: null);
+        string lockFile = WriteLock(rid => Hash(rid));
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains("published no install script hash", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALockThatMovesTheEngineDownIsNamedAsADowngrade()
+    {
+        WriteRelease(rid => Hash(rid));
+        string lockFile = WriteLock(rid => Hash(rid));
+        string baseLock = WriteLock(rid => Hash(rid), Path.Combine(work.FullName, "base.lock"), version: "0.0.0-ci.9");
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed, "--base", baseLock], "", work.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("warning: it moves the engine down from 0.0.0-ci.9 to 0.0.0-ci.7", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALockThatNamesAPlatformTwiceIsUnreadable()
+    {
+        WriteRelease(rid => Hash(rid));
+        string lockFile = WriteLock(rid => Hash(rid));
+        string text = File.ReadAllText(lockFile);
+        File.WriteAllText(lockFile, text.Replace("\"linux-x64\": {", $"\"linux-x64\": {{ \"sha256\": \"{new string('f', 64)}\" }},\n    \"linux-x64\": {{", StringComparison.Ordinal));
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains("the key 'binaries.linux-x64' appears twice", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ALockForAVersionWithoutAReleaseFails()
     {
         string lockFile = WriteLock(rid => Hash(rid));
@@ -54,7 +107,7 @@ public sealed class VerifyLockTests : IDisposable
         string lockFile = WriteLock(rid => Hash(rid));
 
         LockReleaseCheck check = await LockReleaseCheck.RunAsync(
-            File.ReadAllText(lockFile), new EnginePackageFeed(Feed, EnvironmentReader.Of(new Dictionary<string, string>())),
+            File.ReadAllText(lockFile), null, new EnginePackageFeed(Feed, EnvironmentReader.Of(new Dictionary<string, string>())),
             (_, _, _, _) => Task.FromResult(new Lockflight.Cli.Processes.ProcessResult(1, string.Empty, "no attestations found", 0, TimedOut: false)),
             TestContext.Current.CancellationToken);
 
@@ -111,20 +164,21 @@ public sealed class VerifyLockTests : IDisposable
         }
     }
 
-    private string WriteLock(Func<string, string> hash, string? path = null)
+    private string WriteLock(Func<string, string> hash, string? path = null, string version = Version)
     {
         path ??= Path.Combine(work.FullName, "proposed.lock");
-        EngineLockFiles.Write(path, new EngineLock(Version, EngineLockChannel.Release, new string('5', 64), EngineRids.Released.ToDictionary(rid => rid, hash, StringComparer.Ordinal)));
+        EngineLockFiles.Write(path, new EngineLock(version, EngineLockChannel.Release, Script, EngineRids.Released.ToDictionary(rid => rid, hash, StringComparer.Ordinal)));
         return path;
     }
 
-    private void WriteRelease(Func<string, string> hash)
+    private void WriteRelease(Func<string, string> hash, string? script = Script)
     {
+        string scriptEntry = script is null ? string.Empty : $$""", "installScript": { "sha256": "{{script}}" }""";
         string binaries = string.Join(", ", EngineRids.Released.Select(rid => $"\"{rid}\": {{ \"sha256\": \"{hash(rid)}\", \"path\": \"tools/any/{rid}/{EngineRids.ExecutableName(rid)}\" }}"));
         string package = Path.Combine(Feed, "lockflight.cli", Version, $"lockflight.cli.{Version}.nupkg");
         Directory.CreateDirectory(Path.GetDirectoryName(package)!);
         using ZipArchive archive = ZipFile.Open(package, ZipArchiveMode.Create);
         using Stream entry = archive.CreateEntry(EngineHashes.FileName).Open();
-        entry.Write(Encoding.UTF8.GetBytes($$"""{ "schema": "lockflight.engine-hashes/v1", "package": "Lockflight.Cli", "version": "{{Version}}", "commit": "{{new string('1', 40)}}", "binaries": { {{binaries}} } }"""));
+        entry.Write(Encoding.UTF8.GetBytes($$"""{ "schema": "lockflight.engine-hashes/v1", "package": "Lockflight.Cli", "version": "{{Version}}", "commit": "{{new string('1', 40)}}", "binaries": { {{binaries}} }{{scriptEntry}} }"""));
     }
 }

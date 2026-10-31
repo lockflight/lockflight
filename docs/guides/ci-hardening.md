@@ -48,8 +48,14 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
   - **Without a lock** (a project pinned the way Lockflight 0.2 pins): the version in the tool pin, with
     `dotnet tool install --tool-path`.
   - **A pull request that changes the lock:** the judge job runs `lockflight engine verify-lock` on the proposed lock with the
-    base's engine; it fails unless every hash is the one the release of that version published, and unless the release's
-    attestation verifies (the workflow's token).
+    base's engine; it fails unless every platform's hash and the install script's hash are the ones the release of that version
+    published, and unless the release's attestation verifies (the workflow's token). A lock that moves the engine to an older
+    version is named in the verdict ("moves the engine down"), so a downgrade is accepted only on purpose.
+  - **The first lock** (the pull request that moves a 0.2 tool pin to the lock): the base's 0.2 engine has no `verify-lock`, so
+    the action downloads the GitHub Release's `engine-hashes.json` for the lock's version, verifies its attestation with `gh`,
+    and compares every hash, the install script's included, and the vendored `.lockflight/ci/install.sh` with it. Without a
+    token it only warns. On Azure, Bitbucket and GitLab the first lock is **not** release-checked: the job prints a warning, and
+    the person accepting the pull request runs `lockflight engine verify-lock .lockflight/engine.lock` first.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass
   `--ci pr`; see [CI with a development build](getting-started.md#ci-with-a-development-build).
