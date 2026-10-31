@@ -6,9 +6,11 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
 ## What the workflow does
 
 1. **Checks the version.** The workflow publishes only from a tag `vX.Y.Z[-pre]` on a commit of `main` (a dispatch from a
-   branch is a dry run, below). The version is the tag
-   without the `v`, must be SemVer 2.0 without build metadata, and must equal the `version` of `plugins/lockflight/.claude-plugin/plugin.json` and of
-   the Spec Kit preset (`plugins/lockflight/speckit-preset/preset.yml`).
+   branch is a dry run, below). The version is the tag without the `v`, must be SemVer 2.0 without build metadata, and `scripts/release-versions.sh` checks the version files
+   against it: the `version` of `plugins/lockflight/.claude-plugin/plugin.json` and of the Spec Kit preset
+   (`plugins/lockflight/speckit-preset/preset.yml`) is the release's, and so is the crew's `plugin.json` version while the
+   crew is served from the judge's tag; `plugins/lockflight/min-engine-version` names an engine of the release's
+   `MAJOR.MINOR` line, at most the release; the crew's `min-engine-version` is at most the release.
 2. **Builds and tests every platform** (osx-arm64, osx-x64, linux-x64, linux-arm64, win-x64), each on its own runner: build
    with warnings as errors, `dotnet test`, pack the Native AOT package, install it with `dotnet tool install` from a local
    feed, check that `lockflight version` prints the version, `lockflight link` it into a scratch project, run the linked
@@ -103,7 +105,8 @@ push to `main`) fails unless:
 - the judge (`lockflight`) names a `vX.Y.Z` tag and its commit. The crew (`lockflight-crew`) names its own `crew/vX.Y.Z` tag,
   or the judge's tag and commit until its first crew release. Each tag exists on GitHub and points at the commit named;
 - at the judge's tag, `plugins/lockflight/.claude-plugin/plugin.json` has the tag's version, and its `min-engine-version` is
-  at most that version. At a crew tag, the crew's `plugin.json` has the crew tag's version;
+  at most that version. While the crew is served from the judge's tag, the crew's `plugin.json` has the tag's version too. At
+  a crew tag, the crew's `plugin.json` has the crew tag's version;
 - nuget.org lists `Lockflight.Cli` at the judge tag's version and at each plugin's `min-engine-version`;
 - the marketplace's own fields are those of the development marketplace,
   [`plugins/.claude-plugin/marketplace.json`](../../plugins/.claude-plugin/marketplace.json), at the judge's tag, and each
@@ -117,9 +120,14 @@ throughout and users stay on the previous release until the last step below.
 
 ## Cutting a release
 
-1. Raise the version in both `plugin.json` files and in the Spec Kit preset's `preset.yml` (and
-   `plugins/lockflight/min-engine-version` when the plugin needs the new engine), and draft the CHANGELOG entries in a release
-   pull request. Leave `.claude-plugin/marketplace.json` alone. Merge it.
+1. Raise the version in both `plugin.json` files (the crew's while it has no release of its own: Claude Code replaces an
+   installed plugin only when its version changes) and in the Spec Kit preset's `preset.yml`, raise
+   `plugins/lockflight/min-engine-version` to an engine of the new `MAJOR.MINOR` line, at most the release (it stays at the
+   last release on `main` in between, so development builds from `scripts/dev-install.sh`, which sort below the next
+   release, satisfy it), and draft the
+   CHANGELOG entries in a release pull request. Leave `.claude-plugin/marketplace.json` alone. Merge it. From the moment the
+   versions are raised, CI's `scripts/release-versions.sh` (without an argument: the version `plugin.json` declares, while
+   it has no tag) runs the release's full version check on every pull request.
 2. Once the release pull request has merged, tag its commit on `main` (not the pull request's head) and push the tag: `git tag -s vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`.
 3. Approve the `publish` job when the build and smoke tests are green.
 4. Edit the notes of the GitHub Release the workflow published.

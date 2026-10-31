@@ -26,10 +26,11 @@ for e in m["plugins"]:
     e["description"] = e["name"] + " " + sys.argv[2]
 open(sys.argv[1], "w", encoding="utf-8").write(json.dumps(m, indent=2) + "\n")' "$1" "$2"
 }
-release() { # release <tag> <plugin version> <min-engine-version>
+release() { # release <tag> <plugin version> <min-engine-version> [<crew version, default the plugin version>]
   for name in lockflight lockflight-crew; do
+    version=$2; [ "$name" = lockflight-crew ] && version=${4:-$2}
     mkdir -p "$remote/plugins/$name/.claude-plugin"
-    printf '{ "name": "%s", "version": "%s" }\n' "$name" "$2" > "$remote/plugins/$name/.claude-plugin/plugin.json"
+    printf '{ "name": "%s", "version": "%s" }\n' "$name" "$version" > "$remote/plugins/$name/.claude-plugin/plugin.json"
   done
   printf '%s\n' "$3" > "$remote/plugins/lockflight/min-engine-version"
   mkdir -p "$remote/plugins/.claude-plugin"
@@ -42,6 +43,7 @@ release v1.1.0 1.0.0 1.0.0      # tagged without raising the plugin versions
 release v1.2.0 1.2.0 1.3.0      # asks for an engine newer than itself
 release v1.4.0-alpha.2 1.4.0-alpha.2 1.4.0-alpha.10
 release v1.4.0-alpha.10 1.4.0-alpha.10 1.4.0-alpha.2
+release v1.5.0 1.5.0 1.0.0 1.4.0-alpha.10   # the crew, served from the judge's tag, kept its old version
 crew_release() { # crew_release <tag> <crew version> <crew min-engine-version>: a crew release on top of the last commit.
   printf '{ "name": "lockflight-crew", "version": "%s" }\n' "$2" > "$remote/plugins/lockflight-crew/.claude-plugin/plugin.json"
   printf '%s\n' "$3" > "$remote/plugins/lockflight-crew/min-engine-version"
@@ -96,6 +98,8 @@ expect_fail "check refuses a tag whose plugins have another version" "has versio
 expect_fail "check refuses a minimum engine above the release" "min-engine-version 1.3.0 is above" set v1.2.0
 expect_fail "prerelease numbers compare as numbers (alpha.10 is above alpha.2)" "is above the release 1.4.0-alpha.2" set v1.4.0-alpha.2
 expect_ok "a prerelease that needs an older prerelease, listed in another case on nuget.org" set v1.4.0-alpha.10
+printf '{ "versions": ["1.0.0", "1.5.0"] }\n' > "$WORK/index.json"
+expect_fail "check refuses a crew on the judge's tag without the tag's version" "lockflight-crew has version 1.4.0-alpha.10, not 1.5.0" set v1.5.0
 printf '{ "versions": ["1.1.0"] }\n' > "$WORK/index.json"
 expect_fail "check refuses a release nuget.org does not list" "nuget.org does not list Lockflight.Cli 1.0.0" set v1.0.0
 printf '{ "versions": ["1.0.0"] }\n' > "$WORK/index.json"
