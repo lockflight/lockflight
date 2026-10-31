@@ -205,13 +205,25 @@ fi
 if [ -x "$engine" ] && [ -z "$untrusted" ]; then
   # A slash command's payload is read first, so a failed engine can still be told apart from a typed human command.
   if [ "$event" = "user-prompt-expansion" ] && [ -z "$input" ]; then input=$(cat); fi
-  # An engine older than this plugin does not know the TaskCompleted event and would block every task completion; its
-  # "does not know the hook event" refusal is let through instead (it prints nothing else for this event).
-  if [ "$event" = "task-completed" ]; then
+  # An engine older than this plugin does not know a newer event (TaskCompleted, say), or the hook API this plugin announces,
+  # and would block every such event, Stop and SessionStart included. For every event but a tool call and a typed command
+  # those refusals are let through instead (the engine prints nothing else then): the unknown event silently, the hook API
+  # loudly, since none of Lockflight's checks run until the engine is updated.
+  if [ "$event" != "pre-tool-use" ] && [ "$event" != "user-prompt-expansion" ]; then
     [ -n "$input" ] || input=$(cat)
-    refusal=$(printf '%s' "$input" | "$engine" hook "$event" 2>&1 >/dev/null)
-    status=$?
-    case "$refusal" in *"does not know the hook event"*) exit 0 ;; esac
+    # stderr is captured to look for the refusal; stdout (the SessionStart banner, a Stop reason) goes out through fd 3 as it is.
+    # status stays 1 (a hook error that blocks nothing here) when fd 3 cannot be opened because stdout is closed.
+    status=1
+    { refusal=$(printf '%s' "$input" | "$engine" hook "$event" 2>&1 1>&3 3>&-); status=$?; } 3>&1
+    # Only a refusal (exit 2) whose first words are the engine's own: a Stop gate's failure text can quote anything.
+    case "$status:$refusal" in
+      "2:lockflight: this engine does not know the hook event"*) exit 0 ;;
+      "2:lockflight: the plugin speaks hook API "*)
+        printf '%s\n' "$refusal" >&2
+        reason=$(printf '%s' "$refusal" | tr -d '"\\' | tr '\001-\037' ' ')
+        printf '{"systemMessage":"%s Lockflight%ss %s check did not run, so this event was let through."}\n' "$reason" "'" "$event"
+        exit 0 ;;
+    esac
     [ -z "$refusal" ] || printf '%s\n' "$refusal" >&2
     exit "$status"
   fi

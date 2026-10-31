@@ -39,12 +39,24 @@ internal static class NativeHooks
     /// <summary>
     /// The command for one engine event, with paths from the project root Claude Code passes in <c>CLAUDE_PROJECT_DIR</c>. The
     /// native level needs no engine on the machine: with neither a linked engine nor a lockdown it does nothing (it fails open),
-    /// and the deny rules and the sandbox still hold. Once a teammate links the engine, the shim runs it with the plugin's trust
+    /// says so to the person at session start and at every stop, and the deny rules and the sandbox still hold. Once a teammate links the engine, the shim runs it with the plugin's trust
     /// checks.
     /// </summary>
     public static string Command(string engineEvent) =>
-        $"[ -e \"{Project(LinkedEngine)}\" ] || [ -e \"{Project(LinkedEngine)}.exe\" ] || [ -e \"{Project(Lockdown)}\" ] || exit 0; "
+        $"[ -e \"{Project(LinkedEngine)}\" ] || [ -e \"{Project(LinkedEngine)}.exe\" ] || [ -e \"{Project(Lockdown)}\" ] || {{ {NoEngineNotice(engineEvent)}exit 0; }}; "
         + $"{EnvironmentVariables.HookAdapter}={ClaudeCodeAdapter.ClientName} sh \"{Project(NativeHookShim.RelativePath)}\" {engineEvent}";
+
+    /// <summary>What the person reads when the hooks do nothing for want of an engine.</summary>
+    public const string NoEngineMessage =
+        "Lockflight is OFF in this session: no engine is linked (.lockflight/bin/lockflight), so there is no guard, no test lock and no Stop gate. "
+        + "Run ~/.lockflight/bin/lockflight engine install (or dotnet tool restore && dotnet lockflight link) in the project, in a separate terminal window (not with ! in Claude Code), to turn it on.";
+
+    /// <summary>
+    /// At session start and at every stop, the no-engine path tells the person (a <c>systemMessage</c>, never the model) that the
+    /// checks are off: a deleted <c>.lockflight/bin</c> must not turn the native level off silently. The other events stay quiet.
+    /// </summary>
+    private static string NoEngineNotice(string engineEvent) =>
+        engineEvent is "session-start" or "stop" ? $"printf '%s\\n' '{{\"systemMessage\":\"{NoEngineMessage}\"}}'; " : string.Empty;
 
     /// <summary>Whether a hook command is one of Lockflight's native hooks (it runs the vendored shim).</summary>
     public static bool IsLockflights(string? command) => command?.Contains(NativeHookShim.RelativePath, StringComparison.Ordinal) == true;

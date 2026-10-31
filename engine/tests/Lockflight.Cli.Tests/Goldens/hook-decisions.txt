@@ -152,22 +152,19 @@ stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update t
 ledger: type=hook.blocked signature=pre-tool-use:plugin-api-mismatch summary=plugin-api-mismatch tool=Read agent=main
 
 ## another plugin API, Stop (stop)
-exit: 2 HookBlock
-stdout: 
-stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
-ledger: type=hook.blocked signature=stop:plugin-api-mismatch summary=plugin-api-mismatch agent=main
+exit: 0 Pass
+stdout: {"systemMessage":"lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore \u0026\u0026 dotnet lockflight link Lockflight\u0027s stop check did not run, so this event was let through."}
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link Lockflight's stop check did not run, so this event was let through.
 
 ## another plugin API, SessionStart (session-start)
-exit: 2 HookBlock
-stdout: 
-stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
-ledger: type=hook.blocked signature=session-start:plugin-api-mismatch summary=plugin-api-mismatch agent=main
+exit: 0 Pass
+stdout: {"systemMessage":"lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore \u0026\u0026 dotnet lockflight link Lockflight\u0027s session-start check did not run, so this event was let through."}
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link Lockflight's session-start check did not run, so this event was let through.
 
 ## another plugin API, TaskCompleted (task-completed)
-exit: 2 HookBlock
-stdout: 
-stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link
-ledger: type=hook.blocked signature=task-completed:plugin-api-mismatch summary=plugin-api-mismatch agent=main
+exit: 0 Pass
+stdout: {"systemMessage":"lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore \u0026\u0026 dotnet lockflight link Lockflight\u0027s task-completed check did not run, so this event was let through."}
+stderr: lockflight: the plugin speaks hook API 2, this engine speaks 1. Update the plugin or run: dotnet tool restore && dotnet lockflight link Lockflight's task-completed check did not run, so this event was let through.
 
 ## another plugin API, an unrelated prompt (user-prompt-expansion)
 exit: 0 Pass
