@@ -501,7 +501,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "red, tests.sinceRed, tests.existingChanged, tests.hostTampering, green, trace, gates, review, approvals, routing; more may be added."
+            "description": "red, tests.sinceRed, tests.existingChanged, tests.hostTampering, green, trace, gates, review, approvals, routing, policy; more may be added."
           },
           "context": {
             "type": "string",

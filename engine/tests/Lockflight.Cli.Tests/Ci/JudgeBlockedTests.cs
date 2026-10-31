@@ -9,7 +9,7 @@ public sealed class JudgeBlockedTests
     private static readonly string Head = new('a', 40);
 
     /// <summary>The checks that are off in the evidence of a required review no key ran: a report joins only complete evidence.</summary>
-    private static readonly string[] OffChecks = ["red", "tests.sinceRed", "tests.existingChanged", "tests.hostTampering", "trace", "approvals", "routing"];
+    private static readonly string[] OffChecks = ["red", "tests.sinceRed", "tests.existingChanged", "tests.hostTampering", "trace", "approvals", "routing", "policy"];
 
     [Fact]
     public void ARunOutOfTimeWaitsForAMaintainerToRaiseTheLimit()

@@ -22,6 +22,12 @@ internal static class JudgeChecks
             level = CheckLevel.Required;
         }
 
+        if (check == CheckId.Policy && plan.Loosened is null)
+        {
+            string why = plan.Inputs.Event == JudgeEvent.PullRequest ? "no lockflight.yaml on the base to compare with" : "judged on the pull request";
+            return new CheckResult(check, CheckLevel.Off, CheckVerdict.NotApplicable, why);
+        }
+
         if (level == CheckLevel.Off)
         {
             return new CheckResult(check, level, CheckVerdict.NotApplicable, plan.Inputs.Event == JudgeEvent.PullRequest ? "off for this change class" : "judged on the pull request");
@@ -46,6 +52,10 @@ internal static class JudgeChecks
                 : new CheckResult(check, level, CheckVerdict.Pass, $"class {ChangeClassNames.ToName(plan.Class.Classification.Class)} ({plan.Class.Source})"
                     + (plan.Class.Classification.Signals is [ChangeSignal top, ..] ? $": {top.Id} in {top.Where}" : string.Empty)
                     + (plan.Class.ProductionChanged ? string.Empty : "; no production code lines changed, so no red/green or trace")),
+            CheckId.Policy when plan.PolicyNotCompared is string notCompared => new CheckResult(check, level, CheckVerdict.NotEarned, notCompared),
+            CheckId.Policy when plan.Loosened is not null => plan.Loosened.Count == 0
+                ? new CheckResult(check, level, CheckVerdict.Pass, "lockflight.yaml is no looser than the base's")
+                : new CheckResult(check, level, CheckVerdict.Fail, LoosenedWhy(plan.Loosened)),
             CheckId.Review => new CheckResult(check, level, CheckVerdict.Skipped, plan.Inputs.ReviewExpected ? "the report joins the review job's result" : "no review job runs for this pull request"),
             _ => new CheckResult(check, level, CheckVerdict.NotEarned, NotJudgedYet),
         };
@@ -105,6 +115,9 @@ internal static class JudgeChecks
             : level;
         return new CheckResult(CheckId.Trace, resolved, trace.Verdict, trace.Why);
     }
+
+    private static string LoosenedWhy(IReadOnlyList<string> loosened) =>
+        $"looser than the base ({loosened.Count}): {string.Join("; ", loosened)}; a person tightens it back or merges through the platform";
 
     private static string NoRedWhy(JudgePlan plan)
     {

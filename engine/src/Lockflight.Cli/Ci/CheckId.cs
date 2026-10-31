@@ -32,4 +32,7 @@ internal enum CheckId
 
     /// <summary>The change class from the base branch's routing policy, and its rules (a move out of a critical path fails).</summary>
     Routing = 10,
+
+    /// <summary>The pull request's <c>lockflight.yaml</c> is no looser than the base's (<see cref="PolicyLoosening"/>).</summary>
+    Policy = 11,
 }
