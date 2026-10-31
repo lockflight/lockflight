@@ -36,6 +36,13 @@ public sealed class TestCodeScannerTests
     }
 
     [Fact]
+    public void ATestInheritedFromAGenericBaseCallsTheProductionCodeTheBaseCalls()
+    {
+        using TestCodeScanner scanner = Scanner([Engine]);
+        Assert.True(scanner.CallsProduction("Lockflight.Cli.Tests.Lifecycle.RedGreen.InheritedProductionCallSample", nameof(InheritedProductionCallSample.CallsFromAGenericBase)));
+    }
+
+    [Fact]
     public void ATypeArgumentAloneIsNoProductionCall()
     {
         using TestCodeScanner scanner = Scanner([Engine]);
