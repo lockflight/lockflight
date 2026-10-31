@@ -126,7 +126,7 @@ internal static class CliApplication
                                                         policy: the red commits (Lockflight-Red trailer), the change
                                                         class and each check, into evidence.json; --plan prints the
                                                         steps without building (local: HEAD against the target)
-          ci report --evidence <dir> --head <sha> --out <dir> [--review <dir>] [--context gates|lockflight/judge]
+          ci report --evidence <dir> --head <sha> --out <dir> [--review <dir>] [--context gates|lockflight/judge] [--base <sha> [--event pr|push|merge-group] [--platform <name>] [--branch <name>]]
                                                         join the judge's evidence and the review's result into
                                                         verdict.json, the PR comment and the job summary; exits
                                                         with the context's verdict

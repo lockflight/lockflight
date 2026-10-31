@@ -53,8 +53,12 @@ inputs:
     description: "judge with shell-clone: a read-only token for a private shell; only the clone step sees it"
     required: false
     default: ""
+  replan:
+    description: "report: 'true' to re-plan the run from git (base, head, event) and refuse evidence whose policy, class, red commits or check levels disagree"
+    required: false
+    default: "false"
   github-token:
-    description: "report: the token that posts the comment (needs pull-requests: write)"
+    description: "report: the token that posts the comment (needs pull-requests: write) and fetches the head to re-plan (contents: read)"
     required: false
     default: ${{ github.token }}
 
@@ -241,12 +245,27 @@ runs:
       shell: bash
       env:
         LF_HEAD: ${{ inputs.head }}
+        LF_BASE: ${{ inputs.base }}
+        LF_BRANCH: ${{ inputs.branch }}
+        LF_EVENT: ${{ inputs.event }}
+        LF_REPLAN: ${{ inputs.replan }}
+        LF_TOKEN: ${{ inputs.github-token }}
         LF_CONTEXT: ${{ inputs.context }}
       run: |
         out="$RUNNER_TEMP/lockflight-verdict"
+        args=()
+        if [ "$LF_REPLAN" = "true" ] && [ -n "$LF_BASE" ]; then
+          # Which checks are required needs no build: the report re-plans from git and refuses evidence that disagrees. The
+          # checkout holds the target branch's tip; the head and the full history are fetched as data, never checked out.
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$LF_TOKEN" | base64 | tr -d '\n')"
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then git -c "http.extraheader=$auth" fetch --quiet --no-tags --unshallow origin || true; fi
+          if ! git cat-file -e "$LF_HEAD^{commit}" 2>/dev/null; then git -c "http.extraheader=$auth" fetch --quiet --no-tags origin "$LF_HEAD" || true; fi
+          args=(--base "$LF_BASE" --event "$LF_EVENT" --platform github)
+          if [ -n "$LF_BRANCH" ]; then args+=(--branch "$LF_BRANCH"); fi
+        fi
         set +e
         "$LF_LOCKFLIGHT" ci report --evidence "$RUNNER_TEMP/lockflight-evidence" --review "$RUNNER_TEMP/lockflight-review" \
-          --head "$LF_HEAD" --context "$LF_CONTEXT" --out "$out"
+          --head "$LF_HEAD" --context "$LF_CONTEXT" --out "$out" "${args[@]}"
         code=$?
         set -e
         if [ -f "$out/summary.md" ]; then cat "$out/summary.md" >> "$GITHUB_STEP_SUMMARY"; fi
