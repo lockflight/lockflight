@@ -32,16 +32,24 @@ public sealed class HostTamperingScannerTests
     }
 
     [Fact]
-    public void AWriteThatNamesAFolderOfTheRunIsAFinding() =>
-        Assert.Contains("Lockflight.Cli.Tests.Ci.TamperingSamples.TempFolderOwner::WriteToTheRun", Writes);
+    public void ATypeThatAlsoNamesAFolderOfTheRunIsNoTemporaryFolderOwner() =>
+        Assert.Contains("Lockflight.Cli.Tests.Ci.TamperingSamples.ElsewhereUser::WriteIntoTheRun", Writes);
 
     [Fact]
-    public void ABaselineEntryAcceptsTheFindingItNamesOrEveryFindingUnderAPrefix()
+    public void AWriteNamingTheRunnersResultsIsAFindingEvenBesideAFixture() =>
+        Assert.Contains("Lockflight.Cli.Tests.Ci.TamperingSamples.ElsewhereUser::WriteResultsBesideTheFixture", Writes);
+
+    [Fact]
+    public void AWriteThatNamesAFolderOfTheRunIsAFinding() =>
+        Assert.Contains("Lockflight.Cli.Tests.Ci.TamperingSamples.ElsewhereUser::WriteToTheRun", Writes);
+
+    [Fact]
+    public void ABaselineEntryAcceptsTheFindingItNamesOrEveryFindingOfItsKindInOneMethod()
     {
         TamperingFinding finding = new("Shop.Tests", "file-write", "Shop.Tests.CliTests::Writes", "System.IO.File.WriteAllText");
 
         Assert.True(HostTamperingJudge.Accepts(new HashSet<string> { finding.Id }, finding));
-        Assert.True(HostTamperingJudge.Accepts(new HashSet<string> { "Shop.Tests|file-write" }, finding));
+        Assert.False(HostTamperingJudge.Accepts(new HashSet<string> { "Shop.Tests|file-write" }, finding));
         Assert.True(HostTamperingJudge.Accepts(new HashSet<string> { "Shop.Tests|file-write|Shop.Tests.CliTests::Writes" }, finding));
         Assert.False(HostTamperingJudge.Accepts(new HashSet<string> { "Shop.Tests" }, finding));
         Assert.False(HostTamperingJudge.Accepts(new HashSet<string> { "Shop.Tests|file" }, finding));

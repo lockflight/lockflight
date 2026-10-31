@@ -7,8 +7,9 @@ namespace Lockflight.Cli.Ci;
 /// Host tampering (<c>tests.hostTampering</c>): the findings in the head's and every red commit's test assemblies that the base's
 /// assemblies did not have and the base's <c>.lockflight/baselines/host-tampering.json</c> does not accept make the check
 /// NOT-EARNED, with each one listed; findings the base already had are listed as information, so old code in a fixture does not
-/// block. A baseline entry accepts the finding it names (<c>assembly|kind|Type::Method|member</c>) or, cut at a <c>|</c>, every
-/// finding under it: <c>assembly|kind</c> or <c>assembly|kind|Type::Method</c>, so a person can accept code that is not written yet. Forging a test result needs deliberate code of this kind, and this makes the plain forms of it visible.
+/// block. A baseline entry accepts the finding it names (<c>assembly|kind|Type::Method|member</c>) or every finding of its kind in
+/// one method (<c>assembly|kind|Type::Method</c>), so a person can accept code that is not written yet.
+/// Forging a test result needs deliberate code of this kind, and this makes the plain forms of it visible.
 /// </summary>
 internal static class HostTamperingJudge
 {
@@ -43,10 +44,13 @@ internal static class HostTamperingJudge
                 added, existing);
     }
 
-    /// <summary>Whether a baseline entry names the finding, or a <c>|</c>-separated prefix of its id holding at least the assembly and kind.</summary>
+    /// <summary>
+    /// Whether a baseline entry names the finding, or its method (<c>assembly|kind|Type::Method</c>): a person can accept a method
+    /// before it exists, but never every future finding of a kind in an assembly, which would switch the check off for it.
+    /// </summary>
     public static bool Accepts(IReadOnlySet<string> accepted, TamperingFinding finding) =>
         accepted.Contains(finding.Id)
-        || accepted.Any(entry => entry.Contains('|', StringComparison.Ordinal) && finding.Id.StartsWith(entry + "|", StringComparison.Ordinal));
+        || accepted.Any(entry => entry.Count(character => character == '|') == 2 && finding.Id.StartsWith(entry + "|", StringComparison.Ordinal));
 
     public static string Describe(TamperingFinding finding) => $"{finding.Kind} in {finding.Location} ({finding.Member})";
 

@@ -11,7 +11,4 @@ internal sealed class TempFolderOwner
 
     /// <summary>Writes where the runner's results could be, without touching its temporary folder: still a finding.</summary>
     public static void WriteResults() => File.WriteAllText("results.xml", "<pass/>");
-
-    /// <summary>Touches the temporary folder but names a folder of the run from an environment variable: still a finding.</summary>
-    public void WriteToTheRun() => File.WriteAllText(Path.Combine(Environment.GetEnvironmentVariable("RUNNER_TEMP") ?? directory.FullName, "x"), "x");
 }

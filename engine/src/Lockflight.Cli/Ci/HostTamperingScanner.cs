@@ -73,7 +73,9 @@ internal static partial class HostTamperingScanner
 
             // The types of the assembly that ask for a temporary folder, by their outermost type (an async method's state machine
             // and a lambda's closure are nested types).
-            HashSet<TypeDefinitionHandle> tempOwners = [.. bodies.Where(body => body.Body.Calls.Any(IsTemp)).Select(body => body.Body.Owner)];
+            // A type that also names another folder anywhere (an environment variable, the base directory) is no temporary-folder owner.
+            HashSet<TypeDefinitionHandle> elsewhere = [.. bodies.Where(body => NamesAnotherFolder(body.Body)).Select(body => body.Body.Owner)];
+            HashSet<TypeDefinitionHandle> tempOwners = [.. bodies.Where(body => body.Body.Calls.Any(IsTemp)).Select(body => body.Body.Owner).Where(owner => !elsewhere.Contains(owner))];
             foreach ((string location, TamperingBody body) in bodies)
             {
                 findings.AddRange(Findings(body, tempOwners, assembly, location));
@@ -160,7 +162,22 @@ internal static partial class HostTamperingScanner
         }
     }
 
-    private static bool IsTemp((string Type, string Member) call) => TempMembers.Contains(call.Member, StringComparer.Ordinal);
+    private static bool IsTemp((string Type, string Member) call) =>
+        call.Type is "System.IO.Path" or "System.IO.Directory" && TempMembers.Contains(call.Member, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether the body names a folder of the run other than a temporary one: an environment variable (the CI's own files are named
+    /// by variables), the current, base or process directory, or where an assembly was loaded from (next to the runner's results).
+    /// </summary>
+    private static bool NamesAnotherFolder(TamperingBody body) => body.Calls.Any(call => call is ("System.Environment", "GetEnvironmentVariable" or "GetEnvironmentVariables" or "ExpandEnvironmentVariables" or "get_CurrentDirectory" or "get_ProcessPath")
+        or ("System.IO.Directory", "GetCurrentDirectory") or ("System.AppContext", "get_BaseDirectory") or ("System.AppDomain", "get_BaseDirectory")
+        or ("System.Reflection.Assembly", "get_Location" or "get_CodeBase"));
+
+    /// <summary>Whether the body loads a string that names a runner's results or a path outside a folder it was given: <c>.trx</c>, <c>TestResults</c>, <c>junit</c>, <c>..</c>, a rooted path.</summary>
+    private static bool NamesAResultsPath(TamperingBody body) => body.Strings.Any(text =>
+        text.Contains(".trx", StringComparison.OrdinalIgnoreCase) || text.Contains("TestResults", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("junit", StringComparison.OrdinalIgnoreCase) || text.Contains("..", StringComparison.Ordinal)
+        || text.StartsWith('/') || text.StartsWith('\\') || (text.Length >= 2 && char.IsAsciiLetter(text[0]) && text[1] == ':'));
 
     private static TypeDefinitionHandle Outermost(MetadataReader reader, TypeDefinitionHandle type)
     {
@@ -187,13 +204,12 @@ internal static partial class HostTamperingScanner
             }
         }
 
-        // A write counts as visibly temporary only when the method asks for the temporary folder before it, or uses a type of the
-        // assembly that asks for one (its own, or a fixture's), reads no environment variable (the CI's own files are named by
-        // variables) and names no other folder of the run.
-        int firstTemp = calls.FindIndex(call => IsTemp(call));
-        bool namesAnotherFolder = calls.Any(call => call is ("System.Environment", "GetEnvironmentVariable" or "GetEnvironmentVariables" or "ExpandEnvironmentVariables" or "get_CurrentDirectory")
-            or ("System.IO.Directory", "GetCurrentDirectory") or ("System.AppContext", "get_BaseDirectory") or ("System.AppDomain", "get_BaseDirectory"));
-        bool usesATempOwner = body.Touched.Overlaps(tempOwners);
+        // A write counts as visibly temporary only when the method names no other folder of the run, and asks for the temporary
+        // folder before it, or uses a type of the assembly that asks for one and names no other folder (its own, or a fixture's)
+        // while the method loads no string naming the runner's results or a rooted or parent path.
+        int firstTemp = calls.FindIndex(IsTemp);
+        bool namesAnotherFolder = NamesAnotherFolder(body);
+        bool usesATempOwner = body.Touched.Overlaps(tempOwners) && !NamesAResultsPath(body);
         foreach ((string type, string member) in calls.Where((call, index) => (namesAnotherFolder || ((firstTemp < 0 || index < firstTemp) && !usesATempOwner))
             && WriteTypes.Contains(call.Type, StringComparer.Ordinal)
             && WriteMembers.Any(prefix => call.Member.StartsWith(prefix, StringComparison.Ordinal)) && !call.Member.Contains("Read", StringComparison.Ordinal)))
