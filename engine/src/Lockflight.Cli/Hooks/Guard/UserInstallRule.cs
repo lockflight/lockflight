@@ -1,5 +1,6 @@
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Paths;
+using Lockflight.Cli.Updating;
 
 namespace Lockflight.Cli.Hooks.Guard;
 
@@ -21,7 +22,7 @@ internal sealed class UserInstallRule(EnvironmentReader environment) : IGuardRul
 
     private static HookDecision Decide(GuardFacts facts, string home)
     {
-        string install = Path.Combine(home, ".lockflight");
+        string install = UserInstall.Directory(home);
         string workingDirectory = facts.Input.WorkingDirectory ?? facts.Manifest.Root;
         RootRelativePaths relatives = new(install);
         ShellWrites writes = facts.Writes;
@@ -42,12 +43,11 @@ internal sealed class UserInstallRule(EnvironmentReader environment) : IGuardRul
             return Block(above);
         }
 
-        foreach ((string pattern, bool asTree) in filePatterns.Select(pattern => (pattern, false)).Concat(treePatterns.Select(pattern => (pattern, true))))
+        // A wildcard reaches the install when the folder before it is inside it, or holds it and the rest can match its path
+        // (~/.lockflig?/bin/lockflight, rm -rf ~/.l*): the shell expands it to what exists.
+        foreach (string pattern in filePatterns.Concat(treePatterns))
         {
-            string[] segments = pattern.Replace('\\', '/').Split('/');
-            int firstWildcard = Array.FindIndex(segments, GlobOverlap.HasWildcard);
-            string prefix = firstWildcard == 0 ? ShellArguments.CurrentDirectory : string.Join('/', segments[..firstWildcard]);
-            prefix = prefix.Length == 0 ? "/" : prefix;
+            (string prefix, string[] rest) = WildcardPatterns.Split(pattern);
             if (relatives.Relative(prefix, workingDirectory) is not null)
             {
                 return Block(pattern);
@@ -55,7 +55,7 @@ internal sealed class UserInstallRule(EnvironmentReader environment) : IGuardRul
 
             if (relatives.ContainsRoot(prefix, workingDirectory)
                 && PathRules.ToRelative(PathRules.Canonicalize(prefix, workingDirectory), PathRules.Canonicalize(install, baseDirectory: null)) is string below
-                && GlobOverlap.CouldMatch(below, string.Join('/', segments[firstWildcard..]), asTree: true))
+                && WildcardPatterns.Into(rest, below) is not null)
             {
                 return Block(pattern);
             }
