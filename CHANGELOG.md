@@ -8,8 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ## [0.3.0] — 2026-10-31
 
 0.3.0 makes a CI check the judge of record and the plugin the local assistant. The CI judge re-runs each red commit,
-checks green at head, traces the spec, runs the pull-request gates, compares the policy with the base's, and reports one
-`lockflight/judge` status. Its red/green, tests-since-red and trace results are a strong guardrail, not a boundary: the
+checks green at head, traces the spec, runs the pull-request gates, compares the policy with the base's, and reports the
+`gates` and `lockflight/judge` statuses. Its red/green, tests-since-red and trace results are a strong guardrail, not a boundary: the
 judge runs the pull request's code in the same job (judge isolation comes after 0.3.0). The manifest, evidence,
 `engine.lock` and CI comment formats are frozen from this release: until 1.0 they take additions only.
 
@@ -42,13 +42,15 @@ judge runs the pull request's code in the same job (judge isolation comes after 
   0.3.0, moves `lockflight.yaml` to version 2 (listing each new check and how to make it fail), writes
   `.lockflight/engine.lock` and `.lockflight/ci/install.sh`, and moves the CI file's engine install to the lock. Until
   then, Claude Code says at session start that the plugin needs a newer engine. Without the .NET SDK, install the engine
-  with `scripts/install.sh --version 0.3.0` (or `install.ps1 -Version 0.3.0`) first.
-- **Run `lockflight init` again** for the new deny rules and sandbox write denials (`.lockflight/engine.lock`,
-  `.lockflight/ci/**`, and your user install `~/.lockflight/**`); `doctor` names what is missing until then.
+  with `scripts/install.sh --version 0.3.0` (or `install.ps1 -Version 0.3.0`), which prints the engine's path
+  (`~/.lockflight/tools/0.3.0/lockflight`), and run that engine's `update --project` from the project root instead.
+- **Run `lockflight init` again**, with your level's flag (`--native`, `--ci-only`) if you use one, for the new deny rules
+  and sandbox write denials for `.lockflight/engine.lock` and `.lockflight/ci/**`, and an `Edit` deny rule for your user
+  install `~/.lockflight/**`; `doctor` names what is missing until then.
 - **Add the CI judge.** `init` never replaces a CI file that exists, and `update` only moves its engine install, so an
   0.2 `lockflight-gates.yml` keeps running the gates alone. To judge, delete it and run `lockflight init` (or
-  `init --ci-only` for CI without the plugin), which writes the judge's workflow (or the Azure, Bitbucket or GitLab
-  pipeline). Merge it with a person's review, and make `lockflight/judge` a required status check once the team produces
+  `init --ci-only` for CI without the plugin), which writes the judge's workflow on GitHub or pipeline on Bitbucket (the
+  Azure and GitLab jobs run the gates only). Merge it with a person's review, and make `lockflight/judge` a required status check once the team produces
   red commits (a commit with a `Lockflight-Red: <cycle>` trailer; `gates` keeps its name and meaning). Route
   `.github/workflows/**`, `.github/actions/**`, `lockflight.yaml`, `.lockflight/**` and `specs/**` to a code owner;
   `doctor` names what CODEOWNERS leaves uncovered.
@@ -59,7 +61,7 @@ judge runs the pull request's code in the same job (judge isolation comes after 
 - **If you used `rules audit` or `ledger retro`**: install the `lockflight-crew` plugin and use its `rules-audit` and
   `retro` skills.
 - **Pick an install level** ([install levels](docs/guides/install-levels.md)): the plugin (default), `init --native`
-  (project hooks, no plugin) or `init --ci-only`. CI judges at every level.
+  (project hooks, no plugin) or `init --ci-only`. CI runs at every level.
 - **Update the crew plugin too** (0.3.0 adds the spec writer and the planner); it moves with this release.
 - **Keep a cycle test's name until the pull request merges.** The judge reports a cycle test renamed or deleted after its
   red commit as NOT-EARNED, and an amended test whose red version no longer passes on the head's code as NOT-EARNED until a
@@ -115,7 +117,7 @@ judge runs the pull request's code in the same job (judge isolation comes after 
 - At the native level, messages and next steps name terminal commands, not `/lockflight:*` (#195).
 - `init`'s Spec Kit line names the preset of this engine's plugin version and an engine that exists at the chosen level
   (#211).
-- The generated workflows pin the action by commit, labelled with the engine release that wrote them (`# v0.3.0`).
+- The generated workflows pin the action by commit, labelled with the engine release that wrote them (`# v0.3.0`) (#191).
 - Release: each release file is uploaded once, a dry run rehearses the release step, and releases start only from `main`
   (#188); the version files are checked against the release, the crew's included (#190).
 - Docs: a README around the CI judge and a QUICKSTART to a first green verdict (#184); the architecture with the CI judge
@@ -148,7 +150,7 @@ judge runs the pull request's code in the same job (judge isolation comes after 
   with the same message is no new skip (#208).
 - The engine lock: every reader agrees on a lock, the first lock is release-checked in the action, and `engine
   verify-lock` checks the install script (`--script`) and names a downgrade (`--base`) (#198). The action's policy restore
-  reads `NuGet.Config` too.
+  reads `NuGet.Config` too (#PRNUM).
 
 ## [0.2.0-alpha.9] — 2026-10-28
 

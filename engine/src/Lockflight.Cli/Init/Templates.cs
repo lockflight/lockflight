@@ -72,8 +72,8 @@ internal static class Templates
     public const string ActionReference = "lockflight/lockflight/action@{ActionCommit} # {ActionVersion}";
 
     /// <summary>
-    /// The newest commit on main that changed <c>action/</c>. <c>scripts/action-pin.sh</c> fails CI while <c>action/</c> differs
-    /// from this commit's, and the release while it is not in the release commit's history.
+    /// A commit whose <c>action/</c> is this tree's; the release needs it on main. <c>scripts/action-pin.sh</c> fails CI while
+    /// <c>action/</c> differs from this commit's, and the release while it is not in the release commit's history.
     /// </summary>
     public const string ActionCommit = "102d67f62fcb4ab63860bee443100b1bbde5bd0e";
 
