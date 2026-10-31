@@ -48,7 +48,9 @@ public sealed class TemplatesTests
     {
         string workflow = Templates.Workflow(["8.0.x", "10.0.x"]);
 
-        Assert.Matches(@"uses: lockflight/lockflight/action@[0-9a-f]{40} # ", workflow);
+        Assert.Matches("^[0-9a-f]{40}$", Templates.ActionCommit);
+        Assert.Contains($"uses: lockflight/lockflight/action@{Templates.ActionCommit} # v{ToolPin.RunningVersion}\n", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("# main", workflow, StringComparison.Ordinal);
         Assert.Contains("  judge:\n", workflow, StringComparison.Ordinal);
         Assert.Contains("  review:\n", workflow, StringComparison.Ordinal);
         Assert.Contains("  gates:\n", workflow, StringComparison.Ordinal);
