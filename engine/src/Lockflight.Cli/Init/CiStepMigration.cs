@@ -3,7 +3,8 @@ namespace Lockflight.Cli.Init;
 /// <summary>
 /// Moves a generated CI file to the engine lock by editing only the lines Lockflight wrote, never the whole file: the engine
 /// install step (between its markers, or as Lockflight 0.2 wrote it), and in the base-branch policy restore the file list (now
-/// with <c>.lockflight/engine.lock</c>) and the baselines lines (now the policy directories, the vendored install script too).
+/// with <c>.lockflight/engine.lock</c>) and the baselines lines (now the policy directories, the vendored install script too),
+/// and on Azure and GitLab the pull request's base (now the target branch's tip, not the merge base or the diff base).
 /// Each edited block must be found exactly once with the expected text; otherwise the file is left alone and the caller writes
 /// the new step for a person to merge.
 /// </summary>
@@ -56,6 +57,39 @@ internal static class CiStepMigration
     /// <summary>How each policy file is restored now: its committed bytes, in place of whatever the pull request put there.</summary>
     private const string FileRestore = "  if git cat-file -e \"$BASE:$file\" 2>/dev/null; then mkdir -p \"$(dirname \"$file\")\"; rm -f \"$file\"; git show \"$BASE:$file\" > \"$file\"; else rm -f \"$file\"; fi";
 
+    /// <summary>
+    /// The Azure and GitLab lines that took the policy from the merge base or the merge request's diff base, and the lines that take
+    /// it from the target branch's tip; each is replaced only when found exactly once.
+    /// </summary>
+    private static readonly (string[] Legacy, string[] Current)[] BaseBlocks =
+    [
+        (
+            ["merge_request_event) PULL_REQUEST=1; BASE=\"$CI_MERGE_REQUEST_DIFF_BASE_SHA\" ;;"],
+            [
+                "merge_request_event)",
+                "  # Policy comes from the target branch's tip, not the merge request's diff base: a branch cut from an old commit must",
+                "  # not bring an older engine pin, baselines or analyzer config. The gates work out the merge base themselves.",
+                "  PULL_REQUEST=1",
+                "  git fetch --quiet origin \"+refs/heads/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:refs/remotes/origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\"",
+                "  BASE=$(git rev-parse \"origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\") ;;",
+            ]),
+        (
+            ["# The engine version and policy come from the merge request's diff base, so an MR cannot loosen the checks that judge"],
+            ["# The engine version and policy come from the target branch's tip, so an MR cannot loosen the checks that judge"]),
+        (
+            ["target=\"${SYSTEM_PULLREQUEST_TARGETBRANCH#refs/heads/}\"", "BASE=$(git merge-base HEAD \"origin/$target\")"],
+            [
+                "# Policy comes from the target branch's tip, not the merge base: a branch cut from an old commit must not bring",
+                "# an older engine pin, baselines or analyzer config. The gates work out the merge base themselves.",
+                "target=\"${SYSTEM_PULLREQUEST_TARGETBRANCH#refs/heads/}\"",
+                "git fetch --quiet origin \"+refs/heads/$target:refs/remotes/origin/$target\"",
+                "BASE=$(git rev-parse \"origin/$target\")",
+            ]),
+        (
+            ["# come from the base commit on pull requests, so a PR cannot loosen the checks that judge it. Create a pipeline from this"],
+            ["# come from the target branch's tip on pull requests, so a PR cannot loosen the checks that judge it. Create a pipeline from this"]),
+    ];
+
     /// <summary>The migrated text; null when the file must be left alone. The file's own text when it is current already.</summary>
     public static string? Migrate(string text)
     {
@@ -70,6 +104,15 @@ internal static class CiStepMigration
         if (!ReplaceInstallStep(lines) || !ReplaceRestore(lines))
         {
             return null;
+        }
+
+        foreach ((string[] legacy, string[] current) in BaseBlocks)
+        {
+            if (Find(lines, legacy) is (int start, string indent))
+            {
+                lines.RemoveRange(start, legacy.Length);
+                lines.InsertRange(start, current.Select(line => indent + line));
+            }
         }
 
         return string.Join(newline, lines);
