@@ -34,6 +34,8 @@ jobs:
       publish: ${{ steps.version.outputs.publish }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: Check the tag, the crew version and the engine it needs
         id: version
         env:
@@ -70,6 +72,12 @@ jobs:
           git fetch --no-tags origin "+$REF:$REF"
           if [ "$(git rev-parse "$REF^{commit}")" != "$(git rev-parse HEAD)" ]; then
             echo "::error::the checkout is not the commit tagged $TAG"; exit 1
+          fi
+          # A release is cut from main. A guardrail against tagging another commit: a tagged commit with an edited workflow
+          # skips it, so the tag ruleset (docs/engineering/releasing.md) is what limits who can start a release.
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$TAG is not on main: tag a commit of main"; exit 1
           fi
           declared=$(jq -r .version "$manifest")
           if [ "$declared" != "$version" ]; then
@@ -142,6 +150,8 @@ jobs:
         with:
           name: crew-release
           path: release
+      - name: The archive is the one packed
+        run: (cd release && sha256sum -c SHA256SUMS)
       - name: Draft the notes from the crew's commits since the previous crew tag
         uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         with:

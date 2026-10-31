@@ -1,9 +1,10 @@
 # CI hardening
 
 The agent works with your credentials, so CI is where an independent check happens. `lockflight init` writes
-`.github/workflows/lockflight-gates.yml`; this page explains what it does and what you add by hand. On Azure Pipelines,
-Bitbucket Pipelines or GitLab CI/CD, `init --ci-platform azure|bitbucket|gitlab` writes the same job for that service (not
-yet verified on the live services): see [CI on other platforms](ci-other-platforms.md).
+`.github/workflows/lockflight-gates.yml`; this page explains what it does and what you add by hand. On Bitbucket
+Pipelines, `init --ci-platform bitbucket` writes the judge as a pipeline template (not yet run on a live workspace); on GitLab
+CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that runs the `pr` gates only (experimental): see
+[CI on other platforms](ci-other-platforms.md).
 
 **On this page:** [What the generated workflow does](#what-the-generated-workflow-does) ·
 [What the CI judge shows](#what-the-ci-judge-shows-and-what-it-does-not) · [The CI judge action](#the-ci-judge-action) ·
@@ -31,7 +32,8 @@ yet verified on the live services): see [CI on other platforms](ci-other-platfor
     `stylecop.json`, `BannedSymbols.txt`, `CodeMetricsConfig.txt`. A PR is judged by the base's style rules, and its own rule changes apply after the
     merge.
 
-  A PR cannot loosen the checks that judge it, pre-accept its own secret or accept its own failing test. On `pull_request`
+  A PR cannot change the policy it is judged with, pre-accept its own secret or accept its own failing test through a
+  baseline. It can still affect the results, as the next section says. On `pull_request`
   events GitHub runs the **PR's** copy of the workflow file itself, so this holds against a hostile PR only together with the
   CODEOWNERS rule and the required check below.
 
@@ -109,9 +111,10 @@ trailer it builds that commit and requires its new tests to fail inside producti
 be the same test at head (or to fail again on the red commit's code when it changed) and to pass there, the spec's
 requirements to be traced to those tests, and the `pr` gates to pass, all with the target branch's policy.
 
-- **Unforgeable from the pull request** (with the judge a required check, and a required code-owner review covering the
-  workflow files): the policy, baselines and engine the judge runs with, and that the check runs at all. Which commits and
-  tests it examined reaches the report jobs through the evidence file, which the next points limit.
+- **Read from the target branch** (a boundary, with the judge a required check and a required code-owner review covering
+  the workflow files): the policy and baselines the judge applies, the engine the report jobs install, and that the check
+  runs at all. Which commits and tests it examined reaches the report jobs through the evidence file, which the next points
+  limit.
 - **A strong guardrail, not a boundary:** the test results. The tests are the pull request's code and run in the judge job,
   so a determined pull request can forge their outcome. Doing so needs deliberate code in the test assemblies that tampers
   with the test host, which is visible in the test diff; the host-tampering check lists the plain forms of it and is
@@ -119,6 +122,20 @@ requirements to be traced to those tests, and the `pr` gates to pass, all with t
 - **A strong guardrail, not a boundary:** the evidence file itself. In 0.3.0 the judge writes its evidence in the same job
   as the pull request's code, so a process that code leaves running could rewrite it before the report jobs read it.
   Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0.
+- **What the pull request's code can affect in the judge job.** In 0.3.0 the pull request's code runs as the same user, in
+  the same job, before the judge has finished:
+  - leftovers in `obj/` and `bin/` carry from one build to the next in the judge's worktree;
+  - git hooks the pull request's code installs can run when the judge checks out paths;
+  - the policy, baselines and gitleaks config are read from the worktree after the pull request's code has built and run
+    there;
+  - test-framework extension points (an xUnit v3 `TestFramework`, an NUnit `IWrapTestMethod` attribute, a custom runner)
+    run inside the test host;
+  - an MSBuild `<Exec>` task or inline task in a project, props or targets file runs arbitrary code at build time;
+  - the host-tampering scan reads the test assemblies only: production code and MSBuild files are not scanned;
+  - processes the pull request's code starts are killed only when the job times out.
+
+  Each needs deliberate code in the diff, which the person who merges can read. Isolation (the pull request's code in a
+  container or a separate job, the evidence computed outside it) is planned after 0.3.0.
 - **Not shown:** that the tests were written first. A red commit shows that the tests tell the stub from the
   implementation, which is what the evidence claims.
 

@@ -36,6 +36,8 @@ jobs:
       publish: ${{ steps.check.outputs.publish }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: Check the tag, the version and the plugin versions
         id: check
         env:
@@ -61,23 +63,21 @@ jobs:
           if [ "$(git rev-parse "$REF^{commit}")" != "$(git rev-parse HEAD)" ]; then
             echo "::error::the checkout is not the commit tagged $TAG"; exit 1
           fi
+          # A release is cut from main. A guardrail against tagging another commit: a tagged commit with an edited workflow
+          # skips it, so the tag ruleset (docs/engineering/releasing.md) is what limits who can start a release.
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$TAG is not on main: tag a commit of main"; exit 1
+          fi
           # SemVer 2.0 without build metadata (NuGet ignores it, so two builds would collide).
           semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?$'
           version="${TAG#v}"
           if [ "$TAG" = "$version" ] || ! printf '%s\n' "$version" | grep -Eq "$semver"; then
             echo "::error::tag $TAG is not v<SemVer>"; exit 1
           fi
-          # The judge plugin follows the engine's version; the crew has its own (crew/v* tags, release-crew.yml).
-          plugin=plugins/lockflight/.claude-plugin/plugin.json
-          declared=$(jq -r .version "$plugin")
-          if [ "$declared" != "$version" ]; then
-            echo "::error::$plugin declares $declared, the tag is $TAG"; exit 1
-          fi
-          preset=plugins/lockflight/speckit-preset/preset.yml
-          declared=$(sed -n 's/^  version: *"\([^"]*\)".*/\1/p' "$preset" | head -n 1)
-          if [ "$declared" != "$version" ]; then
-            echo "::error::$preset declares ${declared:-no version}, the tag is $TAG"; exit 1
-          fi
+          # The judge plugin and the Spec Kit preset have the release's version, and so does the crew while it is served from
+          # the judge's tag; min-engine-version names an engine of the release's line (the crew's own tags: release-crew.yml).
+          scripts/release-versions.sh "$version"
           publish=false
           if [ "$EVENT" = push ] || [ "$PUBLISH_INPUT" = true ]; then publish=true; fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -109,6 +109,34 @@ jobs:
           global-json-file: engine/global.json
           # The workspace sample's orders service targets net8.0.
           dotnet-version: 8.0.x
+      # The unit tests expect the real gitleaks, as in ci.yml (without it the secrets step errors and the CI judge tests
+      # that expect a passing gates check fail).
+      - name: Install gitleaks (pinned, checksum-verified)
+        env:
+          GITLEAKS_VERSION: 8.30.1
+        run: |
+          case "$RID" in
+            linux-x64) archive=linux_x64.tar.gz; sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
+            linux-arm64) archive=linux_arm64.tar.gz; sum=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080 ;;
+            osx-arm64) archive=darwin_arm64.tar.gz; sum=b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5 ;;
+            osx-x64) archive=darwin_x64.tar.gz; sum=dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709 ;;
+            win-x64) archive=windows_x64.zip; sum=d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e ;;
+            *) echo "::error::no gitleaks build for $RID"; exit 1 ;;
+          esac
+          archive="gitleaks_${GITLEAKS_VERSION}_$archive"
+          binary=gitleaks; case "$RID" in win-*) binary=gitleaks.exe ;; esac
+          curl -fsSLo "$RUNNER_TEMP/$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+          if command -v sha256sum >/dev/null; then
+            echo "$sum  $RUNNER_TEMP/$archive" | sha256sum -c -
+          else
+            echo "$sum  $RUNNER_TEMP/$archive" | shasum -a 256 -c -
+          fi
+          case "$archive" in
+            *.zip) unzip -o -q "$RUNNER_TEMP/$archive" "$binary" -d "$RUNNER_TEMP" ;;
+            *) tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" "$binary" ;;
+          esac
+          "$RUNNER_TEMP/$binary" version
+          echo "LOCKFLIGHT_GITLEAKS=$RUNNER_TEMP/$binary" >> "$GITHUB_ENV"
       - name: Build
         working-directory: engine
         run: dotnet build -warnaserror -nologo
@@ -286,15 +314,7 @@ jobs:
           name: engine-hashes
           path: packages
       - name: Checksums
-        working-directory: packages
-        run: |
-          cp ../scripts/install.sh ../scripts/install.ps1 .
-          count=$(find . -name '*.nupkg' | wc -l)
-          [ "$count" -eq 6 ] || { echo "::error::expected 6 packages, found $count"; exit 1; }
-          count=$(find . -name 'lockflight-*' | wc -l)
-          [ "$count" -eq 5 ] || { echo "::error::expected 5 executables, found $count"; exit 1; }
-          sha256sum -- *.nupkg lockflight-* engine-hashes.json install.sh install.ps1 > SHA256SUMS
-          cat SHA256SUMS
+        run: scripts/release-assets.sh checksums packages "$VERSION"
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: packages/SHA256SUMS
@@ -356,6 +376,10 @@ jobs:
         with:
           path: release
           merge-multiple: true
+      # Each file named once (a second asset of the same name fails the upload after the packages are on nuget.org), and
+      # SHA256SUMS checked against what is uploaded. The release-dry-run job runs the same step.
+      - name: Assemble the release files
+        run: scripts/release-assets.sh assemble release "$VERSION" assets
       - name: Draft the notes from the commits since the previous tag
         uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
         with:
@@ -373,6 +397,52 @@ jobs:
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
           gh release create "$TAG" --verify-tag $prerelease --title "Lockflight $VERSION" \
-            --notes-file release-notes.md release/*.nupkg release/lockflight-* release/engine-hashes.json \
-            scripts/install.sh scripts/install.ps1 \
-            release/SHA256SUMS release/*.cdx.json
+            --notes-file release-notes.md assets/*
+
+  # Dry runs skip publish and release, so this job runs the release job's steps on the dry run's files without publishing:
+  # the checksums the publish job writes, the assembled release files, and the notes. Nothing leaves the runner.
+  release-dry-run:
+    needs: [version, verify]
+    if: ${{ needs.version.outputs.publish != 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: release
+          merge-multiple: true
+      - name: Checksums, as the publish job writes them
+        run: scripts/release-assets.sh checksums release "$VERSION"
+      - name: Assemble the release files into a throw-away folder
+        run: |
+          scripts/release-assets.sh assemble release "$VERSION" "$RUNNER_TEMP/assets"
+          {
+            echo "Release files for $VERSION (not published):"
+            echo '```'
+            ls -1 "$RUNNER_TEMP/assets"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      # gh release create fails for a tag that already has a release, after the packages are on nuget.org.
+      - name: No GitHub Release exists for the tag yet
+        if: ${{ github.ref_type == 'tag' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::$TAG already has a GitHub Release: a release of this version would fail after the push"; exit 1
+          fi
+      - name: Draft the notes, as the release job does
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          version: v2.14.2
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: release-notes.md
+      - name: The notes are not empty
+        run: test -s release-notes.md

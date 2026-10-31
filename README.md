@@ -13,13 +13,14 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-123A4F)](LICENSE)
 
 [Quickstart](QUICKSTART.md) · [How it works](#how-it-works) · [What the judge checks](#what-the-judge-checks) ·
-[Install levels](#install-levels) · [Limits](#honest-about-its-limits) · [Docs](docs/README.md)
+[What it asks of you](#what-it-asks-of-you) · [Install levels](#install-levels) · [Limits](#honest-about-its-limits) ·
+[Docs](docs/README.md) · [Glossary](docs/guides/glossary.md)
 
 </div>
 
 **A CI check for .NET pull requests written by coding agents.** It re-runs the evidence behind "done" (tests that failed
 before the code existed and pass after it, unchanged or amended and still failing on the old code) under your base branch's
-policy, and gives one verdict.
+policy, and reports it in two checks with one verdict each.
 
 **Coding agents write code faster than anyone can review it.** An agent says the build is green and the tests came first.
 Instructions in `CLAUDE.md`, skills and reviewer agents ask it to work that way, but an agent can talk its way past a
@@ -30,10 +31,12 @@ paragraph. It has a much harder time talking its way past an exit code it did no
 | The agent says the build is green. Did anything actually run? | "Don't touch the config," says the skill. One `sed` later, it's touched. | Tests written after the code pass by construction and prove little. |
 
 > [!TIP]
-> **LLMs propose; checks decide.** The judge of record is a CI check: a GitHub Action, and a Bitbucket Pipelines template.
-> It builds and runs the pull request's commits itself and takes its policy and engine from the target branch, so with the
-> check required and the workflow under CODEOWNERS, the pull request cannot loosen what judges it. The Claude Code plugin is an optional assistant that runs the same checks on the
-> developer's machine, earlier; the crew agents give advice and decide nothing.
+> **LLMs propose; checks decide.** The judge of record is a CI check: a GitHub Action, and a Bitbucket Pipelines template not
+> yet run on a live workspace (GitLab and Azure Pipelines get the gates only, experimental). It builds and runs the pull
+> request's commits itself and takes its policy and engine from the target branch. With the check required and a required
+> code-owner review on the workflow and the policy, the pull request cannot change the policy that judges it; the results it
+> judges are a strong guardrail ([limits](#honest-about-its-limits)). The Claude Code plugin is an optional assistant that
+> runs the same checks on the developer's machine, earlier; the crew agents give advice and decide nothing.
 
 ## Quick start
 
@@ -81,7 +84,9 @@ it on. The report jobs never run the pull request's code.
 | **Existing tests changed** (advisory) | A changed old test still tells the old behaviour from the new. Reported for the person who merges; it blocks nothing yet. |
 
 Results land in two checks: **`gates`** (the gates and green at head, the meaning existing rulesets rely on) and
-**`lockflight/judge`** (red, tests since red, host tampering, trace, review, existing tests changed). Approvals are listed but not judged by this engine version yet.
+**`lockflight/judge`** (routing, red, tests since red, host tampering, trace, review, approvals, existing tests changed).
+Approvals check the git facts: CODEOWNERS on the target branch covers the specs and, where spec-first applies, the spec
+merged first; the approval itself is the platform's review.
 
 ### Four verdicts
 
@@ -105,10 +110,29 @@ Results land in two checks: **`gates`** (the gates and green at head, the meanin
 How much evidence a pull request needs should follow what it changes, not who opened it. The engine computes a change class
 from the diff and the base branch's policy: **fix**, **behaviour**, **feature** (an API or the database) or **critical**
 (paths the policy marks critical, the policy itself, the build structure). A class can be raised, never lowered, and a
-higher class never needs less; a critical change, for example, would need a review with a key. `lockflight route show`
-prints a branch's class, but no check uses the classes yet: the judge in this version uses a simpler interim classifier.
-Paths in `ci.lowRiskPaths` (docs by default) need no red/green cycle, package versions only need no red, and anything else
-is a behaviour change. [Risk routing](docs/guides/risk-routing.md) says what is in force.
+higher class never needs less. The judge applies the class: red→green when production code changed, a spec from the
+feature class, and with the default preset a review with an API key for a critical change, which is NOT-EARNED without one.
+`lockflight route show` prints a branch's class before you push. [Risk routing](docs/guides/risk-routing.md) says what each
+class requires.
+
+## What it asks of you
+
+- **A red commit in every pull request that changes production code**, humans and hotfixes included: the new tests with a
+  stub, committed with a `Lockflight-Red: <n>` trailer before the implementation. At the CI-only level this is by hand
+  (`git commit --trailer "Lockflight-Red: 1"`); with the plugin, `redgreen red` makes it. Without one, `lockflight/judge`
+  is NOT-EARNED.
+- **A spec for a feature-class change** (a new API, a database change) under the default preset: `specs/<id>/spec.md`, by
+  hand or with Spec Kit or the crew ([the spec contract](docs/guides/spec-contract.md)).
+- **A review with an API key for a critical change** (a policy file, a build-wide file, a new project, an engine upgrade):
+  set `ANTHROPIC_API_KEY` and turn the review job on, or such pull requests stay NOT-EARNED (`routing.require.reviewKeyFrom`
+  sets the class, or `none`). Each review run spends up to `review.maxUsd`, 3 USD by default.
+- **CI time:** the judge builds the fork point, every red commit and the head, and runs their tests, within
+  `ci.timeoutMinutes` (45 by default; the job's limit is 10 more).
+- **The .NET 10 SDK** where the engine is built from source or installed as a `dotnet tool`, which the plugin level does; the
+  install script needs none. Your projects keep their own SDK.
+- **A platform plan that can block a merge:** required checks on a private GitHub repository need GitHub Pro, Team or
+  Enterprise (a public repository has them); Bitbucket blocks merges on Premium only; on GitLab, code-owner approval needs
+  Premium. Elsewhere the check reports, and a person decides.
 
 ## Install levels
 
@@ -132,9 +156,12 @@ other code. Setup: [getting started](docs/guides/getting-started.md).
 
 ## Honest about its limits
 
+A **guardrail** prevents accidents but a determined agent or pull request can get around it; a **boundary** holds even
+against one, under the conditions named.
+
 | Strong guardrail, not a boundary, in 0.3.0 | Boundary, where the platform enforces it |
 |---|---|
-| The judge computes its evidence in the same job that runs the pull request's code. Forging a result takes deliberate code in the diff; the host-tampering scan finds the plain forms, and an obfuscated one can evade it. Running the pull request's code isolated from the judge is planned after 0.3.0. | The policy, baselines and engine pin read from the target branch; the check itself, as a required check, with the workflow and policy under CODEOWNERS and required review; the spec approved through the platform's review, with CODEOWNERS on `specs/**`. |
+| The judge computes its evidence in the same job that runs the pull request's code. Forging a result takes deliberate code in the diff; the host-tampering scan finds the plain forms in test assemblies, and an obfuscated one, production code or an MSBuild task can evade it ([what the pull request's code can affect](docs/guides/ci-hardening.md#what-the-ci-judge-shows-and-what-it-does-not)). Running the pull request's code isolated from the judge is planned after 0.3.0. | The policy, baselines and engine pin read from the target branch; the check itself, as a required check, with the workflow and policy under CODEOWNERS and required review; the spec approved through the platform's review, with CODEOWNERS on `specs/**`. |
 
 - The judge makes faking test-first hard and visible. It does not prove that the agent worked test-first, or that a test
   fully checks its requirement: a person still reads the test diff.
@@ -142,15 +169,16 @@ other code. Setup: [getting started](docs/guides/getting-started.md).
   spend-limited key scoped to CI.
 - Everything on the developer's machine (the guard, local gates, local approvals) is a guardrail: the agent runs with your
   credentials. The guard catches accidents and lets commands it does not parse through.
-- The Bitbucket template has not yet run on a live workspace; the GitLab and Azure Pipelines templates are experimental.
+- The Bitbucket template has not yet run on a live workspace; the GitLab and Azure Pipelines templates are experimental and
+  run the gates only.
 
 Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-and-boundaries.md).
 
 ## Status
 
-**Alpha, for .NET:** SDK-style .NET 8, 9 and 10 projects. In CI, the judge's red/green runs on xUnit (v3 and v2) and NUnit,
-and other test projects get the gates' test step; the local lifecycle also covers MSTest. The engine is a Native AOT
-binary for macOS, Linux and Windows, with over 1,700 unit tests and end-to-end suites on all three. 0.3.0, the CI judge, is
+**Alpha, for .NET:** SDK-style .NET 8, 9 and 10 projects. Red/green and trace run on xUnit (v3 and v2), NUnit and MSTest,
+in CI and locally; other test projects get the gates' test step. The engine is a Native AOT
+binary for macOS, Linux and Windows, with over 3,800 unit tests and end-to-end suites on all three. 0.3.0, the CI judge, is
 being finished on `main`; the formats freeze at its release.
 
 **Docs:** [quickstart](QUICKSTART.md) · [getting started](docs/guides/getting-started.md) ·

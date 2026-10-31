@@ -5,8 +5,11 @@ Risk routing reads the pull request's diff and computes its **change class**; th
 must pass. For the person who owns a project's policy and for reviewers who want to know why a pull request is in its class.
 
 > [!IMPORTANT]
-> Risk routing is being built. This version computes the class and what it requires, and `lockflight route show` prints both;
-> no check uses the class yet. Nothing on this page is in force until the release notes say so.
+> The CI judge (`lockflight ci`) classifies every pull request this way, under the target branch's `routing:` policy, and the
+> class decides which of its checks are required: red→green, spec and trace, the review and its API key, and spec-first
+> approvals. The per-class coverage thresholds, EF Core and architecture-test rows below are computed and shown by
+> `route show`, but the judge does not apply them yet: its gates run with the `gates:` settings of the target branch. A push
+> with no previous commit falls back to simpler rules (see [commands](commands.md#ci)).
 
 **On this page:** [The four classes](#the-four-classes) · [Which diff is read](#which-diff-is-read) ·
 [File roles](#file-roles) · [What counts toward size](#what-counts-toward-size) · [Moves](#moves) ·
@@ -241,7 +244,10 @@ less. The `default` preset:
 | Spec first (merged before the code) | — | — | — | when `approvals.specFirstFrom` says so |
 
 Red→green, and spec and trace, apply only when production code lines changed: a docs-only or test-only pull request needs
-neither. The [configuration reference](configuration.md#lockflightyaml) lists the other presets' values.
+neither. The judge applies the red→green, spec and trace, review and spec-first rows; it reports the class and these
+requirements in its comment. The coverage, EF Core and architecture rows are shown by `route show` and not applied by the judge
+yet. A critical pull request (a policy file, a build-wide file, a new project or solution change, an engine upgrade) is
+NOT-EARNED until the review job runs with an API key, unless `reviewKeyFrom: none`. The [configuration reference](configuration.md#lockflightyaml) lists the other presets' values.
 
 ## Raising the class
 
@@ -316,5 +322,5 @@ move are in the diff, so no path in the pull request avoids them. Two limits hol
 ## Next
 
 - [Configuration](configuration.md): `lockflight.yaml`
-- [CI hardening](ci-hardening.md): making the CI check the boundary
+- [CI hardening](ci-hardening.md): making the CI check required, and what in it is a boundary
 - [Guardrails and boundaries](guardrails-and-boundaries.md): what each control can promise

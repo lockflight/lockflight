@@ -72,7 +72,7 @@ internal static class JudgeExecutor
                 greenAtHead = greenAtHead with
                 {
                     Verdict = testStep switch { "PASS" => CheckVerdict.Pass, "FAIL" => CheckVerdict.Fail, "ERROR" => CheckVerdict.Error, _ => CheckVerdict.NotEarned },
-                    Why = $"no test project red/green can run (xUnit or NUnit); the gates' test step judged the suite: {testStep}",
+                    Why = $"no test project red/green can run (xUnit, NUnit or MSTest); the gates' test step judged the suite: {testStep}",
                 };
             }
 

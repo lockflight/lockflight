@@ -20,7 +20,8 @@ take longer.
 - macOS or Linux, with git and the **.NET 10 SDK** (Windows: [install on Windows](docs/guides/getting-started.md#install-on-windows)).
 - **[gitleaks](https://github.com/gitleaks/gitleaks)** on `PATH` (for example `brew install gitleaks`). The judge's secrets
   step needs it; without it that step, and so the verdict, is `NOT-EARNED`. The GitHub Action downloads its own.
-- No Claude Code and no API key: this path is the [CI-only install level](docs/guides/install-levels.md#ci-only).
+- No Claude Code and no API key: this path is the [CI-only install level](docs/guides/install-levels.md#ci-only). On your
+  own repository, critical changes need an API key for the review (step 4).
 
 ## 1. Install the engine
 
@@ -53,9 +54,10 @@ git add -A && git commit -m "A new solution"
 git add -A && git commit -m "Set up Lockflight"
 ```
 
-`init --ci-only` writes `lockflight.yaml` (the policy), the engine pin, `.gitignore` entries and
-`.github/workflows/lockflight-gates.yml`, and nothing for Claude Code. The judge reads the policy from the target branch, so
-it has to be committed on `main` before the feature branch.
+`init --ci-only` writes `lockflight.yaml` (the policy), the engine pin (`dotnet-tools.json`, and with a released engine
+`.lockflight/engine.lock` and `.lockflight/ci/install.sh`; a development build keeps its lock in the git-ignored
+`.lockflight/local/`), `.gitignore` entries and `.github/workflows/lockflight-gates.yml`, and nothing for Claude Code. The
+judge reads the policy from the target branch, so it has to be committed on `main` before the feature branch.
 
 ## 3. Make a red commit, then make it green
 
@@ -109,7 +111,7 @@ Run the judge on the branch, against `main`:
 ```
 
 ```text
-PASS head d1e623b, class behaviour (interim), 1 red commits, policy from c2b10dc
+PASS head d1d887b, class behaviour (routing), 1 red commits, policy from 200d2bc
   gates             PASS
   lockflight/judge  PASS
   PASS       red                    required 1 cycles, 1 tests, each red in production code
@@ -120,10 +122,12 @@ PASS head d1e623b, class behaviour (interim), 1 red commits, policy from c2b10dc
   N/A        trace                  off      no spec found for this pull request
   PASS       gates                  required policy.protected PASS · format PASS · quality.suppressions PASS · docs.references N/A · build PASS · ef.pendingModelChanges N/A · test PASS · coverage.patch N/A · security.deps PASS · security.secrets PASS
   SKIPPED    review                 advisory the report joins the review job's result
-  NOT-EARNED approvals              advisory not judged by this engine version yet
+  N/A        approvals              off      off for this change class
+  PASS       routing                required class behaviour (routing): file.added in src/Demo/Pricing.cs
 ```
 
-That is the first green: the judge checked out the red commit, saw the new test fail inside production code (the stub's
+That is the first green. Risk routing put the change in the `behaviour` class (a new production file), which needs red→green
+but no spec and no review. The judge checked out the red commit, saw the new test fail inside production code (the stub's
 `NotImplementedException`), then saw the same test, unchanged, pass at head, with the gates passing under `main`'s policy.
 `lockflight ci` refuses uncommitted changes, and it writes its evidence to `.lockflight/local/ci/last.json`.
 
@@ -136,7 +140,8 @@ git add -A && git commit -m "test and code together" --trailer "Lockflight-Red: 
 ~/.lockflight/bin/lockflight ci        # FAIL: GREEN_BEFORE, the test passes before the implementation exists
 ```
 
-Without any red commit the verdict is `NOT-EARNED`: nothing showed that the new tests could fail.
+Without any red commit the verdict is `NOT-EARNED`: nothing showed that the new tests could fail. Add the red commit by
+hand as above (`--trailer "Lockflight-Red: 1"`); with the full lifecycle, `lockflight redgreen red` makes it.
 
 ## 4. On GitHub
 
@@ -144,14 +149,16 @@ From 0.3.0 on, with a project set up from the released engine:
 
 1. Push `main` with the commit `init` made, then push the feature branch and open a pull request. The workflow's `judge` job
    runs the same `lockflight ci` with the engine and the policy of the target branch, and two checks appear: `gates` (the
-   gates and green at head) and `lockflight/judge` (red, tests since red, host tampering, trace, review, existing tests
-   changed; approvals are listed, not judged yet). A comment on the pull
+   gates and green at head) and `lockflight/judge` (routing, red, tests since red, host tampering, trace, review, approvals,
+   existing tests changed). A comment on the pull
    request shows the verdict and the table above.
 2. Make `gates` a required check, and `lockflight/judge` too once the team makes red commits.
 3. Route the policy and the workflow to a code owner. Without that, a pull request can change the workflow GitHub runs for
    it: [CI hardening](docs/guides/ci-hardening.md).
 4. For a review of record in CI, set the repository variable `LOCKFLIGHT_REVIEW` to `true` and the secret
-   `ANTHROPIC_API_KEY`. The reviewer runs the pull request's code, so use a spend-limited key scoped to CI.
+   `ANTHROPIC_API_KEY`. The reviewer runs the pull request's code, so use a spend-limited key scoped to CI. Under the
+   default preset a critical change (a policy file, a build-wide file such as `Directory.Build.props`, a new project, an
+   engine upgrade) needs this review and is `NOT-EARNED` without it.
 
 On Bitbucket, `init --ci-only --ci-platform bitbucket` writes the pipeline instead; it has not yet run on a live Bitbucket
 workspace. GitLab and Azure Pipelines templates are experimental: [CI on other platforms](docs/guides/ci-other-platforms.md).
