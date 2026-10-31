@@ -1,0 +1,6 @@
+{
+  "schema": "lockflight.ci-review/v1",
+  "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "verdict": "FAIL",
+  "why": 3
+}

@@ -31,7 +31,7 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     public const string CommentFileName = "comment.md";
     public const string SummaryFileName = "summary.md";
 
-    /// <summary>The review job's result file the report joins: <c>lockflight.ci-review/v1</c>.</summary>
+    /// <summary>The review job's result file the report joins: <c>lockflight.ci-review/v1</c> (<see cref="CiReviewResult"/>).</summary>
     public const string ReviewFileName = "review-result.json";
 
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
@@ -139,6 +139,11 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             return Missing(head, $"the judge's evidence is about another head ({TerminalText.Clean(evidence["head"]?.GetValue<string>() ?? "none")}), not {head}: an artifact from another run", CheckVerdict.Error);
         }
 
+        if (EvidenceShape.Problem(evidence) is string shape)
+        {
+            return Missing(head, $"the judge's evidence does not have the expected shape: {shape}", CheckVerdict.Error);
+        }
+
         List<CheckResult> checks = [];
         foreach (JsonNode? node in evidence["checks"]?.AsArray() ?? [])
         {
@@ -229,6 +234,11 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         if (review is null)
         {
             return check with { Verdict = CheckVerdict.Skipped, Why = "no review ran (no API key configured, a fork, or the review job was skipped)" };
+        }
+
+        if (CiReviewResult.Problem(review) is string problem)
+        {
+            return check with { Verdict = CheckVerdict.Error, Why = $"the review's result is not {CiReviewResult.Schema}: {problem}" };
         }
 
         if (review["head"]?.GetValue<string>() != head)
