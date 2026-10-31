@@ -12,6 +12,8 @@ namespace Lockflight.Cli.Ci;
 /// (<c>verdict.json</c>), the PR comment (<c>comment.md</c>, within GitHub's limit) and the job summary (<c>summary.md</c>). The exit
 /// code is the verdict of <c>--context</c> (<c>gates</c> or <c>lockflight/judge</c>), else of the whole run. A missing judge
 /// artifact is NOT-EARNED ("the judge did not finish"); evidence about another head is ERROR; a review about another head is ignored.
+/// With <c>--base</c> (the target branch's tip, checked out, and the head fetched) the report re-plans the run from git and refuses
+/// evidence whose policy, engine, event, class, red commits or check levels disagree with it (<see cref="EvidenceCrossCheck"/>).
 /// </summary>
 internal sealed class CiReportCommand(CliContext context) : ICommand
 {
@@ -20,6 +22,10 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     public const string HeadOption = "--head";
     public const string ContextOption = "--context";
     public const string OutOption = "--out";
+    public const string BaseOption = "--base";
+    public const string BranchOption = "--branch";
+    public const string EventOption = "--event";
+    public const string PlatformOption = "--platform";
 
     public const string VerdictFileName = "verdict.json";
     public const string CommentFileName = "comment.md";
@@ -54,9 +60,26 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             only = parsed;
         }
 
-        JsonObject verdict = Join(Read(Path.GetFullPath(Path.Combine(evidenceDirectory, CiEvidence.FileName), context.WorkingDirectory)), head,
-            options.Value(ReviewOption) is string review ? Read(Path.GetFullPath(Path.Combine(review, ReviewFileName), context.WorkingDirectory)) : null);
         string output = Path.GetFullPath(outDirectory, context.WorkingDirectory);
+        JsonObject? evidence = Read(Path.GetFullPath(Path.Combine(evidenceDirectory, CiEvidence.FileName), context.WorkingDirectory));
+        JsonObject verdict = Join(evidence, head,
+            options.Value(ReviewOption) is string review ? Read(Path.GetFullPath(Path.Combine(review, ReviewFileName), context.WorkingDirectory)) : null);
+        if (options.Value(BaseOption) is string baseCommit && verdict["judge"]?.GetValue<string>() != "missing")
+        {
+            if (!CommitIds.IsFull(baseCommit) || JudgeEventNames.Parse(options.Value(EventOption) ?? "pr") is not JudgeEvent judgeEvent
+                || JudgePlatformNames.Parse(options.Value(PlatformOption) ?? JudgePlatformNames.ToName(JudgePlatform.GitHub)) is not JudgePlatform platform)
+            {
+                await context.Error.WriteLineAsync($"lockflight ci report: {BaseOption} must be a full commit id, {EventOption} pr, push or merge-group, {PlatformOption} {JudgePlatformNames.Accepted}");
+                return ExitCode.Config;
+            }
+
+            JudgeInputs inputs = new(context.WorkingDirectory, head, baseCommit, options.Value(BranchOption), platform, judgeEvent, output, null, ReviewExpected: true);
+            if (await EvidenceCrossCheck.MismatchAsync(evidence!, inputs, context.Environment, cancellationToken) is string mismatch)
+            {
+                verdict = Missing(head, $"the judge's evidence does not match what the report works out from git: {mismatch}", CheckVerdict.Error);
+            }
+        }
+
         JsonFiles.Write(Path.Combine(output, VerdictFileName), verdict);
         string comment;
         string summary;
