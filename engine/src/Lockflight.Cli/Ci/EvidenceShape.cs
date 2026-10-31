@@ -6,7 +6,8 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// The structure of <c>lockflight.ci-evidence/v1</c> the report passes on into the verdict of record, beyond the checks it reads
-/// itself: the event a string, the change class, feature and host-tampering sections objects or null, the cycles an array, the
+/// itself: the event a string, the change class, feature and host-tampering sections objects or null, the cycles an array, the red commits
+/// objects, no <c>judge</c> field (the report's own), the
 /// embedded gate result a <c>lockflight.result/v1</c> object, and the embedded blocked report a valid <c>lockflight.blocked/v1</c>
 /// (read by the engine's own reader). Evidence that fails it is an ERROR, never a verdict.json that breaks the schema.
 /// </summary>
@@ -36,6 +37,17 @@ internal static class EvidenceShape
             {
                 return $"'{property}' must be an array or null";
             }
+        }
+
+        if (evidence["redCommits"] is JsonArray reds && reds.Any(red => red is not JsonObject))
+        {
+            return "'redCommits' must hold objects";
+        }
+
+        if (evidence.ContainsKey("judge"))
+        {
+            // Only the report writes it, for an artifact it could not read; the judge never does.
+            return "'judge' is the report's own field";
         }
 
         if (evidence["gates"] is JsonNode gates && (gates is not JsonObject result || result["schema"] is not JsonValue schema || schema.GetValueKind() != JsonValueKind.String

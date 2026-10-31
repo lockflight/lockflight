@@ -287,9 +287,13 @@ runs:
         if [ "$LF_REPLAN" = "true" ] && [ -n "$LF_BASE" ]; then
           # Which checks are required needs no build: the report re-plans from git and refuses evidence that disagrees. The
           # checkout holds the target branch's tip; the head and the full history are fetched as data, never checked out.
-          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$LF_TOKEN" | base64 | tr -d '\n')"
-          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then git -c "http.extraheader=$auth" fetch --quiet --no-tags --unshallow origin || true; fi
-          if ! git cat-file -e "$LF_HEAD^{commit}" 2>/dev/null; then git -c "http.extraheader=$auth" fetch --quiet --no-tags origin "$LF_HEAD" || true; fi
+          # The token reaches git through its environment, never its command line, and its encoded form is masked in the log.
+          encoded=$(printf 'x-access-token:%s' "$LF_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$encoded"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $encoded"
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then git fetch --quiet --no-tags --unshallow origin || true; fi
+          if ! git cat-file -e "$LF_HEAD^{commit}" 2>/dev/null; then git fetch --quiet --no-tags origin "$LF_HEAD" || true; fi
+          unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
           args=(--base "$LF_BASE" --event "$LF_EVENT" --platform github)
           if [ -n "$LF_BRANCH" ]; then args+=(--branch "$LF_BRANCH"); fi
         fi

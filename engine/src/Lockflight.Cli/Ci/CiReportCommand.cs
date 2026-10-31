@@ -64,7 +64,8 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         JsonObject? evidence = Read(Path.GetFullPath(Path.Combine(evidenceDirectory, CiEvidence.FileName), context.WorkingDirectory));
         JsonObject verdict = Join(evidence, head,
             options.Value(ReviewOption) is string review ? Read(Path.GetFullPath(Path.Combine(review, ReviewFileName), context.WorkingDirectory)) : null);
-        if (options.Value(BaseOption) is string baseCommit && verdict["judge"]?.GetValue<string>() != "missing")
+        // Join returns the evidence itself only when it read it as the judge's; anything else is already an ERROR or NOT-EARNED.
+        if (options.Value(BaseOption) is string baseCommit && ReferenceEquals(verdict, evidence))
         {
             if (!CommitIds.IsFull(baseCommit) || JudgeEventNames.Parse(options.Value(EventOption) ?? "pr") is not JudgeEvent judgeEvent
                 || JudgePlatformNames.Parse(options.Value(PlatformOption) ?? JudgePlatformNames.ToName(JudgePlatform.GitHub)) is not JudgePlatform platform)
@@ -73,8 +74,20 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
                 return ExitCode.Config;
             }
 
-            JudgeInputs inputs = new(context.WorkingDirectory, head, baseCommit, options.Value(BranchOption), platform, judgeEvent, output, null, ReviewExpected: true);
-            if (await EvidenceCrossCheck.MismatchAsync(evidence!, inputs, context.Environment, cancellationToken) is string mismatch)
+            // A push without a usable previous commit was judged without a base: the policy step then names the head itself.
+            string? planBase = judgeEvent != JudgeEvent.PullRequest && baseCommit == head ? null : baseCommit;
+            JudgeInputs inputs = new(context.WorkingDirectory, head, planBase, options.Value(BranchOption), platform, judgeEvent, output, null, ReviewExpected: true);
+            string? mismatch;
+            try
+            {
+                mismatch = await EvidenceCrossCheck.MismatchAsync(evidence!, inputs, context.Environment, cancellationToken);
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or FormatException or JsonException or KeyNotFoundException)
+            {
+                mismatch = $"it does not have the expected shape ({exception.Message})";
+            }
+
+            if (mismatch is not null)
             {
                 verdict = Missing(head, $"the judge's evidence does not match what the report works out from git: {mismatch}", CheckVerdict.Error);
             }

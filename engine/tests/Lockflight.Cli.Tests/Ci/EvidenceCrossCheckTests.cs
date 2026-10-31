@@ -50,6 +50,26 @@ public sealed class EvidenceCrossCheckTests : IAsyncLifetime
         Assert.Contains($"it has {id} off, and the plan makes it required", await MismatchAsync(evidence), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("red")]
+    [InlineData("tests.sinceRed")]
+    public async Task EvidenceThatPassesACheckWithoutARedCommitIsRefused(string id)
+    {
+        JsonObject evidence = await EvidenceAsync();
+        evidence["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == id)!["verdict"] = "PASS";
+
+        Assert.Contains($"it has {id} PASS, and git alone makes it NOT-EARNED", await MismatchAsync(evidence), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EvidenceWithoutTheEngineVersionIsRefused()
+    {
+        JsonObject evidence = await EvidenceAsync();
+        evidence.Remove("engine");
+
+        Assert.Contains("it was written by engine none", await MismatchAsync(evidence), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task EvidenceJudgedWithAnotherPolicyIsRefused()
     {
@@ -87,6 +107,25 @@ public sealed class EvidenceCrossCheckTests : IAsyncLifetime
         Assert.StartsWith("ERROR", output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task EvidenceThatCallsItselfMissingIsStillCrossChecked()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        JsonObject evidence = await EvidenceAsync();
+        evidence["judge"] = "missing";
+        evidence["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == "red")!["requirement"] = "off";
+        string evidenceDirectory = Path.Combine(repository.Root, "out", "evidence");
+        Directory.CreateDirectory(evidenceDirectory);
+        await File.WriteAllTextAsync(Path.Combine(evidenceDirectory, CiEvidence.FileName), evidence.ToJsonString(), cancellationToken);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(
+            ["ci", "report", "--evidence", evidenceDirectory, "--head", head, "--base", baseCommit, "--event", "pr", "--platform", "github", "--out", Path.Combine(repository.Root, "out", "verdict")],
+            string.Empty, repository.Root);
+
+        Assert.Equal(ExitCode.Error, exitCode);
+        Assert.StartsWith("ERROR", output, StringComparison.Ordinal);
+    }
+
     private async Task<JudgePlan> PlanAsync()
     {
         JudgeInputs inputs = new(repository.Root, head, baseCommit, "012-prices", JudgePlatform.GitHub, JudgeEvent.PullRequest, Path.Combine(repository.Root, "out"), null, ReviewExpected: true);
@@ -95,7 +134,8 @@ public sealed class EvidenceCrossCheckTests : IAsyncLifetime
         return planning.Plan;
     }
 
-    /// <summary>Evidence as the judge would write it for this plan: its policy, engine, event, class, red commits and levels, every check passing.</summary>
+    /// <summary>Evidence as the judge would write it for this plan: its policy, engine, event, class, red commits and levels, every check passing
+    /// unless git alone decides it.</summary>
     private async Task<JsonObject> EvidenceAsync()
     {
         JudgePlan plan = await PlanAsync();
@@ -112,7 +152,7 @@ public sealed class EvidenceCrossCheckTests : IAsyncLifetime
             {
                 ["id"] = CheckIdNames.ToName(level.Key),
                 ["context"] = StatusContextNames.ToName(new CheckResult(level.Key, level.Value, CheckVerdict.Pass, "ok").Context),
-                ["verdict"] = level.Value == CheckLevel.Off ? "N/A" : "PASS",
+                ["verdict"] = level.Value == CheckLevel.Off ? "N/A" : CheckVerdictNames.ToName(EvidenceCrossCheck.PlannedVerdict(plan, level.Key) ?? CheckVerdict.Pass),
                 ["requirement"] = CheckLevelNames.ToName(level.Value),
                 ["why"] = "ok",
             })]),
