@@ -114,7 +114,8 @@ internal static partial class HostTamperingScanner
         return method.GetCustomAttributes().Any(handle => AttributeName(reader, reader.GetCustomAttribute(handle).Constructor) == "System.Runtime.CompilerServices.ModuleInitializerAttribute");
     }
 
-    private static TamperingBody Read(MetadataReader reader, BlobReader il, TypeDefinitionHandle owner, string key, bool constructor)
+    /// <summary>Walks one method body's IL: the calls, strings, fields and stores in it. Internal so a test can hand it IL bytes.</summary>
+    internal static TamperingBody Read(MetadataReader reader, BlobReader il, TypeDefinitionHandle owner, string key, bool constructor)
     {
         TamperingBody body = new(owner, key, [], [], [], [], new HashSet<string>(StringComparer.Ordinal), new HashSet<string>(StringComparer.Ordinal))
         {
