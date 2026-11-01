@@ -52,7 +52,7 @@ internal static class CiShellScripts
     private const string SdkImageDotnetRoot = "/usr/share/dotnet";
 
     /// <summary>
-    /// Restores the policy from <c>$BASE</c>: a PR cannot loosen the checks that judge it. The policy files are the committed bytes
+    /// Restores the policy from <c>$BASE</c>, so the checks that judge a PR are read from its base, not the PR. The policy files are the committed bytes
     /// (<c>git show</c>, as the GitHub action reads them), so a checkout's line-ending conversion cannot change the install script
     /// CI hashes against the lock; a file is removed first, so a symbolic link the pull request put there is replaced, not written through.
     /// </summary>
