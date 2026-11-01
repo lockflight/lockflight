@@ -169,19 +169,12 @@ internal static class PolicyLoosening
 
     private static void Removed(List<string> found, string key, IReadOnlyList<string> before, IReadOnlyList<string> after)
     {
-        string[] removed = [.. before.Except(after, StringComparer.Ordinal)];
-        if (removed.Length > 0)
-        {
-            found.Add($"{key}: removed {string.Join(", ", removed)}");
-        }
+        // One line per path, so a long list stays readable line by line in the comment and the evidence.
+        found.AddRange(before.Except(after, StringComparer.Ordinal).Select(path => $"{key}: removed {path}"));
     }
 
     private static void Added(List<string> found, string key, IReadOnlyList<string> before, IReadOnlyList<string> after)
     {
-        string[] added = [.. after.Except(before, StringComparer.Ordinal)];
-        if (added.Length > 0)
-        {
-            found.Add($"{key}: added {string.Join(", ", added)}");
-        }
+        found.AddRange(after.Except(before, StringComparer.Ordinal).Select(path => $"{key}: added {path}"));
     }
 }

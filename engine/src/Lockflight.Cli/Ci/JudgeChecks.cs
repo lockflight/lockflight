@@ -116,8 +116,18 @@ internal static class JudgeChecks
         return new CheckResult(CheckId.Trace, resolved, trace.Verdict, trace.Why);
     }
 
-    private static string LoosenedWhy(IReadOnlyList<string> loosened) =>
-        $"looser than the base ({loosened.Count}): {string.Join("; ", loosened)}; a person tightens it back or merges through the platform";
+    /// <summary>
+    /// The loosenings in one line when they fit the evidence's cap; otherwise their count, and the full list stays in the evidence's
+    /// <c>policy.loosened</c> and the comment's "Policy loosened" section.
+    /// </summary>
+    private static string LoosenedWhy(IReadOnlyList<string> loosened)
+    {
+        const string Remedy = "a person tightens it back or merges through the platform";
+        string full = $"looser than the base ({loosened.Count}): {string.Join("; ", loosened)}; {Remedy}";
+        return full.Length <= CiEvidence.MaxTextLength
+            ? full
+            : $"looser than the base in {loosened.Count} ways, each listed under policy.loosened; {Remedy}";
+    }
 
     private static string NoRedWhy(JudgePlan plan)
     {

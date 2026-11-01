@@ -127,6 +127,11 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/ci-judge.sh "$RUNNER_TEMP/ci-judge"
+      # Runs inside a required job but only on Linux, to keep the added time to about half a minute.
+      - name: QUICKSTART on samples/dotnet-single (init --ci-only, red, green, PASS; then FAIL), time to first green
+        if: runner.os == 'Linux'
+        shell: bash
+        run: ENGINE="$PWD/out/lockflight" bash tests/e2e/quickstart.sh "$RUNNER_TEMP/quickstart"
       - name: Workspace gates end to end (units, VSTest and MTP, per-unit stop cache)
         shell: bash
         run: |

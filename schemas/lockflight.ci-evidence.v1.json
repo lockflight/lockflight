@@ -112,6 +112,9 @@
         },
         "restored": {
           "$ref": "#/$defs/strings"
+        },
+        "loosened": {
+          "$ref": "#/$defs/strings"
         }
       }
     },

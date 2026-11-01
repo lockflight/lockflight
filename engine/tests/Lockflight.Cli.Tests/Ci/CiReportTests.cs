@@ -156,6 +156,21 @@ public sealed class CiReportTests : IDisposable
     }
 
     [Fact]
+    public void TheCommentListsThirtyLooseningsInFullAndCountsTheRest()
+    {
+        JsonObject evidence = Evidence();
+        string[] loosened = [.. Enumerable.Range(1, 40).Select(index => $"protected: removed src/Services/Module{index:D2}/Internal/**")];
+        evidence["policy"]!["loosened"] = new JsonArray([.. loosened.Select(setting => (JsonNode?)setting)]);
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("<details open><summary>Policy loosened (40)</summary>", comment, StringComparison.Ordinal);
+        Assert.All(loosened[..30], setting => Assert.Contains($"- {CommentText.Plain(setting)}\n", comment, StringComparison.Ordinal));
+        Assert.DoesNotContain(CommentText.Plain(loosened[30]), comment, StringComparison.Ordinal);
+        Assert.Contains("- and 10 more in the evidence's policy.loosened\n", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheSpecDiffComesFirstAndItsTextCannotCloseItsFence()
     {
         JsonObject evidence = Evidence();

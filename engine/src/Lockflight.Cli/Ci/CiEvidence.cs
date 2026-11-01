@@ -24,6 +24,9 @@ internal static class CiEvidence
     /// <summary>The longest string from the pull request kept in evidence; longer ones are cut and end with an ellipsis.</summary>
     public const int MaxTextLength = 300;
 
+    /// <summary>The most policy loosenings kept in evidence; past it, one last line counts the rest.</summary>
+    public const int MaxLoosened = 200;
+
     /// <param name="engineSha256">The target branch's engine lock hash of this engine (<see cref="JudgeEngineHash"/>); null without one.</param>
     public static JsonObject Build(JudgeRun run, string engineVersion, string runtimeIdentifier, string? engineSha256)
     {
@@ -49,6 +52,7 @@ internal static class CiEvidence
                 ["from"] = plan.Policy.Commit,
                 ["manifestSha256"] = plan.Policy.ManifestSha256,
                 ["restored"] = Strings(plan.Policy.Files),
+                ["loosened"] = Strings(Loosened(plan.Loosened ?? [])),
             },
             ["ignored"] = Strings(plan.Ignored.Select(Cap)),
             ["feature"] = run.Findings.Trace?.Spec is { FeatureId: string featureId } spec
@@ -294,6 +298,12 @@ internal static class CiEvidence
         ["requirement"] = CheckLevelNames.ToName(check.Level),
         ["why"] = Cap(check.Why),
     };
+
+    /// <summary>The loosenings, each capped (a path comes from the pull request's manifest), and at most <see cref="MaxLoosened"/>.</summary>
+    private static IEnumerable<string> Loosened(IReadOnlyList<string> loosened) =>
+        loosened.Count <= MaxLoosened
+            ? loosened.Select(Cap)
+            : loosened.Take(MaxLoosened - 1).Select(Cap).Append($"and {loosened.Count - MaxLoosened + 1} more");
 
     private static JsonArray Strings(IEnumerable<string> values) => new([.. values.Select(value => (JsonNode?)value)]);
 

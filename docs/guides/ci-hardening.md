@@ -335,7 +335,9 @@ what its CI needs:
 | `.github/workflows/lockflight-gates.yml` | Generated policy too: an edited copy is drift, and sync rewrites it. |
 
 The workflow restores the policy, the pin, the baselines and the code-style config from the unit's base branch, as the
-single-repository workflow does. A pull request in the unit therefore cannot loosen what judges it.
+single-repository workflow does, so a pull request in the unit is judged by its base branch's rules. That holds as a
+boundary only where the check is required and the workflow is under code-owner review; the verdict itself is a strong
+guardrail, and it blocks a merge only where the platform requires the check.
 
 - **Engine install:** as in the single-repository workflow, the engine is installed with `dotnet tool install --tool-path`
   outside the repository and run directly. A `global.json` that pins SDK 8 cannot restore the engine package.

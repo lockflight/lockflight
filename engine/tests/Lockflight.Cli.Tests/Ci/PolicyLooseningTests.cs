@@ -77,6 +77,26 @@ public sealed class PolicyLooseningTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ManyLooseningsKeepTheWhyShortAndEveryOneInThePlan()
+    {
+        string[] paths = [.. Enumerable.Range(1, 15).Select(index => $"src/Services/Module{index:D2}/Internal/**")];
+        string widened = BasePolicy.Replace("  - deploy/**\napprovals:", string.Concat(paths.Select(path => $"  - {path}\n")) + "  - deploy/**\napprovals:", StringComparison.Ordinal);
+        await repository.CheckoutAsync("main", TestContext.Current.CancellationToken);
+        await repository.Write(Manifest.FileName, widened + "\n").CommitAsync("chore: more protected", TestContext.Current.CancellationToken);
+        baseCommit = await repository.HeadAsync(TestContext.Current.CancellationToken);
+        await repository.CheckoutNewAsync("015-policy", TestContext.Current.CancellationToken);
+        await repository.Write(Manifest.FileName, BasePolicy + "\n").CommitAsync("chore: policy", TestContext.Current.CancellationToken);
+
+        JudgePlan plan = await PlanAsync();
+        CheckResult check = JudgeChecks.Decide(plan, JudgeFindings.None).Single(result => result.Id == CheckId.Policy);
+
+        Assert.Equal(CheckVerdict.Fail, check.Verdict);
+        Assert.True(check.Why.Length <= CiEvidence.MaxTextLength, check.Why);
+        Assert.Contains("looser than the base in 15 ways, each listed under policy.loosened", check.Why, StringComparison.Ordinal);
+        Assert.Equal(paths.Select(path => $"protected: removed {path}"), plan.Loosened);
+    }
+
+    [Fact]
     public async Task ARemovedManifestIsALoosening()
     {
         repository.Delete(Manifest.FileName);
@@ -157,13 +177,16 @@ public sealed class PolicyLooseningTests : IAsyncLifetime
         return result.Manifest;
     }
 
-    private async Task<CheckResult> PolicyCheckAsync()
+    private async Task<CheckResult> PolicyCheckAsync() =>
+        JudgeChecks.Decide(await PlanAsync(), JudgeFindings.None).Single(result => result.Id == CheckId.Policy);
+
+    private async Task<JudgePlan> PlanAsync()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         string head = await repository.HeadAsync(cancellationToken);
         JudgeInputs inputs = new(repository.Root, head, baseCommit, "013-policy", JudgePlatform.GitHub, JudgeEvent.PullRequest, Path.Combine(repository.Root, "out"), null, ReviewExpected: false);
         JudgePlanning planning = await JudgePlanner.PlanAsync(inputs, EnvironmentReader.Of(new Dictionary<string, string>()), cancellationToken);
         Assert.True(planning.Plan is not null, planning.Error);
-        return JudgeChecks.Decide(planning.Plan, JudgeFindings.None).Single(result => result.Id == CheckId.Policy);
+        return planning.Plan;
     }
 }

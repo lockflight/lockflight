@@ -20,7 +20,8 @@
     "manifestSha256": null,
     "restored": [
       "lockflight.yaml"
-    ]
+    ],
+    "loosened": []
   },
   "ignored": [
     ".specify/feature.json"
