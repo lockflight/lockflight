@@ -111,6 +111,9 @@ public sealed class ContractSchemaSyncTests : IDisposable
 
         Assert.False(Accepts(CiEvidenceId, Embedding(evidence, "gates", new JsonObject { ["schema"] = "lockflight.result/v1" })), "the embedded gate result is not checked");
         Assert.False(Accepts(CiEvidenceId, Embedding(evidence, "blocked", new JsonObject { ["schema"] = "lockflight.blocked/v1" })), "the embedded blocked report is not checked");
+        JsonObject policy = evidence["policy"]!.DeepClone().AsObject();
+        policy["loosened"] = new JsonArray(1);
+        Assert.False(Accepts(CiEvidenceId, Embedding(evidence, "policy", policy)), "policy.loosened is not checked");
     }
 
     [Fact]

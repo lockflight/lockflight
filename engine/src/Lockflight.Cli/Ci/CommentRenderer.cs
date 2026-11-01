@@ -23,6 +23,9 @@ internal static class CommentRenderer
 
     private const int MaxSpecDiffPaths = 3;
 
+    /// <summary>The most loosenings the comment lists, so the section leaves room for the others.</summary>
+    private const int MaxLoosenedShown = 30;
+
     /// <summary>The order the Next line looks for the first required check that did not pass.</summary>
     private static readonly string[] NextOrder = ["policy", "red", "tests.sinceRed", "tests.existingChanged", "tests.hostTampering", "green", "gates", "trace", "review", "approvals"];
 
@@ -138,6 +141,22 @@ internal static class CommentRenderer
 
     private static IEnumerable<string> Sections(JsonNode verdict)
     {
+        if (verdict["policy"]?["loosened"]?.AsArray() is { Count: > 0 } loosened)
+        {
+            StringBuilder list = new($"<details open><summary>Policy loosened ({loosened.Count})</summary>\n\n");
+            foreach (JsonNode? setting in loosened.Take(MaxLoosenedShown))
+            {
+                list.Append($"- {CommentText.Plain(setting?.GetValue<string>())}\n");
+            }
+
+            if (loosened.Count > MaxLoosenedShown)
+            {
+                list.Append($"- and {loosened.Count - MaxLoosenedShown} more in the evidence's policy.loosened\n");
+            }
+
+            yield return list.Append("\n</details>\n").ToString();
+        }
+
         JsonArray cycles = verdict["cycles"]?.AsArray() ?? [];
         if (cycles.Count > 0)
         {
