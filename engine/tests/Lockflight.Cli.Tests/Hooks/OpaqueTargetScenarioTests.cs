@@ -47,7 +47,7 @@ public sealed class OpaqueTargetScenarioTests : IDisposable
     [InlineData("find . -name '*.tmp' -exec rm {} +")]
     [InlineData("python3 -c \"open('secrets/key.txt', 'w').write('x')\"")]
     [InlineData("bash -c \"bash -c 'rm secrets/key.txt'\"")]
-    [InlineData("cd secrets && rm key.txt")]
+    [InlineData("cd $DIR && rm key.txt")]
     public async Task OpaqueBashTargetsAreAllowed(string command)
     {
         (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
@@ -64,6 +64,7 @@ public sealed class OpaqueTargetScenarioTests : IDisposable
     [InlineData("echo x > secrets/{a,b}")]
     [InlineData("cp x src/*.props")]
     [InlineData("bash -c 'rm secrets/key.txt'")]
+    [InlineData("cd secrets && rm key.txt")]
     public async Task ResolvedBashTargetsStayBlocked(string command)
     {
         Dictionary<string, string> environment = new() { [EnvironmentVariables.Home] = projectRoot.FullName };
@@ -158,6 +159,7 @@ public sealed class OpaqueTargetScenarioTests : IDisposable
     [InlineData("sed -i 's/5m/6m/' test/Shop.Tests/*.cs")]
     [InlineData("git checkout -- test")]
     [InlineData("echo x > test/Shop.Tests/ShippingTests.cs")]
+    [InlineData("cd test/Shop.Tests && rm ShippingTests.cs")]
     public async Task CommonWritesToALockedTestAreBlockedDuringRed(string command)
     {
         OpenRedCycle();
@@ -170,7 +172,7 @@ public sealed class OpaqueTargetScenarioTests : IDisposable
 
     [Theory]
     [InlineData("python3 -c \"open('test/Shop.Tests/ShippingTests.cs', 'w')\"")]
-    [InlineData("cd test/Shop.Tests && rm ShippingTests.cs")]
+    [InlineData("cd $DIR && rm ShippingTests.cs")]
     [InlineData("ls test/Shop.Tests/*.cs | xargs rm")]
     public async Task OpaqueWritesToALockedTestAreAllowed(string command)
     {

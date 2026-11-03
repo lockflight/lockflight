@@ -153,12 +153,63 @@ public sealed class ShellWriteFormsTests
     }
 
     [Fact]
-    public void ARelativePathAfterACdIsTakenAsWritten()
+    public void ARelativePathAfterACdIsTakenAsWrittenAndInTheFolderMovedTo()
     {
         ShellWrites writes = ShellWriteTargets.Find("cd tests && echo x > T.cs", ShellDialect.Posix);
 
-        Assert.Equal(["T.cs"], writes.Files);
+        Assert.Equal(["T.cs", "tests/T.cs"], writes.Files);
     }
+
+    [Theory]
+    [InlineData("cd src/App && cd ../Lib && rm a.cs", "src/App/../Lib/a.cs")]
+    [InlineData("cd -L -- tests && rm a.cs", "tests/a.cs")]
+    [InlineData("eval 'cd tests'; rm a.cs", "tests/a.cs")]
+    [InlineData("eval cd tests && rm a.cs", "tests/a.cs")]
+    [InlineData("pushd tests && pushd $X && popd && rm a.cs", "tests/a.cs")]
+    [InlineData("cd '' && cd tests && rm a.cs", "tests/a.cs")]
+    [InlineData("pushd tests && pushd A && popd && rm a.cs", "tests/a.cs")]
+    [InlineData("cd tests && bash -c 'cd A && rm a.cs'", "tests/A/a.cs")]
+    [InlineData("cd \"$HOME/x\" && rm a.cs", "$HOME/x/a.cs")]
+    public void AMoveIsFollowed(string command, string expectedTarget) =>
+        Assert.Contains(expectedTarget, ShellWriteTargets.Find(command, ShellDialect.Posix).Files);
+
+    [Theory]
+    [InlineData("cd $X && rm a.cs")]
+    [InlineData("cd - && rm a.cs")]
+    [InlineData("cd src* && rm a.cs")]
+    [InlineData("(cd tests) && rm a.cs")]
+    [InlineData("echo $(cd tests && pwd) && rm a.cs")]
+    [InlineData("bash -c 'cd tests' && rm a.cs")]
+    [InlineData("pushd && rm a.cs")]
+    [InlineData("pushd +1 && rm a.cs")]
+    [InlineData("cd && rm a.cs")]
+    [InlineData("pushd tests && popd -n && popd && rm a.cs")]
+    public void AMoveTheGuardCannotNameLeavesTargetsAsWritten(string command) =>
+        Assert.Equal(["a.cs"], ShellWriteTargets.Find(command, ShellDialect.Posix).Files);
+
+    [Theory]
+    [InlineData("Set-Location -LiteralPath tests; Remove-Item a.cs", "tests/a.cs")]
+    [InlineData("Push-Location tests; Pop-Location; sl src; Remove-Item a.cs", "src/a.cs")]
+    [InlineData("cd C:\\repo; Remove-Item a.cs", "C:\\repo/a.cs")]
+    [InlineData("iex 'Set-Location tests'; Remove-Item a.cs", "tests/a.cs")]
+    [InlineData("$(Set-Location tests); Remove-Item a.cs", "tests/a.cs")]
+    [InlineData("(Set-Location tests); Remove-Item a.cs", "tests/a.cs")]
+    [InlineData("Set-Location -ErrorAction Stop tests; Remove-Item a.cs", "tests/a.cs")]
+    [InlineData("Set-Location -ea Stop -PassThru tests; Remove-Item a.cs", "tests/a.cs")]
+    [InlineData("Set-Location -Path:tests; Remove-Item a.cs", "tests/a.cs")]
+    [InlineData("Push-Location -StackName s tests; Remove-Item a.cs", "tests/a.cs")]
+    [InlineData("Push-Location tests; Push-Location src; Pop-Location -PassThru; Remove-Item a.cs", "tests/a.cs")]
+    public void APowerShellMoveIsFollowed(string command, string expectedTarget) =>
+        Assert.Contains(expectedTarget, ShellWriteTargets.Find(command, ShellDialect.PowerShell).Files);
+
+    [Theory]
+    [InlineData("Set-Location Env:; Remove-Item a.cs")]
+    [InlineData("Set-Location -StackName s; Remove-Item a.cs")]
+    [InlineData("cd; Remove-Item a.cs")]
+    [InlineData("Set-Location C:; Remove-Item a.cs")]
+    [InlineData("Set-Location -ErrorAction Stop; Remove-Item a.cs")]
+    public void APowerShellMoveTheGuardCannotNameLeavesTargetsAsWritten(string command) =>
+        Assert.Equal(["a.cs"], ShellWriteTargets.Find(command, ShellDialect.PowerShell).Files);
 
     [Fact]
     public void ASubshellTargetCarriesNoParenthesis()

@@ -27,6 +27,7 @@ public sealed class ShellWriteTargetsTests
     [InlineData("git stash -- tests/A.cs", "tests/A.cs")]
     [InlineData("git stash push -m wip tests/A.cs", "tests/A.cs")]
     [InlineData("git -C tests checkout -- A.cs", "tests/A.cs")]
+    [InlineData("(cd tests && rm T.cs)", "tests/T.cs")]
     [InlineData("(cd tests && rm T.cs)", "T.cs")]
     public void VisibleWritesAreFound(string command, string expectedTarget) =>
         Assert.Contains(expectedTarget, ShellWriteTargets.Find(command, ShellDialect.Posix).Files);
