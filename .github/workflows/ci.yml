@@ -55,7 +55,7 @@ jobs:
       # The canary suite (trait Category=Canary) runs in the canaries jobs.
       - name: Unit tests
         working-directory: engine
-        run: dotnet test --filter-not-trait "Category=Canary" --report-xunit --results-directory "$RUNNER_TEMP/unit-results"
+        run: dotnet test --filter-not-trait "Category=Canary" --report-xunit-trx --results-directory "$RUNNER_TEMP/unit-results"
       # Each test's duration, to keep the slow ones visible and the test shards balanced.
       - name: Upload the unit test report
         if: always()
