@@ -190,7 +190,10 @@ The block is intended even when the commit you want to drop touched no protected
 message names what to run instead. For a reset: `git revert <commit>` undoes a commit with a new one (when the commit changed
 no protected file), and `git restore --source <commit> --staged --worktree -- <files>` takes named files back from a commit.
 The others name their files the same way: `git restore --staged -- <files>`, `git clean -f -- <files>`,
-`git stash push -- <files>`. Name only files no protected rule covers.
+`git stash push --include-untracked -- <files>`. Name only files no protected rule covers. `git stash pop` is blocked for the
+same reason; take the files back by name: `git checkout "stash@{0}" -- <files>` for changed files and
+`git checkout "stash@{0}^3" -- <files>` for files that were untracked (both stage them; `git restore --staged -- <files>`
+unstages), then check `git status` before `git stash drop`.
 
 ## A shell write is allowed although it touches a protected file
 
@@ -340,8 +343,10 @@ separate terminal window (`.lockflight/bin/lockflight approve spec` or `approve 
 The review of record is a review of a commit. The run found files in the paths the review reads (the diff's paths and the
 feature's `spec.md`) that differ from HEAD: changed or staged files, which the diff shows but no commit holds, and untracked
 files, which the diff does not show at all. The run is still reviewed and recorded, and its findings count, but it is not the
-review of record. Commit the files that belong to the change, stash or delete the rest (`git stash -u` also stashes untracked
-files), and run `review` again. Files git ignores, `.lockflight/`, `.claude/worktrees/`, untracked `bin/` and `obj/` folders and
+review of record. Commit the files that belong to the change, stash or delete the rest by name
+(`git stash push --include-untracked -- <files>`; a bare `git stash` rewrites the whole working tree, so the guard blocks it,
+and [the guard section](#git-reset---hard-is-blocked-this-command-may-rewrite-) says how to take them back), and run `review`
+again. Files git ignores, `.lockflight/`, `.claude/worktrees/`, untracked `bin/` and `obj/` folders and
 the other files under `specs/` never count. A local file that should never be committed belongs in `.gitignore` or
 `.git/info/exclude`.
 

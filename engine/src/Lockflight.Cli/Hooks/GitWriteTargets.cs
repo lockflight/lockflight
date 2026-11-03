@@ -17,8 +17,11 @@ internal static class GitWriteTargets
     private const string UnstageAdvice = "Name the files instead: 'git restore --staged -- <files>'.";
     private const string SwitchAdvice = "Discard the changes by name first, 'git restore --source HEAD --staged --worktree -- <files>', then switch without -f.";
     private const string CleanAdvice = "Name the files to delete instead: 'git clean -f -- <files>'.";
-    private const string StashAdvice = "Stash the files by name instead: 'git stash push -- <files>'.";
-    private const string UnstashAdvice = "Take the files from the stash by name instead: 'git checkout \"stash@{0}\" -- <files>'.";
+    private const string StashAdvice = "Stash the files by name instead: 'git stash push --include-untracked -- <files>'.";
+
+    private const string UnstashAdvice =
+        "Take the files from the stash by name instead: 'git checkout \"stash@{0}\" -- <files>' for changed files, 'git checkout \"stash@{0}^3\" -- <files>' "
+        + "for files that were untracked (both stage them: 'git restore --staged -- <files>' unstages), then check 'git status' before 'git stash drop'.";
 
     private static readonly HashSet<string> GitOptionsWithValue = ["-C", "-c", "--git-dir", "--work-tree", "--namespace"];
     private static readonly HashSet<string> ApplyReadOnlyFlags = ["--check", "--stat", "--numstat", "--summary"];

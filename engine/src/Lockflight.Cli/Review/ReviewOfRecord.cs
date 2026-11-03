@@ -103,7 +103,7 @@ internal static class ReviewOfRecord
         }
 
         return $"the working tree has changes that are not committed in the paths the review reads ({string.Join("; ", parts)}), so the run "
-            + "does not review a commit: commit them, or stash them ('git stash -u' also stashes untracked files), and review again "
+            + "does not review a commit: commit them, or stash them by name ('git stash push --include-untracked -- <files>'), and review again "
             + "(ignored files, .lockflight/ and .claude/worktrees/ do not count)";
     }
 

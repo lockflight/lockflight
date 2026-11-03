@@ -135,8 +135,10 @@ public sealed class GuardScenarioTests : IDisposable
     [InlineData("git switch -f main", "then switch without -f")]
     [InlineData("git checkout -f main", "then switch without -f")]
     [InlineData("git clean -fd", "'git clean -f -- <files>'")]
-    [InlineData("git stash", "'git stash push -- <files>'")]
+    [InlineData("git stash", "'git stash push --include-untracked -- <files>'")]
+    [InlineData("git stash -u", "'git stash push --include-untracked -- <files>'")]
     [InlineData("git stash pop", "'git checkout \"stash@{0}\" -- <files>'")]
+    [InlineData("git stash pop", "'git checkout \"stash@{0}^3\" -- <files>'")]
     [InlineData("git -C src/.. reset --hard", "'git revert <commit>'")]
     [InlineData("git checkout -- src/Api.cs && git reset --hard", "'git revert <commit>'")]
     [InlineData("rm -rf src/bin && git reset --hard", "'git revert <commit>'")]
@@ -185,7 +187,11 @@ public sealed class GuardScenarioTests : IDisposable
     [InlineData("git checkout HEAD~1 -- src/Api.cs")]
     [InlineData("git clean -f -- src/scratch.txt")]
     [InlineData("git stash push -- src/Api.cs")]
+    [InlineData("git stash push --include-untracked -- src/Api.cs src/New.cs")]
     [InlineData("git checkout \"stash@{0}\" -- src/Api.cs")]
+    [InlineData("git checkout \"stash@{0}^3\" -- src/New.cs")]
+    [InlineData("git restore --staged -- src/Api.cs src/New.cs")]
+    [InlineData("git stash drop")]
     [InlineData("git switch main")]
     public async Task TheGitCommandsTheBlockSuggestsAreAllowedForUnprotectedFiles(string command)
     {

@@ -88,7 +88,7 @@ public sealed class ReviewOfRecordTests
 
         Assert.Contains("the working tree has changes that are not committed", reason, StringComparison.Ordinal);
         Assert.Contains("4 uncommitted: src/Orders.cs, src/Prices.cs, src/Stock.cs and 1 more", reason, StringComparison.Ordinal);
-        Assert.Contains("commit them, or stash them", reason, StringComparison.Ordinal);
+        Assert.Contains("commit them, or stash them by name", reason, StringComparison.Ordinal);
         Assert.Contains("ignored files", reason, StringComparison.Ordinal);
     }
 
@@ -100,7 +100,8 @@ public sealed class ReviewOfRecordTests
         string reason = Assert.Single(ReviewOfRecord.Reasons(ReviewSettings.Default, "sonnet", 3m, new ReviewBase("main", Commit, "main", Commit), Whole, dirty));
 
         Assert.Contains("1 untracked, which the reviewer was not shown: src/New.cs", reason, StringComparison.Ordinal);
-        Assert.Contains("git stash -u", reason, StringComparison.Ordinal);
+        Assert.Contains("'git stash push --include-untracked -- <files>'", reason, StringComparison.Ordinal);
+        Assert.DoesNotContain("git stash -u", reason, StringComparison.Ordinal);
     }
 
     [Fact]
