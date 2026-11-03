@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Workspace;
 
@@ -97,6 +98,12 @@ internal sealed class CiCommand(CliContext context) : ICommand
         string? engineSha256 = await JudgeEngineHash.ReadAsync(plan, ToolPin.RunningVersion, RuntimeInformation.RuntimeIdentifier, cancellationToken);
         JsonFiles.Write(path, CiEvidence.Build(run, ToolPin.RunningVersion, RuntimeInformation.RuntimeIdentifier, engineSha256));
         await WriteSummaryAsync(run, path);
+        if (inputs.Platform == JudgePlatform.Local && run.Verdict == CheckVerdict.Pass
+            && await new FirstGreen(inputs.Root, context.Time).ReportPassAsync(cancellationToken) is string firstGreen)
+        {
+            await context.Output.WriteLineAsync(firstGreen);
+        }
+
         return CheckVerdictNames.ToExitCode(run.Verdict);
     }
 

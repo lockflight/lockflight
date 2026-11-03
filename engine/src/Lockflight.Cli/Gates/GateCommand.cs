@@ -116,6 +116,12 @@ internal sealed class GateCommand(CliContext context) : ICommand
             await new LedgerWriter(manifest.Root, context.Time).AppendAsync(GateRunEvents.Completed(result, gateRun), cancellationToken);
         }
 
+        if (manifest is not null && result.Verdict == Verdict.Pass
+            && await new FirstGreen(manifest.Root, context.Time).ReportPassAsync(cancellationToken) is string firstGreen)
+        {
+            await context.Output.WriteLineAsync(firstGreen);
+        }
+
         if (inputsHash is not null && VerdictNames.AllowsNextStep(result.Verdict))
         {
             await new StopGateCache(manifest!.Root, unitPath: null).RememberPassAsync(inputsHash, cancellationToken);
