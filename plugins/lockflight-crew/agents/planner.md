@@ -35,7 +35,10 @@ Free-form; no check reads it, but the tasks approval covers it, and the test aut
 - **Declared signatures:** a C# block with every public type and member the stories add or change, without bodies. These
   are the stubs the first task of each story declares and the tests call. Use the code's conventions (namespaces, records,
   injected `TimeProvider` for time, `CancellationToken` last).
-- **Files:** the production and test files each story touches.
+- **Files:** the production and test files each story touches. From the second story on, each story's tests go in new test
+  files of their own, never in a test file that existed when an earlier story's red was taken (that story's file, or one from
+  before the feature): the CI judge may rebuild an earlier story's red with such a file, and the later tests in it need code
+  that red does not have.
 
 ## tasks.md, the contract
 
@@ -49,7 +52,8 @@ Free-form; no check reads it, but the tasks approval covers it, and the test aut
 - **Tests first, per story.** Each story has at least one test task, and no implementation task comes before the story's
   last test task. Lay every story out as:
   1. the stub task: `Declare the <Type.Member> stub …` (it says "stub", so it may come first);
-  2. the test tasks, under a `### Tests for User Story N` heading: `Write tests for <behaviour> in tests/<Project>.Tests/<Name>Tests.cs`;
+  2. the test tasks, under a `### Tests for User Story N` heading: `Write tests for <behaviour> in tests/<Project>.Tests/<Name>Tests.cs`,
+     a new file for each story;
   3. the implementation tasks, under a `### Implementation for User Story N` heading: `Implement <Type.Member> in <file>`.
   A task counts as a test only under a `### Tests` heading, or when it starts with test wording ("Write tests …"), or when it
   names a test file and does not start with "Implement" or "Make". Anything else that is not a stub is implementation.

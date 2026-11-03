@@ -12,7 +12,7 @@ import sys
 STOCK_TESTS = "**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification."
 LOCKFLIGHT_TESTS = """**Tests (Lockflight)**: Tests are MANDATORY and written FIRST. For every user story, test tasks precede implementation tasks; the tests must fail (red) before implementation starts. Every task line cites the requirement IDs it serves, e.g. `(FR-001, FR-003)`.
 
-**Red/green (Lockflight, .NET)**: when a story adds public members, its first task declares them as stubs whose bodies are `throw new NotImplementedException();`. Test tasks then write xUnit v3 tests tagged `[Trait("Requirement", "FR-001")]` against the stubs; `lockflight redgreen red` must accept the red before implementation tasks start, and `lockflight redgreen green` closes the story."""
+**Red/green (Lockflight, .NET)**: when a story adds public members, its first task declares them as stubs whose bodies are `throw new NotImplementedException();`. Test tasks then write xUnit v3 tests tagged `[Trait("Requirement", "FR-001")]` against the stubs; `lockflight redgreen red` must accept the red before implementation tasks start, and `lockflight redgreen green` closes the story. From the second story on, each story's tests go in new test files of their own, never in a test file that existed when an earlier story's red was taken: the CI judge may rebuild an earlier story's red with such a file, and the later tests in it need code that red does not have."""
 
 REPLACEMENTS = [
     (STOCK_TESTS, LOCKFLIGHT_TESTS),

@@ -102,6 +102,7 @@ public sealed class TestsSinceRedTests : IAsyncLifetime
 
         Assert.Equal("NOT-EARNED", Verdict(document));
         Assert.Contains("do not build on", Why(document), StringComparison.Ordinal);
+        Assert.Contains("'redgreen red' warns", Why(document), StringComparison.Ordinal);
     }
 
     [Fact]
