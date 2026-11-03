@@ -127,7 +127,7 @@ internal static class ReadinessChecks
                 PatchCoverageAdvice.Fix(root)));
         }
 
-        if (gateManifest is not null && CheckEfTool(root, gateManifest) is DoctorCheck efTool)
+        if (gateManifest is not null && PatchCoverageAdvice.PrGatesFile(root) is not null && CheckEfTool(root, gateManifest) is DoctorCheck efTool)
         {
             checks.Add(efTool);
         }
@@ -455,11 +455,8 @@ internal static class ReadinessChecks
             : new(PresetCheck, missing, "the Lockflight Spec Kit preset is not installed or is disabled; tasks written from Spec Kit's stock template fail 'phase check tasks'", AddPreset);
     }
 
-    /// <summary>
-    /// Every test project (or a Directory.Build file above it) must reference the configured collector's package — the MTP extension
-    /// or the VSTest data collector, by the platform <c>dotnet test</c> uses in that project's directory.
-    /// </summary>
-    // Whether dotnet-ef is pinned for the EF Core migrations the pr profile checks; null when the step does not need it.
+    // Whether dotnet-ef is pinned for the EF Core migrations the pr profile checks; null when the step does not need it. Asked only
+    // when a CI job runs the pr profile, as the patch coverage warning is.
     private static DoctorCheck? CheckEfTool(string root, Manifest manifest)
     {
         EfToolState state = EfToolAdvice.Inspect(manifest, root);
@@ -473,6 +470,10 @@ internal static class ReadinessChecks
             : new(EfToolCheck, CheckStatus.Pass, $"{EfToolPin.ToolName} is pinned in {string.Join(", ", state.Pins)} for the EF Core migrations ef.pendingModelChanges checks", null);
     }
 
+    /// <summary>
+    /// Every test project (or a Directory.Build file above it) must reference the configured collector's package — the MTP extension
+    /// or the VSTest data collector, by the platform <c>dotnet test</c> uses in that project's directory.
+    /// </summary>
     private static DoctorCheck CheckCoverageExtension(string root, CoverageCollector collector)
     {
         IReadOnlyList<string> testProjects = ProjectFiles.TestProjects(root);

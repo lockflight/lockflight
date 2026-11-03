@@ -543,7 +543,8 @@ global `dotnet ef` is not the repository's choice, so it runs only with `fail`. 
 
 The `N/A` reason appears only in the gate output, so `doctor` warns (**dotnet-ef pin**) when a project with migrations has no
 pin where the step looks for it (from the root, or from each unit that is not `kind: none`, up to the project root) under
-`auto`, and `init` prints the same advice. Neither runs it: from the repository root, `dotnet new tool-manifest` (when there is
+`auto`, and `init` prints the same advice. Like the patch coverage advice, both apply only when a Lockflight CI job runs the
+`pr` profile: `doctor` when one of the CI files `init` writes is there, `init` when it writes one (not with `--ci none`). Neither runs it: from the repository root, `dotnet new tool-manifest` (when there is
 no tool manifest yet), then `dotnet tool install dotnet-ef --version <version>`, with the EF Core version the project's EF Core
 package references (or the nearest `Directory.Packages.props`) state; commit the tool manifest. The check needs EF Core 8 or
 later, so for an older EF Core the advice says to upgrade first. A unit of a workspace shell is left out of both, as for patch

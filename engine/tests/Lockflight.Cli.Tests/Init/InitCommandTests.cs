@@ -240,13 +240,26 @@ public sealed class InitCommandTests : IDisposable
         File.WriteAllText(Path.Combine(projectRoot.FullName, "src", "Shop.Data", "Shop.Data.csproj"), """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" /></ItemGroup></Project>""");
         File.WriteAllText(Path.Combine(projectRoot.FullName, "src", "Shop.Data", "Migrations", "ShopContextModelSnapshot.cs"), "[DbContext(typeof(ShopContext))]\npartial class ShopContextModelSnapshot { }\n");
 
-        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "none"], "", projectRoot.FullName);
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
 
         Assert.Equal(ExitCode.Pass, exitCode);
         Assert.Contains("ef.pendingModelChanges", output, StringComparison.Ordinal);
         Assert.Contains("dotnet tool install dotnet-ef --version 9.0.4", output, StringComparison.Ordinal);
         Assert.DoesNotContain(EfToolPin.ManifestLocations, location => File.Exists(Path.Combine(projectRoot.FullName, location))
             && File.ReadAllText(Path.Combine(projectRoot.FullName, location)).Contains("dotnet-ef", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task WithoutCiInitGivesNoDotnetEfAdvice()
+    {
+        Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "src", "Shop.Data", "Migrations"));
+        File.WriteAllText(Path.Combine(projectRoot.FullName, "src", "Shop.Data", "Shop.Data.csproj"), """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" /></ItemGroup></Project>""");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, "src", "Shop.Data", "Migrations", "ShopContextModelSnapshot.cs"), "[DbContext(typeof(ShopContext))]\npartial class ShopContextModelSnapshot { }\n");
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "none"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.DoesNotContain("dotnet-ef", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -257,7 +270,7 @@ public sealed class InitCommandTests : IDisposable
         File.WriteAllText(Path.Combine(projectRoot.FullName, "src", "Shop.Data", "Migrations", "ShopContextModelSnapshot.cs"), "[DbContext(typeof(ShopContext))]\npartial class ShopContextModelSnapshot { }\n");
         File.WriteAllText(Path.Combine(projectRoot.FullName, "dotnet-tools.json"), """{ "version": 1, "isRoot": true, "tools": { "dotnet-ef": { "version": "9.0.4", "commands": ["dotnet-ef"] } } }""");
 
-        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "none"], "", projectRoot.FullName);
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
 
         Assert.Equal(ExitCode.Pass, exitCode);
         Assert.DoesNotContain("dotnet tool install dotnet-ef", output, StringComparison.Ordinal);
@@ -266,7 +279,7 @@ public sealed class InitCommandTests : IDisposable
     [Fact]
     public async Task AProjectWithoutEfCoreMigrationsGetsNoDotnetEfAdvice()
     {
-        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "none"], "", projectRoot.FullName);
+        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
 
         Assert.DoesNotContain("dotnet-ef", output, StringComparison.Ordinal);
     }

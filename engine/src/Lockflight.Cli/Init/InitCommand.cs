@@ -351,8 +351,9 @@ internal sealed class InitCommand(CliContext context) : ICommand
             }
         }
 
-        // Suggested, not run: the dotnet-ef version is the team's choice, and the tool manifest is theirs to commit.
-        if (EfToolAdvice.Inspect(planned, root) is { Unpinned.Count: > 0 } efTool)
+        // Suggested, not run: the dotnet-ef version is the team's choice, and the tool manifest is theirs to commit. Only for a project
+        // whose CI runs the pr profile, where the step's N/A is otherwise seen only in the CI log.
+        if ((ciSteps.Count > 0 || PatchCoverageAdvice.PrGatesFile(root) is not null) && EfToolAdvice.Inspect(planned, root) is { Unpinned.Count: > 0 } efTool)
         {
             await context.Output.WriteLineAsync(EfToolAdvice.InitLine(root, efTool));
         }
