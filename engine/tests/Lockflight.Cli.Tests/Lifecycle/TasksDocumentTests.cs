@@ -84,6 +84,92 @@ public sealed class TasksDocumentTests
     }
 
     [Theory]
+    [InlineData("Add tests/Infrastructure.Tests/Review/ReviewSessionsHarness.cs, re-point the review tests at it")]
+    [InlineData("Wire the shipping fixture in tests/Shop.Tests/ShippingFixture.cs")]
+    [InlineData("Shipping cost, so tests/Shop.Tests/ShippingTests.cs passes")]
+    [InlineData("Price rounding cases in tests/Shop.Tests/")]
+    public void AnImplementationHeadingWinsOverATestFileName(string description)
+    {
+        string tasks = $"""
+            ### Implementation for User Story 1
+            - [ ] T014 [US1] (FR-001) {description}
+            """;
+
+        TaskLine task = Assert.Single(TasksDocument.Parse(tasks));
+
+        Assert.Equal(TaskRole.Implementation, task.Role);
+        Assert.Contains("under a '### Implementation' heading", task.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnImplementationHeadingKeepsTestWordingAndStubWording()
+    {
+        const string tasks = """
+            ### Implementation for User Story 1
+            - [ ] T011 [US1] (FR-001) Declare ShippingCost stub in src/Shop.Api/PriceCalculator.cs
+            - [ ] T012 [US1] (FR-001) Write tests for the edge cases in tests/Shop.Tests/EdgeCaseTests.cs
+            """;
+
+        IReadOnlyList<TaskLine> parsed = TasksDocument.Parse(tasks);
+
+        Assert.Equal([TaskRole.Stub, TaskRole.Test], parsed.Select(task => task.Role));
+    }
+
+    [Fact]
+    public void AnotherHeadingEndsTheImplementationSection()
+    {
+        const string tasks = """
+            ### Implementation for User Story 1
+            - [ ] T013 [US1] (FR-001) Shipping cost in src/Shop.Api/PriceCalculator.cs
+            ## Phase 4: User Story 2
+            - [ ] T020 [US2] (FR-002) Weight limit cases in tests/Shop.Tests/LimitTests.cs
+            """;
+
+        IReadOnlyList<TaskLine> parsed = TasksDocument.Parse(tasks);
+
+        Assert.Equal(TaskRole.Test, parsed[1].Role);
+        Assert.Contains("names the test file", parsed[1].Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASubheadingKeepsTheImplementationSection()
+    {
+        const string tasks = """
+            ### Implementation for User Story 1
+            #### Backend
+            - [ ] T014 [US1] (FR-001) Wire the harness in tests/Shop.Tests/ShippingHarness.cs
+            ### Tests for User Story 2
+            #### Backend
+            - [ ] T020 [US2] (FR-002) Weight limit cases in tests/Shop.Tests/LimitTests.cs
+            """;
+
+        IReadOnlyList<TaskLine> parsed = TasksDocument.Parse(tasks);
+
+        Assert.Equal(TaskRole.Implementation, parsed[0].Role);
+        Assert.Contains("names the test file", parsed[1].Reason, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Add tests/Shop.Tests/ShippingHarness.cs")]
+    [InlineData("Add tests\\Shop.Tests\\ShippingTests.cs")]
+    [InlineData("Tests.cs helpers for tests/Shop.Tests/")]
+    public void ATestFolderPathAfterAddIsNotTestWording(string description)
+    {
+        TaskLine task = Assert.Single(TasksDocument.Parse($"- [ ] T014 [US1] (FR-001) {description}"));
+
+        Assert.Equal(TaskRole.Test, task.Role);
+        Assert.Contains("names the test file", task.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATestFolderPathWithoutATestFileIsImplementation()
+    {
+        TaskLine task = Assert.Single(TasksDocument.Parse("- [ ] T014 [US1] (FR-001) Add tests/fixtures/orders.json"));
+
+        Assert.Equal(TaskRole.Implementation, task.Role);
+    }
+
+    [Theory]
     [InlineData("Declare ShippingCost stub in src/Shop.Api/PriceCalculator.cs")]
     [InlineData("Add stubs for the cart store in web/src/cart/store.ts")]
     [InlineData("Skeleton of the CartService in web/src/cart/service.ts")]

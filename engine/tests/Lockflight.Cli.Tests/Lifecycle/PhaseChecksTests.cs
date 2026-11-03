@@ -99,6 +99,25 @@ public sealed class PhaseChecksTests : IDisposable
     }
 
     [Fact]
+    public void AnImplementationTaskThatNamesATestFileDoesNotMoveTheTestsFirstBoundary()
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        File.WriteAllText(Feature.SpecPath, Spec);
+        File.WriteAllText(Feature.TasksPath, """
+            ### Tests for User Story 1
+            - [ ] T010 [US1] (FR-001, FR-002) Review session tests in tests/Shop.Tests/ReviewSessionTests.cs
+            ### Implementation for User Story 1
+            - [ ] T011 [US1] (FR-001) Review sessions in src/Shop.Api/ReviewSessions.cs
+            - [ ] T012 [US1] (FR-001) Add tests/Shop.Tests/ReviewSessionsHarness.cs, re-point the review tests at it
+            - [ ] T013 [US1] (FR-002) Review session store in src/Shop.Api/ReviewSessionStore.cs
+            """);
+
+        PhaseCheckItem item = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), [], root.FullName).Single(check => check.Name == "tasks.tests-first");
+
+        Assert.True(item.Passed, item.Detail);
+    }
+
+    [Fact]
     public void FrontendSpecsAndRequirementsAtTheEndOfTheLinePassTheTasksPhase()
     {
         Directory.CreateDirectory(Feature.SpecDirectory);

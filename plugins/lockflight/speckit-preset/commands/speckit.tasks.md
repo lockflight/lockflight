@@ -7,7 +7,9 @@ so follow them even where the text above says otherwise:
   before the story's implementation tasks. Stub declarations may come before the tests.
 - **Make each task's role visible.** A task counts as a test task when it sits under a `### Tests for User Story N` heading,
   starts with test wording ("Write tests …", "Spec for …", "Cover … with tests") or names the test file it writes
-  (`*.spec.ts`, `*.test.ts`, `*Tests.cs`, a `*.Tests/` project). A stub task says "stub", "skeleton", "declare signatures" or
+  (`*.spec.ts`, `*.test.ts`, `*Tests.cs`, a `*.Tests/` project) outside a `### Implementation` heading: under
+  `### Implementation for User Story N`, a task that only names a test file (a harness, a fixture) is implementation.
+  A stub task says "stub", "skeleton", "declare signatures" or
   `NotImplementedException`. Anything else in a story counts as implementation and must come after the story's last test task.
 - **Every user-story task cites the requirements it serves**, preferably right after the story label:
   `- [ ] T012 [P] [US1] (FR-001, FR-003) Description with file path`. An `FR-xxx` anywhere on the line counts. Cite only IDs that spec.md defines. Setup, foundational

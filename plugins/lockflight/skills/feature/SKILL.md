@@ -60,7 +60,8 @@ Never approve for them.
    `.lockflight/bin/lockflight phase check tasks --feature <id>`; run it until it passes; a failure names each misplaced
    task, its line and why it counted as implementation. A task counts as a **test** when it sits under a `### Tests`
    heading, starts with test wording ("Write tests …", "Contract tests …", "Cover … with tests") or names a test file
-   (`…Tests.cs`, `….Tests/`) without starting with "Implement" or "Make"; as a **stub** when it says stub, skeleton,
+   (`…Tests.cs`, `….Tests/`) without starting with "Implement" or "Make" and outside a `### Implementation` heading (there,
+   a task that only names a test file, such as a harness, is implementation); as a **stub** when it says stub, skeleton,
    `NotImplementedException` or "declare … signatures"; anything else is **implementation**.
    - **Crew:** call the Agent tool with `subagent_type: "lockflight-crew:planner"` and a prompt naming the feature
      directory (`specs/<id>`). Your very next action when it returns MUST be

@@ -18,8 +18,8 @@ internal static class PhaseChecks
     private const int MaxListed = 5;
 
     private const string HowToMark = "Mark a test task with a '### Tests for …' heading above it, test wording at the start "
-        + "('Write tests …', 'Spec for …', 'Cover … with tests') or the test file it writes (*.spec.ts, *.test.ts, *Tests.cs, a *.Tests/ "
-        + "project); mark a stub declaration with 'stub', 'skeleton', 'declare signatures' or 'NotImplementedException' so it may "
+        + "('Write tests …', 'Spec for …', 'Cover … with tests') or, outside a '### Implementation' heading, the test file it writes "
+        + "(*.spec.ts, *.test.ts, *Tests.cs, a *.Tests/ project); mark a stub declaration with 'stub', 'skeleton', 'declare signatures' or 'NotImplementedException' so it may "
         + "come first; move implementation tasks after the story's last test task";
 
     /// <summary>The checks of the phase named <paramref name="phase"/> (<c>specify</c> or <c>tasks</c>); null for any other name.</summary>

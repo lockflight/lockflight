@@ -56,7 +56,8 @@ Free-form; no check reads it, but the tasks approval covers it, and the test aut
      a new file for each story;
   3. the implementation tasks, under a `### Implementation for User Story N` heading: `Implement <Type.Member> in <file>`.
   A task counts as a test only under a `### Tests` heading, or when it starts with test wording ("Write tests …"), or when it
-  names a test file and does not start with "Implement" or "Make". Anything else that is not a stub is implementation.
+  names a test file, does not start with "Implement" or "Make" and is not under a `### Implementation` heading. Anything else
+  that is not a stub is implementation.
 - **Units.** When `lockflight.yaml` lists `units:`, tag each story task with the unit it changes, `[unit:services/orders]`,
   using a path from that list exactly. Without units, use no tags.
 - **The spec is approved.** The check's `spec.approved` item: only a person gives that approval.
