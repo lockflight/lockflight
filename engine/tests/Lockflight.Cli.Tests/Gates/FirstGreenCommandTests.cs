@@ -35,7 +35,7 @@ public sealed class FirstGreenCommandTests : IDisposable
         Assert.DoesNotContain("First green", output, StringComparison.Ordinal);
     }
 
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => TempDirectories.DeleteRecursively(root);
 
     private async Task CreateProjectAsync()
     {
