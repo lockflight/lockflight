@@ -213,7 +213,10 @@ internal static partial class ShellLiteralWrite
         }
 
         string resolved = Resolve(path);
-        if (resolved == DevNull)
+
+        // A drive root is a root: /dev and /proc are checked below it too, as Git Bash on Windows has no other.
+        string fromRoot = DriveRoot().IsMatch(resolved) ? resolved[2..] : resolved;
+        if (fromRoot == DevNull)
         {
             return true;
         }
@@ -221,7 +224,7 @@ internal static partial class ShellLiteralWrite
         // Windows drops a trailing dot or space from a name, so "loop.md." is "loop.md" there.
         string[] segments = resolved.Split('/', StringSplitOptions.RemoveEmptyEntries);
         bool windowsAlias = segments.Any(segment => segment != ".." && (segment.EndsWith('.') || segment.EndsWith(' ')));
-        bool device = DeviceDirectories.Any(directory => $"{resolved}/".StartsWith(directory, StringComparison.OrdinalIgnoreCase));
+        bool device = DeviceDirectories.Any(directory => $"{fromRoot}/".StartsWith(directory, StringComparison.OrdinalIgnoreCase));
         return !windowsAlias && !device && !PromptQueueFiles.Contains(target) && !PromptQueueFiles.Contains(resolved);
     }
 
@@ -229,9 +232,11 @@ internal static partial class ShellLiteralWrite
     private static string Resolve(string path)
     {
         string normalized = path.Replace('\\', '/');
-        bool rooted = normalized.StartsWith('/');
+        string drive = DriveRoot().IsMatch(normalized) ? normalized[..2] : string.Empty;
+        string rest = normalized[drive.Length..];
+        bool rooted = rest.StartsWith('/');
         List<string> segments = [];
-        foreach (string segment in normalized.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        foreach (string segment in rest.Split('/', StringSplitOptions.RemoveEmptyEntries))
         {
             if (segment == ".")
             {
@@ -248,7 +253,7 @@ internal static partial class ShellLiteralWrite
             }
         }
 
-        return (rooted ? "/" : string.Empty) + string.Join('/', segments);
+        return drive + (rooted ? "/" : string.Empty) + string.Join('/', segments);
     }
 
     /// <summary>A here-document operator (<c>&lt;&lt;</c> or <c>&lt;&lt;-</c>), not a here-string's <c>&lt;&lt;&lt;</c>.</summary>
