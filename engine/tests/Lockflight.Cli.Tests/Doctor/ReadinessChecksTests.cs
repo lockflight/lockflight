@@ -133,6 +133,97 @@ public sealed class ReadinessChecksTests : IDisposable
     }
 
     [Fact]
+    public async Task APrProfileInCiWithoutACollectorWarnsThatPatchCoverageIsNotJudged()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Write(Templates.WorkflowPath, Templates.Workflow(["10.0.x"]));
+        Write("global.json", """{ "test": { "runner": "Microsoft.Testing.Platform" } }""");
+
+        DoctorCheck coverage = await CheckAsync("coverage collector");
+
+        Assert.Equal(CheckStatus.Warn, coverage.Status);
+        Assert.Contains(Templates.WorkflowPath, coverage.Detail, StringComparison.Ordinal);
+        Assert.Contains("coverage.patch", coverage.Detail, StringComparison.Ordinal);
+        Assert.Contains("not judged", coverage.Detail, StringComparison.Ordinal);
+        Assert.Contains("gates.coverage.collector: coverlet", coverage.Fix, StringComparison.Ordinal);
+        Assert.Contains("coverlet.MTP", coverage.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OnVSTestThePatchCoverageWarningNamesTheCoverletCollector()
+    {
+        Write(Manifest.FileName, "version: 2\ngates:\n  coverage:\n    collector: none\n");
+        Write(GitLabCiTemplate.Path, GitLabCiTemplate.Job(["10.0.x"], CiTrigger.Manual, developmentPin: false));
+
+        DoctorCheck coverage = await CheckAsync("coverage collector");
+
+        Assert.Equal(CheckStatus.Warn, coverage.Status);
+        Assert.Contains("coverlet.collector", coverage.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheBitbucketJudgeWithoutACollectorWarnsButTheCopyToMergeDoesNot()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Write(BitbucketPipelinesTemplate.FragmentPath, BitbucketPipelinesTemplate.Pipeline(["10.0.x"], CiTrigger.PullRequest, developmentPin: false));
+
+        Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "coverage collector");
+
+        Write(BitbucketPipelinesTemplate.Path, BitbucketPipelinesTemplate.Pipeline(["10.0.x"], CiTrigger.PullRequest, developmentPin: false));
+
+        DoctorCheck coverage = await CheckAsync("coverage collector");
+        Assert.Equal(CheckStatus.Warn, coverage.Status);
+        Assert.Contains(BitbucketPipelinesTemplate.Path, coverage.Detail, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("version: 2\nshell:\n  url: https://example.com/shell.git\n  unit: services/orders\n", null)]
+    [InlineData("version: 2\n", Manifest.UnitFileName)]
+    public async Task AUnitOfAWorkspaceShellGetsNoPatchCoverageWarningBecauseItsCiTakesTheShellsCollector(string manifest, string? vendoredPolicy)
+    {
+        Write(Manifest.FileName, manifest);
+        Write(Templates.WorkflowPath, Templates.Workflow(["10.0.x"]));
+        if (vendoredPolicy is not null)
+        {
+            Write(vendoredPolicy, "version: 2\n");
+        }
+
+        Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "coverage collector");
+    }
+
+    [Fact]
+    public async Task ACiFileThatCannotBeReadGetsNoPatchCoverageWarningAndNoCrash()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Directory.CreateDirectory(Path.Combine(root.FullName, Templates.WorkflowPath));
+
+        Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "coverage collector");
+    }
+
+    [Fact]
+    public async Task WithACollectorSetTheCiFileChangesNothingInTheCollectorCheck()
+    {
+        Write(Manifest.FileName, "version: 2\ngates:\n  coverage:\n    collector: coverlet\n");
+        Write(Templates.WorkflowPath, Templates.Workflow(["10.0.x"]));
+        Write("tests/A.Tests/A.Tests.csproj", """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit" Version="2.9.2" /><PackageReference Include="coverlet.collector" Version="6.0.2" /></ItemGroup></Project>""");
+
+        DoctorCheck coverage = await CheckAsync("coverage collector");
+
+        Assert.Equal(CheckStatus.Pass, coverage.Status);
+    }
+
+    [Fact]
+    public async Task ACiFileThatDoesNotRunLockflightGetsNoPatchCoverageWarning()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Write(Templates.WorkflowPath, "on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: dotnet test\n");
+
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(checks, check => check.Name == "coverage collector");
+    }
+
+    [Fact]
     public async Task AMissingPythonIsAWarningWithItsFixNotACrash()
     {
         DoctorCheck check = await ReadinessChecks.CheckPyYamlAsync(root.FullName, "lockflight-no-such-python", TestContext.Current.CancellationToken);
@@ -553,11 +644,10 @@ public sealed class ReadinessChecksTests : IDisposable
         return binary;
     }
 
-    private async Task<DoctorCheck> CheckAsync(string name)
-    {
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
-        return Assert.Single(checks, check => check.Name == name);
-    }
+    private async Task<DoctorCheck> CheckAsync(string name) => Assert.Single(await AllChecksAsync(), check => check.Name == name);
+
+    private Task<IReadOnlyList<DoctorCheck>> AllChecksAsync() =>
+        ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
 
     private async Task InitAsync()
     {

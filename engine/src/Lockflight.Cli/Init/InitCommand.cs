@@ -343,6 +343,12 @@ internal sealed class InitCommand(CliContext context) : ICommand
             {
                 await context.Output.WriteLineAsync(line);
             }
+
+            // Suggested, not written: the collector needs a package in every test project, which is the team's change to make.
+            if (ciSteps.Any(step => step.Outcome != FileOutcome.Unchanged) && PatchCoverageAdvice.AppliesTo(planned, root))
+            {
+                await context.Output.WriteLineAsync(PatchCoverageAdvice.InitLine(root));
+            }
         }
 
         await RecordAsync(root, steps, done, cancellationToken);
