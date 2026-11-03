@@ -27,11 +27,61 @@ permissions:
   contents: read
 
 jobs:
+  # Which platforms run and how the Windows unit tests are split, in one place for the jobs below. Pull requests run Linux and
+  # Windows; pushes to main and manual runs with the macOS input add macOS.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      platforms: ${{ steps.plan.outputs.platforms }}
+      engine: ${{ steps.plan.outputs.engine }}
+    steps:
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          MACOS: ${{ inputs.macos }}
+          # Windows runs the unit tests in shards: each group below (test classes, or namespaces; don't mix the two in one group,
+          # since different filter kinds narrow each other) is a shard, and one more shard runs every other test, so a new test is
+          # never left out. Balanced by the durations in the unit test reports (unit-tests-* artifacts).
+          WINDOWS_SHARDS: "Ci.RedAtRedCommitsRedCheckTests Ci.TestFingerprinterDataAndFixtureTests Ci.TraceAndGatesTests Gates.WorkspaceGateRunnerTests Routing.ChangeClassifierAddedFileBehaviourAndCriticalTests Routing.ChangeClassifierRaiseTests|Ci.ExistingTestsChangedTests Ci.HostTamperingTests Ci.ShellJudgeTests Gates.Steps.FormatStepTests Review.ReviewCommandTests Routing.ChangeClassifierAddedFileFeatureAndFixTests|Ci.JudgeRoutingTests Ci.TestsSinceRedAmendTests Ci.TestsSinceRedHelperTests Ci.TestsSinceRedUnchangedTests Lifecycle.Approvals.SessionApprovalTests Review.ReviewReproductionFixAndEscalationTests Routing.ChangeClassifierFileOrderTests|Ci.RedAtRedCommitsGreenCheckTests Ci.TestFingerprinterMethodAndBaseTests Ci.TestsSinceRedLaterCycleTests Ci.TestsSinceRedWeakeningTests Gates.Steps.SecretsStepTests Review.ReviewReproductionRepairTests Routing.ChangeClassifierGoldenTests"
+        run: |
+          platforms='[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]'
+          if [ "$EVENT" = push ] || { [ "$EVENT" = workflow_dispatch ] && [ "$MACOS" = true ]; }; then
+            platforms=$(jq -c '. + [{"os":"macos-latest","rid":"osx-arm64"}]' <<<"$platforms")
+          fi
+          # An entry with a dot is a test class (Ci.RedAtRedCommitsTests), one without is a namespace with its sub-namespaces.
+          filters() {
+            for name in $1; do
+              case "$name" in
+                *.*) printf ' --filter-%sclass Lockflight.Cli.Tests.%s' "$2" "$name" ;;
+                *) printf ' --filter-%snamespace Lockflight.Cli.Tests.%s --filter-%snamespace Lockflight.Cli.Tests.%s.*' "$2" "$name" "$2" "$name" ;;
+              esac
+            done
+          }
+          IFS='|' read -r -a groups <<<"$WINDOWS_SHARDS"
+          total=$(( ${#groups[@]} + 1 ))
+          windows='[]'
+          index=0
+          for group in "${groups[@]}"; do
+            index=$((index + 1))
+            windows=$(jq -c --arg filters "$(filters "$group" "")" --arg shard ", $index of $total" --arg key "win-x64-$index" \
+              '. + [{"os":"windows-latest","rid":"win-x64","shard":$shard,"key":$key,"filters":$filters,"publish":false}]' <<<"$windows")
+          done
+          rest=$(filters "$(tr '|' ' ' <<<"$WINDOWS_SHARDS")" not-)
+          windows=$(jq -c --arg filters "$rest" --arg shard ", $total of $total" --arg key "win-x64-$total" \
+            '. + [{"os":"windows-latest","rid":"win-x64","shard":$shard,"key":$key,"filters":$filters,"publish":true}]' <<<"$windows")
+          engine=$(jq -c --argjson windows "$windows" \
+            'map(if .os == "windows-latest" then empty else . + {"shard":"","key":.rid,"filters":"","publish":true} end) + $windows' <<<"$platforms")
+          echo "platforms=$platforms" >> "$GITHUB_OUTPUT"
+          echo "engine=$engine" >> "$GITHUB_OUTPUT"
+          jq . <<<"$engine"
+
   engine:
+    needs: plan
+    name: engine (${{ matrix.os }}, ${{ matrix.rid }}${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.macos)) && '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]') }}
+        include: ${{ fromJSON(needs.plan.outputs.engine) }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -55,21 +105,38 @@ jobs:
       # The canary suite (trait Category=Canary) runs in the canaries jobs.
       - name: Unit tests
         working-directory: engine
-        run: dotnet test --filter-not-trait "Category=Canary"
+        env:
+          FILTERS: ${{ matrix.filters }}
+        run: |
+          set -f
+          # shellcheck disable=SC2086 # FILTERS holds separate arguments; set -f keeps their wildcards for the test runner.
+          dotnet test --filter-not-trait "Category=Canary" $FILTERS --report-xunit-trx --results-directory "$RUNNER_TEMP/unit-results"
+      # Each test's duration, to keep the slow ones visible and the test shards balanced.
+      - name: Upload the unit test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unit-tests-${{ matrix.key }}
+          path: ${{ runner.temp }}/unit-results
+          if-no-files-found: warn
       - name: Native AOT publish
+        if: matrix.publish
         working-directory: engine
         run: dotnet publish src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o ../out -nologo
       - name: Self-test of the published engine (doctor --self-test)
+        if: matrix.publish
         run: |
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           cd "$RUNNER_TEMP" && "$engine" doctor --self-test
       - name: Hook compatibility suite
+        if: matrix.publish
         run: |
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" sh tests/compat/probe-suite.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: matrix.publish
         with:
           name: lockflight-${{ matrix.rid }}
           path: |
@@ -79,10 +146,11 @@ jobs:
 
   # The end-to-end suites with a freshly published engine, beside the unit tests rather than after them.
   e2e:
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.macos)) && '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]') }}
+        include: ${{ fromJSON(needs.plan.outputs.platforms) }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -243,10 +311,11 @@ jobs:
   # the TaskCompleted hook, and on a generated .NET project the real test gate, red, amend, green and trace. It fails when one is
   # not caught, or when a registered guard rule, gate step or human-only command has no canary (CONTRIBUTING.md, Canaries).
   canaries:
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.macos)) && '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]') }}
+        include: ${{ fromJSON(needs.plan.outputs.platforms) }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:

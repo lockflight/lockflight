@@ -19,8 +19,8 @@ public sealed class RoutingCommentTests
         StringBuilder text = new();
         foreach (string name in Shown)
         {
-            (ChangeSet changeSet, Manifest? manifest) = await ChangeClassifierTests.ReadAsync(name, extraFile: null, cancellationToken);
-            RoutingPolicy policy = ChangeClassifierTests.Policy(manifest);
+            (ChangeSet changeSet, Manifest? manifest) = await ChangeClassifierCases.ReadAsync(name, extraFile: null, cancellationToken);
+            RoutingPolicy policy = ChangeClassifierCases.Policy(manifest);
             Classification classification = ChangeClassifier.Classify(changeSet, policy, []);
             text.Append($"## {name}\n{RoutingComment.ClassLine(classification, policy)}\n{RoutingComment.NeedsLine(ClassRequirements.For(classification.Class, policy))}\n");
         }
@@ -31,7 +31,7 @@ public sealed class RoutingCommentTests
     [Fact]
     public void RaisesAreNamedAndALowerOneIsShownAsIgnored()
     {
-        RoutingPolicy policy = ChangeClassifierTests.Policy(manifest: null);
+        RoutingPolicy policy = ChangeClassifierCases.Policy(manifest: null);
         Classification classification = new(
             ChangeClass.Critical,
             ChangeClass.Feature,
@@ -48,7 +48,7 @@ public sealed class RoutingCommentTests
     [Fact]
     public void ALongListStaysWithinTheLineLimitAndCountsTheRest()
     {
-        RoutingPolicy policy = ChangeClassifierTests.Policy(manifest: null);
+        RoutingPolicy policy = ChangeClassifierCases.Policy(manifest: null);
         ChangeSignal[] signals = [.. Enumerable.Range(0, 20).Select(index =>
             new ChangeSignal("critical.path", ChangeClass.Critical, SignalStrength.Boundary, $"src/{new string('a', 50)}/{new string('b', 50)}/File{index}.cs", "glob"))];
         Classification classification = new(ChangeClass.Critical, ChangeClass.Critical, signals, [], [], policy.Source);
