@@ -117,6 +117,83 @@ public sealed class GuardScenarioTests : IDisposable
         Assert.Equal(ExitCode.HookBlock, exitCode);
     }
 
+    [Fact]
+    public async Task AHardResetIsBlockedWithAWayToUndoTheCommitInstead()
+    {
+        (ExitCode exitCode, _, string error) = await RunBashAsync("git reset --hard HEAD~1");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("which can hold files protected by rule 'lockflight.yaml'", error, StringComparison.Ordinal);
+        Assert.Contains("'git revert <commit>'", error, StringComparison.Ordinal);
+        Assert.Contains("'git restore --source <commit> --staged --worktree -- <files>'", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("git checkout -- .", "'git restore --source <commit> --staged --worktree -- <files>'")]
+    [InlineData("git restore .", "'git restore --source <commit> --staged --worktree -- <files>'")]
+    [InlineData("git restore --staged .", "'git restore --staged -- <files>'")]
+    [InlineData("git switch -f main", "then switch without -f")]
+    [InlineData("git checkout -f main", "then switch without -f")]
+    [InlineData("git clean -fd", "'git clean -f -- <files>'")]
+    [InlineData("git stash", "'git stash push -- <files>'")]
+    [InlineData("git stash pop", "'git checkout \"stash@{0}\" -- <files>'")]
+    [InlineData("git -C src/.. reset --hard", "'git revert <commit>'")]
+    [InlineData("git checkout -- src/Api.cs && git reset --hard", "'git revert <commit>'")]
+    [InlineData("rm -rf src/bin && git reset --hard", "'git revert <commit>'")]
+    public async Task AGitRewriteOfTheWholeTreeIsBlockedWithACommandThatNamesFilesInstead(string command, string advice)
+    {
+        (ExitCode exitCode, _, string error) = await RunBashAsync(command);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains(advice, error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APowerShellHardResetIsBlockedWithTheSameAdvice()
+    {
+        string payload = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["cwd"] = projectRoot.FullName,
+            ["tool_name"] = "PowerShell",
+            ["tool_input"] = new Dictionary<string, string> { ["command"] = "git reset --hard HEAD~1" },
+        });
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("'git revert <commit>'", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("rm -rf secrets")]
+    [InlineData("rm -rf . && git reset --hard")]
+    [InlineData("git stash && git reset --hard")]
+    [InlineData("git apply fix.patch")]
+    public async Task ABlockedTreeRewriteWithoutOneGitAlternativeAsksForTheFilesByName(string command)
+    {
+        (ExitCode exitCode, _, string error) = await RunBashAsync(command);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("Name the files to change instead", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("git revert HEAD")]
+    [InlineData("git revert --no-edit abc123")]
+    [InlineData("git restore --source HEAD~1 --staged --worktree -- src/Api.cs")]
+    [InlineData("git restore --staged -- src/Api.cs")]
+    [InlineData("git checkout HEAD~1 -- src/Api.cs")]
+    [InlineData("git clean -f -- src/scratch.txt")]
+    [InlineData("git stash push -- src/Api.cs")]
+    [InlineData("git checkout \"stash@{0}\" -- src/Api.cs")]
+    [InlineData("git switch main")]
+    public async Task TheGitCommandsTheBlockSuggestsAreAllowedForUnprotectedFiles(string command)
+    {
+        (ExitCode exitCode, _, string error) = await RunBashAsync(command);
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+    }
+
     [Theory]
     [InlineData("cd src && echo x > Note.cs")]
     [InlineData("rm -rf src/bin src/obj")]

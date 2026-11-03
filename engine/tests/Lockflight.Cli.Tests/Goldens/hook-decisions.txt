@@ -71,6 +71,12 @@ stdout:
 stderr: lockflight: this command may rewrite or delete '..', the folder that contains this project and every protected path in it. Name the files to change instead.
 ledger: type=hook.blocked signature=pre-tool-use:protected-path:project-root summary=protected-path:project-root tool=Bash agent=main
 
+## a hard reset of the whole tree (pre-tool-use)
+exit: 2 HookBlock
+stdout: 
+stderr: lockflight: this command may rewrite '.', which can hold files protected by rule 'lockflight.yaml'. To undo a commit that changed no protected file, run 'git revert <commit>'; to take files back from a commit, name them: 'git restore --source <commit> --staged --worktree -- <files>'. Leave out protected files: they are changed by a human or a lockflight command.
+ledger: type=hook.blocked signature=pre-tool-use:protected-path:lockflight.yaml summary=protected-path:lockflight.yaml tool=Bash agent=main
+
 ## an unknown variable (pre-tool-use)
 exit: 0 Pass
 stdout: 

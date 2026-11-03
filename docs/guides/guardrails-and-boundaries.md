@@ -130,8 +130,12 @@ A relative path is checked against the session's working directory, as written, 
 -- <dir>`, `rm -r`, `git clean`) is blocked when a locked test project or a protected file lies inside it; for rules without a
 fixed directory (`**/Directory.Build.props`) the files that exist there are checked, and a directory is walked only for the
 rules that could match below it. Because `lockflight.yaml` sits at the root, whole-repository rewrites such as `git stash`, `git
-restore .`, `git reset --hard` or `git apply` are always blocked: name the files instead. A tree that contains the project (`rm
--rf ..`, `rm -rf ~` for a project under the home folder) is blocked without a scan.
+restore .`, `git reset --hard` or `git apply` are always blocked: name the files instead. The block of `git reset`, `restore`,
+`checkout`, `switch`, `clean` or `stash` names a command that does it for named files: `git revert <commit>` (for a commit that
+changed no protected file) or `git restore --source <commit> --staged --worktree -- <files>` for a reset,
+`git restore --staged -- <files>` to unstage, `git clean -f -- <files>`, `git stash push -- <files>`, and
+`git checkout "stash@{0}" -- <files>` for a stash pop. A tree that contains the project (`rm -rf ..`, `rm -rf ~` for a project under the home folder) is blocked without a
+scan.
 
 It does **not** see, and so allows:
 
