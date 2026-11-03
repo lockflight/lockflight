@@ -160,10 +160,12 @@ public sealed class ChangeSetReaderTests
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         using RoutingRepository repository = await RoutingRepository.CreateAsync(BaseFiles, cancellationToken);
         repository.Write("src/Shop/Cart.cs", "class Cart { }\n");
-        string head = await repository.CommitAsync("cart", cancellationToken);
+        await repository.CommitAsync("cart", cancellationToken);
+        string head = await repository.HeadAsync(cancellationToken);
         await repository.GitAsync(["checkout", "-q", RoutingRepository.BaseBranch], cancellationToken);
         repository.Write("src/Shop/Other.cs", "class Other { }\n");
-        string baseTip = await repository.CommitAsync("moved on", cancellationToken);
+        await repository.CommitAsync("moved on", cancellationToken);
+        string baseTip = await repository.HeadAsync(cancellationToken);
 
         ChangeSet changeSet = await ReadAsync(repository, head, cancellationToken);
 
