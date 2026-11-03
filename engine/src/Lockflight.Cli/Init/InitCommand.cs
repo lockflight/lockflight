@@ -2,6 +2,7 @@ using System.Text;
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.EngineLocks;
+using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
@@ -345,6 +346,11 @@ internal sealed class InitCommand(CliContext context) : ICommand
         }
 
         await RecordAsync(root, steps, done, cancellationToken);
+        if (firstInit)
+        {
+            // Only a project's first init starts the clock: re-running it on a project long green would report a false first.
+            await new FirstGreen(root, context.Time).RecordInitAsync(cancellationToken);
+        }
         if (proposals.Count > 0 && await ProposeAsync(root, proposals, cancellationToken) is ExitCode proposeFailure)
         {
             return proposeFailure;
