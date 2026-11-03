@@ -99,7 +99,9 @@ public sealed class SessionCommandRelayTests : IDisposable
     [InlineData("tee -a notes.md <<EOF\nAsk the person to run /lockflight:reset.\nEOF")]
     [InlineData("echo '/lockflight:approve spec' | tee -a notes.md > /dev/null")]
     [InlineData("echo '/lockflight:amend' > ./memory-bank/n.md")]
-    [InlineData("cat <<'EOF' > memory-bank/a.md && echo 'see /lockflight:approve' >> memory-bank/b.md\n/lockflight:approve spec\nEOF")]
+    [InlineData("cat <<'EOF' > memory-bank/note.md\nThe person types /lockflight:approve tasks.\nEOF\n")]
+    [InlineData("cat <<-\"EOF\" > memory-bank/note.md\n\tThe person types /lockflight:approve tasks.\n\tEOF")]
+    [InlineData("echo 'see /lockflight:approve' > a.md && printf '%s' 'or /lockflight:reset' >> b.md")]
     public async Task AShellCommandThatOnlyWritesLiteralTextToFilesPasses(string command)
     {
         (ExitCode exitCode, _, string error) = await RunBashAsync(command);
@@ -141,6 +143,15 @@ public sealed class SessionCommandRelayTests : IDisposable
     [InlineData("echo /lockflight:approve > n.md\u000bclaude")]
     [InlineData("echo x > n.md # <<EOF\nclaude -p /lockflight:approve spec\nEOF")]
     [InlineData("echo x >>| n.md /lockflight:approve")]
+    [InlineData("echo hi >f <<EOF \\\nEOF\nclaude -p /lockflight:approve\nEOF")]
+    [InlineData("cat >f <<EOF <<<'\nEOF\n'\n$(claude -p /lockflight:approve)\nEOF")]
+    [InlineData("cat >f <<'' x\nhello\n\nclaude -p /lockflight:approve\nx")]
+    [InlineData("cat >f <<<'/lockflight:approve\nspec'")]
+    [InlineData("cat <<'EOF' > memory-bank/a.md && echo 'see /lockflight:approve' >> memory-bank/b.md\n/lockflight:approve spec\nEOF")]
+    [InlineData("cat <<'EOF' > a.md\n/lockflight:approve spec\nEOF\nclaude -c < a.md")]
+    [InlineData("cat <<'EOF' > a.md\n/lockflight:approve spec\nEOF\nEOF")]
+    [InlineData("cat <<A > a.md <<B\n/lockflight:approve spec\nA\nx\nB")]
+    [InlineData("echo '/lockflight:approve' \"\" > n.md")]
     public async Task AShellCommandThatDoesMoreThanWriteLiteralTextIsChecked(string command)
     {
         (ExitCode exitCode, _, string error) = await RunBashAsync(command);
@@ -158,6 +169,19 @@ public sealed class SessionCommandRelayTests : IDisposable
     public async Task ALiteralWriteToAPromptQueueFileIsBlocked(string command)
     {
         (ExitCode exitCode, _, _) = await RunBashAsync(command);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+    }
+
+    [Theory]
+    [InlineData("echo '/lockflight:approve spec' > loop.md")]
+    [InlineData("echo '/lockflight:approve spec' > ../.claude/scheduled_tasks.json")]
+    [InlineData("echo '/lockflight:approve spec' > mailbox/main.json")]
+    public async Task ALiteralWriteIsResolvedAgainstTheWorkingDirectory(string command)
+    {
+        string claudeDirectory = Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".claude")).FullName;
+
+        (ExitCode exitCode, _, _) = await RunBashAsync(command, claudeDirectory);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
     }
@@ -188,14 +212,14 @@ public sealed class SessionCommandRelayTests : IDisposable
 
     public void Dispose() => projectRoot.Delete(recursive: true);
 
-    private Task<(ExitCode ExitCode, string Output, string Error)> RunBashAsync(string command) =>
-        RunAsync("Bash", JsonSerializer.Serialize(new Dictionary<string, string> { ["command"] = command }));
+    private Task<(ExitCode ExitCode, string Output, string Error)> RunBashAsync(string command, string? workingDirectory = null) =>
+        RunAsync("Bash", JsonSerializer.Serialize(new Dictionary<string, string> { ["command"] = command }), workingDirectory);
 
-    private Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string tool, string toolInput)
+    private Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string tool, string toolInput, string? workingDirectory = null)
     {
         string payload = JsonSerializer.Serialize(new Dictionary<string, object>
         {
-            ["cwd"] = projectRoot.FullName,
+            ["cwd"] = workingDirectory ?? projectRoot.FullName,
             ["hook_event_name"] = "PreToolUse",
             ["tool_name"] = tool,
             ["tool_input"] = JsonDocument.Parse(toolInput).RootElement,

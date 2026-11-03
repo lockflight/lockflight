@@ -184,8 +184,9 @@ The relay guard blocks any tool call other than a file tool whose input mentions
 (`/lockflight:approve`, `/lockflight:baseline`, `/lockflight:reset`, `/lockflight:amend`), because a shell command, a scheduled
 task, a message or a subagent prompt could hand it to Claude Code as if you had typed it. To save a note or a doc that mentions
 one, write the file with the **Write or Edit tool**: the guard checks where file tools write, not what they say. A Bash command
-that only writes literal text to files also passes: `cat`, `echo`, `printf` and `tee` with a quoted here-document or quoted
-arguments, no `$` or backtick anywhere, and plain file targets (`cat <<'EOF' > memory-bank/note.md`). Anything more (another
+that only writes literal text to files also passes: `cat`, `echo`, `printf` and `tee` with quoted arguments or one
+here-document that is the whole command (`cat <<'EOF' > memory-bank/note.md`, the body, then `EOF` as the last line), no `$`
+or backtick anywhere, and plain file targets. Anything more (another
 program, a pipe into one, a substitution, a variable, a background `&`, a subshell) is checked like any other command. MCP tools
 are always checked, whatever their name. See [guardrails and boundaries](guardrails-and-boundaries.md).
 

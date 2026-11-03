@@ -56,7 +56,7 @@ internal static class SessionCommandRelay
     }
 
     private static bool OnlyWritesLiteralText(HookRequest input) =>
-        input.Tool is { Kind: ToolKind.Shell, Shell: ShellDialect.Posix } && input.Command is string command && ShellLiteralWrite.OnlyWritesLiteralText(command);
+        input.Tool is { Kind: ToolKind.Shell, Shell: ShellDialect.Posix } && input.Command is string command && ShellLiteralWrite.OnlyWritesLiteralText(command, input.WorkingDirectory);
 
     private static bool WritesAFile(HookRequest input) =>
         input.Tool.WritesFiles

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Text.RegularExpressions;
 
 namespace Lockflight.Cli.Hooks;
 
@@ -8,12 +9,14 @@ namespace Lockflight.Cli.Hooks;
 /// <c>;</c>, newlines, <c>&amp;&amp;</c>, <c>||</c> and <c>|</c>, and at least one file is written. Anything that could run
 /// something else or write somewhere unseen fails the test: substitutions, subshells, groups, background jobs, other programs,
 /// variable assignments, a <c>$</c> or a backtick anywhere in a word or a here-text (quoted or not, since quoting is not kept),
-/// a here-document line ending in a backslash (which can end the body early), comment-hiding or unusual whitespace, input read
-/// from a file, and a target that is a pattern, starts with <c>~</c> or <c>=</c>, holds a <c>!</c> (zsh's <c>&gt;!</c>), lies
-/// under <c>/dev</c> or <c>/proc</c> (except <c>/dev/null</c>), has a name ending in a dot or a space, or is a prompt queue file once <c>.</c> and <c>..</c> are
-/// resolved. When in doubt it says no; a guardrail, not a boundary.
+/// an empty quoted word (the tokenizer drops it), a here-string over several lines, unusual whitespace, input read from a file,
+/// and a target that is a pattern, starts with <c>~</c> or <c>=</c>, holds a <c>!</c> (zsh's <c>&gt;!</c>), lies under
+/// <c>/dev</c> or <c>/proc</c> (except <c>/dev/null</c>), has a name ending in a dot or a space, or is a prompt queue file once
+/// resolved against the working directory (a relative target with no working directory fails). A here-document is checked
+/// line by line, without the tokenizer, and only one plain form passes (<see cref="IsPlainHereDocument"/>). When in doubt it
+/// says no; a guardrail, not a boundary.
 /// </summary>
-internal static class ShellLiteralWrite
+internal static partial class ShellLiteralWrite
 {
     private const string DevNull = "/dev/null";
     private const string EndOfOptions = "--";
@@ -21,7 +24,7 @@ internal static class ShellLiteralWrite
     private static readonly HashSet<string> Writers = ["cat", "echo", "printf", "tee"];
     private static readonly HashSet<string> Joiners = [";", "\n", "&&", "||", "|"];
     private static readonly HashSet<string> TeeOptions = ["-a", "--append", "-i", "--ignore-interrupts"];
-    private static readonly HashSet<string> DeviceDirectories = ["dev", "proc"];
+    private static readonly string[] DeviceDirectories = ["/dev/", "/proc/"];
 
     /// <summary>Characters that start an expansion or a command substitution.</summary>
     private static readonly SearchValues<char> Expansions = SearchValues.Create("$`");
@@ -29,9 +32,14 @@ internal static class ShellLiteralWrite
     /// <summary>Characters that make a target a pattern or something other than the path as written.</summary>
     private static readonly SearchValues<char> TargetSpecials = SearchValues.Create("*?[]{}~!$`");
 
-    public static bool OnlyWritesLiteralText(string command)
+    /// <summary>What the line that opens a here-document may not hold: another command, a group, a continuation.</summary>
+    private static readonly SearchValues<char> OpenerSpecials = SearchValues.Create("\\;|&()$`");
+
+    /// <param name="workingDirectory">The directory the command runs in; null when unknown, and then a relative target fails.</param>
+    public static bool OnlyWritesLiteralText(string command, string? workingDirectory)
     {
-        if (command.Any(IsUnusualSpace))
+        bool hereDocument = HereDocumentOperator().IsMatch(command);
+        if (command.Any(IsUnusualSpace) || (hereDocument ? !IsPlainHereDocument(command) : HasEmptyQuotes(command)))
         {
             return false;
         }
@@ -54,7 +62,10 @@ internal static class ShellLiteralWrite
                 case ShellTokenKind.Word when pending is null:
                     words.Add(token.Text);
                     break;
-                case ShellTokenKind.HereText when (pending is null or ShellTokenKind.InputRedirect) && IsLiteralHereText(token.Text):
+                case ShellTokenKind.HereText when pending is null && IsLiteralHereText(token.Text) && !token.Text.Contains('\n', StringComparison.Ordinal):
+                    hasRedirections = true;
+                    break;
+                case ShellTokenKind.HereText when pending == ShellTokenKind.InputRedirect && IsLiteralHereText(token.Text):
                     hasRedirections = true;
                     break;
                 case ShellTokenKind.WriteRedirect or ShellTokenKind.InputRedirect when pending is null:
@@ -76,7 +87,7 @@ internal static class ShellLiteralWrite
             }
         }
 
-        return redirect is null && IsLiteralWriter(words, hasRedirections, targets) && targets.Count > 0 && targets.All(IsPlainFile);
+        return redirect is null && IsLiteralWriter(words, hasRedirections, targets) && targets.Count > 0 && targets.All(target => IsPlainFile(target, workingDirectory));
     }
 
     /// <summary>Whether one simple command is an allowed writer; its <c>tee</c> operands are added to the targets.</summary>
@@ -128,30 +139,81 @@ internal static class ShellLiteralWrite
     private static bool IsLiteralHereText(string text) =>
         !text.AsSpan().ContainsAny(Expansions) && !text.Split('\n').Any(line => line.EndsWith('\\'));
 
-    private static bool IsPlainFile(string target)
+    /// <summary>
+    /// Whether the command is one simple command whose first line opens one here-document with a plain delimiter (a name, bare
+    /// or wholly in single or double quotes; <c>&lt;&lt;-</c> strips tabs), and whose last line, and no line before it, ends the
+    /// body. The opening line may not continue onto the next (a backslash, an open quote), so the body starts where the
+    /// tokenizer reads it; the body may not expand (<c>$</c>, a backtick) or join lines (a trailing backslash).
+    /// </summary>
+    private static bool IsPlainHereDocument(string command)
+    {
+        string[] lines = (command.EndsWith('\n') ? command[..^1] : command).Split('\n');
+        string opener = lines[0];
+        Match opening = HereDocumentOpening().Match(opener);
+        if (lines.Length < 2 || !opening.Success || opener.Count(character => character == '<') != 2
+            || opener.AsSpan().ContainsAny(OpenerSpecials) || HasEmptyQuotes(opener) || !QuotesClose(opener))
+        {
+            return false;
+        }
+
+        string delimiter = opening.Groups["delimiter"].Value;
+        bool stripsTabs = opening.Groups["strip"].Value.Length > 0;
+        string[] body = [.. lines.Skip(1).Select(line => stripsTabs ? line.TrimStart('\t') : line)];
+        return body[^1] == delimiter
+            && !body[..^1].Any(line => line == delimiter || line.AsSpan().ContainsAny(Expansions) || line.EndsWith('\\'));
+    }
+
+    private static bool QuotesClose(string line)
+    {
+        char? quote = null;
+        foreach (char character in line)
+        {
+            if (quote is null && character is '\'' or '"')
+            {
+                quote = character;
+            }
+            else if (character == quote)
+            {
+                quote = null;
+            }
+        }
+
+        return quote is null;
+    }
+
+    /// <summary>The tokenizer drops an empty quoted word, so the text around it would be read differently from the shell.</summary>
+    private static bool HasEmptyQuotes(string text) =>
+        text.Contains("''", StringComparison.Ordinal) || text.Contains("\"\"", StringComparison.Ordinal);
+
+    private static bool IsPlainFile(string target, string? workingDirectory)
     {
         if (target.Length == 0 || target == "-" || target[0] == '=' || target.AsSpan().ContainsAny(TargetSpecials))
         {
             return false;
         }
 
-        string resolved = Resolve(target);
+        string path = target.Replace('\\', '/');
+        if (!path.StartsWith('/') && !DriveRoot().IsMatch(path))
+        {
+            if (workingDirectory is null)
+            {
+                return false;
+            }
+
+            path = $"{workingDirectory.Replace('\\', '/')}/{path}";
+        }
+
+        string resolved = Resolve(path);
         if (resolved == DevNull)
         {
             return true;
         }
 
-        string[] segments = resolved.Split('/', StringSplitOptions.RemoveEmptyEntries);
-
         // Windows drops a trailing dot or space from a name, so "loop.md." is "loop.md" there.
-        if (segments.Any(segment => segment != ".." && (segment.EndsWith('.') || segment.EndsWith(' '))))
-        {
-            return false;
-        }
-
-        bool outsideTheFolder = resolved.StartsWith('/') || (segments.Length > 0 && segments[0] == "..");
-        bool device = outsideTheFolder && segments.Any(segment => DeviceDirectories.Contains(segment.ToLowerInvariant()));
-        return !device && !PromptQueueFiles.Contains(target) && !PromptQueueFiles.Contains(resolved);
+        string[] segments = resolved.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        bool windowsAlias = segments.Any(segment => segment != ".." && (segment.EndsWith('.') || segment.EndsWith(' ')));
+        bool device = DeviceDirectories.Any(directory => $"{resolved}/".StartsWith(directory, StringComparison.OrdinalIgnoreCase));
+        return !windowsAlias && !device && !PromptQueueFiles.Contains(target) && !PromptQueueFiles.Contains(resolved);
     }
 
     /// <summary>The path with <c>.</c> segments dropped and each <c>..</c> applied to the segment before it, where there is one.</summary>
@@ -179,6 +241,16 @@ internal static class ShellLiteralWrite
 
         return (rooted ? "/" : string.Empty) + string.Join('/', segments);
     }
+
+    /// <summary>A here-document operator (<c>&lt;&lt;</c> or <c>&lt;&lt;-</c>), not a here-string's <c>&lt;&lt;&lt;</c>.</summary>
+    [GeneratedRegex("(?<!<)<<(?!<)")]
+    private static partial Regex HereDocumentOperator();
+
+    [GeneratedRegex("""<<(?<strip>-?)[ \t]*(?:'(?<delimiter>[A-Za-z_][A-Za-z0-9_]*)'|"(?<delimiter>[A-Za-z_][A-Za-z0-9_]*)"|(?<delimiter>[A-Za-z_][A-Za-z0-9_]*))(?=[ \t>]|$)""")]
+    private static partial Regex HereDocumentOpening();
+
+    [GeneratedRegex("^[A-Za-z]:/")]
+    private static partial Regex DriveRoot();
 
     /// <summary>Whitespace or a control character the shell does not split on (or treats differently from the tokenizer).</summary>
     private static bool IsUnusualSpace(char character) =>
