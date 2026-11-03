@@ -84,7 +84,7 @@ public sealed partial class HookDecisionGoldenTests
         new("an unreadable pin, an edit", "pre-tool-use", root => ToolCall(root, "Edit", "src/A.cs"), Setup: root => File.WriteAllText(Path.Combine(root, "dotnet-tools.json"), "{ not json")),
         new("an unreadable red/green record, a test edit", "pre-tool-use", root => ToolCall(root, "Edit", "tests/ATests.cs"), Setup: CorruptTestLock),
         new("an unreadable red/green record, a source edit", "pre-tool-use", root => ToolCall(root, "Edit", "src/A.cs"), Setup: CorruptTestLock),
-        new("a relayed session command and a protected write", "pre-tool-use", root => Tool(root, "Bash", "command", "echo /lockflight:approve spec > lockflight.yaml")),
+        new("a relayed session command and a protected write", "pre-tool-use", root => Tool(root, "Bash", "command", "claude -p \"/lockflight:approve spec\" > lockflight.yaml")),
         new("Stop with the stop gate off", "stop", root => Event(root, "Stop")),
         new("PostToolUse", "post-tool-use", root => ToolCall(root, "Edit", "lockflight.yaml")),
         new("SubagentStop", "subagent-stop", root => Event(root, "SubagentStop")),

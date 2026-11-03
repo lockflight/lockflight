@@ -191,6 +191,18 @@ or interpreters, and allows what it does not parse. A changed test file is still
 `redgreen green` and at review, and a protected path by CI. See
 [what the shell write detection sees](guardrails-and-boundaries.md#what-the-shell-write-detection-sees).
 
+## A note that mentions `/lockflight:approve` is blocked: "would send '/lockflight:approve' as a prompt"
+
+The relay guard blocks any tool call other than a file tool whose input mentions an in-session human command
+(`/lockflight:approve`, `/lockflight:baseline`, `/lockflight:reset`, `/lockflight:amend`), because a shell command, a scheduled
+task, a message or a subagent prompt could hand it to Claude Code as if you had typed it. To save a note or a doc that mentions
+one, write the file with the **Write or Edit tool**: the guard checks where file tools write, not what they say. A Bash command
+that only writes literal text to files also passes: `cat`, `echo`, `printf` and `tee` with quoted arguments or one
+here-document that is the whole command (`cat <<'EOF' > memory-bank/note.md`, the body, then `EOF` as the last line), no `$`
+or backtick anywhere, and plain file targets. Anything more (another
+program, a pipe into one, a substitution, a variable, a background `&`, a subshell) is checked like any other command. MCP tools
+are always checked, whatever their name. See [guardrails and boundaries](guardrails-and-boundaries.md).
+
 ## `command not found: lockflight`
 
 The install puts `~/.lockflight/bin` on `PATH` for **new** terminals only. Open a new terminal, or load the line now:

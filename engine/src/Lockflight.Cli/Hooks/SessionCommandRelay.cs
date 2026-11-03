@@ -10,11 +10,18 @@ namespace Lockflight.Cli.Hooks;
 /// a session, a loop, a subagent's prompt or a shell command. A prompt Claude Code starts by itself expands slash commands like a
 /// typed one and its hook payload looks the same, so the only place to stop the agent from deciding for the person in the session
 /// is the call that would queue the prompt. Tools that only read or write files are exempt, so specs and docs that mention the
-/// commands can still be edited, except on the files Claude Code reads prompts from (<see cref="PromptQueueFiles"/>): every write
-/// there is blocked, by a file tool or a shell command, because a prompt can be put together across several edits.
+/// commands can still be edited, and so is a POSIX shell command that only writes literal text to files
+/// (<see cref="ShellLiteralWrite"/>), except on the files Claude Code reads prompts from (<see cref="PromptQueueFiles"/>): every
+/// write there is blocked, by a file tool or a shell command, because a prompt can be put together across several edits. Any
+/// other tool is checked whatever its name or input looks like, MCP tools included; when a blocked call writes a file, the
+/// message says to save the text with a file tool instead.
 /// </summary>
 internal static class SessionCommandRelay
 {
+    /// <summary>Added to a block of a call that writes a file: the way to save text that mentions a command.</summary>
+    private const string NoteHint =
+        " To save a note that mentions the command, write the file with the Write or Edit tool: Lockflight checks where file tools write, not what they say.";
+
     /// <summary>The tools that only read or write files: what they write is checked, not what they say.</summary>
     private static readonly HashSet<ToolKind> FileKinds = [ToolKind.Read, ToolKind.Search, ToolKind.Edit, ToolKind.Write, ToolKind.Notebook];
 
@@ -30,7 +37,7 @@ internal static class SessionCommandRelay
                 $"lockflight: {toolName} would write {queue}, a file Claude Code reads prompts from, where a queued in-session command ({commands}) would not be seen. Use the tool for the purpose (CronCreate, SendMessage), or ask the person to edit the file.");
         }
 
-        if (FileKinds.Contains(input.Tool.Kind))
+        if (FileKinds.Contains(input.Tool.Kind) || OnlyWritesLiteralText(input))
         {
             return null;
         }
@@ -41,12 +48,19 @@ internal static class SessionCommandRelay
             {
                 return HookDecision.Block(
                     $"{spec.Name.Split(':')[^1]}-relay",
-                    $"lockflight: {toolName} would send '/{spec.Name}' as a prompt. Only the person {spec.Decision}: they type /{spec.Name} themselves, or {HumanOnlyCommands.OpenATerminalAndRun($"lockflight {spec.TerminalCommand}")}.");
+                    $"lockflight: {toolName} would send '/{spec.Name}' as a prompt. Only the person {spec.Decision}: they type /{spec.Name} themselves, or {HumanOnlyCommands.OpenATerminalAndRun($"lockflight {spec.TerminalCommand}")}.{(WritesAFile(input) ? NoteHint : string.Empty)}");
             }
         }
 
         return null;
     }
+
+    private static bool OnlyWritesLiteralText(HookRequest input) =>
+        input.Tool is { Kind: ToolKind.Shell, Shell: ShellDialect.Posix } && input.Command is string command && ShellLiteralWrite.OnlyWritesLiteralText(command, input.WorkingDirectory);
+
+    private static bool WritesAFile(HookRequest input) =>
+        input.Tool.WritesFiles
+        || (input.Tool is { Kind: ToolKind.Shell, Shell: ShellDialect shell } && input.Command is string command && ShellWriteTargets.Find(command, shell).Files.Count > 0);
 
     /// <summary>The prompt queue file the call writes, if any.</summary>
     private static string? QueueWrite(HookRequest input)

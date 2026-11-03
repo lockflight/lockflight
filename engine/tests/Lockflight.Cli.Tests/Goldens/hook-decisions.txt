@@ -286,7 +286,7 @@ stderr:
 ## a relayed session command and a protected write (pre-tool-use)
 exit: 2 HookBlock
 stdout: 
-stderr: lockflight: Bash would send '/lockflight:approve' as a prompt. Only the person approves: they type /lockflight:approve themselves, or open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `lockflight approve`.
+stderr: lockflight: Bash would send '/lockflight:approve' as a prompt. Only the person approves: they type /lockflight:approve themselves, or open a separate terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run `lockflight approve`. To save a note that mentions the command, write the file with the Write or Edit tool: Lockflight checks where file tools write, not what they say.
 ledger: type=hook.blocked signature=pre-tool-use:approve-relay summary=approve-relay tool=Bash agent=main
 
 ## Stop with the stop gate off (stop)

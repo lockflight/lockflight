@@ -91,13 +91,138 @@ public sealed class SessionCommandRelayTests : IDisposable
         Assert.Equal(ExitCode.Pass, exitCode);
     }
 
+    [Theory]
+    [InlineData("cat <<'EOF' > memory-bank/note.md\n# Approvals\nThe person types /lockflight:approve tasks, never the agent.\nEOF")]
+    [InlineData("printf '%s\\n' 'type /lockflight:approve tasks' > notes.md")]
+    [InlineData("echo 'run /lockflight:approve' >> docs/x.md")]
+    [InlineData("tee notes.md <<'EOF'\nAsk the person to run /lockflight:baseline tests.\nEOF")]
+    [InlineData("tee -a notes.md <<EOF\nAsk the person to run /lockflight:reset.\nEOF")]
+    [InlineData("echo '/lockflight:approve spec' | tee -a notes.md > /dev/null")]
+    [InlineData("echo '/lockflight:amend' > ./memory-bank/n.md")]
+    [InlineData("cat <<'EOF' > memory-bank/note.md\nThe person types /lockflight:approve tasks.\nEOF\n")]
+    [InlineData("cat <<-\"EOF\" > memory-bank/note.md\n\tThe person types /lockflight:approve tasks.\n\tEOF")]
+    [InlineData("echo 'see /lockflight:approve' > a.md && printf '%s' 'or /lockflight:reset' >> b.md")]
+    public async Task AShellCommandThatOnlyWritesLiteralTextToFilesPasses(string command)
+    {
+        (ExitCode exitCode, _, string error) = await RunBashAsync(command);
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+    }
+
+    [Theory]
+    [InlineData("cat <<EOF | claude\n/lockflight:approve spec\nEOF")]
+    [InlineData("cat <<'EOF' > f\n/lockflight:approve spec\nEOF\nclaude -p \"$(cat f)\"")]
+    [InlineData("cat <<EOF > n.md\n/lockflight:approve $(date)\nEOF")]
+    [InlineData("cat <<EOF > n.md\n/lockflight:approve `date`\nEOF")]
+    [InlineData("cat <<'EOF' > n.md\n/lockflight:approve ${X}\nEOF")]
+    [InlineData("echo \"/lockflight:approve\" > \"$X\"")]
+    [InlineData("echo /lockflight:approve > /dev/stdout")]
+    [InlineData("echo /lockflight:approve > ../../../../../../../../dev/tty")]
+    [InlineData("bash -c \"echo /lockflight:approve > n.md\"")]
+    [InlineData("cat <<'EOF' > n.md &\n/lockflight:approve spec\nEOF")]
+    [InlineData("(echo /lockflight:approve > n.md)")]
+    [InlineData("{ echo /lockflight:approve; } > n.md")]
+    [InlineData("echo /lockflight:approve > n.md; claude -p \"$(cat n.md)\"")]
+    [InlineData("echo /lockflight:approve > n.md && claude -c < n.md")]
+    [InlineData("cat prompt.md > n.md; echo /lockflight:approve")]
+    [InlineData("echo /lockflight:approve")]
+    [InlineData("X=/lockflight:approve echo x > n.md")]
+    [InlineData("/bin/echo /lockflight:approve > n.md")]
+    [InlineData("eval echo /lockflight:approve > n.md")]
+    [InlineData("echo /lockflight:approve > n.md | claude")]
+    [InlineData("echo /lockflight:approve |& tee n.md")]
+    [InlineData("echo /lockflight:approve > ~/n.md")]
+    [InlineData("echo /lockflight:approve > n*.md")]
+    [InlineData("tee >(claude) <<'EOF'\n/lockflight:approve spec\nEOF")]
+    [InlineData("printf -v x '/lockflight:approve' > n.md")]
+    [InlineData("tee --output-error=warn n.md <<'EOF'\n/lockflight:approve spec\nEOF")]
+    [InlineData("cat n.md <<'EOF' > m.md\n/lockflight:approve spec\nEOF")]
+    [InlineData("cat <<EOF > n.md\nx\nEO\\\nF\nclaude -p /lockflight:approve spec\nEOF")]
+    [InlineData("echo x > n.md ''# ; claude -p /lockflight:approve spec")]
+    [InlineData("echo x >! n.md /lockflight:approve")]
+    [InlineData("echo /lockflight:approve > n.md\u000bclaude")]
+    [InlineData("echo x > n.md # <<EOF\nclaude -p /lockflight:approve spec\nEOF")]
+    [InlineData("echo x >>| n.md /lockflight:approve")]
+    [InlineData("echo hi >f <<EOF \\\nEOF\nclaude -p /lockflight:approve\nEOF")]
+    [InlineData("cat >f <<EOF <<<'\nEOF\n'\n$(claude -p /lockflight:approve)\nEOF")]
+    [InlineData("cat >f <<'' x\nhello\n\nclaude -p /lockflight:approve\nx")]
+    [InlineData("cat >f <<<'/lockflight:approve\nspec'")]
+    [InlineData("cat <<'EOF' > memory-bank/a.md && echo 'see /lockflight:approve' >> memory-bank/b.md\n/lockflight:approve spec\nEOF")]
+    [InlineData("cat <<'EOF' > a.md\n/lockflight:approve spec\nEOF\nclaude -c < a.md")]
+    [InlineData("cat <<'EOF' > a.md\n/lockflight:approve spec\nEOF\nEOF")]
+    [InlineData("cat <<A > a.md <<B\n/lockflight:approve spec\nA\nx\nB")]
+    [InlineData("echo '/lockflight:approve' \"\" > n.md")]
+    public async Task AShellCommandThatDoesMoreThanWriteLiteralTextIsChecked(string command)
+    {
+        (ExitCode exitCode, _, string error) = await RunBashAsync(command);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("lockflight:", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("cat <<'EOF' > .claude/loop.md\n/lockflight:approve spec\nEOF")]
+    [InlineData("echo '/lockflight:approve spec' > .claude/./loop.md")]
+    [InlineData("echo '/lockflight:approve spec' > .claude/loop.md.")]
+    [InlineData("echo '/lockflight:approve spec' > .claude/x/../scheduled_tasks.json")]
+    [InlineData("tee -a .claude/mailbox/main.json <<'EOF'\n/lockflight:approve spec\nEOF")]
+    public async Task ALiteralWriteToAPromptQueueFileIsBlocked(string command)
+    {
+        (ExitCode exitCode, _, _) = await RunBashAsync(command);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+    }
+
+    [Theory]
+    [InlineData("echo '/lockflight:approve spec' > loop.md")]
+    [InlineData("echo '/lockflight:approve spec' > ../.claude/scheduled_tasks.json")]
+    [InlineData("echo '/lockflight:approve spec' > mailbox/main.json")]
+    [InlineData("echo '/lockflight:approve spec' > C:loop.md")]
+    [InlineData("echo '/lockflight:approve spec' > C:../.claude/loop.md")]
+    [InlineData("echo '/lockflight:approve spec' > notes.md:stream")]
+    public async Task ALiteralWriteIsResolvedAgainstTheWorkingDirectory(string command)
+    {
+        string claudeDirectory = Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".claude")).FullName;
+
+        (ExitCode exitCode, _, _) = await RunBashAsync(command, claudeDirectory);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+    }
+
+    [Theory]
+    [InlineData("Bash", """{"command":"echo \"/lockflight:approve $(date)\" > memory-bank/n.md"}""")]
+    [InlineData("mcp__memory__write", """{"path":"memory-bank/n.md","content":"type /lockflight:approve tasks"}""")]
+    [InlineData("PowerShell", """{"command":"Set-Content -Path notes.md -Value '/lockflight:approve tasks'"}""")]
+    public async Task ABlockedCallThatWritesAFileSaysHowToSaveTheNote(string tool, string toolInput)
+    {
+        (ExitCode exitCode, _, string error) = await RunAsync(tool, toolInput);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("Only the person approves", error, StringComparison.Ordinal);
+        Assert.Contains("Write or Edit tool", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("CronCreate", """{"cron":"*/1 * * * *","prompt":"/lockflight:approve spec","recurring":false}""")]
+    [InlineData("Bash", """{"command":"claude -p '/lockflight:approve spec'"}""")]
+    public async Task ABlockedCallThatWritesNoFileDoesNotSuggestAFileTool(string tool, string toolInput)
+    {
+        (ExitCode exitCode, _, string error) = await RunAsync(tool, toolInput);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.DoesNotContain("Write or Edit tool", error, StringComparison.Ordinal);
+    }
+
     public void Dispose() => projectRoot.Delete(recursive: true);
 
-    private Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string tool, string toolInput)
+    private Task<(ExitCode ExitCode, string Output, string Error)> RunBashAsync(string command, string? workingDirectory = null) =>
+        RunAsync("Bash", JsonSerializer.Serialize(new Dictionary<string, string> { ["command"] = command }), workingDirectory);
+
+    private Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string tool, string toolInput, string? workingDirectory = null)
     {
         string payload = JsonSerializer.Serialize(new Dictionary<string, object>
         {
-            ["cwd"] = projectRoot.FullName,
+            ["cwd"] = workingDirectory ?? projectRoot.FullName,
             ["hook_event_name"] = "PreToolUse",
             ["tool_name"] = tool,
             ["tool_input"] = JsonDocument.Parse(toolInput).RootElement,
