@@ -56,6 +56,66 @@ public sealed class ApprovalStoreTests : IDisposable
     }
 
     [Theory]
+    [InlineData("- [x] T001 Setup\n- [X] T002 [P] [US1] (FR-001) Build the parser\n")]
+    [InlineData("- [x] T001 Setup\r\n- [ ] T002 [P] [US1] (FR-001) Build the parser\r\n")]
+    public void TickingTasksKeepsTheTasksApprovalValid(string ticked)
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        File.WriteAllText(Feature.TasksPath, "- [ ] T001 Setup\n- [ ] T002 [P] [US1] (FR-001) Build the parser\n");
+        File.WriteAllText(Feature.PlanPath, "# Plan\n");
+        ApprovalStore store = new(Feature);
+        store.Save(ApprovalPhase.Tasks, "dev@example.com", DateTimeOffset.UnixEpoch, "0.0.0-test");
+
+        File.WriteAllText(Feature.TasksPath, ticked);
+
+        Assert.Equal(ApprovalState.Valid, store.Check(ApprovalPhase.Tasks).State);
+    }
+
+    [Theory]
+    [InlineData("- [ ] T001 Setup\n", "- [x] T001 Set up the project\n")]
+    [InlineData("- [ ] T001 Setup\n", "- [x] T001 Setup\n- [ ] T002 Added later\n")]
+    [InlineData("- [ ] Setup\n", "- [x] Setup\n")]
+    [InlineData("- [ ] T001 Setup\n- [ ] check the release notes\n", "- [x] T001 Setup\n- [x] check the release notes\n")]
+    public void ATickNextToAnyOtherChangeOrOffATaskLineStillMakesItStale(string approved, string edited)
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        File.WriteAllText(Feature.TasksPath, approved);
+        ApprovalStore store = new(Feature);
+        store.Save(ApprovalPhase.Tasks, "dev@example.com", DateTimeOffset.UnixEpoch, "0.0.0-test");
+
+        File.WriteAllText(Feature.TasksPath, edited);
+
+        Assert.Equal(["tasks.md"], store.Check(ApprovalPhase.Tasks).ChangedArtifacts);
+    }
+
+    [Fact]
+    public void ATasksApprovalRecordedWithTicksAsWrittenStaysValid()
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        const string Ticked = "- [x] T001 Setup\n- [ ] T002 Build\n";
+        File.WriteAllText(Feature.TasksPath, Ticked);
+        File.WriteAllText(Feature.PlanPath, "# Plan\n");
+        ApprovalStore store = new(Feature);
+        string plan = ArtifactHash.Of(Feature.PlanPath);
+        store.Save(ApprovalPhase.Tasks, [("tasks.md", ArtifactHash.Of(Feature.TasksPath)), ("plan.md", plan)], "dev@example.com", DateTimeOffset.UnixEpoch, "0.3.0");
+
+        Assert.Equal(ApprovalState.Valid, store.Check(ApprovalPhase.Tasks).State);
+    }
+
+    [Fact]
+    public void TicksInTheSpecStillChangeItsApproval()
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        File.WriteAllText(Feature.SpecPath, "# Spec\n- [ ] T001 looks like a task\n");
+        ApprovalStore store = new(Feature);
+        store.Save(ApprovalPhase.Spec, "dev@example.com", DateTimeOffset.UnixEpoch, "0.0.0-test");
+
+        File.WriteAllText(Feature.SpecPath, "# Spec\n- [x] T001 looks like a task\n");
+
+        Assert.Equal(ApprovalState.Stale, store.Check(ApprovalPhase.Spec).State);
+    }
+
+    [Theory]
     [InlineData("not json")]
     [InlineData("[1, 2]")]
     [InlineData("{\"feature\": 7, \"phase\": \"spec\", \"artifacts\": {}}")]

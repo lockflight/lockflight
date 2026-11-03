@@ -96,7 +96,7 @@ and the tests will call. The crew's test author reads it.
 
 | Part | Rule |
 |---|---|
-| `- [ ]` | a checkbox; `- [x]` marks it done (the checks treat both alike) |
+| `- [ ]` | a checkbox; `- [x]` marks it done (the checks treat both alike, and ticking a task leaves the tasks approval valid: any other edit makes it stale) |
 | `T012` | `T` and three or more digits |
 | `[P]` | optional: may run in parallel with others |
 | `[US1]` | the user story it belongs to. A task without it (setup, foundational, polish) is not a story task and needs no requirement |

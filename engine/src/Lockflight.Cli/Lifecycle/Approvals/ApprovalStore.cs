@@ -55,10 +55,21 @@ internal sealed class ApprovalStore(Feature feature)
     /// Compares the record with the artifacts on disk. The record must name this feature and phase: a record copied from another
     /// feature (whose artifacts may hash the same) or saved as another phase approves nothing here.
     /// </summary>
-    public ApprovalCheck Check(ApprovalPhase phase) => Check(phase, [.. CurrentHashes(phase)]);
+    public ApprovalCheck Check(ApprovalPhase phase) => Check(phase, Snapshot(phase));
+
+    /// <summary>As <see cref="Check(ApprovalPhase)"/>, against artifacts already read (<paramref name="snapshot"/>).</summary>
+    /// <remarks>
+    /// A record also matches an artifact's <see cref="ArtifactSnapshot.AsWrittenHash"/>: an earlier engine recorded <c>tasks.md</c> with
+    /// its ticked boxes as written, and that file, unchanged, is still approved.
+    /// </remarks>
+    public ApprovalCheck Check(ApprovalPhase phase, IReadOnlyList<ArtifactSnapshot> snapshot) =>
+        Check(phase, [.. snapshot.Select(artifact => (artifact.Name, artifact.Hash, artifact.AsWrittenHash))]);
 
     /// <summary>As <see cref="Check(ApprovalPhase)"/>, against hashes already taken (<paramref name="current"/>) instead of reading the files again.</summary>
-    public ApprovalCheck Check(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> current)
+    public ApprovalCheck Check(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash)> current) =>
+        Check(phase, [.. current.Select(artifact => (artifact.Name, artifact.Hash, artifact.Hash))]);
+
+    private ApprovalCheck Check(ApprovalPhase phase, IReadOnlyList<(string Name, string Hash, string AsWrittenHash)> current)
     {
         string path = RecordPath(phase);
         if (!File.Exists(path))
@@ -88,7 +99,7 @@ internal sealed class ApprovalStore(Feature feature)
         }
 
         string[] changed = [.. current
-            .Where(artifact => Text(approved[artifact.Name]) != artifact.Hash)
+            .Where(artifact => Text(approved[artifact.Name]) is not string recorded || (recorded != artifact.Hash && recorded != artifact.AsWrittenHash))
             .Select(artifact => artifact.Name)];
         return new ApprovalCheck(phase, changed.Length == 0 ? ApprovalState.Valid : ApprovalState.Stale, Text(record["approvedBy"]), changed);
     }

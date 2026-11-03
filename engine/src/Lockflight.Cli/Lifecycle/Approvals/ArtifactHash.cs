@@ -30,6 +30,83 @@ internal static class ArtifactHash
 
     public static string Of(ReadOnlySpan<byte> content)
     {
+        byte[] normalised = Normalise(content);
+        return Convert.ToHexStringLower(SHA256.HashData(normalised));
+    }
+
+    /// <summary>
+    /// As <see cref="Of(ReadOnlySpan{byte})"/>, for <c>tasks.md</c>: a task line's box hashes as open whether it is ticked or not
+    /// (<c>- [x] T012 …</c> as <c>- [ ] T012 …</c>), so ticking off tasks during implementation leaves the tasks approval valid. Any
+    /// other change, including a ticked box on a line that is not a task, still changes the hash. A file without a ticked task hashes
+    /// as <see cref="Of(ReadOnlySpan{byte})"/> does.
+    /// </summary>
+    public static string OfTasks(ReadOnlySpan<byte> content)
+    {
+        byte[] normalised = Normalise(content);
+        int lineStart = 0;
+        for (int index = 0; index <= normalised.Length; index++)
+        {
+            if (index == normalised.Length || normalised[index] == LineFeed)
+            {
+                if (TickedTaskBox(normalised, lineStart, index) is int box)
+                {
+                    normalised[box] = (byte)' ';
+                }
+
+                lineStart = index + 1;
+            }
+        }
+
+        return Convert.ToHexStringLower(SHA256.HashData(normalised));
+    }
+
+    /// <summary>
+    /// The index of the <c>x</c> in a task line's ticked box (<c>- [x] T001</c>, as <see cref="TasksDocument"/> reads a task: blanks,
+    /// a dash, blanks, the box, blanks, <c>T</c>, three or more digits and a blank); null for any other line. ASCII only, so the bytes are
+    /// matched as written.
+    /// </summary>
+    private static int? TickedTaskBox(byte[] text, int start, int end)
+    {
+        int index = SkipBlanks(text, start, end);
+        if (index >= end || text[index] != (byte)'-')
+        {
+            return null;
+        }
+
+        int open = SkipBlanks(text, index + 1, end);
+        if (open == index + 1 || open + 2 >= end || text[open] != (byte)'[' || text[open + 1] is not ((byte)'x' or (byte)'X') || text[open + 2] != (byte)']')
+        {
+            return null;
+        }
+
+        int id = SkipBlanks(text, open + 3, end);
+        if (id == open + 3 || id >= end || text[id] != (byte)'T')
+        {
+            return null;
+        }
+
+        int digits = id + 1;
+        while (digits < end && text[digits] is >= (byte)'0' and <= (byte)'9')
+        {
+            digits++;
+        }
+
+        return digits - id - 1 >= 3 && SkipBlanks(text, digits, end) > digits ? open + 1 : null;
+    }
+
+    private static int SkipBlanks(byte[] text, int index, int end)
+    {
+        while (index < end && text[index] is (byte)' ' or (byte)'\t')
+        {
+            index++;
+        }
+
+        return index;
+    }
+
+    /// <summary>The content without leading BOMs and with CRLF and a lone CR as LF.</summary>
+    private static byte[] Normalise(ReadOnlySpan<byte> content)
+    {
         ReadOnlySpan<byte> text = FromUtf16Or32(content) ?? content;
         while (text.StartsWith(Utf8Bom))
         {
@@ -53,7 +130,7 @@ internal static class ArtifactHash
             }
         }
 
-        return Convert.ToHexStringLower(SHA256.HashData(normalised.AsSpan(0, length)));
+        return normalised[..length];
     }
 
     /// <summary>

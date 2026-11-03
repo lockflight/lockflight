@@ -21,7 +21,7 @@ internal static class ApprovalPhaseNames
     public static IReadOnlyList<string> ArtifactsOf(ApprovalPhase phase) => phase switch
     {
         ApprovalPhase.Spec => ["spec.md"],
-        ApprovalPhase.Tasks => ["tasks.md", "plan.md"],
+        ApprovalPhase.Tasks => [ArtifactSnapshot.TasksName, "plan.md"],
         _ => throw new ArgumentOutOfRangeException(nameof(phase), phase, null),
     };
 }
