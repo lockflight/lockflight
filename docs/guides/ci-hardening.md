@@ -9,7 +9,8 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
 **On this page:** [What the generated workflow does](#what-the-generated-workflow-does) ·
 [What the CI judge shows](#what-the-ci-judge-shows-and-what-it-does-not) · [The CI judge action](#the-ci-judge-action) ·
 [CODEOWNERS for the protected paths](#what-you-add-codeowners-for-the-protected-paths) ·
-[Approvals of record](#approvals-of-record-the-platforms-review) · [Plan limits](#plan-limits) · [Locally](#locally) ·
+[Approvals of record](#approvals-of-record-the-platforms-review) ·
+[Enable workflows on a new repository](#enable-workflows-on-a-new-repository) · [Plan limits](#plan-limits) · [Locally](#locally) ·
 [Workspace shells](#workspace-shells-unit-repositories)
 
 ## What the generated workflow does
@@ -63,7 +64,8 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
     the person accepting the pull request runs `lockflight engine verify-lock .lockflight/engine.lock` first.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass
-  `--ci pr`; see [CI with a development build](getting-started.md#ci-with-a-development-build).
+  `--ci pr`; see [CI with a development build](getting-started.md#ci-with-a-development-build). On a new
+  repository, [enable workflows](#enable-workflows-on-a-new-repository) before the first pull request.
 - **`gate run --profile pr --base <merge base>`**, run by the judge at head in its worktree, in this order:
   1. `policy.protected` — lists protected files the PR changes (never fails; the list goes to the job summary);
   2. `format`, then `quality.suppressions` — suppressions the PR adds (`#pragma warning disable`, `[SuppressMessage]`,
@@ -249,6 +251,20 @@ and phase, and matches the current artifact hashes. A `--base` value starting wi
 a machine where the agent has your credentials, so this step is a **guardrail**; the review above is the approval of record.
 A `.sig` file next to a record (written by a 0.2 engine with `--sign`) is ignored. See
 [guardrails and boundaries](guardrails-and-boundaries.md).
+
+## Enable workflows on a new repository
+
+On some new repositories (seen after `gh repo create`), GitHub runs no workflow on `push` or `pull_request` until someone
+enables workflows: the Actions tab says "Workflows aren't being run on this repository" and offers "Enable Actions on this
+repository", although the Actions permissions API (`gh api repos/{owner}/{repo}/actions/permissions`) answers
+`"enabled": true`. No `push` or `pull_request` run starts (a workflow that also has `workflow_dispatch` can still be
+started by hand). A ruleset that requires the `gates` check then shows it as
+"Expected — Waiting for status to be reported" on every pull request, and nothing will ever report it.
+
+After pushing the workflow `init --ci pr` wrote, open the repository's Actions tab, enable workflows if GitHub asks, then push
+to `main` or open a pull request and check that `lockflight-gates` runs. `init` prints this step when it writes the workflow,
+and `lockflight doctor` warns (**github actions**) when the `gh` CLI is signed in and GitHub lists no `push` or `pull_request`
+run of the workflow (it skips a fork, whose pull requests run in the upstream repository).
 
 ## Plan limits
 

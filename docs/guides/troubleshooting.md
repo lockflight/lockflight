@@ -12,6 +12,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --self-test` reports MISSED or BROKEN](#doctor---self-test-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [review: changes not committed](#review-says-the-working-tree-has-changes-that-are-not-committed) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
+| CI | [the `gates` check waits: "Expected — Waiting for status to be reported"](#the-gates-check-waits-expected--waiting-for-status-to-be-reported) |
 | Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) |
 
 ## Every tool call is blocked: "engine not installed in this project"
@@ -156,6 +157,17 @@ and `link --installed` or `engine install` answers "unknown command": that user 
 - **claude code:** the plugin's hooks rely on `onFailure: block`, which Claude Code honours from 2.1.295: before it, a guard
   hook that times out lets the tool call through. Run `claude update`. `doctor` also warns when `claude --version` cannot be
   read, for example when `claude` is not on the `PATH` of the shell you run doctor in.
+
+## The `gates` check waits: "Expected — Waiting for status to be reported"
+
+A pull request shows the required `gates` check as "Expected — Waiting for status to be reported", and `lockflight-gates`
+never runs on it. On a new GitHub repository the usual cause is that workflows are not enabled yet: the Actions tab says
+"Workflows aren't being run on this repository", no push or pull_request run starts, and the Actions permissions API still answers
+`"enabled": true`. Open the Actions tab, enable workflows, then push to the pull request's branch (or close and reopen it) so
+the workflow runs. With the `gh` CLI signed in, `lockflight doctor` warns about this (**github actions**). Other causes: the
+workflow file is not on the branch yet, or it runs only when started by hand (`init --ci manual`, or a development build pin:
+see [CI with a development build](getting-started.md#ci-with-a-development-build)). See
+[enable workflows on a new repository](ci-hardening.md#enable-workflows-on-a-new-repository).
 
 ## "lockflight: internal error" or "the engine failed (exit N)"
 

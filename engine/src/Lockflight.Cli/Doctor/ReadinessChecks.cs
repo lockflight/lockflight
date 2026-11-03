@@ -3,8 +3,8 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
-using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Gates.Steps;
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Processes;
@@ -44,8 +44,9 @@ internal static class ReadinessChecks
     /// <param name="gitleaks">The gitleaks the secrets step runs (<c>LOCKFLIGHT_GITLEAKS</c>, else the one on PATH); null when there is none.</param>
     /// <param name="environment">The variables the plugin and Claude Code give the session, for the plugin engine check.</param>
     /// <param name="time">The clock, for the window of Stop timings read from the ledger.</param>
+    /// <param name="processes">Starts git and gh for the GitHub Actions check, doctor's only network call.</param>
     public static async Task<IReadOnlyList<DoctorCheck>> RunAsync(
-        string root, string? userHome, string? nugetPackages, string? gitleaks, EnvironmentReader environment, TimeProvider time, CancellationToken cancellationToken)
+        string root, string? userHome, string? nugetPackages, string? gitleaks, EnvironmentReader environment, TimeProvider time, RunTimedProcess processes, CancellationToken cancellationToken)
     {
         List<DoctorCheck> checks = [CheckManifest(root), .. ManifestSettingsChecks.Check(root), CheckPin(root), .. EngineLockCheck.Check(root)];
         if (CodeownersCheck.Check(root) is DoctorCheck codeowners)
@@ -76,6 +77,11 @@ internal static class ReadinessChecks
         if (WorkflowJudgeCheck.Check(root) is DoctorCheck workflowJudge)
         {
             checks.Add(workflowJudge);
+        }
+
+        if (await GitHubActionsCheck.CheckAsync(root, processes, cancellationToken) is DoctorCheck gitHubActions)
+        {
+            checks.Add(gitHubActions);
         }
 
         if (!ciOnly)

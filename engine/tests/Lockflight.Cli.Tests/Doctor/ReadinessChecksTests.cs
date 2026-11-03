@@ -4,12 +4,17 @@ using Lockflight.Cli.Doctor;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
 using Lockflight.Cli.Linking;
+using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Tests.Doctor;
 
 public sealed class ReadinessChecksTests : IDisposable
 {
     private const string DevelopmentVersion = "0.2.0-dev.20260101000000";
+
+    // git and gh fail as they do offline, so the GitHub Actions check never reaches the network from a test.
+    private static readonly RunTimedProcess NoNetwork = (fileName, arguments, workingDirectory, timeLimit, cancellationToken) =>
+        Task.FromResult(new ProcessResult(1, string.Empty, "offline", 0, TimedOut: false));
 
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-doctor-");
 
@@ -30,7 +35,7 @@ public sealed class ReadinessChecksTests : IDisposable
     {
         Write(".gitattributes", GitAttributesUpdater.Rule + "\n");
 
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
 
         DoctorCheck preset = Assert.Single(checks, check => check.Name == "lockflight preset");
         Assert.Equal(CheckStatus.Info, preset.Status);
@@ -58,7 +63,7 @@ public sealed class ReadinessChecksTests : IDisposable
         // init --speckit-preset installs the preset into a lite project, which has no .gitattributes rule.
         Write(".specify/presets/.registry", """{ "presets": { "lockflight": { "version": "0.1.0", "enabled": true } } }""");
 
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
 
         Assert.Contains(checks, check => check is { Name: "lockflight preset", Status: CheckStatus.Pass });
         Assert.Contains(checks, check => check.Name == "spec kit presets");
@@ -70,7 +75,7 @@ public sealed class ReadinessChecksTests : IDisposable
     {
         Write(".specify/presets/.registry", """{ "presets": { "lockflight": { "version": "0.1.0", "enabled": false } } }""");
 
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(checks, check => check.Name is "lockflight preset" or "spec kit presets");
     }
@@ -107,11 +112,22 @@ public sealed class ReadinessChecksTests : IDisposable
     }
 
     [Fact]
+    public async Task WhenGitAndGhCannotAnswerTheGitHubActionsCheckLeavesNoLine()
+    {
+        await InitAsync();
+        Assert.True(File.Exists(Path.Combine(root.FullName, Templates.WorkflowPath)));
+
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(checks, check => check.Name == "github actions");
+    }
+
+    [Fact]
     public async Task NoCoverageCheckRunsWithoutACollector()
     {
         Write(Manifest.FileName, "version: 1\n");
 
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(checks, check => check.Name == "coverage collector");
     }
@@ -279,7 +295,7 @@ public sealed class ReadinessChecksTests : IDisposable
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--ci-only"], string.Empty, root.FullName);
         Assert.True(exitCode == ExitCode.Pass, error);
 
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
 
         Assert.Equal(CheckStatus.Info, Assert.Single(checks, check => check.Name == "linked engine").Status);
         DoctorCheck settings = Assert.Single(checks, check => check.Name == "claude settings");
@@ -539,7 +555,7 @@ public sealed class ReadinessChecksTests : IDisposable
 
     private async Task<DoctorCheck> CheckAsync(string name)
     {
-        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, TestContext.Current.CancellationToken);
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
         return Assert.Single(checks, check => check.Name == name);
     }
 

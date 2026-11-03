@@ -8,6 +8,7 @@ namespace Lockflight.Cli.Init;
 internal static class CiPipeline
 {
     public const string GuideUrl = "https://github.com/lockflight/lockflight/blob/main/docs/guides/ci-other-platforms.md";
+    public const string GitHubGuideUrl = "https://github.com/lockflight/lockflight/blob/main/docs/guides/ci-hardening.md";
 
     /// <summary>The file that holds the Lockflight job on <paramref name="platform"/> when the repository has no pipeline yet.</summary>
     public static string PathFor(CiPlatform platform) => platform switch
@@ -32,18 +33,23 @@ internal static class CiPipeline
     };
 
     /// <summary>
-    /// What the person does next once CI files were written; nothing for GitHub, whose docs cover it. A GitLab pipeline that
-    /// does not include the job yet is named on every run: until it does, the job never runs.
+    /// What the person does next once CI files were written. A GitLab pipeline that does not include the job yet is named on every
+    /// run: until it does, the job never runs. A GitHub workflow that runs on pull requests comes with the step a new repository
+    /// may need before any workflow runs; GitHub's other settings are in the CI guide.
     /// </summary>
-    public static IReadOnlyList<string> NextSteps(CiPlatform platform, string root, IReadOnlyList<InitStep> steps)
+    public static IReadOnlyList<string> NextSteps(CiPlatform platform, string root, IReadOnlyList<InitStep> steps, CiTrigger trigger)
     {
         bool written = steps.Any(step => step.Outcome != FileOutcome.Unchanged);
         bool gitLabWithoutInclude = platform == CiPlatform.GitLab && !GitLabCiTemplate.IsIncludedBy(ReadOrEmpty(root, GitLabCiTemplate.RootPath));
-        return written || gitLabWithoutInclude ? Instructions(platform, steps, gitLabWithoutInclude) : [];
+        return written || gitLabWithoutInclude ? Instructions(platform, steps, gitLabWithoutInclude, trigger) : [];
     }
 
-    private static IReadOnlyList<string> Instructions(CiPlatform platform, IReadOnlyList<InitStep> steps, bool gitLabWithoutInclude) => platform switch
+    private static IReadOnlyList<string> Instructions(CiPlatform platform, IReadOnlyList<InitStep> steps, bool gitLabWithoutInclude, CiTrigger trigger) => platform switch
     {
+        CiPlatform.GitHub when trigger == CiTrigger.PullRequest =>
+        [
+            $"CI: on a new GitHub repository, open the Actions tab and enable workflows if it says \"Workflows aren't being run on this repository\", then push or open a pull request; until {Templates.WorkflowPath} has run, a required gates check waits as \"Expected — Waiting for status to be reported\": {GitHubGuideUrl}#enable-workflows-on-a-new-repository",
+        ],
         CiPlatform.Azure =>
         [
             $"CI: in Azure DevOps, create a pipeline from {AzurePipelinesTemplate.Path} and require it with a build validation policy on main; route the file to a required reviewer: {GuideUrl}#azure-pipelines",
