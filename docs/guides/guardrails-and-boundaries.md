@@ -133,8 +133,8 @@ rules that could match below it. Because `lockflight.yaml` sits at the root, who
 restore .`, `git reset --hard` or `git apply` are always blocked: name the files instead. The block of `git reset`, `restore`,
 `checkout`, `switch`, `clean` or `stash` names a command that does it for named files: `git revert <commit>` (for a commit that
 changed no protected file) or `git restore --source <commit> --staged --worktree -- <files>` for a reset,
-`git restore --staged -- <files>` to unstage, `git clean -f -- <files>`, `git stash push -- <files>`, and
-`git checkout "stash@{0}" -- <files>` for a stash pop. A tree that contains the project (`rm -rf ..`, `rm -rf ~` for a project under the home folder) is blocked without a
+`git restore --staged -- <files>` to unstage, `git clean -f -- <files>`, `git stash push --include-untracked -- <files>`, and
+`git checkout "stash@{0}" -- <files>` (or `"stash@{0}^3"` for files that were untracked) for a stash pop. A tree that contains the project (`rm -rf ..`, `rm -rf ~` for a project under the home folder) is blocked without a
 scan.
 
 It does **not** see, and so allows:
