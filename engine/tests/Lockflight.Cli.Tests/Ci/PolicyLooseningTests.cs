@@ -155,6 +155,23 @@ public sealed class PolicyLooseningTests : IAsyncLifetime
             Load("version: 2\nprotected:\n  - b/**\n  - a/**\nrouting:\n  preset: default\n  critical:\n    - b/**\n    - a/**\n")));
 
     [Fact]
+    public void AGlobRewrittenToCoverMoreLoosensNothing() =>
+        Assert.Empty(PolicyLoosening.Between(
+            Load("version: 2\nprotected:\n  - src/Payments/**\nrouting:\n  preset: default\n  critical:\n    - src/Payments/**\n  nonProduction:\n    - tools/**\n"),
+            Load("version: 2\nprotected:\n  - src/**\nrouting:\n  preset: default\n  critical:\n    - src/**\n  nonProduction:\n    - tools/**\n    - tools/scripts/**\n")));
+
+    [Fact]
+    public void AGlobRewrittenToCoverLessIsALoosening()
+    {
+        IReadOnlyList<string> loosened = PolicyLoosening.Between(
+            Load("version: 2\nprotected:\n  - src/**\nrouting:\n  preset: default\n  nonProduction:\n    - tools/scripts/**\n"),
+            Load("version: 2\nprotected:\n  - src/Payments/**\nrouting:\n  preset: default\n  nonProduction:\n    - tools/**\n"));
+
+        Assert.Contains("protected: removed src/**", loosened);
+        Assert.Contains("routing.nonProduction: added tools/**", loosened);
+    }
+
+    [Fact]
     public void ARemovedUnitIsALoosening() =>
         Assert.Contains("units: removed svc/b", PolicyLoosening.Between(
             Load("version: 2\nunits:\n  - path: svc/a\n  - path: svc/b\n"),

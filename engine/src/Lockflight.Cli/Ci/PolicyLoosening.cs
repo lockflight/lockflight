@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Paths;
 
 namespace Lockflight.Cli.Ci;
 
@@ -9,8 +10,11 @@ namespace Lockflight.Cli.Ci;
 /// the approvals check or default weakened, the CI judge's limits widened or its test inputs grown, a unit removed, or a unit
 /// repository's shell pointer removed or moved. The judge enforces the base's policy whatever the pull request says, so a looser
 /// head is no bypass of this run; it is named because merging it weakens every later one, and the check FAILs so that a person,
-/// not the agent, decides to merge it (through the platform, as for a finding). It is best effort: globs and layers are compared
-/// as written (a rewritten glob, a layer's narrowed paths or a new layer order are not seen), and settings that only shape a run
+/// not the agent, decides to merge it (through the platform, as for a finding). A glob is compared by what it matches: one removed
+/// from a list is no loosening when a single glob left still matches every path it did (<c>src/Payments/**</c> under
+/// <c>src/**</c>), and one added is none when a single glob already there did; a glob the comparison does not model counts as
+/// written (<see cref="GlobContainment"/>). It is best effort: globs are not combined (two narrower globs that together cover a
+/// removed one still name it), layers are compared by name (a layer's narrowed paths or a new layer order are not seen), and settings that only shape a run
 /// (time limits, the review model and budget, the build file, the stop filter, whether red/green commits its reds) are not compared.
 /// </summary>
 internal static class PolicyLoosening
@@ -19,7 +23,7 @@ internal static class PolicyLoosening
     public static IReadOnlyList<string> Between(Manifest baseManifest, Manifest head)
     {
         List<string> found = [];
-        Removed(found, "protected", baseManifest.ProtectedGlobs, head.ProtectedGlobs);
+        RemovedGlobs(found, "protected", baseManifest.ProtectedGlobs, head.ProtectedGlobs);
         Removed(found, "units", [.. baseManifest.Units.Select(unit => unit.Path)], [.. head.Units.Select(unit => unit.Path)]);
         Shell(found, baseManifest.Shell, head.Shell);
         if (baseManifest.StopGate && !head.StopGate)
@@ -64,12 +68,12 @@ internal static class PolicyLoosening
         From(found, "routing.require.reviewKeyFrom", before.Require.ReviewKeyFrom, after.Require.ReviewKeyFrom);
         Raised(found, "routing.require.architectureFrom", before.Require.ArchitectureFrom, after.Require.ArchitectureFrom);
         From(found, "routing.require.architectureDeclaredFrom", before.Require.ArchitectureDeclaredFrom, after.Require.ArchitectureDeclaredFrom);
-        Removed(found, "routing.critical", before.Critical, after.Critical);
-        Removed(found, "routing.dbPaths", before.DbPaths, after.DbPaths);
-        Removed(found, "routing.apiProjects", before.ApiProjects, after.ApiProjects);
-        Removed(found, "routing.requiredWorkflows", before.RequiredWorkflows, after.RequiredWorkflows);
-        Added(found, "routing.generatedPaths", before.GeneratedPaths, after.GeneratedPaths);
-        Added(found, "routing.nonProduction", before.NonProduction, after.NonProduction);
+        RemovedGlobs(found, "routing.critical", before.Critical, after.Critical);
+        RemovedGlobs(found, "routing.dbPaths", before.DbPaths, after.DbPaths);
+        RemovedGlobs(found, "routing.apiProjects", before.ApiProjects, after.ApiProjects);
+        RemovedGlobs(found, "routing.requiredWorkflows", before.RequiredWorkflows, after.RequiredWorkflows);
+        AddedGlobs(found, "routing.generatedPaths", before.GeneratedPaths, after.GeneratedPaths);
+        AddedGlobs(found, "routing.nonProduction", before.NonProduction, after.NonProduction);
         Removed(found, "routing.layers", [.. before.Layers.Select(layer => layer.Name)], [.. after.Layers.Select(layer => layer.Name)]);
     }
 
@@ -86,16 +90,16 @@ internal static class PolicyLoosening
         }
 
         From(found, "approvals.specFirstFrom", before.SpecFirstFrom, after.SpecFirstFrom);
-        Removed(found, "approvals.specFirstPaths", before.SpecFirstPaths, after.SpecFirstPaths);
-        Removed(found, "approvals.specPaths", before.SpecPaths, after.SpecPaths);
+        RemovedGlobs(found, "approvals.specFirstPaths", before.SpecFirstPaths, after.SpecFirstPaths);
+        RemovedGlobs(found, "approvals.specPaths", before.SpecPaths, after.SpecPaths);
     }
 
     private static void Ci(List<string> found, CiSettings before, CiSettings after)
     {
         Higher(found, "ci.maxRedCommits", before.MaxRedCommits, after.MaxRedCommits);
         Higher(found, "ci.flakyRetries", before.FlakyRetries, after.FlakyRetries);
-        Added(found, "ci.lowRiskPaths", before.LowRiskPaths, after.LowRiskPaths);
-        Added(found, "ci.testInputs", before.TestInputs, after.TestInputs);
+        AddedGlobs(found, "ci.lowRiskPaths", before.LowRiskPaths, after.LowRiskPaths);
+        AddedGlobs(found, "ci.testInputs", before.TestInputs, after.TestInputs);
     }
 
     /// <summary>A unit repository's pointer to its workspace shell, whose stricter policy and specs the judge adds: gone or moved.</summary>
@@ -173,8 +177,17 @@ internal static class PolicyLoosening
         found.AddRange(before.Except(after, StringComparer.Ordinal).Select(path => $"{key}: removed {path}"));
     }
 
-    private static void Added(List<string> found, string key, IReadOnlyList<string> before, IReadOnlyList<string> after)
+    /// <summary>A glob gone from a list that tightens as it grows, unless a glob left in it still matches every path it matched.</summary>
+    private static void RemovedGlobs(List<string> found, string key, IReadOnlyList<string> before, IReadOnlyList<string> after)
     {
-        found.AddRange(after.Except(before, StringComparer.Ordinal).Select(path => $"{key}: added {path}"));
+        found.AddRange(before.Distinct(StringComparer.Ordinal).Where(glob => !after.Any(kept => GlobContainment.Covers(kept, glob)))
+            .Select(glob => $"{key}: removed {glob}"));
+    }
+
+    /// <summary>A glob new in a list that loosens as it grows, unless a glob already in it matched every path it matches.</summary>
+    private static void AddedGlobs(List<string> found, string key, IReadOnlyList<string> before, IReadOnlyList<string> after)
+    {
+        found.AddRange(after.Distinct(StringComparer.Ordinal).Where(glob => !before.Any(had => GlobContainment.Covers(had, glob)))
+            .Select(glob => $"{key}: added {glob}"));
     }
 }
