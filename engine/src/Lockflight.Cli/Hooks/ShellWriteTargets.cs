@@ -24,6 +24,7 @@ internal sealed class ShellWriteTargets
     private readonly List<string> trees = [];
     private readonly List<string> sourceTrees = [];
     private readonly WorkingFolder folder = new();
+    private readonly Dictionary<string, string?> treeAdvice = new(StringComparer.Ordinal);
     private string? humanOnly;
     private string? humanOnlyIgnoringHelp;
 
@@ -33,6 +34,7 @@ internal sealed class ShellWriteTargets
         targets.Scan(command, dialect, nested: false);
         return new ShellWrites(Distinct(targets.files), Distinct(targets.trees), Distinct(targets.sourceTrees))
         {
+            TreeAdvice = targets.treeAdvice,
             HumanOnly = targets.humanOnly,
             HumanOnlyIgnoringHelp = targets.humanOnlyIgnoringHelp,
         };
@@ -123,8 +125,15 @@ internal sealed class ShellWriteTargets
 
         CommandWrites writes = CommandWriters.Of(command, dialect);
         files.AddRange(writes.Files.SelectMany(folder.Locate));
-        trees.AddRange(writes.Trees.SelectMany(folder.Locate));
-        sourceTrees.AddRange(writes.SourceTrees.SelectMany(folder.Locate));
+        List<string> locatedTrees = [.. writes.Trees.SelectMany(folder.Locate)];
+        List<string> locatedSourceTrees = [.. writes.SourceTrees.SelectMany(folder.Locate)];
+        trees.AddRange(locatedTrees);
+        sourceTrees.AddRange(locatedSourceTrees);
+        foreach (string tree in locatedTrees.Concat(locatedSourceTrees))
+        {
+            // Two commands that rewrite the same directory with different advice (or one with none) leave it without advice.
+            treeAdvice[tree] = treeAdvice.TryGetValue(tree, out string? earlier) && earlier != writes.TreeAdvice ? null : writes.TreeAdvice;
+        }
     }
 
     /// <summary>

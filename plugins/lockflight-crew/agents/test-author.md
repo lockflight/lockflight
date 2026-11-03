@@ -17,7 +17,10 @@ The caller names the story (for example `US1`) and the feature. Read, in this or
 
 1. `lockflight.yaml` to find the project root (run every engine command from the directory that holds it).
 2. The feature's `spec.md` (the story's Given/When/Then scenarios and its `FR-…` requirements), `plan.md` and `tasks.md`
-   under `specs/<feature>/`: the story's test tasks say which test files to write.
+   under `specs/<feature>/`: the story's test tasks say which test files to write. Put the story's tests in new files of their own,
+   never in a test file that existed when an earlier story's red was taken (that story's file, or one from before the
+   feature), even when the tasks say so, and say so in your report: the CI judge may rebuild an earlier story's red with such
+   a file, and the later tests in it need code that red does not have.
 3. The declared stubs in production code: members whose body is `throw new NotImplementedException();`. They are the API
    your tests call. Use only members that exist; read their signatures, do not guess them.
 4. The existing test projects and tests, to match their framework (xUnit v3 or v2, NUnit or MSTest), namespaces, usings and style.

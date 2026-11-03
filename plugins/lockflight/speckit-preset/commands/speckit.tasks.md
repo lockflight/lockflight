@@ -16,5 +16,9 @@ so follow them even where the text above says otherwise:
   `throw new NotImplementedException();`. The test tasks then write xUnit v3 tests tagged `[Trait("Requirement", "FR-001")]`
   against the stubs. `.lockflight/bin/lockflight redgreen red` must accept the red before the implementation tasks start, and
   `.lockflight/bin/lockflight redgreen green` closes the story.
+- **Each user story's tests in new test files of their own.** From the second story on, a story's test tasks name new test
+  files, never a test file that existed when an earlier story's red was taken (that story's file, or one from before the
+  feature): the CI judge may rebuild an earlier story's red with such a file, and the later tests in it need code that red does
+  not have.
 - After writing tasks.md, run `.lockflight/bin/lockflight phase check tasks` and fix every item that fails. A failure names
   each task, its line and why it was classified as it was.

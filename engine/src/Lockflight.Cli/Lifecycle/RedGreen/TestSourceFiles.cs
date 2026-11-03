@@ -20,7 +20,40 @@ internal static class TestSourceFiles
     /// <param name="testProjects">Test project directories relative to <paramref name="root"/>, '/'-separated ("." for the root).</param>
     /// <param name="className">The test's class as the runner names it: namespace-qualified, nested classes as <c>Outer+Inner</c>.</param>
     /// <returns>The matching files relative to the root, '/'-separated and ordered.</returns>
-    public static IReadOnlyList<string> Find(string root, IReadOnlyList<string> testProjects, string className, string method)
+    public static IReadOnlyList<string> Find(string root, IReadOnlyList<string> testProjects, string className, string method) =>
+        FindAll(root, testProjects, [(className, method)])[0];
+
+    /// <summary>As <see cref="Find"/> for several tests, reading each source file once; the results are in the order of <paramref name="tests"/>.</summary>
+    public static IReadOnlyList<IReadOnlyList<string>> FindAll(string root, IReadOnlyList<string> testProjects, IReadOnlyList<(string ClassName, string Method)> tests)
+    {
+        (Regex DeclaresType, Regex DeclaresMethod)[] patterns = [.. tests.Select(test => Patterns(test.ClassName, test.Method))];
+        List<string>[] found = [.. tests.Select(_ => new List<string>())];
+        IEnumerable<string> files = testProjects
+            .Select(project => project is "." or "" ? root : Path.Combine(root, project.Replace('/', Path.DirectorySeparatorChar)))
+            .Where(Directory.Exists)
+            .SelectMany(SourceFiles)
+            .Distinct(StringComparer.Ordinal);
+        foreach (string file in files)
+        {
+            if (Read(file) is not string text)
+            {
+                continue;
+            }
+
+            string relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+            for (int index = 0; index < patterns.Length; index++)
+            {
+                if (patterns[index].DeclaresType.IsMatch(text) && patterns[index].DeclaresMethod.IsMatch(text))
+                {
+                    found[index].Add(relative);
+                }
+            }
+        }
+
+        return [.. found.Select(paths => (IReadOnlyList<string>)[.. paths.Order(StringComparer.Ordinal)])];
+    }
+
+    private static (Regex DeclaresType, Regex DeclaresMethod) Patterns(string className, string method)
     {
         string typeName = className.Split('.', '+')[^1];
         int arity = typeName.IndexOf('`', StringComparison.Ordinal);
@@ -28,14 +61,7 @@ internal static class TestSourceFiles
         Regex declaresType = new($@"\b(?:class|record|struct)\s+{Regex.Escape(typeName)}\b", RegexOptions.CultureInvariant);
         Regex declaresMethod = new(
             $@"\b(?!(?:{NotAType})\b)[\w>\]?)]+\s+{Regex.Escape(method)}\s*(?:<[^<>()]*>)?\s*\(", RegexOptions.CultureInvariant);
-        return [.. testProjects
-            .Select(project => project is "." or "" ? root : Path.Combine(root, project.Replace('/', Path.DirectorySeparatorChar)))
-            .Where(Directory.Exists)
-            .SelectMany(SourceFiles)
-            .Distinct(StringComparer.Ordinal)
-            .Where(file => Declares(file, declaresType, declaresMethod))
-            .Select(file => Path.GetRelativePath(root, file).Replace('\\', '/'))
-            .Order(StringComparer.Ordinal)];
+        return (declaresType, declaresMethod);
     }
 
     private static IEnumerable<string> SourceFiles(string directory)
@@ -59,18 +85,15 @@ internal static class TestSourceFiles
         }
     }
 
-    private static bool Declares(string file, Regex declaresType, Regex declaresMethod)
+    private static string? Read(string file)
     {
-        string text;
         try
         {
-            text = File.ReadAllText(file);
+            return File.ReadAllText(file);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            return false;
+            return null;
         }
-
-        return declaresType.IsMatch(text) && declaresMethod.IsMatch(text);
     }
 }

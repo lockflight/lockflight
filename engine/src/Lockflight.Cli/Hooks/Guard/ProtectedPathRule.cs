@@ -47,7 +47,7 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
         IReadOnlyList<string> collapsedSourceTrees = WindowsParentSegments.WithCollapsed(sourceTrees, workingDirectory);
 
         ProtectedTreeScan scan = new(manifest.Root, [.. globs, .. testLocks.Select(testLock => testLock.Glob)], reads);
-        return TreeDecision(scan, relatives, [.. collapsedTrees.Select(tree => (tree, false)), .. collapsedSourceTrees.Select(tree => (tree, true))], globs, testLocks, amended, workingDirectory)
+        return TreeDecision(scan, relatives, [.. collapsedTrees.Select(tree => (tree, false)), .. collapsedSourceTrees.Select(tree => (tree, true))], globs, testLocks, amended, workingDirectory, ResolvedAdvice(writes.TreeAdvice, workingDirectory))
             ?? await FileDecisionAsync(relatives, WindowsParentSegments.WithCollapsed([.. files, .. trees, .. sourceTrees, .. filePatterns, .. treePatterns], workingDirectory), manifest, globs, testLocks, amended, workingDirectory)
             ?? PatternDecision(scan, relatives, filePatterns.Except(treePatterns).Select(pattern => (pattern, false)).Concat(treePatterns.Select(pattern => (pattern, true))), globs, testLocks, amended, workingDirectory)
             ?? HookDecision.Allow;
@@ -74,6 +74,21 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
         }
 
         return (literal, patterns);
+    }
+
+    /// <summary>The advice for each directory, keyed as <see cref="Resolved(IReadOnlyList{string}, string)"/> writes it.</summary>
+    private Dictionary<string, string?> ResolvedAdvice(IReadOnlyDictionary<string, string?> advice, string workingDirectory)
+    {
+        Dictionary<string, string?> resolved = new(StringComparer.Ordinal);
+        foreach ((string tree, string? text) in advice)
+        {
+            foreach (string path in Resolved([tree], workingDirectory).Literal)
+            {
+                resolved[path] = resolved.TryGetValue(path, out string? earlier) && earlier != text ? null : text;
+            }
+        }
+
+        return resolved;
     }
 
     /// <summary>
@@ -160,11 +175,12 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
 
     /// <summary>
     /// A command that may rewrite a whole directory (git restore ., rm -r, dotnet format) is blocked when a protected file or a
-    /// locked test project could lie inside it. Conservative: a rule that might match under the directory counts.
+    /// locked test project could lie inside it. Conservative: a rule that might match under the directory counts. A git command
+    /// that has a way to name the files instead (<c>git revert</c> for <c>git reset --hard</c>) is told it.
     /// </summary>
     private static HookDecision? TreeDecision(
         ProtectedTreeScan scan, RootRelativePaths relatives, IReadOnlyList<(string Tree, bool SourceOnly)> trees, IReadOnlyList<string> globs,
-        IReadOnlyList<(string Glob, string Reason)> testLocks, IReadOnlySet<string> amended, string workingDirectory)
+        IReadOnlyList<(string Glob, string Reason)> testLocks, IReadOnlySet<string> amended, string workingDirectory, Dictionary<string, string?> advice)
     {
         List<(string Tree, bool SourceOnly, string RelativeTree)> resolved = [];
         foreach ((string tree, bool sourceOnly) in trees)
@@ -195,7 +211,9 @@ internal sealed class ProtectedPathRule(TextWriter diagnostics, EnvironmentReade
             {
                 return HookDecision.Block(
                     $"protected-path:{protectedGlob}",
-                    $"lockflight: this command may rewrite '{tree}', which can hold files protected by rule '{protectedGlob}'. Name the files to change instead; protected files are changed by a human or a lockflight command.");
+                    advice.GetValueOrDefault(tree) is not string treeAdvice
+                        ? $"lockflight: this command may rewrite '{tree}', which can hold files protected by rule '{protectedGlob}'. Name the files to change instead; protected files are changed by a human or a lockflight command."
+                        : $"lockflight: this command may rewrite '{tree}', which can hold files protected by rule '{protectedGlob}'. {treeAdvice} Leave out protected files: they are changed by a human or a lockflight command.");
             }
         }
 

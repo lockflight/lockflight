@@ -79,6 +79,7 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
             return ExitCode.Fail;
         }
 
+        await WarnOfSharedTestFilesAsync(record, fresh, cancellationToken);
         if (await workspace.RunAsync(fresh, cancellationToken) is not IReadOnlyList<ExecutedTest> results)
         {
             return await session.BrokenAsync($"the test runner produced no report for {workspace.FailedApp}", cancellationToken);
@@ -104,6 +105,21 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         }
 
         return fresh;
+    }
+
+    // Said before the tests run, so the output shows it above the verdict.
+    private async Task WarnOfSharedTestFilesAsync(RedGreenRecord record, TestCase[] fresh, CancellationToken cancellationToken)
+    {
+        if (record.Cycles.Count == 0)
+        {
+            return;
+        }
+
+        string[] testProjects = [.. record.TestProjects.Union(session.RelativeProjects(), StringComparer.Ordinal)];
+        if (SharedTestFiles.Find(session.Manifest.Root, testProjects, record.Cycles, fresh) is { Count: > 0 } shared)
+        {
+            await session.Output.WriteLineAsync(SharedTestFiles.Warning(shared).AsMemory(), cancellationToken);
+        }
     }
 
     private async Task<ExitCode> JudgeAsync(

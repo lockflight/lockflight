@@ -139,7 +139,7 @@ internal sealed class SinceRedJudge(TreeBuilder trees, TimeProvider time)
             RecheckOutcome.NotRed => new SinceRedTest(result.Key, label, SinceRed.AmendRejected,
                 $"the test as it is at head is {RedClassNames.ToName(result.Class!.Value)} on the code as it was at red: it no longer checks the behaviour it went red for", changedFiles, result.Class),
             _ => new SinceRedTest(result.Key, label, SinceRed.AmendUncheckable,
-                $"{result.Why}; amend a test before the next cycle starts, or keep each story's tests in their own file", changedFiles, null),
+                $"{result.Why}; put each story's tests in new test files, which this re-check leaves out ('redgreen red' warns otherwise), or amend a test before the next cycle starts", changedFiles, null),
         };
     }
 
