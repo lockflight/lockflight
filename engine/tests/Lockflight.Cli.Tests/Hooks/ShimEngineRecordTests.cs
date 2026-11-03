@@ -229,6 +229,37 @@ public sealed class ShimEngineRecordTests : IDisposable
         Assert.Equal(0, (await RunShimAsync(Read)).ExitCode);
     }
 
+    [Theory]
+    [InlineData("/home/\u00e9l\u00e8ve")]
+    [InlineData("/home/dev/")]
+    [InlineData("/Users/Jo Smith")]
+    public async Task TheShimNamesTheInstallAsTheEngineDoesInAUtf8Locale(string home)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        EngineRecord.Write(project.FullName, EngineRecord.HashOf(LinkEngine(AllowingEngine)), "linux-x64");
+        WriteLock(".lockflight/engine.lock", "linux-x64", new string('a', 64));
+
+        ProcessResult run = await RunShimProcessAsync(Write, "pre-tool-use", [$"HOME={home}", "LC_ALL=en_US.UTF-8"]);
+
+        Assert.Equal(2, run.ExitCode);
+        Assert.Contains($"Run exactly: {RecoveryCommands.LinkInstalled(home)} ", run.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithARelativeHomeTheShimOffersNoLinkInstalledCommand()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        EngineRecord.Write(project.FullName, EngineRecord.HashOf(LinkEngine(AllowingEngine)), "linux-x64");
+        WriteLock(".lockflight/engine.lock", "linux-x64", new string('a', 64));
+
+        ProcessResult run = await RunShimProcessAsync(Write, "pre-tool-use", ["HOME=relative"]);
+        ProcessResult recovery = await RunShimProcessAsync(BashPayload("relative/.lockflight/bin/lockflight link --installed"), "pre-tool-use", ["HOME=relative"]);
+
+        Assert.Equal(2, run.ExitCode);
+        Assert.Contains("Ask the user to open a separate terminal window", run.Error, StringComparison.Ordinal);
+        Assert.Equal(2, recovery.ExitCode);
+    }
+
     [Fact]
     public async Task AReplacedEngineIsNotRunThroughTheRecoveryCommandEither()
     {
@@ -344,11 +375,13 @@ public sealed class ShimEngineRecordTests : IDisposable
         return (run.ExitCode, run.Output);
     }
 
-    private async Task<ProcessResult> RunShimProcessAsync(string payload, string hookEvent)
+    private Task<ProcessResult> RunShimProcessAsync(string payload, string hookEvent) => RunShimProcessAsync(payload, hookEvent, [$"HOME={Home}"]);
+
+    private async Task<ProcessResult> RunShimProcessAsync(string payload, string hookEvent, string[] environment)
     {
         string input = Path.Combine(project.FullName, "payload.json");
         File.WriteAllText(input, payload);
         return await ProcessRunner.RunAsync(
-            "env", [$"CLAUDE_PROJECT_DIR={project.FullName}", $"HOME={Home}", "sh", ShimLocation.Path, hookEvent], project.FullName, TimeSpan.FromSeconds(30), input, TestContext.Current.CancellationToken);
+            "env", [$"CLAUDE_PROJECT_DIR={project.FullName}", .. environment, "sh", ShimLocation.Path, hookEvent], project.FullName, TimeSpan.FromSeconds(30), input, TestContext.Current.CancellationToken);
     }
 }

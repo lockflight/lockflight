@@ -115,10 +115,11 @@ It recognises:
   and the engines in `tools/<version>` it links) are blocked, links (`ln`) included, and `init` writes the
   `Edit(~/.lockflight/**)` deny rule. Only your own `update` and `engine install` write there. The recovery command names
   the install by its absolute path under the hook's own `HOME` (`/home/you/.lockflight/bin/lockflight link --installed`,
-  single-quoted when the path needs it), never `~`, so an `export HOME=…` the agent's shell sources does not redirect it. The
-  other recovery commands, `dotnet tool restore && dotnet lockflight link`, stay a guardrail: `dotnet` reads `PATH`,
-  `DOTNET_*` (such as `DOTNET_STARTUP_HOOKS`) and `NUGET_PACKAGES` from the agent's shell, which a file the Bash tool sources
-  can set, so an agent that does so runs code of its own inside them.
+  single-quoted when the path needs it), never `~`, so an `export HOME=…` the agent's shell sources no longer swaps in another
+  program. That removes one redirection, not the class: every recovery command still runs in the agent's shell, so what a
+  file the Bash tool sources runs, or a preload variable it sets, runs with it, and `dotnet tool restore && dotnet lockflight
+  link` also reads `PATH`, `DOTNET_*` (such as `DOTNET_STARTUP_HOOKS`) and `NUGET_PACKAGES` from it. All of them are a
+  guardrail. What holds is the link itself: `link --installed` links only an engine whose hash is the committed lock's.
   `scripts/dev-install.sh` run from a sandboxed session now fails there; run it in your own terminal.
 
 A relative path is checked against the session's working directory, as written: a `cd` earlier in the same command line is not

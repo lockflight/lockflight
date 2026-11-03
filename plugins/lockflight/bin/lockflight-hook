@@ -191,8 +191,8 @@ untrusted_message="lockflight: the engine at $engine was not run because $untrus
 # An engine without a record may be older than the plugin's min-engine-version too, and an older engine writes no record when
 # linked again, so the fix is update: it installs the newest engine, re-pins the project to it and links it.
 # The user's install by its absolute path under this hook's HOME, never ~: the agent's shell may have sourced another HOME, and
-# ~ would then run a program of its own. Quoted by the engine's rule (RecoveryCommands.LinkInstalled); none when HOME is unset
-# or holds a single quote.
+# ~ would then run a program of its own. Quoted by the engine's rule (RecoveryCommands.LinkInstalled; the letters are spelled out
+# so no locale widens them); none when HOME is not absolute or holds a single quote.
 link_installed=""
 install_home=${HOME:-}
 while :; do
@@ -202,11 +202,11 @@ while :; do
   esac
 done
 case "${HOME:-}" in
-  ""|*\'*) ;;
-  *)
+  *\'*) ;;
+  /*|[A-Za-z]:*)
     install_program="$install_home/.lockflight/bin/lockflight"
     case "$install_program" in
-      *[!A-Za-z0-9_./:-]*) install_program="'$install_program'" ;;
+      *[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./:-]*) install_program="'$install_program'" ;;
     esac
     link_installed="$install_program link --installed"
     ;;

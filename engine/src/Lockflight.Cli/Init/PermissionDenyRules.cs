@@ -20,7 +20,7 @@ internal static class PermissionDenyRules
     private const string LinkedEngine = ".lockflight/bin";
 
     /// <summary>
-    /// The user's Lockflight install: the engine the recovery command <c>~/.lockflight/bin/lockflight link --installed</c> runs and
+    /// The user's Lockflight install: the engine the recovery command <c>&lt;HOME&gt;/.lockflight/bin/lockflight link --installed</c> runs and
     /// the engines it links. Only the user's own commands (<c>update</c>, <c>engine install</c>) write there.
     /// </summary>
     public const string UserInstallRule = "Edit(~/.lockflight/**)";
