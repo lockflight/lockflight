@@ -32,7 +32,10 @@ than a fix, please open an issue first, because the design still moves. Everyone
     `ledger`, `cli`, `plugin`, `speckit`, `ci`, `deps`. Leave the scope out when a change spans several.
 - **Pull requests** are squash-merged, so the title becomes the commit on `main` and follows the same format. Fill in the
   [template](.github/pull_request_template.md): what and why, how it was verified, the effect on guarantees, breaking changes.
-  One concern per pull request.
+  One concern per pull request. Since the body becomes the commit's message, the title and body follow the same rule as code
+  and commits: no citations of records a reader of this repository cannot open, no home directory paths or personal email
+  addresses. CI checks them with `scripts/check-public-tree.sh --text-file <file>` on each push to the pull request (an edit of the title
+  or body is checked on the next push, and text changed in the merge dialog is not checked), and it runs locally on a draft too.
 - **Changelog:** pull requests do not edit [CHANGELOG.md](CHANGELOG.md). The release pull request drafts the entries from the
   Conventional Commits on `main` with [git-cliff](https://git-cliff.org) ([cliff.toml](cliff.toml)) and edits them for users, so
   write the pull request title as the line a user should read.
