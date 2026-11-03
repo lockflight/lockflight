@@ -57,6 +57,22 @@ public sealed class ArtifactHashTests
         }
     }
 
+    [Theory]
+    [InlineData("# Tasks\n- [ ] T001 Setup\n")]
+    [InlineData("")]
+    [InlineData("- [x] Setup, not a task\n")]
+    [InlineData("- [x] T001x is not a task id\n")]
+    [InlineData("- [x] T01 is too short\n")]
+    [InlineData("-[x] T001 needs a blank after the dash\n")]
+    public void TasksWithoutATickedTaskHashAsEarlierEnginesRecordedThem(string text) =>
+        Assert.Equal(EarlierHash(text), ArtifactHash.OfTasks(Encoding.UTF8.GetBytes(text)));
+
+    [Fact]
+    public void ATickedTaskHashesAsItsOpenBox() =>
+        Assert.Equal(
+            ArtifactHash.Of(Encoding.UTF8.GetBytes("- [ ] T001 Setup\n\t- [ ] T0012 Nested\n")),
+            ArtifactHash.OfTasks([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes("- [X] T001 Setup\r\n\t- [x] T0012 Nested\r\n")]));
+
     private static string EarlierFileHash(string path) => EarlierHash(File.ReadAllText(path));
 
     private static string EarlierHash(string text) =>
