@@ -83,7 +83,7 @@ safe arguments in `HumanOnlyCanaries.cs`. `CanaryCoverageTests` fails on `main` 
 step whose violation needs a fact the planted tools do not give (a file, a setting) plants it in the same case; a step that only
 reports, as the protected-changes report does, is caught when its report names the planted change.
 
-The canary tests carry the trait `Category=Canary`: CI's `canaries` jobs run them on Linux, Windows and macOS, and the `engine`
+The canary tests carry the trait `Category=Canary`: CI's `canaries` jobs run them on Linux and Windows (and macOS on main), and the `engine`
 jobs leave them out. `lockflight doctor --self-test` is the product's own, much smaller set (five canaries, no build) for a
 person's machine; it is not where a new control's canary goes.
 
@@ -120,8 +120,8 @@ again:
 claude plugin eval plugins --tag both-plugins --runs 3 --ablation none --allow-tools Bash Write Edit --trust-plugin --scaffold --no-publish
 ```
 
-[`tests/README.md`](tests/README.md) describes each suite. CI runs them on Linux, Windows and macOS. Before opening a pull
-request, run the same steps locally (on Linux use `-r linux-x64`):
+[`tests/README.md`](tests/README.md) describes each suite. CI runs them on Linux and Windows for a pull request, and on macOS
+too after a merge to main or in a manual run. Before opening a pull request, run the same steps locally (on Linux use `-r linux-x64`):
 
 ```sh
 (cd engine && dotnet test) && dotnet publish engine/src/Lockflight.Cli -c Release -r osx-arm64 -o out \
