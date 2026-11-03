@@ -103,7 +103,7 @@ internal static class ReproductionBuild
             }
 
             string[] filters = [.. candidates.Select(candidate => $"{Namespace}.{candidate.ClassName}.{candidate.Method}"), .. alsoRun];
-            TestRunOutcome run = await TestRunners.For(app.Mode, time).RunAsync(app with { AssemblyPath = assembly }, filters, suiteFilter: null, root, timeLimit, cancellationToken);
+            TestRunOutcome run = await TestRunners.For(app.Mode, time).RunAsync(app with { AssemblyPath = assembly }, filters, suiteFilter: null, timeLimit, cancellationToken);
             TestRunReport? report = run.Reported ? run.Report : null;
             return report is null
                 ? new ReproductionBuildResult(ReproductionBuildStatus.NotRun, [], [])

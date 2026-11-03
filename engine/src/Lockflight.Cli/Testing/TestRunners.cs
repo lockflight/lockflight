@@ -36,7 +36,7 @@ internal static class TestRunners
     /// Lists the app's tests with the first runner of its probe order that can; the listing names the mode that worked. When none
     /// can, the first runner's reason (what the test project needs) is kept.
     /// </summary>
-    public static async Task<TestListing> ListAsync(TestApp app, string workingDirectory, TimeSpan timeLimit, TimeProvider time, CancellationToken cancellationToken)
+    public static async Task<TestListing> ListAsync(TestApp app, TimeSpan timeLimit, TimeProvider time, CancellationToken cancellationToken)
     {
         RunnerMode[] probe = app.Mode switch
         {
@@ -51,7 +51,7 @@ internal static class TestRunners
         TestListing? unlisted = null;
         foreach (RunnerMode mode in probe)
         {
-            TestListing listing = await For(mode, time).ListAsync(app, workingDirectory, timeLimit, cancellationToken);
+            TestListing listing = await For(mode, time).ListAsync(app, timeLimit, cancellationToken);
             if (listing.Listed)
             {
                 return listing;

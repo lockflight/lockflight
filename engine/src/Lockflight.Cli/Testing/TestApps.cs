@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Lockflight.Cli.Gates;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Testing;
@@ -17,7 +18,8 @@ internal static class TestApps
     private static readonly string[] MSTestFrameworkAssemblies = ["MSTest.TestFramework.dll", "Microsoft.VisualStudio.TestPlatform.TestFramework.dll"];
 
     private static readonly string[] Properties =
-        ["-getProperty:IsTestingPlatformApplication", "-getProperty:IsTestProject", "-getProperty:TargetPath", "-getProperty:TargetFrameworks"];
+        ["-getProperty:IsTestingPlatformApplication", "-getProperty:IsTestProject", "-getProperty:TargetPath", "-getProperty:TargetFrameworks",
+         "-getProperty:RunSettingsFilePath"];
 
     /// <summary>
     /// The projects are evaluated in parallel (<c>dotnet msbuild -getProperty</c> only evaluates; it builds nothing), within
@@ -48,14 +50,16 @@ internal static class TestApps
             return ProjectEvaluation.Of(unevaluated);
         }
 
-        if (Parse(properties.Output) is not (true, bool onTestingPlatform, string targetPath, string frameworks))
+        if (Parse(properties.Output) is not (true, bool onTestingPlatform, string targetPath, string frameworks, string runSettings))
         {
             return ProjectEvaluation.NotATestApp;
         }
 
         // A multi-targeted project has no TargetPath of its own; ask again for one framework.
+        string? chosenFramework = null;
         if (targetPath.Length == 0 && ChooseFramework(frameworks, preferredFramework) is string framework)
         {
+            chosenFramework = framework;
             ProcessResult single = await ProcessRunner.RunAsync(
                 "dotnet", ["msbuild", project, $"-p:TargetFramework={framework}", .. Properties], root, budget.Left, cancellationToken);
             if (Unevaluated(root, project, single) is UnevaluatedProject unevaluatedFramework)
@@ -63,7 +67,7 @@ internal static class TestApps
                 return ProjectEvaluation.Of(unevaluatedFramework);
             }
 
-            targetPath = Parse(single.Output) is (true, _, string path, _) ? path : string.Empty;
+            (targetPath, runSettings) = Parse(single.Output) is (true, _, string path, _, string settings) ? (path, settings) : (string.Empty, runSettings);
         }
 
         if (targetPath.Length == 0)
@@ -71,26 +75,55 @@ internal static class TestApps
             return ProjectEvaluation.NotATestApp;
         }
 
-        string output = Path.GetDirectoryName(targetPath)!;
+        string directory = Path.GetDirectoryName(project)!;
+        return Kind(Path.GetDirectoryName(targetPath)!, onTestingPlatform) is RunnerMode mode
+            ? ProjectEvaluation.Of(Configured(new TestApp(directory, targetPath, mode) { ProjectFile = project, Framework = chosenFramework }, runSettings))
+            : ProjectEvaluation.NotATestApp;
+    }
+
+    /// <summary>The runner mode the framework in <paramref name="output"/> starts with (an xUnit v3 app is probed); null for no known framework.</summary>
+    private static RunnerMode? Kind(string output, bool onTestingPlatform)
+    {
         if (File.Exists(Path.Combine(output, "xunit.v3.core.dll")))
         {
-            return ProjectEvaluation.Of(new TestApp(Path.GetDirectoryName(project)!, targetPath));
+            return RunnerMode.Unknown;
         }
 
-        string directory = Path.GetDirectoryName(project)!;
         if (File.Exists(Path.Combine(output, "xunit.core.dll")))
         {
-            return ProjectEvaluation.Of(new TestApp(directory, targetPath, RunnerMode.VSTest));
+            return RunnerMode.VSTest;
         }
 
         if (File.Exists(Path.Combine(output, "nunit.framework.dll")))
         {
-            return ProjectEvaluation.Of(new TestApp(directory, targetPath, onTestingPlatform ? RunnerMode.NUnitMtp : RunnerMode.NUnit));
+            return onTestingPlatform ? RunnerMode.NUnitMtp : RunnerMode.NUnit;
         }
 
         return MSTestFrameworkAssemblies.Any(assembly => File.Exists(Path.Combine(output, assembly)))
-            ? ProjectEvaluation.Of(new TestApp(directory, targetPath, onTestingPlatform ? RunnerMode.MSTestMtp : RunnerMode.MSTest))
-            : ProjectEvaluation.NotATestApp;
+            ? onTestingPlatform ? RunnerMode.MSTestMtp : RunnerMode.MSTest
+            : null;
+    }
+
+    /// <summary>
+    /// The app with the project's run settings (<c>RunSettingsFilePath</c>, relative to the project directory) and the variables they
+    /// set, when <c>dotnet test</c> would apply them to it (<see cref="RunSettingsEnvironment.AppliesTo"/>).
+    /// </summary>
+    public static TestApp Configured(TestApp app, string runSettings)
+    {
+        if (runSettings.Length == 0)
+        {
+            return app;
+        }
+
+        string file = Path.GetFullPath(runSettings, app.ProjectDirectory);
+        if (!File.Exists(file))
+        {
+            return app;
+        }
+
+        return RunSettingsEnvironment.AppliesTo(TestRunnerDetection.For(app.ProjectDirectory))
+            ? app with { RunSettingsFile = file, Environment = RunSettingsEnvironment.Read(file) }
+            : app with { RunSettingsFile = file };
     }
 
     /// <summary>The evaluation as an unevaluated project when it timed out, exited non-zero or printed no properties; null when it can be read.</summary>
@@ -133,7 +166,7 @@ internal static class TestApps
         return line.Length <= MaxDetailLength ? line : line[..MaxDetailLength] + "…";
     }
 
-    private static (bool IsTestApp, bool OnTestingPlatform, string TargetPath, string Frameworks)? Parse(string output)
+    private static (bool IsTestApp, bool OnTestingPlatform, string TargetPath, string Frameworks, string RunSettings)? Parse(string output)
     {
         int start = output.IndexOf('{', StringComparison.Ordinal);
         if (start < 0)
@@ -146,7 +179,8 @@ internal static class TestApps
         bool onTestingPlatform = string.Equals(properties.GetProperty("IsTestingPlatformApplication").GetString(), "true", StringComparison.OrdinalIgnoreCase);
         bool isTestApp = onTestingPlatform
             || (properties.TryGetProperty("IsTestProject", out JsonElement testProject) && string.Equals(testProject.GetString(), "true", StringComparison.OrdinalIgnoreCase));
-        return (isTestApp, onTestingPlatform, properties.GetProperty("TargetPath").GetString() ?? string.Empty, properties.GetProperty("TargetFrameworks").GetString() ?? string.Empty);
+        string runSettings = properties.TryGetProperty("RunSettingsFilePath", out JsonElement settings) ? settings.GetString() ?? string.Empty : string.Empty;
+        return (isTestApp, onTestingPlatform, properties.GetProperty("TargetPath").GetString() ?? string.Empty, properties.GetProperty("TargetFrameworks").GetString() ?? string.Empty, runSettings.Trim());
     }
 
     /// <summary>The preferred framework when the project targets it, else the newest <c>netN.M</c> (the SDK's own runtime is the likeliest to be installed).</summary>

@@ -70,12 +70,44 @@ public sealed class TestAppsTests : IDisposable
             discovery.Apps.Select(app => (app.AssemblyName, app.Mode)).Order());
     }
 
+    [Fact]
+    public async Task AnAppCarriesItsProjectAndTheVariablesOfItsRunSettingsWhenDotnetTestAppliesThem()
+    {
+        TestProject("tests/Shop.Tests/Shop.Tests.csproj", onTestingPlatform: false, "nunit.framework.dll", "<RunSettingsFilePath>../test.runsettings</RunSettingsFilePath>");
+        File.WriteAllText(Path.Combine(root.FullName, "tests", "test.runsettings"), RunSettingsWith("SHOP_MODE", "test"));
+
+        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeLimit, TimeProvider.System, TestContext.Current.CancellationToken);
+
+        TestApp app = Assert.Single(discovery.Apps);
+        Assert.Equal(Path.Combine(root.FullName, "tests", "Shop.Tests", "Shop.Tests.csproj"), app.ProjectFile);
+        Assert.Equal(Path.Combine(root.FullName, "tests", "test.runsettings"), app.RunSettingsFile);
+        Assert.Equal("test", app.Environment["SHOP_MODE"]);
+        Assert.Equal(Path.Combine(root.FullName, "tests", "Shop.Tests", "bin", "Debug", "net10.0"), app.OutputDirectory);
+    }
+
+    [Fact]
+    public async Task AnAppOnTheTestingPlatformGetsNoRunSettingsVariablesBecauseDotnetTestAppliesNone()
+    {
+        File.WriteAllText(Path.Combine(root.FullName, "global.json"), """{ "test": { "runner": "Microsoft.Testing.Platform" } }""");
+        TestProject("tests/Shop.Tests/Shop.Tests.csproj", onTestingPlatform: true, "xunit.v3.core.dll", "<RunSettingsFilePath>$(MSBuildProjectDirectory)/test.runsettings</RunSettingsFilePath>");
+        File.WriteAllText(Path.Combine(root.FullName, "tests", "Shop.Tests", "test.runsettings"), RunSettingsWith("SHOP_MODE", "test"));
+
+        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeLimit, TimeProvider.System, TestContext.Current.CancellationToken);
+
+        TestApp app = Assert.Single(discovery.Apps);
+        Assert.Equal(Path.Combine(root.FullName, "tests", "Shop.Tests", "test.runsettings"), app.RunSettingsFile);
+        Assert.Empty(app.Environment);
+    }
+
     public void Dispose() => root.Delete(recursive: true);
 
+    private static string RunSettingsWith(string name, string value) =>
+        $"<RunSettings><RunConfiguration><EnvironmentVariables><{name}>{value}</{name}></EnvironmentVariables></RunConfiguration></RunSettings>";
+
     /// <summary>A test project whose build output holds the framework's assembly (an empty stand-in: discovery only looks for the file).</summary>
-    private void TestProject(string relativePath, bool onTestingPlatform, string frameworkAssembly)
+    private void TestProject(string relativePath, bool onTestingPlatform, string frameworkAssembly, string properties = "")
     {
-        WriteProject(relativePath, $"<PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsTestingPlatformApplication>{(onTestingPlatform ? "true" : "false")}</IsTestingPlatformApplication></PropertyGroup>");
+        WriteProject(relativePath, $"<PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsTestingPlatformApplication>{(onTestingPlatform ? "true" : "false")}</IsTestingPlatformApplication>{properties}</PropertyGroup>");
         string output = Path.Combine(root.FullName, Path.GetDirectoryName(relativePath)!, "bin", "Debug", "net10.0");
         Directory.CreateDirectory(output);
         File.WriteAllText(Path.Combine(output, frameworkAssembly), string.Empty);
