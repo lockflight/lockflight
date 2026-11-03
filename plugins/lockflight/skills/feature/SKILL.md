@@ -141,8 +141,9 @@ Never approve for them.
       locked test, and never amend or reset yourself. Tell them which test and why, and that they can let exactly that test
       change by typing `/lockflight:amend <Class.Method> --reason <why>` here. Never type the command or its code yourself. Check
       `.lockflight/bin/lockflight redgreen status`: it names the file the amend unlocks. Then change only what the amend
-      allows, run `.lockflight/bin/lockflight redgreen red` (the amended test must fail in production code again), and go on
-      to green. Discarding the whole cycle is `redgreen reset` (or `/lockflight:reset`), also theirs.
+      allows, run `.lockflight/bin/lockflight redgreen red` (the amended test must fail in production code again; it is
+      re-checked on the red-time snapshot with the cycle's amended files laid over it, so leave the implementation as it is,
+      and the test must compile against the code as it was at red), and go on to green. Discarding the whole cycle is `redgreen reset` (or `/lockflight:reset`), also theirs.
       **If a test written in this cycle turns out wrong after red, ask the user for `/lockflight:amend <test>`. Never change
       production code just to satisfy a wrong test, and `baseline` does not excuse this cycle's tests.**
    5. If `red` or `green` refuses because an approval is stale (spec.md, plan.md or tasks.md changed after approval), show the

@@ -164,7 +164,7 @@ internal sealed class SessionAmend(CliContext context, Manifest manifest) : ISes
         return SessionCommandResult.Recorded(
             $"Step 2 of 2 — amended: {target.Test.MethodFilter} in red cycle {target.Cycle.Number} of {feature.Id}. {RedGreenAmends.Unlocks(target)}",
             $"The person amended {target.Test.MethodFilter} in this session: {string.Join(", ", target.Files)} may now be changed, and only as the reason says ({reason}). "
-            + $"Change only that test, then run '{EngineCommand.Linked} redgreen red': it must fail in production code again. "
+            + $"Change only that test, then run '{EngineCommand.Linked} redgreen red': it must fail in production code again. {RedGreenAmends.Recheck(target)} "
             + $"Re-read the state from the engine ({EngineCommand.Linked} redgreen status --feature {feature.Id}), never assume it.");
     }
 

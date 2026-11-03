@@ -1,4 +1,5 @@
 using System.Globalization;
+using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Lifecycle.RedGreen;
 
@@ -79,8 +80,15 @@ internal static class RedGreenAmends
             : $" The amend covers the whole file, so these tests of the cycle in it become writable too: {List(target.SharedWith)}.";
         return $"{files} ({(target.Files.Count == 1 ? "the file" : "the files")} declaring {target.Test.MethodFilter}) "
             + $"{(target.Files.Count == 1 ? "becomes" : "become")} writable until 'redgreen red' re-checks the test, which must fail in production code again "
-            + $"(RED_STUB or RED_ASSERT).{shared}";
+            + $"(RED_STUB or RED_ASSERT).{shared} {Recheck(target)}";
     }
+
+    /// <summary>Where the red after the amend re-checks the test, so nobody breaks the implementation to get it failing again.</summary>
+    public static string Recheck(AmendTarget target) => target.Cycle.Snapshot is null
+        ? $"Cycle {target.Cycle.Number} has no red-time snapshot, so the re-check runs on the current tree, where an implementation written since the red "
+            + $"makes the amended test pass (GREEN_BEFORE). Do not break the implementation to get a red: a person can move it aside for this red, or discard the cycle with '{EngineCommand.Linked} redgreen reset'."
+        : $"The re-check runs on the red-time snapshot of cycle {target.Cycle.Number} with the cycle's amended files laid over it, so the implementation written "
+            + "since the red cannot make the test pass: do not undo the implementation to get a red. The amended test must compile against the code as it was at red.";
 
     /// <summary>One line per amend, for status, trace and the pull request summary; empty when there are none.</summary>
     public static IReadOnlyList<string> Lines(RedGreenRecord record) =>
