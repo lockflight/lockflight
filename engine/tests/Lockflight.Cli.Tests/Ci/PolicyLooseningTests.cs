@@ -172,6 +172,24 @@ public sealed class PolicyLooseningTests : IAsyncLifetime
     }
 
     [Fact]
+    public void AProtectedGlobThatLosesItsFixedFolderIsALoosening() =>
+        Assert.Contains("protected: removed secrets/**", PolicyLoosening.Between(
+            Load("version: 2\nprotected:\n  - secrets/**\n"),
+            Load("version: 2\nprotected:\n  - '**/secrets/**'\n")));
+
+    [Fact]
+    public void AWorkspaceShellsRoutingGlobsCountAsWritten() =>
+        Assert.Contains("routing.critical: removed svc/a/src/Payments/**", PolicyLoosening.Between(
+            Load("version: 2\nunits:\n  - path: svc/a\nrouting:\n  preset: default\n  critical:\n    - svc/a/src/Payments/**\n"),
+            Load("version: 2\nunits:\n  - path: svc/a\nrouting:\n  preset: default\n  critical:\n    - svc/*/src/Payments/**\n")));
+
+    [Fact]
+    public void SpecPathsCountAsWritten() =>
+        Assert.Contains("approvals.specPaths: removed specs/**", PolicyLoosening.Between(
+            Load("version: 2\napprovals:\n  specPaths:\n    - specs/**\n"),
+            Load("version: 2\napprovals:\n  specPaths:\n    - '**'\n")));
+
+    [Fact]
     public void ARemovedUnitIsALoosening() =>
         Assert.Contains("units: removed svc/b", PolicyLoosening.Between(
             Load("version: 2\nunits:\n  - path: svc/a\n  - path: svc/b\n"),
