@@ -201,7 +201,7 @@ internal sealed class SessionBaseline(CliContext context, Manifest manifest) : I
         string[] dropped = [.. current.Except(entries, StringComparer.Ordinal).Order(StringComparer.Ordinal)];
         StringBuilder digest = new();
         digest.AppendLine(SessionCommandGate.Opening(
-            "nothing has been accepted yet", $"Check the {Count(kind, entries)} {BaselineKindNames.Entries(kind, Count(kind, entries))} you are accepting as the {kindName} baseline of {what}; the engine {source}"));
+            "Nothing has been accepted yet", $"Check the {Count(kind, entries)} {BaselineKindNames.Entries(kind, Count(kind, entries))} you are accepting as the {kindName} baseline of {what}; the engine {source}"));
         digest.AppendLine($"  File: {run.RelativePath(kind, unitPath)} ({(current.Count == 0 ? "new" : $"replaces {Count(kind, current)} accepted now")}); entries {HashOf(entries)[..HashPrefixLength]}");
         digest.AppendLine($"  Compared with the current baseline: {added.Length} new, {dropped.Length} no longer listed");
         digest.AppendLine($"  Accepted ({Count(kind, entries)}):");
@@ -217,7 +217,7 @@ internal sealed class SessionBaseline(CliContext context, Manifest manifest) : I
         }
 
         digest.AppendLine("  CI reads baselines from the base branch: merge this one in its own pull request before the change that needs it.");
-        digest.Append(SessionCommandGate.Closing($"/{CommandName} {kindName} {code}{PathWords(subject)}", "no file changes from the state the engine took the baseline in"));
+        digest.Append(SessionCommandGate.Closing(code, $"/{CommandName} {kindName} {code}{PathWords(subject)}", "no file changes from the state the engine took the baseline in"));
         return digest.ToString();
     }
 

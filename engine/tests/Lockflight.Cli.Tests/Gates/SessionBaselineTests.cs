@@ -25,10 +25,10 @@ public sealed class SessionBaselineTests : IDisposable
         (ExitCode shownExit, _, string digest) = await TypeAsync("build");
 
         Assert.Equal(ExitCode.HookBlock, shownExit);
-        Assert.StartsWith("Step 1 of 2 — nothing has been accepted yet. Check the 1 build warning you are accepting as the build baseline of the repository", digest, StringComparison.Ordinal);
+        Assert.StartsWith("Step 1 of 2 — not an error: review below, then type the line with the code.\nNothing has been accepted yet. Check the 1 build warning you are accepting as the build baseline of the repository", digest, StringComparison.Ordinal);
         Assert.Contains("Shop.cs: The field 'Shop.unused' is never used", digest, StringComparison.Ordinal);
         Assert.Contains("Compared with the current baseline: 1 new, 0 no longer listed", digest, StringComparison.Ordinal);
-        Assert.Contains($"Type within 10 minutes: /lockflight:baseline build {Code}", digest, StringComparison.Ordinal);
+        Assert.Contains($"Your code: {Code} — type within 10 minutes: /lockflight:baseline build {Code}", digest, StringComparison.Ordinal);
         Assert.False(File.Exists(BaselinePath));
 
         (ExitCode acceptedExit, string output, string error) = await TypeAsync($"build {Code}");

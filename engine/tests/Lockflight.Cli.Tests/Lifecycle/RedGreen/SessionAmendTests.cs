@@ -58,12 +58,12 @@ public sealed class SessionAmendTests : IDisposable
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Empty(output);
-        Assert.StartsWith("Step 1 of 2 — nothing has been amended yet.", error, StringComparison.Ordinal);
+        Assert.StartsWith("Step 1 of 2 — not an error: review below, then type the line with the code.\nNothing has been amended yet.", error, StringComparison.Ordinal);
         Assert.Contains("Test: Shop.Tests.ShippingTests.FirstKilogramCostsFive", error, StringComparison.Ordinal);
         Assert.Contains($"Unlocks: {ShippingFile}", error, StringComparison.Ordinal);
         Assert.Contains("Also writable, in the same file: Shop.Tests.ShippingTests.EveryKilogramCostsMore", error, StringComparison.Ordinal);
         Assert.Contains("Reason: the rate is 5.50", error, StringComparison.Ordinal);
-        Assert.Contains($"Type within 10 minutes: /lockflight:amend {Test} {Code}", error, StringComparison.Ordinal);
+        Assert.Contains($"Your code: {Code} — type within 10 minutes: /lockflight:amend {Test} {Code}", error, StringComparison.Ordinal);
         Assert.Empty(RedGreenRecord.Load(RecordPath)!.Amends);
     }
 

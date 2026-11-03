@@ -3,9 +3,9 @@ using System.Text;
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
-/// What the engine shows a person before they approve in a session: the feature, each artifact with the start of its hash, what the
-/// artifacts hold (requirements and stories, or tasks), open clarifications, the current approval, and the line to type with the
-/// one-time code. The engine renders it from the same bytes it hashed (<see cref="ArtifactSnapshot"/>), so it does not depend on the
+/// What the engine shows a person before they approve in a session: the feature, each artifact with the start of its hash (labelled
+/// as a hash, so it is not taken for the code), what the artifacts hold (requirements and stories, or tasks), open clarifications,
+/// the current approval, and the one-time code on its own line with the line to type. The engine renders it from the same bytes it hashed (<see cref="ArtifactSnapshot"/>), so it does not depend on the
 /// agent's summary, and a file rewritten while it renders cannot make the digest describe other content than the code binds.
 /// </summary>
 internal static class ApprovalDigest
@@ -18,11 +18,11 @@ internal static class ApprovalDigest
     {
         string phaseName = ApprovalPhaseNames.ToName(phase);
         StringBuilder digest = new();
-        digest.AppendLine(SessionCommandGate.Opening("nothing has been approved yet", $"Check the {phaseName} of {feature.Id} you are approving"));
+        digest.AppendLine(SessionCommandGate.Opening("Nothing has been approved yet", $"Check the {phaseName} of {feature.Id} you are approving"));
         foreach (ArtifactSnapshot artifact in artifacts)
         {
             string hash = artifact.Hash;
-            digest.AppendLine($"  {artifact.Name,-10} {(hash.Length > HashPrefixLength ? hash[..HashPrefixLength] : hash)}");
+            digest.AppendLine($"  {artifact.Name,-10} {(artifact.Content is null ? hash : $"hash {hash[..Math.Min(HashPrefixLength, hash.Length)]}")}");
         }
 
         string main = artifacts[0].Text ?? string.Empty;
@@ -33,7 +33,7 @@ internal static class ApprovalDigest
 
         digest.AppendLine($"  Open [NEEDS CLARIFICATION] markers: {Clarifications(artifacts)}");
         digest.AppendLine($"  Current approval: {Describe(current)}");
-        digest.Append(SessionCommandGate.Closing($"/lockflight:approve {phaseName} {code}", "the files stay as shown"));
+        digest.Append(SessionCommandGate.Closing(code, $"/lockflight:approve {phaseName} {code}", "the files stay as shown"));
         return digest.ToString();
     }
 

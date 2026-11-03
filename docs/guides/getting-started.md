@@ -81,8 +81,9 @@ Then set up your project: the [lite profile](#lite-profile-target-first-green-in
   terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
   approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`), and a baseline, a reset or an
   amend by typing `/lockflight:baseline`, `/lockflight:reset` or `/lockflight:amend`. Each takes two steps: the engine shows
-  you what would be recorded under "UserPromptExpansion operation blocked by hook" (not an error), starting with
-  `Step 1 of 2`, and ends with the line to type with its code.
+  you what would be recorded under "UserPromptExpansion operation blocked by hook", starting with
+  `Step 1 of 2 — not an error`, and ends with the `Your code:` line, which holds the code and the line to type.
+  `/lockflight:approve` typed alone starts with the phase that waits for your approval.
 - **Updating:** in a separate terminal window (not with `!` in Claude Code), run `~/.lockflight/bin/lockflight update` in a project. An install from source
   (the checkout recorded in `~/.lockflight/source`) pulls your checkout, reinstalls the engine and the plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
   commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at

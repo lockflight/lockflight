@@ -20,7 +20,7 @@ internal static class SessionCommandCanaries
     private const string FeatureId = "001-canary";
     private const string Slot = "spec";
     private const string StepOne = "Step 1 of 2";
-    private const string CodeLinePrefix = "Type within";
+    private const string CodeLinePrefix = "Your code: ";
     private const string WrongCode = "zzzzzz";
     private const string OtherWrongCode = "yyyyyy";
 
@@ -119,7 +119,7 @@ internal static class SessionCommandCanaries
     {
         CanaryRun run = await TypeAsync(scratch, Slot, AttendedSession, PluginSource, scratch.Time, cancellationToken);
         return run.ExitCode == ExitCode.HookBlock && run.Error.StartsWith(StepOne, StringComparison.Ordinal)
-            ? run.Error.Split('\n').FirstOrDefault(line => line.StartsWith(CodeLinePrefix, StringComparison.Ordinal))?.Split(' ')[^1].Trim()
+            ? run.Error.Split('\n').FirstOrDefault(line => line.StartsWith(CodeLinePrefix, StringComparison.Ordinal))?[CodeLinePrefix.Length..].Split(' ')[0]
             : null;
     }
 

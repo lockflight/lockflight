@@ -17,8 +17,17 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 /// </summary>
 internal sealed class SessionCommandGate(CliContext context, Manifest manifest, SessionCommandSpec spec)
 {
-    /// <summary>Claude Code labels every stopped prompt "blocked by hook"; a digest is not a failure.</summary>
+    /// <summary>Claude Code labels every stopped prompt "blocked by hook"; an answer that says what to type is not a failure.</summary>
     public const string NotAnError = "This is not an error: Claude Code labels any stopped command 'blocked by hook'.";
+
+    /// <summary>
+    /// The first line of every digest. Claude Code shows the digest under "UserPromptExpansion operation blocked by hook", so the
+    /// line says before anything else that this is not an error and what to do.
+    /// </summary>
+    public const string StepOneHeadline = "Step 1 of 2 — not an error: review below, then type the line with the code.";
+
+    /// <summary>The label of the digest line that holds the code, which refusals point back to.</summary>
+    public const string CodeLabel = "Your code";
 
     private const string PluginSource = "plugin";
 
@@ -66,15 +75,30 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
     /// <paramref name="codeName"/> names the waiting code (<c>approval code</c>), <paramref name="shownWith"/> what it was shown with
     /// (<c>the spec</c>), and <paramref name="again"/> says how to see it again.
     /// </summary>
-    public static SessionRefusal? CodeProblem(SessionCodeCheck check, string codeName, string shownWith, string again) => check.State switch
+    /// <remarks>
+    /// Every refusal says whether the waiting code still works. <paramref name="notTheCode"/>, when set, says what the typed word was
+    /// instead (<c>3bd45 is the start of spec.md's hash</c>) in place of "that is not the code".
+    /// </remarks>
+    public static SessionRefusal? CodeProblem(SessionCodeCheck check, string codeName, string shownWith, string again, string? notTheCode = null) => check.State switch
     {
-        SessionCodeState.NoneWaiting => new SessionRefusal("no-code", $"no {codeName} is waiting for {shownWith} (it was used, or never shown); {again}"),
-        SessionCodeState.Expired => new SessionRefusal("code-expired", $"the code expired (codes last {SessionCodes.Lifetime.TotalMinutes:0} minutes); {again}"),
-        SessionCodeState.WrongCode => new SessionRefusal("wrong-code", $"that is not the code shown with {shownWith}; type the code exactly, or {again}"),
+        SessionCodeState.NoneWaiting => new SessionRefusal("no-code", $"no {codeName} is waiting for {shownWith} (it was used, or never shown), so there is no code to type now; {again}"),
+        SessionCodeState.Expired => new SessionRefusal("code-expired", $"{ExpiredReason}; {again}"),
+        SessionCodeState.WrongCode => new SessionRefusal(
+            "wrong-code",
+            $"{NotTheCode(notTheCode, shownWith)}; {StillWorks(check.ExpiresAt)} (it is discarded after {check.AttemptsLeft} more wrong code{(check.AttemptsLeft == 1 ? string.Empty : "s")}): type it exactly, or {again}"),
         SessionCodeState.TooManyAttempts => new SessionRefusal(
-            "too-many-attempts", $"that is not the code shown with {shownWith}, and after {SessionCodes.MaxAttempts} wrong codes it was discarded; {again}"),
+            "too-many-attempts", $"{NotTheCode(notTheCode, shownWith)}, and after {SessionCodes.MaxAttempts} wrong codes that code was discarded and no longer works; {again}"),
         _ => null,
     };
+
+    /// <summary>Why an expired code was refused: it no longer works.</summary>
+    public static string ExpiredReason => $"the code expired and no longer works (codes last {SessionCodes.Lifetime.TotalMinutes:0} minutes)";
+
+    /// <summary>That the waiting code is still valid, and until when.</summary>
+    public static string StillWorks(DateTimeOffset? expiresAt) => $"that code still works {Until(expiresAt)}";
+
+    /// <summary><c>until 09:10 UTC</c>; <c>for now</c> when the expiry is not known.</summary>
+    public static string Until(DateTimeOffset? expiresAt) => expiresAt is DateTimeOffset at ? $"until {at.ToUniversalTime():HH:mm} UTC" : "for now";
 
     /// <summary>
     /// The code (the one word that is neither an option nor the value of one of <paramref name="valueOptions"/>) and the remaining
@@ -109,16 +133,18 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
     }
 
     /// <summary>
-    /// The first line of every digest. Claude Code shows it under "blocked by hook", so it says first that this is step 1 and that
-    /// nothing is recorded yet (<paramref name="nothingYet"/>: <c>nothing has been approved yet</c>), then what to check.
+    /// The first lines of every digest: <see cref="StepOneHeadline"/>, then that nothing is recorded yet (<paramref name="nothingYet"/>:
+    /// <c>Nothing has been approved yet</c>) and what to check.
     /// </summary>
-    public static string Opening(string nothingYet, string check) => $"Step 1 of 2 — {nothingYet}. {check} (the engine read this, the agent did not write it):";
+    public static string Opening(string nothingYet, string check) => $"{StepOneHeadline}\n{nothingYet}. {check} (the engine read this, the agent did not write it):";
 
-    /// <summary>The closing lines of every digest: the line to type on its own, what the code binds, and why it says "blocked".</summary>
-    public static string Closing(string line, string bindsWhat) =>
-        $"Type within {SessionCodes.Lifetime.TotalMinutes:0} minutes: {line}\n"
-        + $"The code works once, and only while {bindsWhat}. The agent does not see this message.\n"
-        + NotAnError;
+    /// <summary>
+    /// The closing lines of every digest: the code on its own labelled line with the line to type, then what the code binds. The
+    /// label keeps the code apart from the hashes the digest shows above it.
+    /// </summary>
+    public static string Closing(string code, string line, string bindsWhat) =>
+        $"{CodeLabel}: {code} — type within {SessionCodes.Lifetime.TotalMinutes:0} minutes: {line}\n"
+        + $"The code works once, and only while {bindsWhat}. The agent does not see this message.";
 
     /// <summary>
     /// The answer to an incomplete second step (no verb, or no code) while a code waits: the line to type. Only a hash of the code
@@ -129,6 +155,13 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
             $"{spec.RefusalPrefix}:incomplete",
             $"lockflight: {spec.NothingDone} yet: a code is waiting for {shownFor}, valid until {waiting.ExpiresAt.ToUniversalTime():HH:mm} UTC.\n"
             + $"Step 2 of 2 — type: {line} <the code shown with it>\n{again}.\n{NotAnError}");
+
+    /// <summary>
+    /// The refusal of a second step whose code no longer works, followed by step 1 again (<paramref name="digest"/>, with a new
+    /// code) for <paramref name="what"/> (<c>the spec</c>): what the person would see by typing the command again.
+    /// </summary>
+    public SessionCommandResult RefuseAndShowAgain(SessionRefusal refusal, string what, string digest) =>
+        SessionCommandResult.Answered($"{spec.RefusalPrefix}:{refusal.Code}", $"lockflight: {spec.NothingDone}: {refusal.Reason}. Here is {what} again, with a new code.\n{digest}");
 
     /// <summary>A refusal that ends with the command for a separate terminal (<paramref name="terminalArguments"/> after the engine), never with the code.</summary>
     public SessionCommandResult Refuse(SessionRefusal refusal, string terminalArguments)
@@ -145,6 +178,9 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
     /// </summary>
     public string Terminal(string literal, IEnumerable<string> words) =>
         spec.TerminalCommand + (literal.Length == 0 ? string.Empty : " " + literal) + string.Concat(words.Select(word => " " + ShellQuoting.QuoteIfNeeded(word)));
+
+    private static string NotTheCode(string? notTheCode, string shownWith) =>
+        notTheCode is null ? $"that is not the code shown with {shownWith}" : $"{notTheCode}, not the code; the code is on the '{CodeLabel}' line";
 
     /// <summary>
     /// Why the session is not one a person attends; null when it is. Claude Code marks an interactive session with the entrypoint
