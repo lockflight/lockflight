@@ -339,7 +339,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
                 await ExplainPreviewCiAsync(pipeline.RelativePath, ci);
             }
 
-            foreach (string line in CiPipeline.NextSteps(init.Platform, root, ciSteps))
+            foreach (string line in CiPipeline.NextSteps(init.Platform, root, ciSteps, ci))
             {
                 await context.Output.WriteLineAsync(line);
             }

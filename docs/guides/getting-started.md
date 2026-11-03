@@ -208,7 +208,9 @@ The lite profile gives you the guard and the gates, without the lifecycle.
      run in a folder nobody trusted ignores it without a message;
    - `.github/workflows/lockflight-gates.yml`, the CI job. It installs every .NET version the test projects target, and `init`
      says so when there are several. `--ci manual` writes a job that runs only when started by hand, `--ci none` none;
-     `--ci-platform azure|bitbucket|gitlab` writes the job for that service instead ([CI on other platforms](ci-other-platforms.md));
+     `--ci-platform azure|bitbucket|gitlab` writes the job for that service instead ([CI on other platforms](ci-other-platforms.md)).
+     On a new GitHub repository, enable workflows in the Actions tab before the first pull request
+     ([why](ci-hardening.md#enable-workflows-on-a-new-repository));
    - the linked engine in `.lockflight/bin/` (git-ignored), which the hooks run.
 
    It merges into files that exist and never overwrites them. Running it again changes nothing.

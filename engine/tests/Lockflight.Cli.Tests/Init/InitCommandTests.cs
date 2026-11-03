@@ -195,6 +195,28 @@ public sealed class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task APullRequestWorkflowComesWithTheStepToEnableActionsOnANewRepository()
+    {
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
+        (_, string again, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("open the Actions tab and enable workflows", output, StringComparison.Ordinal);
+        Assert.Contains("Expected — Waiting for status to be reported", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Actions tab", again, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("--ci", "manual")]
+    [InlineData("--ci-platform", "azure")]
+    public async Task AManualWorkflowOrAnotherPlatformNamesNoStepToEnableActions(params string[] options)
+    {
+        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link", .. options], "", projectRoot.FullName);
+
+        Assert.DoesNotContain("Actions tab", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task NoCiWritesNoWorkflow()
     {
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "none"], "", projectRoot.FullName);

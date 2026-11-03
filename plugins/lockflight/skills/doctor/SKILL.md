@@ -20,7 +20,8 @@ description: Diagnose a Lockflight setup — manifest, engine pin, linked engine
    is not installed, ask the user to run `~/.lockflight/bin/lockflight engine install` in a separate terminal window, in the
    project (it installs exactly the locked engine and changes nothing committed).
 2. Report each line. For `FAIL`/`warn`, give the fix shown after `→`. The `docs drift` and `instructions size` lines are
-   advisory: report them, and change no document for them unless the user asks. Spec Kit is optional: in a standard
+   advisory: report them, and change no document for them unless the user asks. The `github actions` warning is advisory too: enabling
+   workflows is the user's step in the repository's Actions tab on GitHub; give them the link it prints. Spec Kit is optional: in a standard
    project without `.specify/`, the `info` line for the Lockflight preset means Spec Kit is not used: it needs no fix and
    does not count against readiness. The lifecycle does not need it (the crew's spec writer and planner, or the session, write the files to the
    spec contract), so say so, and set Spec Kit up only when the user wants it.
