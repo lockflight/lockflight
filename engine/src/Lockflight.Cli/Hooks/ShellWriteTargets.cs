@@ -6,12 +6,13 @@ namespace Lockflight.Cli.Hooks;
 /// Finds the common writes in a shell command line, to catch accidents: output redirections (<c>&gt;</c>, <c>&gt;&gt;</c>,
 /// <c>2&gt;</c>, <c>&amp;&gt;</c>), the writers known to <see cref="CommandWriters"/>, the commands inside substitutions and subshells,
 /// and the literal command string of one nested shell (<c>bash -c '…'</c>, <c>pwsh -Command '…'</c>, <c>eval '…'</c>). A relative
-/// target after a literal <c>cd</c>, <c>pushd</c>, <c>popd</c> or <c>Set-Location</c> is judged as written and in the folder it moved
-/// to, until a subshell or substitution that moved ends (<see cref="WorkingFolder"/>), so a move never hides a write but may block
-/// one it made harmless (<c>cd ~ &amp;&amp; rm -rf .lockflight</c>). Nothing else is followed: a <c>cd</c> to a variable,
-/// <c>-</c> or a pattern leaves later targets where they were, <c>$PWD</c> stays the session's folder, and variables other than
-/// <c>$HOME</c> and <c>$PWD</c>, what <c>xargs</c> reads, a shell inside a nested shell, scripts, interpreters and build tools are
-/// not seen, and what is not seen is allowed. A guardrail against accidents, not a boundary.
+/// target after a literal <c>cd</c>, <c>pushd</c>, <c>popd</c> or <c>Set-Location</c> is judged as written and in the folder
+/// it moved to (<see cref="WorkingFolder"/>), so a move never hides a write but may block one it made harmless
+/// (<c>cd ~ &amp;&amp; rm -rf .lockflight</c>); a move in a POSIX subshell or substitution, or in a child shell, ends with it.
+/// Nothing else is followed: a <c>cd</c> to a variable, <c>-</c> or a pattern leaves later targets where they were,
+/// <c>$PWD</c> stays the session's folder, and variables other than <c>$HOME</c> and <c>$PWD</c>, what <c>xargs</c> reads, a
+/// shell inside a nested shell, scripts, interpreters and build tools are not seen, and what is not seen is allowed. A
+/// guardrail against accidents, not a boundary.
 /// </summary>
 internal sealed class ShellWriteTargets
 {
@@ -76,7 +77,11 @@ internal sealed class ShellWriteTargets
                     {
                         words = group.Words;
                         redirect = group.Redirect;
-                        folder.Restore(group.Folder);
+                        // A POSIX subshell or substitution is a process of its own; PowerShell's groups run in the same one.
+                        if (dialect == ShellDialect.Posix)
+                        {
+                            folder.Restore(group.Folder);
+                        }
                     }
 
                     break;
@@ -99,10 +104,13 @@ internal sealed class ShellWriteTargets
         {
             if (!nested)
             {
-                // The nested shell starts where its parent is, and its moves end with it.
+                // A child shell starts where its parent is, and its moves end with it; eval and Invoke-Expression run in this one.
                 WorkingFolder.State saved = folder.Save();
                 Scan(text, nestedDialect, nested: true);
-                folder.Restore(saved);
+                if (PosixShells.Contains(command.Program) || PowerShells.Contains(command.Program))
+                {
+                    folder.Restore(saved);
+                }
             }
 
             return;

@@ -122,7 +122,8 @@ It recognises:
 A relative path is checked against the session's working directory, as written, and, after a literal `cd`, `pushd`/`popd` or
 `Set-Location` earlier in the same command line, also in the folder it moved to (`cd tests && rm FooTests.cs` is judged as
 `FooTests.cs` and as `tests/FooTests.cs`), so a move never hides a write; it may block one the move made harmless
-(`cd ~ && rm -rf .lockflight`). A move inside a subshell, a substitution or a nested shell ends with it. A command that may rewrite a whole directory (`git restore .`, `git checkout -- <dir>`, `rm -r`, `git clean`) is
+(`cd ~ && rm -rf .lockflight`). A move in a POSIX subshell or substitution, or in a child shell (`bash -c`), ends with it; one
+in `eval`, `Invoke-Expression` or a PowerShell group does not. A command that may rewrite a whole directory (`git restore .`, `git checkout -- <dir>`, `rm -r`, `git clean`) is
 blocked when a locked test project or a protected file lies inside it; for rules without a fixed directory
 (`**/Directory.Build.props`) the files that exist there are checked, and a directory is walked only for the rules that could
 match below it. Because `lockflight.yaml` sits at the root, whole-repository rewrites such as `git stash`, `git restore .`,
@@ -136,8 +137,8 @@ It does **not** see, and so allows:
 - **script files** (`./fix.sh`, `bash fix.sh`), commands a shell reads on stdin (`bash <<EOF`, `curl … | sh`), a shell inside a
   nested command string, and other runners (`find -exec`, `find -delete`, `parallel`, `watch`, `script`, `ssh`, `tmux`);
 - the files `xargs` or `while read` get from a pipe, and paths built from variables or command output;
-- the folder a `cd` to a variable, to `-` or to a pattern moves to (later relative paths are judged as written), and a
-  `$PWD` after a `cd` (taken as the session's folder);
+- the folder a `cd` alone, to a variable, to `-` or to a pattern moves to (later relative paths are judged as written), and
+  a `$PWD` after a `cd` (taken as the session's folder);
 - other writers: `ln`, `rsync`, `tar`, `unzip`, `patch`, `dd`, `curl -o`, `wget -O`, `sort -o`, `chmod`, `Rename-Item`,
   `Set-Item`, `Invoke-WebRequest -OutFile`, `Expand-Archive`, `robocopy`, `xcopy`, .NET file APIs;
 - **git commands that switch the working tree to committed states** (`git switch <branch>`, `git checkout <branch>`,
