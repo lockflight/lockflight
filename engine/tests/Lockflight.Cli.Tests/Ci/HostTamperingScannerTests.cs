@@ -74,6 +74,38 @@ public sealed class HostTamperingScannerTests
         Assert.Contains($"Lockflight.Cli.Tests.Ci.TamperingSamples.LaunderingUser::{method}", Writes);
 
     [Fact]
+    public void ARecordModeSnapshotWriteBehindAnOffByDefaultVariableIsNoFinding() =>
+        Assert.DoesNotContain(Writes, location => location.Contains(".SnapshotStore", StringComparison.Ordinal));
+
+    [Theory]
+    [InlineData("SnapshotTamperer::WriteWithoutAGuard")]
+    [InlineData("SnapshotTamperer::WriteAfterTheGuard")]
+    [InlineData("SnapshotTamperer::WriteUnlessSwitchedOff")]
+    [InlineData("SnapshotTamperer::WriteOnAVariableTheRunnerSets")]
+    [InlineData("SnapshotTamperer::WriteOnTheGuardOrAFlag")]
+    [InlineData("SnapshotTamperer::WriteTheProjectFile")]
+    [InlineData("SnapshotTamperer::WriteASource")]
+    [InlineData("SnapshotTamperer::WriteTheRunnerConfig")]
+    [InlineData("SnapshotTamperer::WriteTheBuildProps")]
+    [InlineData("SnapshotTamperer::WriteAboveTheProject")]
+    [InlineData("SnapshotTamperer::DeleteInRecordMode")]
+    [InlineData("SnapshotTamperer::WriteBesideTheBuildOutput")]
+    [InlineData("SnapshotTamperer::WriteOnAnotherLocal")]
+    [InlineData("SnapshotTamperer::WriteAFileAFieldNames")]
+    [InlineData("SnapshotTamperer+<WriteAwaitedInRecordMode>::MoveNext")]
+    [InlineData("SnapshotSwitcher::Write")]
+    [InlineData("SnapshotFieldSwitcher::WriteBehindTheField")]
+    [InlineData("SnapshotFieldSwitcher::WriteBehindTheHelper")]
+    public void ASnapshotLookingWriteThatIsNotARecordModeCaseFileIsAFinding(string method) =>
+        Assert.Contains($"Lockflight.Cli.Tests.Ci.TamperingSamples.{method}", Writes);
+
+    [Fact]
+    public void ASnapshotVariableNamedOutsideTheTestCodeAllowsNoRecordModeWrite() =>
+        Assert.Contains(
+            HostTamperingScanner.Scan(typeof(TempFolderOwner).Assembly.Location, name => name.StartsWith("SHOP_", StringComparison.Ordinal)),
+            finding => finding.Kind == "file-write" && finding.Location.EndsWith("TamperingSamples.SnapshotStore::Save", StringComparison.Ordinal));
+
+    [Fact]
     public void ABaselineEntryAcceptsTheFindingItNamesOrEveryFindingOfItsKindInOneMethod()
     {
         TamperingFinding finding = new("Shop.Tests", "file-write", "Shop.Tests.CliTests::Writes", "System.IO.File.WriteAllText");

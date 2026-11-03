@@ -82,6 +82,42 @@ public sealed class HostTamperingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ASnapshotStoreThatWritesOnlyInRecordModeIsNotHostTampering()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string head = await repository.WriteCode(Stub, Test).Write("tests/Shop.Tests/Snapshots.cs", """
+            namespace Shop.Tests;
+
+            internal sealed class Snapshots(string directory)
+            {
+                public void Save(string name, string text)
+                {
+                    if (Environment.GetEnvironmentVariable("SHOP_SNAPSHOTS") == "record")
+                    {
+                        Directory.CreateDirectory(Path.Combine(directory, "Snapshots"));
+                        File.WriteAllText(Path.Combine(directory, "Snapshots", name + ".verified.json"), text);
+                    }
+                }
+
+                public void SaveTheRunnerConfig(string text)
+                {
+                    if (Environment.GetEnvironmentVariable("SHOP_SNAPSHOTS") == "record")
+                    {
+                        File.WriteAllText(Path.Combine(directory, "xunit.runner.json"), text);
+                    }
+                }
+            }
+
+            """).CommitAsync("test: red", cancellationToken, null, "Lockflight-Red: 1");
+
+        JsonNode document = await JudgeAsync(head);
+
+        JsonNode finding = Assert.Single(document["hostTampering"]!["new"]!.AsArray())!;
+        Assert.Equal("file-write", finding["kind"]!.GetValue<string>());
+        Assert.Contains("Snapshots::SaveTheRunnerConfig", finding.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AFindingTheBasesBaselineAcceptsDoesNotBlock()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;

@@ -26,4 +26,13 @@ internal sealed record TamperingBody(
 
     /// <summary>A constructor's field stores, each with the code since the previous store.</summary>
     public List<TamperingSegment> Segments { get; } = [];
+
+    /// <summary>The IL offset of each of <see cref="Calls"/>, by the same index.</summary>
+    public List<int> CallOffsets { get; init; } = [];
+
+    /// <summary>Every way control reaches an offset other than falling through: branches, <c>leave</c>, <c>switch</c> targets and exception handlers, as (from, target).</summary>
+    public List<(int From, int Target)> Jumps { get; } = [];
+
+    /// <summary>The body's instructions in order, as far as a record-mode guard needs them (<see cref="SnapshotRecords"/>).</summary>
+    public List<TamperingStep> Steps { get; } = [];
 }

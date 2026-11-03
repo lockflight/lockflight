@@ -15,6 +15,7 @@ internal static class TamperingScan
         HashSet<string> projects = new(Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Select(Path.GetFileNameWithoutExtension).OfType<string>(), StringComparer.OrdinalIgnoreCase);
         HashSet<string> scanned = new(StringComparer.OrdinalIgnoreCase);
         List<TamperingFinding> findings = [];
+        VariableMentions mentions = new(root, production);
         foreach (TestApp app in workspace.Apps)
         {
             string output = Path.GetDirectoryName(app.AssemblyPath)!;
@@ -22,7 +23,7 @@ internal static class TamperingScan
                 .Select(name => Path.Combine(output, name + ".dll")).Where(File.Exists);
             foreach (string assembly in helpers.Prepend(app.AssemblyPath).Where(path => scanned.Add(Path.GetFileName(path))))
             {
-                findings.AddRange(HostTamperingScanner.Scan(assembly));
+                findings.AddRange(HostTamperingScanner.Scan(assembly, mentions.IsNamedOutsideTheTests));
             }
         }
 

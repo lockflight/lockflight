@@ -11,7 +11,8 @@ namespace Lockflight.Cli.Ci;
 /// starting processes, file writes in a method that does not visibly use a temporary folder, reflection in a method that names a
 /// test framework's or runner's types, and setting CI variables. A method visibly uses a temporary folder when it asks for one before
 /// it writes, or reads a field or calls a method of a type of the assembly that asks for one (a fixture that makes a temporary
-/// folder, a test class that writes into its fixture's folder); either way it must name no other folder of the run. A guardrail: an obfuscated call evades it. What it catches is
+/// folder, a test class that writes into its fixture's folder); either way it must name no other folder of the run. A snapshot store's
+/// record-mode write behind an off-by-default snapshot variable is not a finding (<see cref="SnapshotRecords"/>). A guardrail: an obfuscated call evades it. What it catches is
 /// listed, so the code is visible in the pull request's evidence.
 /// </summary>
 internal static partial class HostTamperingScanner
@@ -19,8 +20,27 @@ internal static partial class HostTamperingScanner
     private const byte TwoBytePrefix = 0xFE;
     private const byte SwitchOpCode = 0x45;
     private const byte StringOpCode = 0x72;
+    private const byte NoOperation = 0x00;
+    private const byte FirstLoadLocal = 0x06;
+    private const byte FirstStoreLocal = 0x0A;
+    private const byte LastStoreLocal = 0x0D;
+    private const byte ShortLoadLocal = 0x11;
+    private const byte ShortStoreLocal = 0x13;
+    private const byte FirstShortBranch = 0x2B;
+    private const byte ShortBranchFalse = 0x2C;
+    private const byte LastShortBranch = 0x37;
+    private const byte FirstLongBranch = 0x38;
+    private const byte LongBranchFalse = 0x39;
+    private const byte LastLongBranch = 0x44;
+    private const byte LongLeave = 0xDD;
+    private const byte ShortLeave = 0xDE;
+    private const byte LongLoadLocal = 0x0C;
+    private const byte LongStoreLocal = 0x0E;
+
+    private const string OtherAssembly = "other";
 
     private static readonly HashSet<byte> MethodOps = [0x27, 0x28, 0x6F, 0x73];
+    private static readonly string[] RuntimeAssemblies = ["System.Runtime", "System.Private.CoreLib", "mscorlib", "netstandard"];
     private static readonly HashSet<byte> TwoByteMethodOps = [0x06, 0x07];
 
     /// <summary><c>ldfld</c>, <c>ldflda</c>, <c>ldsfld</c>, <c>ldsflda</c>.</summary>
@@ -43,10 +63,17 @@ internal static partial class HostTamperingScanner
     private static readonly string[] TempMembers = ["GetTempPath", "GetTempFileName", "CreateTempSubdirectory"];
     private static readonly string[] ReflectionMembers = ["GetType", "GetField", "GetFields", "GetMethod", "GetMethods", "GetProperty", "GetProperties", "GetMember", "InvokeMember", "CreateInstance"];
     private static readonly string[] RunnerNamespaces = ["Xunit", "NUnit", "Microsoft.Testing", "Microsoft.VisualStudio.TestPlatform", "Microsoft.TestPlatform"];
-    private static readonly string[] CiVariablePrefixes = ["GITHUB_", "RUNNER_", "LOCKFLIGHT_", "BITBUCKET_", "CI_", "SYSTEM_", "BUILD_"];
+    /// <summary>The prefixes of the variables CI runners (and Lockflight) set.</summary>
+    public static readonly string[] CiVariablePrefixes = ["GITHUB_", "RUNNER_", "LOCKFLIGHT_", "BITBUCKET_", "CI_", "SYSTEM_", "BUILD_"];
 
     /// <summary>Every finding in the assembly; empty when it cannot be read (the build output is the build's problem, not tampering).</summary>
-    public static IReadOnlyList<TamperingFinding> Scan(string assemblyPath)
+    public static IReadOnlyList<TamperingFinding> Scan(string assemblyPath) => Scan(assemblyPath, _ => false);
+
+    /// <summary>
+    /// Every finding in the assembly, with <paramref name="namedElsewhere"/> saying whether a snapshot variable is named anywhere
+    /// outside the test code (a runsettings or MSBuild file, production code), which could set it (<see cref="SnapshotRecords"/>).
+    /// </summary>
+    public static IReadOnlyList<TamperingFinding> Scan(string assemblyPath, Func<string, bool> namedElsewhere)
     {
         try
         {
@@ -71,8 +98,10 @@ internal static partial class HostTamperingScanner
                     if (method.RelativeVirtualAddress != 0)
                     {
                         string name = reader.GetString(method.Name);
-                        TamperingBody body = Read(reader, pe.GetMethodBody(method.RelativeVirtualAddress).GetILReader(), Outermost(reader, typeHandle), MemberKey(typeHandle, name), name is ".ctor" or ".cctor");
+                        MethodBodyBlock block = pe.GetMethodBody(method.RelativeVirtualAddress);
+                        TamperingBody body = Read(reader, block.GetILReader(), Outermost(reader, typeHandle), MemberKey(typeHandle, name), name is ".ctor" or ".cctor");
                         body = body with { StubKey = StubKey(reader, typeHandle) };
+                        AddHandlerEntries(body, block);
                         body.AttributeStrings.AddRange(attributeStrings.GetValueOrDefault((Outermost(reader, typeHandle), SourceMethod(reader, typeHandle, method))) ?? []);
                         bodies.Add((location, body));
                     }
@@ -84,9 +113,21 @@ internal static partial class HostTamperingScanner
             TamperingBody[] all = [.. bodies.Select(body => body.Body)];
             HashSet<string> tempReach = Reach(all, calls => calls.Any(IsTemp), _ => false);
             HashSet<string> elsewhere = Reach(all, NamesAnotherFolder, NamesAResultsPath);
+            HashSet<string> switchedOn = SnapshotRecords.SwitchedOn(all);
+            Func<string, bool> isSet = name => switchedOn.Contains(name) || namedElsewhere(name);
+            Dictionary<TamperingBody, IReadOnlyList<RecordGuard>> guards = new(ReferenceEqualityComparer.Instance);
+            foreach (TamperingBody body in all)
+            {
+                guards[body] = SnapshotRecords.Guards(body, isSet);
+            }
+
+            IReadOnlyList<RecordGuard> GuardsOf(TamperingBody body) => guards[body];
+            HashSet<string> elsewhereButGuards = Reach([.. all.Select(body => SnapshotRecords.WithoutGuardReads(body, GuardsOf(body)))], NamesAnotherFolder, NamesAResultsPath);
+            HashSet<string> hostFiles = Reach(all, _ => false, strings => strings.Any(SnapshotRecords.NamesAHostFile));
             foreach ((string location, TamperingBody body) in bodies)
             {
-                findings.AddRange(Findings(body, tempReach, elsewhere, assembly, location));
+                findings.AddRange(Findings(body, tempReach, elsewhere, assembly, location)
+                    .Where(finding => !IsSnapshotRecord(body, finding, GuardsOf(body), elsewhereButGuards, hostFiles)));
             }
 
             return [.. findings.DistinctBy(finding => (finding.Id, finding.Member))];
@@ -124,13 +165,21 @@ internal static partial class HostTamperingScanner
         (int Calls, int Strings, HashSet<string> Members) segment = (0, 0, new HashSet<string>(StringComparer.Ordinal));
         while (il.RemainingBytes > 0)
         {
+            int offset = il.Offset;
             byte code = il.ReadByte();
+            TamperingStepKind kind = TamperingStepKind.Other;
+            string text = string.Empty;
+            int target = 0;
             if (code == TwoBytePrefix)
             {
                 byte second = il.ReadByte();
                 if (TwoByteMethodOps.Contains(second))
                 {
-                    Call(reader, body, segment.Members, MetadataTokens.EntityHandle(il.ReadInt32()));
+                    (kind, text) = (TamperingStepKind.Call, Call(reader, body, segment.Members, MetadataTokens.EntityHandle(il.ReadInt32()), offset));
+                }
+                else if (second is LongLoadLocal or LongStoreLocal)
+                {
+                    (kind, target) = (second == LongLoadLocal ? TamperingStepKind.LoadLocal : TamperingStepKind.StoreLocal, il.ReadUInt16());
                 }
                 else
                 {
@@ -139,7 +188,7 @@ internal static partial class HostTamperingScanner
             }
             else if (MethodOps.Contains(code))
             {
-                Call(reader, body, segment.Members, MetadataTokens.EntityHandle(il.ReadInt32()));
+                (kind, text) = (TamperingStepKind.Call, Call(reader, body, segment.Members, MetadataTokens.EntityHandle(il.ReadInt32()), offset));
             }
             else if (FieldLoadOps.Contains(code))
             {
@@ -171,27 +220,65 @@ internal static partial class HostTamperingScanner
             }
             else if (code == StringOpCode)
             {
-                body.Strings.Add(reader.GetUserString(MetadataTokens.UserStringHandle(il.ReadInt32() & 0x00FFFFFF)));
+                text = reader.GetUserString(MetadataTokens.UserStringHandle(il.ReadInt32() & 0x00FFFFFF));
+                kind = TamperingStepKind.String;
+                body.Strings.Add(text);
+            }
+            else if (code is (>= FirstShortBranch and <= LastShortBranch) or ShortLeave)
+            {
+                target = il.ReadSByte() + il.Offset;
+                kind = code == ShortBranchFalse ? TamperingStepKind.BranchFalse : TamperingStepKind.Other;
+                body.Jumps.Add((offset, target));
+            }
+            else if (code is (>= FirstLongBranch and <= LastLongBranch) or LongLeave)
+            {
+                target = il.ReadInt32() + il.Offset;
+                kind = code == LongBranchFalse ? TamperingStepKind.BranchFalse : TamperingStepKind.Other;
+                body.Jumps.Add((offset, target));
             }
             else if (code == SwitchOpCode)
             {
                 // The count is read first: `il.Offset += il.ReadInt32() * 4` would take the offset before the read moved it,
                 // land four bytes short of the jump table's end, and read its last entry as code.
                 int targets = il.ReadInt32();
-                il.Offset += targets * sizeof(int);
+                int tableEnd = il.Offset + (targets * sizeof(int));
+                for (int entry = 0; entry < targets; entry++)
+                {
+                    body.Jumps.Add((offset, tableEnd + il.ReadInt32()));
+                }
+            }
+            else if (code is (>= FirstLoadLocal and <= LastStoreLocal) or ShortLoadLocal or ShortStoreLocal)
+            {
+                (kind, target) = code switch
+                {
+                    ShortLoadLocal => (TamperingStepKind.LoadLocal, il.ReadByte()),
+                    ShortStoreLocal => (TamperingStepKind.StoreLocal, il.ReadByte()),
+                    < FirstStoreLocal => (TamperingStepKind.LoadLocal, code - FirstLoadLocal),
+                    _ => (TamperingStepKind.StoreLocal, code - FirstStoreLocal),
+                };
             }
             else
             {
+                kind = code is >= 0x15 and <= 0x20 ? TamperingStepKind.Constant : TamperingStepKind.Other;
                 il.Offset += OperandSize(code);
+            }
+
+            // A nop (Debug builds put them around statements) is left out, so the guard's shape is the same in both builds.
+            if (code != NoOperation)
+            {
+                body.Steps.Add(new TamperingStep(offset, kind, text, target, il.Offset));
             }
         }
 
         return body;
     }
 
-    private static void Call(MetadataReader reader, TamperingBody body, HashSet<string> segment, EntityHandle token)
+    /// <summary>Records a call at <paramref name="offset"/> and returns it as <c>Type::Member</c>.</summary>
+    private static string Call(MetadataReader reader, TamperingBody body, HashSet<string> segment, EntityHandle token, int offset)
     {
-        body.Calls.Add(Member(reader, token));
+        (string Type, string Member) called = Member(reader, token);
+        body.Calls.Add(called);
+        body.CallOffsets.Add(offset);
         EntityHandle method = token.Kind == HandleKind.MethodSpecification ? reader.GetMethodSpecification((MethodSpecificationHandle)token).Method : token;
         if (method.Kind == HandleKind.MethodDefinition)
         {
@@ -207,6 +294,28 @@ internal static partial class HostTamperingScanner
             body.Members.Add(key);
             segment.Add(key);
         }
+
+        // A framework call names its type only when the type comes from the runtime's own assemblies: a project of the repository
+        // can declare its own System.Environment and be referenced under an alias.
+        return IsFromTheRuntime(reader, method) ? $"{called.Type}::{called.Member}" : $"{called.Type}::{called.Member}@{OtherAssembly}";
+    }
+
+    /// <summary>Whether a member reference's type resolves to one of the runtime's own assemblies.</summary>
+    private static bool IsFromTheRuntime(MetadataReader reader, EntityHandle method)
+    {
+        if (method.Kind != HandleKind.MemberReference || reader.GetMemberReference((MemberReferenceHandle)method).Parent is not { Kind: HandleKind.TypeReference } parent)
+        {
+            return false;
+        }
+
+        EntityHandle scope = reader.GetTypeReference((TypeReferenceHandle)parent).ResolutionScope;
+        while (scope.Kind == HandleKind.TypeReference)
+        {
+            scope = reader.GetTypeReference((TypeReferenceHandle)scope).ResolutionScope;
+        }
+
+        return scope.Kind == HandleKind.AssemblyReference
+            && RuntimeAssemblies.Contains(reader.GetString(reader.GetAssemblyReference((AssemblyReferenceHandle)scope).Name), StringComparer.Ordinal);
     }
 
     private static string MemberKey(TypeDefinitionHandle type, string name) => $"{MetadataTokens.GetRowNumber(type)}::{name}";
@@ -443,6 +552,31 @@ internal static partial class HostTamperingScanner
         }
 
         return type;
+    }
+
+    /// <summary>Whether a file-write finding is a snapshot store's record-mode write (<see cref="SnapshotRecords"/>).</summary>
+    private static bool IsSnapshotRecord(
+        TamperingBody body, TamperingFinding finding, IReadOnlyList<RecordGuard> guards, IReadOnlySet<string> elsewhere, IReadOnlySet<string> hostFiles) =>
+        finding.Kind == "file-write"
+        && guards.Count > 0
+        && body.Calls.Select((call, index) => (call, index))
+            .Where(entry => $"{entry.call.Type}.{entry.call.Member}" == finding.Member)
+            .All(entry => SnapshotRecords.IsRecord(body, entry.index, guards, elsewhere, hostFiles));
+
+    /// <summary>
+    /// Adds an exception handler's entries to the body's jumps: a handler is reached from anywhere in its protected block, so a
+    /// jump is recorded from the block's first and last offsets.
+    /// </summary>
+    private static void AddHandlerEntries(TamperingBody body, MethodBodyBlock block)
+    {
+        foreach (ExceptionRegion region in block.ExceptionRegions)
+        {
+            foreach (int entry in region.FilterOffset >= 0 ? [region.HandlerOffset, region.FilterOffset] : new[] { region.HandlerOffset })
+            {
+                body.Jumps.Add((region.TryOffset, entry));
+                body.Jumps.Add((region.TryOffset + region.TryLength - 1, entry));
+            }
+        }
     }
 
     private static IEnumerable<TamperingFinding> Findings(
