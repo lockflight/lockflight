@@ -94,7 +94,9 @@ reviewer to read, so an attribute cannot hide a change from the review; a real b
 exits NOT-EARNED when it finds nothing.
 
 **Diff limit.** `review.maxDiffCharacters` (default 120,000) is how much of the diff the reviewer is shown; a longer diff is
-cut, the reviewer is told which files to read, and the run is not of record. Raise it for a change that cannot be split, up to
+cut, the reviewer is told which files to read, and the run is not of record. Moved and renamed files count only with their
+edits (a file moved unchanged is a few lines naming the old and new path), so a refactoring that mostly moves files is
+much smaller than its file count suggests. Raise it for a change that cannot be split, up to
 the engine's ceiling of 400,000 (a value outside 10,000 to 400,000 is a configuration error). A larger diff costs more tokens,
 so `review.maxUsd` may need raising with it. Generated files (package lock files, EF Core model snapshots and migration
 designer files, chosen by path and, for the EF files, by the shape of their content) are listed by path, size and hash instead

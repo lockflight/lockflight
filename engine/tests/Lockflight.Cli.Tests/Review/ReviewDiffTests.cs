@@ -69,6 +69,18 @@ public sealed class ReviewDiffTests : IDisposable
         Assert.Equal(["src/Pr\\303\\251ces.cs"], fitted.NotShown);
     }
 
+    [Fact]
+    public void ASourceFileRenamedToALockFilesNameIsShownNotListed()
+    {
+        string diff = "diff --git a/src/Auth.cs b/packages.lock.json\nsimilarity index 100%\nrename from src/Auth.cs\nrename to packages.lock.json\n";
+        File.WriteAllText(Path.Combine(root.FullName, "packages.lock.json"), "namespace Shop;\n");
+
+        ReviewDiff fitted = ReviewDiff.Fit(diff, 10_000, root.FullName);
+
+        Assert.Empty(fitted.Generated);
+        Assert.Contains("rename from src/Auth.cs", fitted.Shown, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("packages.lock.json")]
     [InlineData("src/Shop/packages.lock.json")]

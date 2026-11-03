@@ -224,6 +224,98 @@ public sealed class ReviewCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task APureMoveOfALargeFileAddsOnlyItsRenameToTheDiff()
+    {
+        await ProjectWithCatalogAsync();
+        Directory.CreateDirectory(Path.Combine(root.FullName, "src", "Moved"));
+        await GitAsync("mv", "src/Catalog.cs", "src/Moved/Catalog.cs");
+        await GitAsync("commit", "-q", "-m", "move");
+        claude.Answers();
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.DoesNotContain("will not be the review of record", output, StringComparison.Ordinal);
+        string marker = Regex.Match(Assert.Single(claude.Prompts), @"<(data-[0-9a-f]{16}) kind=""diff""").Groups[1].Value;
+        string shown = Fenced(claude.Prompts[0], marker, "diff");
+        Assert.Contains("rename from src/Catalog.cs", shown, StringComparison.Ordinal);
+        Assert.Contains("rename to src/Moved/Catalog.cs", shown, StringComparison.Ordinal);
+        Assert.DoesNotContain("a catalog line", shown, StringComparison.Ordinal);
+        Assert.True(shown.Length < 2_000, $"the shown diff is {shown.Length} characters");
+        using JsonDocument evidence = JsonDocument.Parse(File.ReadAllText(Assert.Single(RunFiles())));
+        Assert.True(evidence.RootElement.GetProperty("ofRecord").GetBoolean());
+        Assert.Equal("src/Moved/Catalog.cs", Assert.Single(evidence.RootElement.GetProperty("renamedFiles").EnumerateArray().ToArray()).GetString());
+    }
+
+    [Fact]
+    public async Task AMoveWithAOneLineEditShowsOnlyThatLine()
+    {
+        await ProjectWithCatalogAsync();
+        Directory.CreateDirectory(Path.Combine(root.FullName, "src", "Moved"));
+        string moved = File.ReadAllText(Path.Combine(root.FullName, "src", "Catalog.cs")).Replace("namespace Shop;", "namespace Shop.Moved;", StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(root.FullName, "src", "Moved", "Catalog.cs"), moved);
+        File.Delete(Path.Combine(root.FullName, "src", "Catalog.cs"));
+        await GitAsync("add", "-A");
+        await GitAsync("commit", "-q", "-m", "move and rename the namespace");
+        claude.Answers();
+
+        (ExitCode exitCode, _, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        string marker = Regex.Match(Assert.Single(claude.Prompts), @"<(data-[0-9a-f]{16}) kind=""diff""").Groups[1].Value;
+        string shown = Fenced(claude.Prompts[0], marker, "diff");
+        Assert.Contains("rename to src/Moved/Catalog.cs", shown, StringComparison.Ordinal);
+        Assert.Contains("-namespace Shop;", shown, StringComparison.Ordinal);
+        Assert.Contains("+namespace Shop.Moved;", shown, StringComparison.Ordinal);
+        Assert.True(Regex.Count(shown, "a catalog line") <= 3, "only the edit's context lines of the moved file are shown");
+    }
+
+    [Fact]
+    public async Task MovesWithEditsAreFoundWhenTheRepositorysRenameLimitIsLow()
+    {
+        await ProjectWithCatalogAsync();
+        await GitAsync("config", "diff.renameLimit", "1");
+        Directory.CreateDirectory(Path.Combine(root.FullName, "src", "Moved"));
+        foreach ((string from, string to) in new[] { ("Catalog.cs", "Products.cs"), ("Prices.cs", "Tariffs.cs") })
+        {
+            string text = File.ReadAllText(Path.Combine(root.FullName, "src", from)).Replace("namespace Shop;", "namespace Shop.Moved;", StringComparison.Ordinal);
+            File.WriteAllText(Path.Combine(root.FullName, "src", "Moved", to), text);
+            File.Delete(Path.Combine(root.FullName, "src", from));
+        }
+
+        await GitAsync("add", "-A");
+        await GitAsync("commit", "-q", "-m", "move and rename");
+        claude.Answers();
+
+        (ExitCode exitCode, _, _) = await RunAsync(["review"]);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        string marker = Regex.Match(Assert.Single(claude.Prompts), @"<(data-[0-9a-f]{16}) kind=""diff""").Groups[1].Value;
+        string shown = Fenced(claude.Prompts[0], marker, "diff");
+        Assert.Contains("rename to src/Moved/Products.cs", shown, StringComparison.Ordinal);
+        Assert.Contains("rename to src/Moved/Tariffs.cs", shown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ACopyIsShownInFullEvenWhenTheRepositoryLooksForCopies()
+    {
+        await ProjectWithCatalogAsync();
+        await GitAsync("config", "diff.renames", "copies");
+        File.Copy(Path.Combine(root.FullName, "src", "Prices.cs"), Path.Combine(root.FullName, "src", "PricesCopy.cs"));
+        File.AppendAllText(Path.Combine(root.FullName, "src", "Prices.cs"), "// changed so git may take it as a copy source\n");
+        await GitAsync("add", "-A");
+        await GitAsync("commit", "-q", "-m", "copy");
+        claude.Answers();
+
+        await RunAsync(["review"]);
+
+        string marker = Regex.Match(Assert.Single(claude.Prompts), @"<(data-[0-9a-f]{16}) kind=""diff""").Groups[1].Value;
+        string shown = Fenced(claude.Prompts[0], marker, "diff");
+        Assert.DoesNotContain("copy from", shown, StringComparison.Ordinal);
+        Assert.Contains("+// a price line 3000", shown, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AGeneratedFileIsListedForTheReviewerAndRecordedAsNotReviewed()
     {
         await ProjectAsync();
@@ -777,6 +869,23 @@ public sealed class ReviewCommandTests : IDisposable
         File.WriteAllText(Path.Combine(root.FullName, "src", "Orders.cs"), "namespace Shop;\n\npublic static class Orders { public static decimal Total(decimal price) => price; }\n");
         await GitAsync("commit", "-q", "-am", "total");
         File.WriteAllText(Path.Combine(tools.FullName, OperatingSystem.IsWindows() ? "claude.exe" : "claude"), string.Empty);
+    }
+
+    /// <summary>
+    /// The project with a large file on the target branch under the feature branch, in a repository that turns git's rename
+    /// detection off: the review must find moves itself.
+    /// </summary>
+    private async Task ProjectWithCatalogAsync()
+    {
+        await ProjectAsync();
+        await GitAsync("config", "diff.renames", "false");
+        await GitAsync("switch", "-q", "main");
+        File.WriteAllText(Path.Combine(root.FullName, "src", "Catalog.cs"), "namespace Shop;\n" + string.Concat(Enumerable.Range(1, 6_000).Select(line => $"// a catalog line {line}\n")));
+        File.WriteAllText(Path.Combine(root.FullName, "src", "Prices.cs"), "namespace Shop;\n" + string.Concat(Enumerable.Range(1, 3_000).Select(line => $"// a price line {line}\n")));
+        await GitAsync("add", "src");
+        await GitAsync("commit", "-q", "-m", "catalog");
+        await GitAsync("switch", "-q", "work");
+        await GitAsync("rebase", "-q", "main");
     }
 
     /// <summary>The text of the prompt's fenced block of this kind, up to the first closing tag with the marker.</summary>

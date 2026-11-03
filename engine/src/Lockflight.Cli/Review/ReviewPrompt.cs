@@ -88,6 +88,13 @@ internal static class ReviewPrompt
             repository root, then `@@` hunks whose context and removed lines are copied exactly from the file). Change only
             existing C# files that are not tests; never edit a test.
 
+            A file the change moves or renames appears in the diff as one entry with a `similarity index` and `rename from`
+            and `rename to` lines (read the file at the paths of its `diff --git` line). An entry with `similarity index 100%`
+            has no hunks: the content is unchanged from the base, but it is new where it now lives. Otherwise the hunks are the
+            edits made with the move. Review the move itself (namespaces, references, project files that list the path) and
+            those edits, and read the moved file whenever the move can change what runs: into another project, out of a test
+            project, from a path that was not compiled, or to another file extension.
+
             {ReproductionRules}
 
             {DataRules(fence)}

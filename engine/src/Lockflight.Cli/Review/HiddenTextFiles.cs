@@ -11,6 +11,13 @@ namespace Lockflight.Cli.Review;
 /// </summary>
 internal static class HiddenTextFiles
 {
+    /// <summary>
+    /// The rename limit both review diffs pass (<c>-l</c>), so the repository's <c>diff.renameLimit</c> cannot switch the search for
+    /// moved files with edits off on a large refactoring (git's default of 1,000 files skips it, with only a warning); git's own
+    /// default for merges.
+    /// </summary>
+    public const string RenameLimit = "-l7000";
+
     private const int SniffBytes = 8_000;
     private const string Unknown = "-";
 
@@ -21,7 +28,7 @@ internal static class HiddenTextFiles
     public static async Task<IReadOnlyList<string>?> FindAsync(RepoRoot repo, string baseRef, IReadOnlyList<string> scope, CancellationToken cancellationToken)
     {
         ProcessResult numstat = await ProcessRunner.RunAsync(
-            "git", ["diff", "--numstat", "-z", "--no-color", "--no-ext-diff", "--no-textconv", baseRef, "--", .. scope], repo.Directory, cancellationToken);
+            "git", ["diff", "--numstat", "-z", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", RenameLimit, baseRef, "--", .. scope], repo.Directory, cancellationToken);
         if (numstat.ExitCode != 0)
         {
             return null;

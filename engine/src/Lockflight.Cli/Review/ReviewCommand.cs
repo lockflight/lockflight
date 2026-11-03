@@ -215,6 +215,7 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
             ReviewOfRecord.Reasons(manifest.Review, model, budget, reviewBase, diff, tree))
         {
             Generated = diff.Generated,
+            Renamed = diff.Renamed,
         };
         string evidence = ReviewEvidence.Save(feature.RecordDirectory, run, outcome);
         await PrintAsync(run, outcome, manifest.Root, evidence);
@@ -284,7 +285,10 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
     /// The code change since the base: the project's own diff without Lockflight's records and the specs, then — in a workspace —
     /// each unit repository's diff with its unit path in the file names, with the text files it shows as binary. External diff
     /// tools and text conversions (<c>diff=&lt;driver&gt;</c> with a <c>textconv</c>) are off, so the reviewer reads the content
-    /// itself. Null when git fails in any of them.
+    /// itself. Moves and renames are found whatever the repository's <c>diff.renames</c> and <c>diff.renameLimit</c> say
+    /// (<c>--find-renames</c>, git's default 50% similarity, <see cref="HiddenTextFiles.RenameLimit"/>): a pure move is its <c>rename from</c>/<c>rename to</c> lines and a moved file with edits shows only the
+    /// edits, so a large refactoring fits the reviewer's limit. Copies are not looked for: a copy adds code in a new place, and the
+    /// reviewer is shown it in full. Null when git fails in any of them.
     /// </summary>
     private static async Task<CodeDiff?> CodeDiffAsync(string root, string baseRef, CancellationToken cancellationToken)
     {
@@ -295,7 +299,7 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
             string[] scope = repo.Prefix.Length == 0 ? [".", ":(exclude).lockflight", $":(exclude){FeatureLocator.SpecsDirectory}"] : [];
             ProcessResult diff = await ProcessRunner.RunAsync(
                 "git",
-                ["diff", "--no-color", "--no-ext-diff", "--no-textconv", $"--src-prefix=a/{repo.Prefix}", $"--dst-prefix=b/{repo.Prefix}", baseRef, "--", .. scope],
+                ["diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", HiddenTextFiles.RenameLimit, $"--src-prefix=a/{repo.Prefix}", $"--dst-prefix=b/{repo.Prefix}", baseRef, "--", .. scope],
                 repo.Directory,
                 cancellationToken);
             if (diff.ExitCode != 0 || await HiddenTextFiles.FindAsync(repo, baseRef, scope, cancellationToken) is not IReadOnlyList<string> shownAsBinary)

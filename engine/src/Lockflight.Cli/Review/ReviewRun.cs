@@ -26,4 +26,7 @@ internal sealed record ReviewRun(
 
     /// <summary>The generated files listed instead of shown (<see cref="GeneratedFiles"/>): not reviewed.</summary>
     public IReadOnlyList<GeneratedFile> Generated { get; init; } = [];
+
+    /// <summary>The new paths of the moved or renamed files, whose diff the reviewer was shown as the move and its edits only.</summary>
+    public IReadOnlyList<string> Renamed { get; init; } = [];
 }
