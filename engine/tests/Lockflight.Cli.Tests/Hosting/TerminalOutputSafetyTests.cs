@@ -159,9 +159,41 @@ public sealed class TerminalOutputSafetyTests : IDisposable
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "user-prompt-expansion"], payload, root.FullName, attended, time);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("you are approving", error, StringComparison.Ordinal);
+        Assert.Contains("Check the spec of 001-orders", error, StringComparison.Ordinal);
         AssertClean(error);
         Assert.Contains($"1 Pay{HostileShown}", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheSessionApprovalConfirmationShowsSpecTextWithoutItsEscapes()
+    {
+        WriteManifest();
+        string spec = Path.Combine(root.FullName, "specs", "001-orders", "spec.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(spec)!);
+        File.WriteAllText(spec, $"# Orders\n\n### User Story 1 - Pay{Hostile} (Priority: P1)\n\n1. **Given** a cart, **When** paying, **Then** it is paid\n\n- **FR-001**: Pay\n");
+        string stop = JsonSerializer.Serialize(new Dictionary<string, string> { ["session_id"] = "s1", ["cwd"] = root.FullName, ["hook_event_name"] = "Stop" });
+        string payload = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["session_id"] = "s1",
+            ["cwd"] = root.FullName,
+            ["hook_event_name"] = "UserPromptExpansion",
+            ["command_name"] = "lockflight:approve",
+            ["command_args"] = "spec",
+            ["command_source"] = "plugin",
+        });
+        Dictionary<string, string> attended = new()
+        {
+            [EnvironmentVariables.ClaudeCodeEntrypoint] = "cli",
+            [EnvironmentVariables.ClaudeCodeSessionAttended] = "1",
+        };
+        await TestConsole.RunAsync(["hook", "stop"], stop, root.FullName, attended, time);
+
+        (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(["hook", "user-prompt-expansion"], payload, root.FullName, attended, time);
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        string message = JsonDocument.Parse(output).RootElement.GetProperty("systemMessage").GetString()!;
+        AssertClean(message);
+        Assert.Contains($"1 Pay{HostileShown}", message, StringComparison.Ordinal);
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(root);

@@ -79,11 +79,12 @@ Then set up your project: the [lite profile](#lite-profile-target-first-green-in
   CI cannot install it until the project pins a release (`update`).
 - **Human decisions** (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `update`) are yours: run them in a separate
   terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
-  approval you can also give in the session by typing `/lockflight:approve spec` (or `tasks`), and a baseline, a reset or an
-  amend by typing `/lockflight:baseline`, `/lockflight:reset` or `/lockflight:amend`. Each takes two steps: the engine shows
-  you what would be recorded under "UserPromptExpansion operation blocked by hook", starting with
+  approval you can also give in the session by typing `/lockflight:approve` (it picks the spec or the tasks, whichever waits),
+  and a baseline, a reset or an amend by typing `/lockflight:baseline`, `/lockflight:reset` or `/lockflight:amend`. An
+  approval takes one step: it records the files as they were when the agent's turn ended, and if they changed since, it shows
+  them to you instead and the same command typed again approves them. A baseline, a reset or an amend takes two steps: the
+  engine shows you what would be recorded under "UserPromptExpansion operation blocked by hook", starting with
   `Step 1 of 2 — not an error`, and ends with the `Your code:` line, which holds the code and the line to type.
-  `/lockflight:approve` typed alone starts with the phase that waits for your approval.
 - **Updating:** in a separate terminal window (not with `!` in Claude Code), run `~/.lockflight/bin/lockflight update` in a project. An install from source
   (the checkout recorded in `~/.lockflight/source`) pulls your checkout, reinstalls the engine and the plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
   commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at
@@ -347,16 +348,18 @@ skips the PyYAML check; neither counts against readiness.
    | Step | Who | Check |
    |---|---|---|
    | write `spec.md`: the crew's spec writer, `/speckit-specify` and `/speckit-clarify`, or by hand | agent + you | `lockflight phase check specify` |
-   | approve the spec | **you**: type `/lockflight:approve spec` in Claude Code, review what the engine shows, then type the line with its code; or, in a separate terminal window (not `!` in Claude Code), `.lockflight/bin/lockflight approve spec` | hash-bound record |
+   | approve the spec | **you**: read `spec.md`, then type `/lockflight:approve` in Claude Code (Claude Code tells you when the spec is ready for it); or, in a separate terminal window (not `!` in Claude Code), `.lockflight/bin/lockflight approve spec` | hash-bound record |
    | write `plan.md` and `tasks.md`: the crew's planner, `/speckit-plan` and `/speckit-tasks`, or by hand | agent | `lockflight phase check tasks` |
-   | approve the tasks | **you**, the same way: `/lockflight:approve tasks`, or `.lockflight/bin/lockflight approve tasks` | hash-bound record |
+   | approve the tasks | **you**, the same way: read `plan.md` and `tasks.md`, then `/lockflight:approve`, or `.lockflight/bin/lockflight approve tasks` | hash-bound record |
    | per story: stubs → tests → `redgreen red` → implement → `redgreen green` | agent | red must fail in production code; tests locked until green |
    | a test turns out wrong during red | **you**: `/lockflight:amend <Class.Method> --reason <why>` in Claude Code, or `.lockflight/bin/lockflight redgreen amend` in a separate terminal window | the next `redgreen red` must fail in production code again |
    | `lockflight trace`, `lockflight review`, `gate run --profile pr` | agent | every requirement covered; review findings confirmed by reproductions |
    | PR and merge | **you** | CI runs the same gates with the base branch's policy |
 
    Approvals are your decision, not the agent's. Inside Claude Code only what you type yourself counts
-   (`/lockflight:approve`); the engine refuses `lockflight approve` run from the session, a `!` command included.
+   (`/lockflight:approve`); the engine refuses `lockflight approve` run from the session, a `!` command included. The
+   approval binds the files as they are when you type it, so read them first: the confirmation lists what you approved
+   (each file with the start of its hash, the requirements and stories or the task counts, open clarifications).
    Optional: the `lockflight-crew` plugin adds a spec writer and a planner for the first steps, and a test author that
    writes each story's failing tests at the red step (`/plugin install lockflight-crew@lockflight`). They are an aid; the
    same checks judge their work. See [the crew](skills.md#the-crew-optional).
@@ -395,7 +398,8 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
   turns him off.
 - **In Claude Code's status line** (optional). `lockflight statusline` prints his face and the last verdict from the local
   ledger, for example `guard blocked **/.env · 2m ago`, `stop gate PASS · just now` or `stop gate FAIL · just now`, or
-  `approval waiting: type /lockflight:approve spec <code>` while an in-session code waits for you. The status line is shown to you only
+  `spec ready for your approval: type /lockflight:approve` while the spec or tasks wait for your approval, or
+  `reset waiting: type /lockflight:reset <code>` while an in-session code waits for you. The status line is shown to you only
   and costs no tokens. A plugin cannot set it, so add it to your user settings (`~/.claude/settings.json`) yourself, unless
   you already have a status line you want to keep:
 
