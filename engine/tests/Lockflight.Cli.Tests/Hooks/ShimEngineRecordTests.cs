@@ -231,8 +231,8 @@ public sealed class ShimEngineRecordTests : IDisposable
 
     [Theory]
     [InlineData("/home/\u00e9l\u00e8ve")]
-    [InlineData("/home/dev/")]
-    [InlineData("/Users/Jo Smith")]
+    [InlineData("/home/user/")]
+    [InlineData("/Users/x y")]
     public async Task TheShimNamesTheInstallAsTheEngineDoesInAUtf8Locale(string home)
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
