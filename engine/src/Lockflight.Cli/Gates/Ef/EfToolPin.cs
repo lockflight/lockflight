@@ -11,7 +11,8 @@ internal static class EfToolPin
 {
     public const string ToolName = "dotnet-ef";
 
-    private static readonly string[] ManifestLocations = ["dotnet-tools.json", Path.Combine(".config", "dotnet-tools.json")];
+    /// <summary>Where a tool manifest may sit in a directory: the file <c>dotnet new tool-manifest</c> writes since SDK 10, or under <c>.config/</c>.</summary>
+    public static readonly string[] ManifestLocations = ["dotnet-tools.json", Path.Combine(".config", "dotnet-tools.json")];
 
     /// <summary>The manifest that pins the tool, relative to the project root ('/'-separated); null when none does.</summary>
     public static string? Find(string projectRoot, string unitDirectory)

@@ -351,6 +351,12 @@ internal sealed class InitCommand(CliContext context) : ICommand
             }
         }
 
+        // Suggested, not run: the dotnet-ef version is the team's choice, and the tool manifest is theirs to commit.
+        if (EfToolAdvice.Inspect(planned, root) is { Unpinned.Count: > 0 } efTool)
+        {
+            await context.Output.WriteLineAsync(EfToolAdvice.InitLine(root, efTool));
+        }
+
         await RecordAsync(root, steps, done, cancellationToken);
         if (firstInit)
         {
