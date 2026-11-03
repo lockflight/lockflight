@@ -7,7 +7,10 @@ internal static class ShellEscapes
 {
     private const char Newline = '\n';
 
-    /// <summary>Outside quotes the escape takes the next character literally; before a newline it continues the line.</summary>
+    /// <summary>
+    /// Outside quotes the escape takes the next character literally; right before a newline it continues the line (before a carriage
+    /// return it escapes that character, as bash and zsh do).
+    /// </summary>
     public static (string Text, int Length) Unquoted(string command, int index)
     {
         char escape = command[index];
@@ -22,7 +25,7 @@ internal static class ShellEscapes
             return (string.Empty, 2);
         }
 
-        return next == '\r' && index + 2 < command.Length && command[index + 2] == Newline ? (string.Empty, 3) : (next.ToString(), 2);
+        return (next.ToString(), 2);
     }
 
     /// <summary>

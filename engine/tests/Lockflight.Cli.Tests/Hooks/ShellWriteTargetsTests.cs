@@ -45,12 +45,20 @@ public sealed class ShellWriteTargetsTests
     [InlineData("git reset --hard HEAD", ".")]
     [InlineData("git clean -fd", ".")]
     [InlineData("rm -rf tests/Shop.Tests", "tests/Shop.Tests")]
+    [InlineData("exec -a '' rm -rf tests", "tests")]
+    [InlineData("<<<'' rm -rf tests", "tests")]
+    [InlineData("git -C '' clean -fd", ".")]
+    [InlineData("git -C '' -C tests clean -fd", "tests")]
     public void CommandsThatRewriteADirectoryNameIt(string command, string expectedTree)
     {
         ShellWrites writes = ShellWriteTargets.Find(command, ShellDialect.Posix);
 
         Assert.Contains(expectedTree, writes.Trees.Concat(writes.SourceTrees));
     }
+
+    [Fact]
+    public void AnEmptyBackupSuffixIsNotTakenForTheSedScript() =>
+        Assert.Equal(["Directory.Build.props"], ShellWriteTargets.Find("sed -i '' 's/a/b/' Directory.Build.props", ShellDialect.Posix).Files);
 
     [Fact]
     public void DotnetFormatRewritesSourceFilesOnly()

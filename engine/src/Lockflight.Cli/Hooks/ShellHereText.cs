@@ -10,28 +10,18 @@ internal static class ShellHereText
 {
     private const char Newline = '\n';
 
-    /// <summary>Skips the bodies of the here-documents opened on the line that just ended, in order.</summary>
-    public static int SkipHereDocumentBodies(string command, int index, IReadOnlyList<(string Delimiter, bool StripsTabs)> hereDocuments)
-    {
-        foreach ((string delimiter, bool stripsTabs) in hereDocuments)
-        {
-            index = ReadHereDocumentBody(command, index, delimiter, stripsTabs).End;
-        }
-
-        return index;
-    }
-
-    /// <summary>The body of a here-document starting at the index (leading tabs removed for <c>&lt;&lt;-</c>), and where it ends.</summary>
-    public static (string Body, int End) ReadHereDocumentBody(string command, int index, string delimiter, bool stripsTabs)
+    /// <summary>
+    /// The body of a here-document starting at the index (leading tabs removed for <c>&lt;&lt;-</c>), and where it ends. With
+    /// <paramref name="joinsLines"/> (an unquoted delimiter) a line ending in an unescaped backslash is joined to the next one first.
+    /// </summary>
+    public static (string Body, int End) ReadHereDocumentBody(string command, int index, IReadOnlyList<string> delimiters, bool stripsTabs, bool joinsLines)
     {
         StringBuilder body = new();
         while (index < command.Length)
         {
-            int lineEnd = command.IndexOf(Newline, index);
-            string line = command[index..(lineEnd < 0 ? command.Length : lineEnd)].TrimEnd('\r');
-            index = lineEnd < 0 ? command.Length : lineEnd + 1;
+            (string line, index) = ReadBodyLine(command, index, joinsLines);
             string text = stripsTabs ? line.TrimStart('\t') : line;
-            if (text == delimiter)
+            if (delimiters.Contains(text))
             {
                 break;
             }
@@ -68,4 +58,26 @@ internal static class ShellHereText
         int bodyEnd = end < 0 ? command.Length : end;
         return (command[bodyStart..Math.Max(bodyStart, bodyEnd)], end < 0 ? command.Length : end + terminator.Length);
     }
+
+    private static (string Line, int End) ReadBodyLine(string command, int index, bool joinsLines)
+    {
+        StringBuilder line = new();
+        while (true)
+        {
+            int lineEnd = command.IndexOf(Newline, index);
+            string physical = command[index..(lineEnd < 0 ? command.Length : lineEnd)];
+            index = lineEnd < 0 ? command.Length : lineEnd + 1;
+
+            // Only a backslash right before the newline joins: before a carriage return it escapes that character.
+            if (!joinsLines || lineEnd < 0 || !EndsInAnEscape(physical))
+            {
+                return (line.Append(physical.TrimEnd('\r')).ToString(), index);
+            }
+
+            line.Append(physical, 0, physical.Length - 1);
+        }
+    }
+
+    /// <summary>Whether the line ends in a backslash that is not itself escaped (an odd number of them).</summary>
+    private static bool EndsInAnEscape(string line) => (line.Length - line.TrimEnd('\\').Length) % 2 == 1;
 }

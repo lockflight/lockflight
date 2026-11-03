@@ -29,7 +29,8 @@ internal static class GitWriteTargets
         string? gitDirectory = null;
         while (index < arguments.Count && arguments[index].StartsWith('-'))
         {
-            if (arguments[index] == "-C" && index + 1 < arguments.Count)
+            // "git -C ''" leaves the directory as it is.
+            if (arguments[index] == "-C" && index + 1 < arguments.Count && arguments[index + 1].Length > 0)
             {
                 gitDirectory = gitDirectory is null ? arguments[index + 1] : ShellArguments.Join(gitDirectory, arguments[index + 1]);
             }
