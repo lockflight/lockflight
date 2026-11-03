@@ -395,6 +395,13 @@ jobs:
         run: scripts/release-versions.sh
       - name: No citations of records outside the repository
         run: scripts/check-public-tree.sh
+      # A squash merge makes the pull request's title and body the commit on main. They come from the event payload into a file,
+      # never into the script's text. An edited body is checked again on the next push.
+      - name: No citations of records outside the repository in the pull request's title and body
+        if: github.event_name == 'pull_request'
+        run: |
+          jq -r '.pull_request.title, "", (.pull_request.body // "")' "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/pull-request.txt"
+          scripts/check-public-tree.sh --text-file "$RUNNER_TEMP/pull-request.txt"
       # Pinned so a Claude Code release cannot change validation results unannounced. To bump: run
       # `claude plugin validate --strict` on both plugins and the marketplace with the new version, then change it here and in
       # canary.yml together.
