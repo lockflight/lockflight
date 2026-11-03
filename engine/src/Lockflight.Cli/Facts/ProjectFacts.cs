@@ -10,7 +10,10 @@ namespace Lockflight.Cli.Facts;
 /// <param name="ProtectedPaths">The effective protected list (built-in plus the manifest's); null without a manifest.</param>
 /// <param name="Profiles">The gate profiles with each step's mode under the manifest's settings.</param>
 /// <param name="InstructionFiles">The tracked instruction files an agent is given (CLAUDE.md, rules, skills, the constitution).</param>
-/// <param name="ArchitectureTests">Tracked C# test files that use ArchUnitNET or NetArchTest.</param>
+/// <param name="ArchitectureTests">
+/// Tracked C# test files that use ArchUnitNET or NetArchTest, or declare tests in an architecture test project
+/// (<c>*.ArchitectureTests</c>, <c>*.Architecture.Tests</c>, <c>*.ArchTests</c>) or a file named like one.
+/// </param>
 /// <param name="LedgerFiles">The ledger's monthly files that exist, relative to the project root, oldest first.</param>
 internal sealed record ProjectFacts(
     Manifest? Manifest,
