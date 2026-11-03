@@ -6,7 +6,7 @@ namespace Lockflight.Cli.Hooks.Guard;
 
 /// <summary>
 /// Blocks the agent's writes to the user's Lockflight install (<c>~/.lockflight</c>: <c>bin/lockflight</c> and the engines in
-/// <c>tools/&lt;version&gt;</c>). The recovery command the guard allows, <c>~/.lockflight/bin/lockflight link --installed</c>, runs
+/// <c>tools/&lt;version&gt;</c>). The recovery command the guard allows, <c>&lt;HOME&gt;/.lockflight/bin/lockflight link --installed</c>, runs
 /// that binary and links one of those engines, so an agent that could replace them would choose the judge. Edits, the parsed
 /// shell writes and a tree or wildcard that holds the install are judged, as for protected paths; unparsed writes are not (a
 /// guardrail; the <c>Edit(~/.lockflight/**)</c> deny rule and the sandbox are the platform's side).
@@ -18,7 +18,7 @@ internal sealed class UserInstallRule(EnvironmentReader environment) : IGuardRul
     public string Id => RuleId;
 
     public ValueTask<GuardBlock?> CheckAsync(GuardFacts facts, CancellationToken cancellationToken) =>
-        ValueTask.FromResult(environment.HomeDirectory() is string home && !RecoveryCommands.Allows(facts.Input) ? GuardBlock.Of(Decide(facts, home)) : null);
+        ValueTask.FromResult(environment.HomeDirectory() is string home && !RecoveryCommands.Allows(facts.Input, environment.Get(EnvironmentVariables.Home)) ? GuardBlock.Of(Decide(facts, home)) : null);
 
     private static HookDecision Decide(GuardFacts facts, string home)
     {

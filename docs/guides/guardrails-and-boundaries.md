@@ -111,12 +111,14 @@ It recognises:
   `git worktree add /tmp/wt`, a second clone, a checkout nested in the project) gets the same rules, anchored at that folder,
   with this session's manifest: that checkout's own extra `protected:` entries are not read. A wildcard is judged from the
   folder before its first wildcard, so one above several checkouts (`rm -rf /tmp/*`) is not judged at theirs.
-- **The user's install.** Parsed writes to `~/.lockflight` (the engine `~/.lockflight/bin/lockflight link --installed` runs,
+- **The user's install.** Parsed writes to `~/.lockflight` (the engine the recovery `link --installed` runs,
   and the engines in `tools/<version>` it links) are blocked, links (`ln`) included, and `init` writes the
-  `Edit(~/.lockflight/**)` deny rule. Only your own `update` and `engine install` write there. It is a guardrail: the recovery
-  command is matched as text, and what `~` means when it runs depends on the shell's state, which the agent can change for
-  later commands (an `export HOME=…` in a file the Bash tool sources), so an agent that does so runs a program of its own
-  under that name.
+  `Edit(~/.lockflight/**)` deny rule. Only your own `update` and `engine install` write there. The recovery command names
+  the install by its absolute path under the hook's own `HOME` (`/home/you/.lockflight/bin/lockflight link --installed`,
+  single-quoted when the path needs it), never `~`, so an `export HOME=…` the agent's shell sources does not redirect it. The
+  other recovery commands, `dotnet tool restore && dotnet lockflight link`, stay a guardrail: `dotnet` reads `PATH`,
+  `DOTNET_*` (such as `DOTNET_STARTUP_HOOKS`) and `NUGET_PACKAGES` from the agent's shell, which a file the Bash tool sources
+  can set, so an agent that does so runs code of its own inside them.
   `scripts/dev-install.sh` run from a sandboxed session now fails there; run it in your own terminal.
 
 A relative path is checked against the session's working directory, as written: a `cd` earlier in the same command line is not

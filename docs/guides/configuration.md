@@ -346,7 +346,7 @@ each platform's executable, the file `link` copies, and of the vendored install 
 - **Written by** `init` (a new project) and `update`, from the release's `engine-hashes.json` (see [`update`](commands.md)). A
   release that published no hashes gets no lock; the project stays pinned by version in `dotnet-tools.json`, as before.
 - **Read by** `link` (links only the locked engine), the hook shim and the guard (an engine that is not the locked one for this
-  platform runs only reads and the recovery `~/.lockflight/bin/lockflight link --installed`), and `doctor` (the linked engine,
+  platform runs only reads and the recovery `link --installed` of `~/.lockflight/bin/lockflight`, named by its absolute path), and `doctor` (the linked engine,
   the `dotnet-tools.json` mirror of its version, the vendored script).
 - **Strict:** an unknown or repeated key, a hash that is not 64 lower-case hex or a release lock without every platform is an
   error; a platform a later engine adds is ignored by this one. `init` and `update` add `.lockflight/ci/install.sh text eol=lf`

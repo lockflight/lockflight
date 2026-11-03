@@ -17,7 +17,8 @@ namespace Lockflight.Cli.Hooks.Guard;
 internal static class GuardRules
 {
     /// <summary>The rules that judge the call once, on its input, before any path work.</summary>
-    public static IReadOnlyList<IGuardRule> OncePerCall { get; } = [new LockdownRule(), new EnginePinRule(), new SessionRelayRule()];
+    public static IReadOnlyList<IGuardRule> OncePerCall(CliContext context) =>
+        [new LockdownRule(), new EnginePinRule(context.Environment), new SessionRelayRule()];
 
     /// <summary>The rules that judge the call at each root, built for one invocation.</summary>
     public static IReadOnlyList<IGuardRule> PerRoot(CliContext context, DirectoryReads reads) =>
@@ -26,7 +27,7 @@ internal static class GuardRules
     public static async Task<HookDecision> DecideAsync(HookRequest input, Manifest manifest, CliContext context, DirectoryReads reads, CancellationToken cancellationToken)
     {
         GuardFacts project = new(input, manifest);
-        if (await FirstBlockAsync(OncePerCall, project, cancellationToken) is GuardBlock precondition)
+        if (await FirstBlockAsync(OncePerCall(context), project, cancellationToken) is GuardBlock precondition)
         {
             return precondition.ToDecision();
         }

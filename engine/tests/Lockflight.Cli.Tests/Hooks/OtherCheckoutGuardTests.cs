@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Tests.Hooks;
@@ -92,7 +93,7 @@ public sealed class OtherCheckoutGuardTests : IDisposable
     public async Task TheRecoveryCommandAndOtherWritesInTheHomeFolderAreAllowed()
     {
         Assert.Equal(ExitCode.Pass, await GuardAsync("Bash", filePath: null, "cp src/x ~/notes.txt"));
-        Assert.Equal(ExitCode.Pass, await GuardAsync("Bash", filePath: null, "~/.lockflight/bin/lockflight link --installed"));
+        Assert.Equal(ExitCode.Pass, await GuardAsync("Bash", filePath: null, RecoveryCommands.LinkInstalled(Home)));
     }
 
     private async Task<ExitCode> GuardAsync(string tool, string? filePath, string? command, string? workingDirectory = null)
