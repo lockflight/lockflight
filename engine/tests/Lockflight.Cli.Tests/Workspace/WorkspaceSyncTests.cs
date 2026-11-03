@@ -80,6 +80,18 @@ public sealed class WorkspaceSyncTests : IDisposable
     }
 
     [Fact]
+    public async Task EveryRunSaysSyncIsDeprecatedAndNamesThePointer()
+    {
+        await CreateWorkspaceAsync();
+
+        (ExitCode sync, _, string error) = await TestConsole.RunAsync(["workspace", "sync", "--check"], string.Empty, shell.FullName);
+
+        Assert.NotEqual(ExitCode.Config, sync);
+        Assert.Contains("deprecated and goes in 0.4", error, StringComparison.Ordinal);
+        Assert.Contains("init --unit-of", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task SyncVendorsThePolicyCheckFindsDriftAndTheUnitLoadsItOnItsOwn()
     {
         await CreateWorkspaceAsync();

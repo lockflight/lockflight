@@ -14,12 +14,18 @@ namespace Lockflight.Cli.Workspace;
 /// its CI needs to judge pull requests without the shell — <c>lockflight.unit.yaml</c>, the engine pin, the unit's baselines and
 /// the CI workflow (an edited workflow is rewritten) — all derived from the shell's protected policy, so running it never loosens
 /// anything.
-/// <c>--check</c> changes nothing and fails when a unit has drifted from the shell.
+/// <c>--check</c> changes nothing and fails when a unit has drifted from the shell. Deprecated: the shell pointer
+/// (<c>init --unit-of</c>) replaces it, and it goes in 0.4; every run says so on stderr.
 /// </summary>
 internal sealed class WorkspaceSyncCommand(CliContext context) : ICommand
 {
+    public const string DeprecationNotice =
+        "lockflight: workspace sync (vendored policy) is deprecated and goes in 0.4. Point each unit at the shell instead: "
+        + "run `lockflight init --unit-of <shell url> --unit-path <path>` in the unit repository.";
+
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
+        await context.Error.WriteLineAsync(DeprecationNotice);
         if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options
             || await ManifestRequirement.LoadAsync(context, context.WorkingDirectory, cancellationToken) is not Manifest manifest)
         {

@@ -324,6 +324,9 @@ CI file to a person. The shell's own policy is a boundary for the unit only as f
 
 ### Vendored policy (`workspace sync`)
 
+> **Deprecated in 0.3.1, removed in 0.4.** Point each unit at the shell instead
+> ([the shell pointer](#the-shell-pointer-preferred)); `lockflight update` in 0.4 moves a vendored unit to the pointer.
+
 `lockflight workspace sync`, run in the shell, vendors into every .NET unit that is its own repository (and has no pointer)
 what its CI needs:
 
