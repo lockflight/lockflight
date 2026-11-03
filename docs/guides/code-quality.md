@@ -102,7 +102,8 @@ instruction files, and labels each written rule by what backs it, by exact match
   "maintainability index", "class coupling"), is **related** when the facts show a tracked `.editorconfig` or `.globalconfig`
   setting that id to `warning` or `error`. Otherwise the skill suggests the `dotnet_diagnostic` line.
 - A rule that bans a dependency between two named layers (Domain, Application, Infrastructure, Api) is **related** when a test
-  file uses ArchUnitNET or NetArchTest. Otherwise the skill suggests `init --architecture-tests`.
+  file uses ArchUnitNET or NetArchTest, or an architecture test project (`*.ArchitectureTests`, `*.Architecture.Tests`,
+  `*.ArchTests`) or a file named like one (`ArchitectureTests.cs`) declares tests. Otherwise the skill suggests `init --architecture-tests`.
 
 Related, never checked: a build warning fails only as a new warning against the baseline, and a test checks its own rules,
 not the sentence in your instructions.

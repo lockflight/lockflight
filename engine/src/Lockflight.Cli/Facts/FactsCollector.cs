@@ -21,6 +21,7 @@ internal static partial class FactsCollector
     private const string GlobalConfigExtension = ".globalconfig";
     private const string CSharpExtension = ".cs";
     private static readonly string[] ArchitectureLibraries = ["using ArchUnitNET", "using NetArchTest"];
+    private static readonly string[] TestAttributes = ["[Fact", "[Theory", "[Test"];
 
     /// <summary>The facts of the tree at <paramref name="directory"/>; null when it is not inside a git working tree.</summary>
     public static async Task<ProjectFacts?> CollectAsync(string directory, CancellationToken cancellationToken)
@@ -97,7 +98,11 @@ internal static partial class FactsCollector
         return thresholds;
     }
 
-    /// <summary>The tracked C# files in test code that use an architecture testing library.</summary>
+    /// <summary>
+    /// The tracked C# files in test code that use an architecture testing library, and the files that declare tests in an
+    /// architecture test project (a directory named like <c>Shop.ArchitectureTests</c>, the name <c>init --architecture-tests</c>
+    /// gives it) or are named like one (<c>ArchitectureTests.cs</c>), whose tests may read the source instead of using a library.
+    /// </summary>
     private static async Task<IReadOnlyList<string>> ArchitectureTestsAsync(RepositoryFiles files, CancellationToken cancellationToken)
     {
         List<string> tests = [];
@@ -106,7 +111,7 @@ internal static partial class FactsCollector
             .Order(StringComparer.Ordinal))
         {
             string text = await File.ReadAllTextAsync(Path.Combine(files.Root, path), cancellationToken);
-            if (ArchitectureLibraries.Any(library => text.Contains(library, StringComparison.Ordinal)))
+            if (UsesArchitectureLibrary(text) || (NamedForArchitectureTests(path) && DeclaresTests(text)))
             {
                 tests.Add(path);
             }
@@ -114,6 +119,14 @@ internal static partial class FactsCollector
 
         return tests;
     }
+
+    private static bool UsesArchitectureLibrary(string text) => ArchitectureLibraries.Any(library => text.Contains(library, StringComparison.Ordinal));
+
+    private static bool DeclaresTests(string text) => TestAttributes.Any(attribute => text.Contains(attribute, StringComparison.Ordinal));
+
+    /// <summary>A directory on the path, or the file itself without <c>.cs</c>, is named like an architecture test project.</summary>
+    private static bool NamedForArchitectureTests(string path) =>
+        path[..^CSharpExtension.Length].Split('/').Any(name => ArchitectureTestsName().IsMatch(name));
 
     private static IReadOnlyList<string> LedgerFiles(string projectRoot)
     {
@@ -134,4 +147,8 @@ internal static partial class FactsCollector
 
     [GeneratedRegex(@"^[ \t]*(?<rule>CA[0-9]{4})(?:\((?<target>[A-Za-z]+)\))?[ \t]*:[ \t]*(?<value>[0-9]{1,9})[ \t]*\r?$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex ThresholdLine();
+
+    // Shop.ArchitectureTests, Shop.Architecture.Tests, ArchitectureTests, Shop.ArchTests (and the singular Test).
+    [GeneratedRegex(@"^(.+\.)?Arch(itecture)?\.?Tests?$", RegexOptions.IgnoreCase)]
+    private static partial Regex ArchitectureTestsName();
 }

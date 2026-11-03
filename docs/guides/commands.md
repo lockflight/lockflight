@@ -79,7 +79,7 @@ with forward slashes. Within `v1`, properties are only added; a removed, renamed
 | `analyzers` | object[] | every `dotnet_diagnostic.<id>.severity` line in a tracked `.editorconfig` or `.globalconfig`: `id`, `severity`, `reachesBuild` (`warning` or `error`), `file` |
 | `bannedSymbols` | object[] | each tracked `BannedSymbols.txt`: `file` and its `symbols` |
 | `codeMetrics` | object[] | each line of a tracked `CodeMetricsConfig.txt`: `rule`, `target` (`Method`, `Type`, … or null), `threshold`, `file` |
-| `architectureTests` | object | `present` and the tracked test `files` that use ArchUnitNET or NetArchTest |
+| `architectureTests` | object | `present` and the tracked test `files` that use ArchUnitNET or NetArchTest, or declare tests in an architecture test project (a directory named `*.ArchitectureTests`, as `init --architecture-tests` names it, `*.Architecture.Tests` or `*.ArchTests`, with or without a prefix and in the singular too) or a file named like one (`ArchitectureTests.cs`) |
 | `humanOnlyCommands` | string[] | the commands the engine refuses inside Claude Code |
 | `ledger` | object | `directory` (`.lockflight/ledger`), the line `schema` (`lockflight.ledger/v1`) and the monthly `files` that exist |
 
