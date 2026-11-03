@@ -123,8 +123,8 @@ A relative path is checked against the session's working directory, as written, 
 `Set-Location` earlier in the same command line, also in the folder it moved to (`cd tests && rm FooTests.cs` is judged as
 `FooTests.cs` and as `tests/FooTests.cs`), so a move never hides a write; it may block one the move made harmless
 (`cd ~ && rm -rf .lockflight`). A move in a POSIX subshell or substitution, or in a child shell (`bash -c`), ends with it; one
-in `eval`, `Invoke-Expression` or a PowerShell group does not. A command that may rewrite a whole directory (`git restore .`, `git checkout -- <dir>`, `rm -r`, `git clean`) is
-blocked when a locked test project or a protected file lies inside it; for rules without a fixed directory
+in `eval`, `Invoke-Expression` or a PowerShell group does not. A command that may rewrite a whole
+directory (`git restore .`, `git checkout -- <dir>`, `rm -r`, `git clean`) is blocked when a locked test project or a protected file lies inside it; for rules without a fixed directory
 (`**/Directory.Build.props`) the files that exist there are checked, and a directory is walked only for the rules that could
 match below it. Because `lockflight.yaml` sits at the root, whole-repository rewrites such as `git stash`, `git restore .`,
 `git reset --hard` or `git apply` are always blocked: name the files instead. A tree that contains the project (`rm -rf ..`,
