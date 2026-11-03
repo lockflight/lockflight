@@ -10,6 +10,12 @@ internal sealed record ShellWrites(IReadOnlyList<string> Files, IReadOnlyList<st
 {
     public static ShellWrites None { get; } = new([], [], []);
 
+    /// <summary>
+    /// For each directory in <see cref="Trees"/> and <see cref="SourceTrees"/>, what to run instead when it can hold a protected file
+    /// (<see cref="CommandWrites.TreeAdvice"/>); null when a command that rewrites it has no advice, or two commands that do disagree.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?> TreeAdvice { get; init; } = new Dictionary<string, string?>(StringComparer.Ordinal);
+
     /// <summary>A command reserved for a person found inside a nested command string (<c>bash -c "lockflight approve spec"</c>); null when none is.</summary>
     public string? HumanOnly { get; init; }
 

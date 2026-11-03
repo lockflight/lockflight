@@ -10,6 +10,16 @@ namespace Lockflight.Cli.Hooks;
 /// </summary>
 internal static class GitWriteTargets
 {
+    private const string ResetAdvice =
+        "To undo a commit that changed no protected file, run 'git revert <commit>'; to take files back from a commit, name them: 'git restore --source <commit> --staged --worktree -- <files>'.";
+
+    private const string RestoreAdvice = "Name the files instead: 'git restore --source <commit> --staged --worktree -- <files>'.";
+    private const string UnstageAdvice = "Name the files instead: 'git restore --staged -- <files>'.";
+    private const string SwitchAdvice = "Discard the changes by name first, 'git restore --source HEAD --staged --worktree -- <files>', then switch without -f.";
+    private const string CleanAdvice = "Name the files to delete instead: 'git clean -f -- <files>'.";
+    private const string StashAdvice = "Stash the files by name instead: 'git stash push -- <files>'.";
+    private const string UnstashAdvice = "Take the files from the stash by name instead: 'git checkout \"stash@{0}\" -- <files>'.";
+
     private static readonly HashSet<string> GitOptionsWithValue = ["-C", "-c", "--git-dir", "--work-tree", "--namespace"];
     private static readonly HashSet<string> ApplyReadOnlyFlags = ["--check", "--stat", "--numstat", "--summary"];
 
@@ -38,7 +48,7 @@ internal static class GitWriteTargets
             return writes;
         }
 
-        return new CommandWrites(Under(gitDirectory, writes.Files), Under(gitDirectory, writes.Trees), []);
+        return writes with { Files = Under(gitDirectory, writes.Files), Trees = Under(gitDirectory, writes.Trees), SourceTrees = [] };
     }
 
     private static CommandWrites Subcommand(string subcommand, List<string> arguments)
@@ -70,8 +80,22 @@ internal static class GitWriteTargets
             return new CommandWrites(move.Files, [.. move.Trees, .. paths], []);
         }
 
-        return CommandWrites.OfFilesAndTrees(paths);
+        return CommandWrites.OfFilesAndTrees(paths) with { TreeAdvice = Advice(subcommand, beforeSeparator, separator >= 0, forced) };
     }
+
+    /// <summary>The command naming files to suggest when a directory the subcommand rewrites can hold a protected file.</summary>
+    private static string? Advice(string subcommand, List<string> beforeSeparator, bool hasSeparator, bool forced) => subcommand switch
+    {
+        "reset" => ResetAdvice,
+        "restore" when beforeSeparator.Any(argument => argument is "--staged" or "-S") && !beforeSeparator.Any(argument => argument is "--worktree" or "-W") => UnstageAdvice,
+        "switch" => SwitchAdvice,
+        "checkout" when forced && !hasSeparator => SwitchAdvice,
+        "checkout" or "restore" => RestoreAdvice,
+        "clean" => CleanAdvice,
+        "stash" when StashAction(beforeSeparator) is "pop" or "apply" => UnstashAdvice,
+        "stash" => StashAdvice,
+        _ => null,
+    };
 
     /// <summary><c>git apply</c> writes the working tree unless it only reports, or applies to the index alone.</summary>
     private static bool Applies(List<string> arguments) =>
@@ -107,15 +131,17 @@ internal static class GitWriteTargets
             return afterSeparator.Count > 0 ? afterSeparator : [ShellArguments.CurrentDirectory];
         }
 
-        int actionIndex = beforeSeparator.FindIndex(argument => !argument.StartsWith('-'));
-        string? action = actionIndex >= 0 ? beforeSeparator[actionIndex] : null;
-        if (action == "push" && ShellArguments.Operands([.. beforeSeparator.Skip(actionIndex + 1)], ["-m", "--message"]) is { Count: > 0 } pushed)
+        string? action = StashAction(beforeSeparator);
+        if (action == "push" && ShellArguments.Operands([.. beforeSeparator.Skip(beforeSeparator.IndexOf(action) + 1)], ["-m", "--message"]) is { Count: > 0 } pushed)
         {
             return pushed;
         }
 
         return action is null or "push" or "save" or "pop" or "apply" ? [ShellArguments.CurrentDirectory] : [];
     }
+
+    /// <summary>The stash subcommand (<c>push</c>, <c>pop</c>, …): the first word that is not an option; null for a bare <c>git stash</c>.</summary>
+    private static string? StashAction(List<string> beforeSeparator) => beforeSeparator.FirstOrDefault(argument => !argument.StartsWith('-'));
 
     private static List<string> Under(string directory, IReadOnlyList<string> paths) =>
         [.. paths.Select(path => path == ShellArguments.CurrentDirectory ? directory : IsRooted(path) ? path : ShellArguments.Join(directory, path))];

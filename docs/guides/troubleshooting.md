@@ -9,7 +9,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | You see | Go to |
 |---|---|
 | Every tool call or every write is blocked | [engine not installed](#every-tool-call-is-blocked-engine-not-installed-in-this-project) · [engine not run](#every-tool-call-is-blocked-the-engine-was-not-run) · [lockdown](#every-write-is-blocked-the-project-is-in-lockdown) · [after editing `lockflight.yaml`](#writes-are-blocked-after-editing-lockflightyaml) · [engine and pin differ](#running-engine-x-but-the-project-pins-y) · [internal error](#lockflight-internal-error-or-the-engine-failed-exit-n) |
-| One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
+| One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [`git reset --hard` and other whole-tree rewrites](#git-reset---hard-is-blocked-this-command-may-rewrite-) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --self-test` reports MISSED or BROKEN](#doctor---self-test-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [review: changes not committed](#review-says-the-working-tree-has-changes-that-are-not-committed) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
 | Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) |
@@ -170,6 +170,15 @@ The block is intended. The agent writes the complete new file outside the projec
 `.lockflight/bin/lockflight propose <path> --from <file>` (or `<path> --delete`); you read the patch it prints and apply it with the
 printed `git apply` command at the project root. See
 [proposing a protected change](guardrails-and-boundaries.md#proposing-a-protected-change).
+
+## `git reset --hard` is blocked: "this command may rewrite '.'"
+
+The block is intended even when the commit you want to drop touched no protected file: `git reset --hard`, `git restore .`,
+`git checkout -- .`, `git clean -f` and `git stash` rewrite the whole working tree, and `lockflight.yaml` lies in it. The
+message names what to run instead. For a reset: `git revert <commit>` undoes a commit with a new one (when the commit changed
+no protected file), and `git restore --source <commit> --staged --worktree -- <files>` takes named files back from a commit.
+The others name their files the same way: `git restore --staged -- <files>`, `git clean -f -- <files>`,
+`git stash push -- <files>`. Name only files no protected rule covers.
 
 ## A shell write is allowed although it touches a protected file
 

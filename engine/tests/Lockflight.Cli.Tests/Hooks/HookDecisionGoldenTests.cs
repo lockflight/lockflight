@@ -46,6 +46,7 @@ public sealed partial class HookDecisionGoldenTests
         new("a writer behind xargs", "pre-tool-use", root => Bash(root, "cat list | xargs rm")),
         new("a tree that holds protected files", "pre-tool-use", root => Bash(root, "rm -rf secrets")),
         new("the folder above the project", "pre-tool-use", root => Bash(root, "rm -rf ..")),
+        new("a hard reset of the whole tree", "pre-tool-use", root => Bash(root, "git reset --hard HEAD~1")),
         new("an unknown variable", "pre-tool-use", root => Bash(root, "rm $SOMEWHERE/x")),
         new("a wildcard", "pre-tool-use", root => Bash(root, "rm secrets/*")),
         new("a PowerShell write", "pre-tool-use", root => PowerShell(root, "Set-Content -Path lockflight.yaml -Value x")),
