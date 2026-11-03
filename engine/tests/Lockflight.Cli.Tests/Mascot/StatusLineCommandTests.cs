@@ -76,18 +76,18 @@ public sealed class StatusLineCommandTests : IDisposable
     public async Task ACodeWaitingForItsSecondStepShowsTheLineToType()
     {
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
-        new SessionCodes(root.FullName, time, RandomSource.WithCodes("k7m2qx")).Issue("spec", "001-orders", [("spec.md", "abc")]);
+        new SessionCodes(root.FullName, time, RandomSource.WithCodes("k7m2qx")).Issue("reset", "001-orders", [("redgreen.json", "abc")]);
 
         (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
 
-        Assert.Equal("Lockflight · approval waiting: type /lockflight:approve spec <code>", output);
+        Assert.Equal("Lockflight · reset waiting: type /lockflight:reset <code>", output);
     }
 
     [Fact]
     public async Task AnExpiredCodeIsNotShown()
     {
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
-        new SessionCodes(root.FullName, time, RandomSource.WithCodes("k7m2qx")).Issue("spec", "001-orders", [("spec.md", "abc")]);
+        new SessionCodes(root.FullName, time, RandomSource.WithCodes("k7m2qx")).Issue("reset", "001-orders", [("redgreen.json", "abc")]);
         time.Advance(SessionCodes.Lifetime);
 
         (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
