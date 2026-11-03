@@ -77,7 +77,11 @@ Never approve for them.
    `/lockflight:baseline tests` in Claude Code, and merge that baseline in its own pull request first.
 6. **For each user story, one red/green cycle:**
    1. Declare the members the tests need with bodies `throw new NotImplementedException();`.
-   2. Write the story's tests in the project's framework (xUnit v3 or v2, NUnit or MSTest), each tagged with its requirement
+   2. Write the story's tests in new test files of their own, never in a test file that existed when an earlier story's red
+      was taken (that story's file, or one from before the feature): the CI judge may rebuild an earlier story's red with such
+      a file, and the later tests in it need code that red does not have. `redgreen red` warns of it; once a red is accepted,
+      moving its tests renames them, which CI counts as lost. Use the
+      project's framework (xUnit v3 or v2, NUnit or MSTest), each tagged with its requirement
       (`[Trait("Requirement", "FR-001")]`; NUnit: `[Property("Requirement", "FR-001")]`; MSTest:
       `[TestProperty("Requirement", "FR-001")]`), asserting the specified behaviour.
    3. `.lockflight/bin/lockflight redgreen red`. Every new test (one not in the inventory `start` recorded) must fail because
