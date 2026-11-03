@@ -103,7 +103,7 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest) : I
 
         (string Name, string Hash)[] artifacts = [.. snapshot.Select(artifact => (artifact.Name, artifact.Hash))];
         string code = Gate.Codes.Issue(ApprovalPhaseNames.ToName(phase), feature.Id, artifacts);
-        return SessionCommandResult.Shown(ApprovalDigest.Render(feature, phase, snapshot, store.Check(phase, artifacts), code));
+        return SessionCommandResult.Shown(ApprovalDigest.Render(feature, phase, snapshot, store.Check(phase, snapshot), code));
     }
 
     private async Task<SessionCommandResult> RecordAsync(ApprovalPhase phase, string code, CommandOptions options, string[] words, CancellationToken cancellationToken)
