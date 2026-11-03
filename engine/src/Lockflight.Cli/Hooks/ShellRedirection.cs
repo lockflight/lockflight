@@ -18,6 +18,8 @@ internal sealed record ShellRedirection(int Length, ShellTokenKind? Kind, bool? 
         {
             '&' when At(1) == '>' => new ShellRedirection(At(2) == '>' ? 3 : 2, ShellTokenKind.WriteRedirect, null),
             '>' => Output(command, index, At(1) is '>' or '|' ? 2 : 1),
+            // zsh reads "<<(" as "<" and a process substitution; bash refuses it.
+            '<' when At(1) == '<' && At(2) == '(' => new ShellRedirection(1, ShellTokenKind.InputRedirect, null),
             '<' when At(1) == '<' && At(2) == '<' => new ShellRedirection(3, ShellTokenKind.HereText, null),
             '<' when At(1) == '<' => new ShellRedirection(At(2) == '-' ? 3 : 2, ShellTokenKind.InputRedirect, At(2) == '-'),
             '<' when At(1) == '>' => new ShellRedirection(2, ShellTokenKind.WriteRedirect, null),

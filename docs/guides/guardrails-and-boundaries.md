@@ -77,7 +77,10 @@ do: a command whose writes it does not parse is **allowed**, not blocked. What i
 
 Commands are split on `;`, `&&`, `||`, `|`, `&` and newlines; subshells `( … )`, groups `{ …; }`, `if`/`for`/`while` bodies,
 PowerShell script blocks `& { … }` and the commands inside `$( … )` and backticks are each checked as commands of their own.
-Here-document bodies and comments are not commands. Prefixes that run the next word as a program are looked through
+Here-document bodies and comments are not commands; a body is read where bash and zsh read it (after the whole line that opens
+it, continuations and multi-line quotes included; up to the first empty line for an empty delimiter `<<''`; with a trailing
+backslash joining body lines when the delimiter is unquoted), so the commands after it are checked, and so are the `$( … )` and
+backtick substitutions an unquoted body runs. Prefixes that run the next word as a program are looked through
 (`command`, `env`, `sudo`, `time`, `nice`, `nohup`, `exec`, `timeout`, `xargs`, `!`, `VAR=value`), and so is one level of a
 literal command string: `bash -c '…'`/`sh -c '…'` (`-c` in any option cluster), `eval '…'`, `pwsh -Command '…'` and
 `Invoke-Expression '…'`.

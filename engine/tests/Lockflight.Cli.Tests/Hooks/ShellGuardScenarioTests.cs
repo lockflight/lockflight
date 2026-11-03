@@ -72,6 +72,28 @@ public sealed class ShellGuardScenarioTests : IDisposable
     }
 
     [Theory]
+    [InlineData("cat >notes.md <<'' x\nhello\n\nrm -rf .lockflight\nx")]
+    [InlineData("cat >notes.md <<\"\"\nhello\n\necho x > lockflight.yaml")]
+    [InlineData("<<<'' rm -rf .lockflight")]
+    [InlineData("exec -a '' rm -rf secrets")]
+    [InlineData("echo $(cat <<EOF)\nrm -rf .lockflight\nEOF")]
+    [InlineData("cat <<EOF $(\nrm -rf .lockflight\n)\nbody\nEOF")]
+    [InlineData("cat >notes.md <<EOF\nE\\\nOF\nrm -rf .lockflight\nEOF")]
+    [InlineData("cat >notes.md <<E\\\nOF\nE\\\nOF\nrm secrets/k\nEOF")]
+    [InlineData("cat <<EOF\nx\\\r\nEOF\nrm -rf secrets\nEOF")]
+    [InlineData("cat >notes.md <<EOF\n$(rm -rf .lockflight)\nEOF")]
+    [InlineData("cat <<<$(rm -rf secrets)")]
+    [InlineData("cat <<(rm -rf secrets)")]
+    [InlineData("cat <<$\"EOF\"\nbody\nEOF\nrm -rf secrets\n$EOF")]
+    public async Task AWriteTheShellRunsAfterAHereDocumentIsBlocked(string command)
+    {
+        (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
+
+        Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
+        Assert.Contains("lockflight:", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("Set-Content -Path:lockflight.yaml -Value x")]
     [InlineData("Out-File -FilePath:secrets\\k")]
     [InlineData("Copy-Item C:\\tmp\\Directory.Build.props src")]
