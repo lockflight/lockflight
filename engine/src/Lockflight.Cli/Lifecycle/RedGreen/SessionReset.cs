@@ -114,7 +114,7 @@ internal sealed class SessionReset(CliContext context, Manifest manifest) : ISes
     private static string Digest(Feature feature, RedGreenSnapshot snapshot, string code, string? requestedFeature)
     {
         StringBuilder digest = new();
-        digest.AppendLine(SessionCommandGate.Opening("nothing has been reset yet", $"Check the red/green evidence of {feature.Id} you are discarding"));
+        digest.AppendLine(SessionCommandGate.Opening("Nothing has been reset yet", $"Check the red/green evidence of {feature.Id} you are discarding"));
         digest.AppendLine($"  {RedGreenRecord.FileName} {snapshot.Hash[..12]} (deleted)");
         if (snapshot.Record is RedGreenRecord record)
         {
@@ -145,7 +145,7 @@ internal sealed class SessionReset(CliContext context, Manifest manifest) : ISes
         }
 
         string featureOption = requestedFeature is null ? string.Empty : $" --feature {requestedFeature}";
-        digest.Append(SessionCommandGate.Closing($"/{CommandName} {code}{featureOption}", "the record stays as shown"));
+        digest.Append(SessionCommandGate.Closing(code, $"/{CommandName} {code}{featureOption}", "the record stays as shown"));
         return digest.ToString();
     }
 

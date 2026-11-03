@@ -171,7 +171,7 @@ internal sealed class SessionAmend(CliContext context, Manifest manifest) : ISes
     private static string Digest(Feature feature, AmendTarget target, string reason, string person, string test, string code, string? requestedFeature)
     {
         StringBuilder digest = new();
-        digest.AppendLine(SessionCommandGate.Opening("nothing has been amended yet", $"Check the test of red cycle {target.Cycle.Number} of {feature.Id} you are unlocking"));
+        digest.AppendLine(SessionCommandGate.Opening("Nothing has been amended yet", $"Check the test of red cycle {target.Cycle.Number} of {feature.Id} you are unlocking"));
         digest.AppendLine($"  Test: {target.Test.MethodFilter}");
         digest.AppendLine($"  Unlocks: {string.Join(", ", target.Files)}, writable until the next 'redgreen red' re-checks the test");
         digest.AppendLine(target.SharedWith.Count == 0
@@ -181,7 +181,7 @@ internal sealed class SessionAmend(CliContext context, Manifest manifest) : ISes
         digest.AppendLine($"  Recorded as: {person}");
         digest.AppendLine("  The amended test must fail in production code again (RED_STUB or RED_ASSERT) before the cycle can go green.");
         string featureOption = requestedFeature is null ? string.Empty : $" --feature {requestedFeature}";
-        digest.Append(SessionCommandGate.Closing($"/{CommandName} {test} {code}{featureOption}", "the red/green evidence stays as shown"));
+        digest.Append(SessionCommandGate.Closing(code, $"/{CommandName} {test} {code}{featureOption}", "the red/green evidence stays as shown"));
         return digest.ToString();
     }
 

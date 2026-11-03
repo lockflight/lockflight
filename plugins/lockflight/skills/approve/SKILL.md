@@ -2,7 +2,7 @@
 name: approve
 description: Help the user approve a feature's spec or tasks — in this session by typing /lockflight:approve, or in a separate terminal window.
 disable-model-invocation: true
-argument-hint: spec | tasks [--feature <id>]
+argument-hint: "[spec | tasks] [--feature <id>]"
 ---
 
 # Lockflight approve (human gate)
@@ -10,8 +10,10 @@ argument-hint: spec | tasks [--feature <id>]
 An approval is the user's decision, recorded by the engine against the exact content of the artifacts. Only the user gives it,
 in one of two ways:
 
-- **In this session:** the user types `/lockflight:approve spec` (or `tasks`). The engine's hook, not you, shows them what
-  would be approved with a one-time code; they type `/lockflight:approve spec <code>` and the engine records the approval.
+- **In this session:** the user types `/lockflight:approve spec` (or `tasks`; typed alone, it picks the phase that waits for
+  an approval). The engine's hook, not you, shows them what would be approved with a one-time code on its own `Your code:`
+  line; they type `/lockflight:approve spec <code>` and the engine records the approval. The hashes shown above that line are
+  not the code. Claude Code labels the message "blocked by hook"; it is not an error.
 - **In a separate terminal window:** `lockflight approve spec|tasks` (not with `!` in Claude Code: that runs inside the
   session and is refused).
 

@@ -35,11 +35,11 @@ public sealed class SessionResetTests : IDisposable
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Empty(output);
-        Assert.StartsWith("Step 1 of 2 — nothing has been reset yet. Check the red/green evidence of f1 you are discarding", error, StringComparison.Ordinal);
+        Assert.StartsWith("Step 1 of 2 — not an error: review below, then type the line with the code.\nNothing has been reset yet. Check the red/green evidence of f1 you are discarding", error, StringComparison.Ordinal);
         Assert.Contains("Baseline: 1 tests at commit abc", error, StringComparison.Ordinal);
         Assert.Contains("Cycle 1: 2 tests, red, test projects locked", error, StringComparison.Ordinal);
-        Assert.Contains($"Type within 10 minutes: /lockflight:reset {Code}", error, StringComparison.Ordinal);
-        Assert.EndsWith(SessionCommandGate.NotAnError, error, StringComparison.Ordinal);
+        Assert.Contains($"Your code: {Code} — type within 10 minutes: /lockflight:reset {Code}", error, StringComparison.Ordinal);
+        Assert.EndsWith("The agent does not see this message.", error, StringComparison.Ordinal);
         Assert.True(File.Exists(RecordPath));
         Assert.DoesNotContain(Code, File.ReadAllText(Path.Combine(root.FullName, SessionCodes.RelativeDirectory, "reset.json")), StringComparison.Ordinal);
     }

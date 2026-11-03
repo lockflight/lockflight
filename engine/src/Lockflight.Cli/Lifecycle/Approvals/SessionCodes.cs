@@ -116,13 +116,13 @@ internal sealed class SessionCodes(string root, TimeProvider time, RandomSource 
         if (now >= waiting.ExpiresAt || waiting.ExpiresAt - now > Lifetime + ClockStepAllowance)
         {
             Discard(slot);
-            return SessionCodeCheck.Of(SessionCodeState.Expired);
+            return SessionCodeCheck.Of(SessionCodeState.Expired) with { Subject = waiting.Subject };
         }
 
         byte[] typedHash = HashOf(typedCode.Trim().ToLowerInvariant(), waiting.Salt);
         if (CryptographicOperations.FixedTimeEquals(typedHash, waiting.CodeHash))
         {
-            return new SessionCodeCheck(SessionCodeState.Matched, waiting.Subject, waiting.Bound, waiting.Payload);
+            return new SessionCodeCheck(SessionCodeState.Matched, waiting.Subject, waiting.Bound, waiting.Payload) { ExpiresAt = waiting.ExpiresAt };
         }
 
         if (waiting.Attempts + 1 >= MaxAttempts)
@@ -133,7 +133,7 @@ internal sealed class SessionCodes(string root, TimeProvider time, RandomSource 
 
         waiting.Entry["attempts"] = waiting.Attempts + 1;
         Write(path, waiting.Entry);
-        return SessionCodeCheck.Of(SessionCodeState.WrongCode);
+        return SessionCodeCheck.Of(SessionCodeState.WrongCode) with { ExpiresAt = waiting.ExpiresAt, AttemptsLeft = MaxAttempts - (waiting.Attempts + 1) };
     }
 
     /// <summary>
@@ -151,7 +151,7 @@ internal sealed class SessionCodes(string root, TimeProvider time, RandomSource 
         DateTimeOffset now = time.GetUtcNow();
         return now >= waiting.ExpiresAt || waiting.ExpiresAt - now > Lifetime + ClockStepAllowance
             ? null
-            : new SessionCodeWaiting(waiting.Subject, waiting.Payload, waiting.ExpiresAt);
+            : new SessionCodeWaiting(waiting.Subject, waiting.Bound, waiting.Payload, waiting.ExpiresAt);
     }
 
     /// <summary>Removes the slot's waiting code: once used, or when what it was shown for has changed.</summary>
