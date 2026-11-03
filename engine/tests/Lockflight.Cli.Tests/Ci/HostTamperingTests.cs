@@ -88,22 +88,22 @@ public sealed class HostTamperingTests : IAsyncLifetime
         string head = await repository.WriteCode(Stub, Test).Write("tests/Shop.Tests/Snapshots.cs", """
             namespace Shop.Tests;
 
-            internal sealed class Snapshots(string directory)
+            internal static class Snapshots
             {
-                public void Save(string name, string text)
+                public static void Save(string text)
                 {
                     if (Environment.GetEnvironmentVariable("SHOP_SNAPSHOTS") == "record")
                     {
-                        Directory.CreateDirectory(Path.Combine(directory, "Snapshots"));
-                        File.WriteAllText(Path.Combine(directory, "Snapshots", name + ".verified.json"), text);
+                        Directory.CreateDirectory("Snapshots");
+                        File.WriteAllText(Path.Combine("Snapshots", "shipping.verified.json"), text);
                     }
                 }
 
-                public void SaveTheRunnerConfig(string text)
+                public static void SaveTheRunnerConfig(string text)
                 {
                     if (Environment.GetEnvironmentVariable("SHOP_SNAPSHOTS") == "record")
                     {
-                        File.WriteAllText(Path.Combine(directory, "xunit.runner.json"), text);
+                        File.WriteAllText("xunit.runner.json", text);
                     }
                 }
             }

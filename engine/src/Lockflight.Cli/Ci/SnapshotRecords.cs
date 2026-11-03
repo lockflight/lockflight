@@ -6,24 +6,31 @@ namespace Lockflight.Cli.Ci;
 /// is not a host-tampering finding. A write is such a record when all of these hold, read from the method's IL; anything else
 /// stays a finding:
 /// <list type="bullet">
-/// <item>it is <c>File.WriteAll*</c> or <c>Directory.CreateDirectory</c> of the runtime's own assemblies: no delete, move, copy,
-/// append or stream;</item>
+/// <item>it is <c>File.WriteAll*</c> or <c>Directory.CreateDirectory</c> of the runtime's own assemblies (no delete, move, copy,
+/// append or stream), and its path is built in the method from string literals only (<see cref="IlValueFlow"/>): not from a
+/// parameter (a <c>[CallerFilePath]</c> one included), a field, or what a call returns (an interface, a delegate);</item>
 /// <item>it lies inside an <c>if</c> on <c>Environment.GetEnvironmentVariable("&lt;name&gt;") == "&lt;literal&gt;"</c> (or
 /// <c>string.Equals</c>), branching on that comparison itself, with nothing jumping into the block from outside the guard (no
 /// <c>||</c> around it, no <c>await</c> inside it); unset, the variable is null, equals no literal, and the block does not run;</item>
-/// <item>the name contains <c>SNAPSHOT</c>, does not start like a CI runner's variables, and appears in the assembly only where a
-/// guard reads it, and nowhere in the repository outside the test code (a runsettings, MSBuild or launch settings file, production
-/// code, a workflow), which could set it;</item>
+/// <item>the name contains <c>SNAPSHOT</c>, does not start like a CI runner's variables, appears in the scanned assemblies (the
+/// test and test-helper assemblies, and the production assemblies they load) only where a guard reads it, and in no file of the
+/// repository outside the test project's own C# (git-ignored files aside), which could set it; and nothing in those assemblies
+/// sets an environment variable under a name built at run time or natively, which turns the allowance off everywhere;</item>
 /// <item>the method reads no other variable and names no folder of the run (current, base or process directory, an assembly's
 /// location), no runner's results, parent (<c>..</c>) or rooted path, and no file the test host or build reads (sources,
 /// project and build files, runner and app configuration), itself or through a member of the assembly it uses.</item>
 /// </list>
-/// A guardrail: the strings are literals the assembly loads, so a path a caller builds at run time is not seen, and an
-/// obfuscated call (a name or path assembled from pieces) evades it.
+/// A guardrail: an obfuscated call evades it, and so does code outside the scanned assemblies (a native library, another process).
+/// Every process the engine starts runs without variables whose name contains <c>SNAPSHOT</c>, so the CI job's own environment
+/// cannot switch the record mode on for the tests the judge runs.
 /// </summary>
 internal static class SnapshotRecords
 {
+    /// <summary>The finding kind of code that sets an environment variable under a name built at run time, or natively.</summary>
+    public const string SwitchKind = "snapshot-switch";
+
     private const string SnapshotMark = "SNAPSHOT";
+    private const string SetVariable = "SetEnvironmentVariable";
     private const string GetVariable = "System.Environment::GetEnvironmentVariable";
 
     private static readonly string[] RecordWrites =
@@ -33,6 +40,9 @@ internal static class SnapshotRecords
     ];
 
     private static readonly string[] Comparisons = ["System.String::op_Equality", "System.String::Equals"];
+
+    /// <summary>Names that reach the process environment by reflection or natively, as a string the code loads.</summary>
+    private static readonly string[] SetterNames = [SetVariable, "SetEnvironmentVariableA", "SetEnvironmentVariableW", "setenv", "putenv", "_putenv", "_wputenv"];
 
     /// <summary>Prefixes of variables CI systems set, besides those the scanner's CI-variable check names.</summary>
     private static readonly string[] MoreCiPrefixes = ["GITLAB_", "AGENT_", "TEAMCITY_", "RELEASE_", "TF_", "JENKINS_", "BUILDKITE_", "CIRCLE_", "TRAVIS_", "APPVEYOR_"];
@@ -61,7 +71,8 @@ internal static class SnapshotRecords
     public static bool IsRecord(TamperingBody body, int index, IReadOnlyList<RecordGuard> guards, IReadOnlySet<string> elsewhere, IReadOnlySet<string> hostFiles)
     {
         int offset = body.CallOffsets[index];
-        return body.Steps.Any(step => step.Offset == offset && step.Kind == TamperingStepKind.Call && RecordWrites.Contains(step.Text, StringComparer.Ordinal))
+        return body.Flow.ArgumentsAt(offset) is [{ FromLiterals: true }, ..]
+            && body.Steps.Any(step => step.Offset == offset && step.Kind == TamperingStepKind.Call && RecordWrites.Contains(step.Text, StringComparer.Ordinal))
             && !body.Strings.Concat(body.AttributeStrings).Any(NamesAHostFile)
             && !elsewhere.Contains(body.Key) && !body.Members.Overlaps(elsewhere)
             && !hostFiles.Contains(body.Key) && !body.Members.Overlaps(hostFiles)
@@ -107,6 +118,27 @@ internal static class SnapshotRecords
         }
 
         return used;
+    }
+
+    /// <summary>
+    /// What in the body could switch any snapshot variable on unseen: <c>Environment.SetEnvironmentVariable</c> with a name that is not
+    /// one string literal (built at run time, passed in, or a body the value-flow pass could not follow), or a string naming a way to
+    /// set the process environment by reflection or natively.
+    /// </summary>
+    public static IEnumerable<string> Switches(TamperingBody body)
+    {
+        for (int index = 0; index < body.Calls.Count; index++)
+        {
+            if (body.Calls[index] is ("System.Environment", SetVariable) && body.Flow.ArgumentsAt(body.CallOffsets[index]) is not [{ Literal: not null }, ..])
+            {
+                yield return "System.Environment.SetEnvironmentVariable(a name that is not a literal)";
+            }
+        }
+
+        foreach (string text in body.Strings.Concat(body.AttributeStrings).Where(text => SetterNames.Contains(text, StringComparer.OrdinalIgnoreCase)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            yield return $"\"{text}\"";
+        }
     }
 
     /// <summary>Whether a string names a file the build or the test host reads.</summary>

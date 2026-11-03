@@ -50,6 +50,25 @@ public sealed class ProcessRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task AChildProcessGetsNoSnapshotVariable()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Uses the POSIX sh command.");
+        const string Variable = "SHOP_" + "SNAPSHOTS";
+        string? saved = Environment.GetEnvironmentVariable(Variable);
+        Environment.SetEnvironmentVariable(Variable, "record");
+        try
+        {
+            ProcessResult result = await ProcessRunner.RunAsync("sh", ["-c", $"echo \"${{{Variable}:-unset}}\""], directory.FullName, TestContext.Current.CancellationToken);
+
+            Assert.Equal("unset", result.Output.Trim());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(Variable, saved);
+        }
+    }
+
+    [Fact]
     public async Task ALargeInputIsWrittenWhileTheOutputIsDrained()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Uses the POSIX cat command.");

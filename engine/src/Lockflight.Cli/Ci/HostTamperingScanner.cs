@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -67,21 +68,47 @@ internal static partial class HostTamperingScanner
     public static readonly string[] CiVariablePrefixes = ["GITHUB_", "RUNNER_", "LOCKFLIGHT_", "BITBUCKET_", "CI_", "SYSTEM_", "BUILD_"];
 
     /// <summary>Every finding in the assembly; empty when it cannot be read (the build output is the build's problem, not tampering).</summary>
-    public static IReadOnlyList<TamperingFinding> Scan(string assemblyPath) => Scan(assemblyPath, _ => false);
+    public static IReadOnlyList<TamperingFinding> Scan(string assemblyPath) => ScanAll([assemblyPath], [], (_, _) => false);
 
     /// <summary>
-    /// Every finding in the assembly, with <paramref name="namedElsewhere"/> saying whether a snapshot variable is named anywhere
-    /// outside the test code (a runsettings or MSBuild file, production code), which could set it (<see cref="SnapshotRecords"/>).
+    /// Every finding in the <paramref name="scanned"/> test and test-helper assemblies, read together: a snapshot variable any of them,
+    /// or a <paramref name="context"/> assembly (production code the tests load), sets or names other than in a guard allows no
+    /// record-mode write anywhere, and one set under a name built at run time (or through a native call) allows none at all and is
+    /// reported as <c>snapshot-switch</c>. <paramref name="namedElsewhere"/> says whether a variable is named in the repository
+    /// outside the given test assembly's own project (<see cref="SnapshotRecords"/>). An assembly that cannot be read has no
+    /// findings (the build output is the build's problem, not tampering); a context assembly that cannot be read allows no record.
     /// </summary>
-    public static IReadOnlyList<TamperingFinding> Scan(string assemblyPath, Func<string, bool> namedElsewhere)
+    public static IReadOnlyList<TamperingFinding> ScanAll(IReadOnlyList<string> scanned, IReadOnlyList<string> context, Func<string, string, bool> namedElsewhere)
+    {
+        LoadedAssembly[] tests = [.. scanned.Select(Load).OfType<LoadedAssembly>()];
+        LoadedAssembly?[] others = [.. context.Select(Load)];
+        LoadedAssembly[] every = [.. tests, .. others.OfType<LoadedAssembly>()];
+        HashSet<string> switchedOn = SnapshotRecords.SwitchedOn(every.SelectMany(assembly => assembly.Bodies.Select(entry => entry.Body)));
+        TamperingFinding[] switches = [.. every.SelectMany(assembly => assembly.Switches)];
+        bool off = switches.Length > 0 || others.Any(assembly => assembly is null);
+        List<TamperingFinding> findings = [];
+        foreach (LoadedAssembly assembly in tests)
+        {
+            findings.AddRange(Judge(assembly, name => off || switchedOn.Contains(name) || namedElsewhere(name, assembly.Name)));
+        }
+
+        if (switches.Length > 0 && tests.Any(assembly => assembly.Bodies.Any(entry => SnapshotRecords.Guards(entry.Body, _ => false).Count > 0)))
+        {
+            findings.AddRange(switches);
+        }
+
+        return [.. findings.DistinctBy(finding => (finding.Id, finding.Member))];
+    }
+
+    /// <summary>Reads every method body of the assembly, its module initializers and what could switch a snapshot variable on; null when it cannot be read.</summary>
+    private static LoadedAssembly? Load(string assemblyPath)
     {
         try
         {
             using PEReader pe = new(File.OpenRead(assemblyPath));
             MetadataReader reader = pe.GetMetadataReader();
             string assembly = reader.GetString(reader.GetAssemblyDefinition().Name);
-            List<TamperingFinding> findings = [];
-            List<(string Location, TamperingBody Body)> bodies = [];
+            LoadedAssembly loaded = new(assembly, [], [], []);
             Dictionary<(TypeDefinitionHandle, string), List<string>> attributeStrings = AttributeStrings(reader);
             foreach (TypeDefinitionHandle typeHandle in reader.TypeDefinitions)
             {
@@ -92,7 +119,13 @@ internal static partial class HostTamperingScanner
                     string location = Canonical($"{TypeName(reader, typeHandle)}::{reader.GetString(method.Name)}");
                     if (IsModuleInitializer(reader, type, method))
                     {
-                        findings.Add(new TamperingFinding(assembly, "module-initializer", location, "runs before any test"));
+                        loaded.Findings.Add(new TamperingFinding(assembly, "module-initializer", location, "runs before any test"));
+                    }
+
+                    if ((method.Attributes & MethodAttributes.PinvokeImpl) != 0
+                        && reader.GetString(method.GetImport().Name) is string entry && entry.Contains("env", StringComparison.OrdinalIgnoreCase))
+                    {
+                        loaded.Switches.Add(new TamperingFinding(assembly, SnapshotRecords.SwitchKind, location, $"native {entry}"));
                     }
 
                     if (method.RelativeVirtualAddress != 0)
@@ -100,42 +133,47 @@ internal static partial class HostTamperingScanner
                         string name = reader.GetString(method.Name);
                         MethodBodyBlock block = pe.GetMethodBody(method.RelativeVirtualAddress);
                         TamperingBody body = Read(reader, block.GetILReader(), Outermost(reader, typeHandle), MemberKey(typeHandle, name), name is ".ctor" or ".cctor");
-                        body = body with { StubKey = StubKey(reader, typeHandle) };
+                        body = body with { StubKey = StubKey(reader, typeHandle), Flow = IlValueFlow.Analyze(reader, block, token => CallText(reader, token)) };
                         AddHandlerEntries(body, block);
                         body.AttributeStrings.AddRange(attributeStrings.GetValueOrDefault((Outermost(reader, typeHandle), SourceMethod(reader, typeHandle, method))) ?? []);
-                        bodies.Add((location, body));
+                        loaded.Bodies.Add((location, body));
+                        loaded.Switches.AddRange(SnapshotRecords.Switches(body).Select(what => new TamperingFinding(assembly, SnapshotRecords.SwitchKind, location, what)));
                     }
                 }
             }
 
-            // The types of the assembly that ask for a temporary folder, by their outermost type (an async method's state machine
-            // and a lambda's closure are nested types).
-            TamperingBody[] all = [.. bodies.Select(body => body.Body)];
-            HashSet<string> tempReach = Reach(all, calls => calls.Any(IsTemp), _ => false);
-            HashSet<string> elsewhere = Reach(all, NamesAnotherFolder, NamesAResultsPath);
-            HashSet<string> switchedOn = SnapshotRecords.SwitchedOn(all);
-            Func<string, bool> isSet = name => switchedOn.Contains(name) || namedElsewhere(name);
-            Dictionary<TamperingBody, IReadOnlyList<RecordGuard>> guards = new(ReferenceEqualityComparer.Instance);
-            foreach (TamperingBody body in all)
-            {
-                guards[body] = SnapshotRecords.Guards(body, isSet);
-            }
-
-            IReadOnlyList<RecordGuard> GuardsOf(TamperingBody body) => guards[body];
-            HashSet<string> elsewhereButGuards = Reach([.. all.Select(body => SnapshotRecords.WithoutGuardReads(body, GuardsOf(body)))], NamesAnotherFolder, NamesAResultsPath);
-            HashSet<string> hostFiles = Reach(all, _ => false, strings => strings.Any(SnapshotRecords.NamesAHostFile));
-            foreach ((string location, TamperingBody body) in bodies)
-            {
-                findings.AddRange(Findings(body, tempReach, elsewhere, assembly, location)
-                    .Where(finding => !IsSnapshotRecord(body, finding, GuardsOf(body), elsewhereButGuards, hostFiles)));
-            }
-
-            return [.. findings.DistinctBy(finding => (finding.Id, finding.Member))];
+            return loaded;
         }
         catch (Exception exception) when (exception is IOException or BadImageFormatException or InvalidOperationException)
         {
-            return [];
+            return null;
         }
+    }
+
+    /// <summary>The findings of one loaded assembly, with <paramref name="isSet"/> saying whether something may set a snapshot variable.</summary>
+    private static List<TamperingFinding> Judge(LoadedAssembly assembly, Func<string, bool> isSet)
+    {
+        // The types of the assembly that ask for a temporary folder, by their outermost type (an async method's state machine
+        // and a lambda's closure are nested types).
+        TamperingBody[] all = [.. assembly.Bodies.Select(entry => entry.Body)];
+        HashSet<string> tempReach = Reach(all, calls => calls.Any(IsTemp), _ => false);
+        HashSet<string> elsewhere = Reach(all, NamesAnotherFolder, NamesAResultsPath);
+        Dictionary<TamperingBody, IReadOnlyList<RecordGuard>> guards = new(ReferenceEqualityComparer.Instance);
+        foreach (TamperingBody body in all)
+        {
+            guards[body] = SnapshotRecords.Guards(body, isSet);
+        }
+
+        HashSet<string> elsewhereButGuards = Reach([.. all.Select(body => SnapshotRecords.WithoutGuardReads(body, guards[body]))], NamesAnotherFolder, NamesAResultsPath);
+        HashSet<string> hostFiles = Reach(all, _ => false, strings => strings.Any(SnapshotRecords.NamesAHostFile));
+        List<TamperingFinding> findings = [.. assembly.Findings];
+        foreach ((string location, TamperingBody body) in assembly.Bodies)
+        {
+            findings.AddRange(Findings(body, tempReach, elsewhere, assembly.Name, location)
+                .Where(finding => !IsSnapshotRecord(body, finding, guards[body], elsewhereButGuards, hostFiles)));
+        }
+
+        return findings;
     }
 
     /// <summary>
@@ -295,9 +333,18 @@ internal static partial class HostTamperingScanner
             segment.Add(key);
         }
 
-        // A framework call names its type only when the type comes from the runtime's own assemblies: a project of the repository
-        // can declare its own System.Environment and be referenced under an alias.
-        return IsFromTheRuntime(reader, method) ? $"{called.Type}::{called.Member}" : $"{called.Type}::{called.Member}@{OtherAssembly}";
+        return CallText(reader, token);
+    }
+
+    /// <summary>
+    /// A call as <c>Type::Member</c>. A framework call names its type only when the type comes from the runtime's own assemblies (a
+    /// project of the repository can declare its own System.Environment and be referenced under an alias); <c>@other</c> marks the rest.
+    /// </summary>
+    private static string CallText(MetadataReader reader, EntityHandle token)
+    {
+        (string type, string member) = Member(reader, token);
+        EntityHandle method = token.Kind == HandleKind.MethodSpecification ? reader.GetMethodSpecification((MethodSpecificationHandle)token).Method : token;
+        return IsFromTheRuntime(reader, method) ? $"{type}::{member}" : $"{type}::{member}@{OtherAssembly}";
     }
 
     /// <summary>Whether a member reference's type resolves to one of the runtime's own assemblies.</summary>
@@ -686,4 +733,10 @@ internal static partial class HostTamperingScanner
         0xDE => 1,
         _ => 0,
     };
+
+    /// <summary>
+    /// One assembly as the scan read it: its name, the findings it has whatever else is read (module initializers), its method
+    /// bodies by location, and what in it could switch a snapshot variable on.
+    /// </summary>
+    private sealed record LoadedAssembly(string Name, List<TamperingFinding> Findings, List<(string Location, TamperingBody Body)> Bodies, List<TamperingFinding> Switches);
 }

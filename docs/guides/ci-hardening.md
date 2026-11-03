@@ -133,11 +133,12 @@ requirements to be traced to those tests, and the `pr` gates to pass, all with t
   - test-framework extension points (an xUnit v3 `TestFramework`, an NUnit `IWrapTestMethod` attribute, a custom runner)
     run inside the test host;
   - an MSBuild `<Exec>` task or inline task in a project, props or targets file runs arbitrary code at build time;
-  - the host-tampering scan reads the test assemblies only: production code and MSBuild files are not scanned. It does not
-    report a snapshot store's record-mode writes (case files written only inside an `if` on a `…SNAPSHOT…` variable equal
-    to a literal, naming no source, project, build or runner-configuration file); it reports them again when the variable
-    is named anywhere in the repository outside the test projects' C#, but it does not see the job's own environment, so
-    the judge job must not set such a variable;
+  - the host-tampering scan reports code in the test assemblies only: production code and MSBuild files are not scanned for
+    findings. It does not report a snapshot store's record-mode writes (literal case-file paths written only inside an `if`
+    on a `…SNAPSHOT…` variable equal to a literal), and keeps that allowance fail-closed: the variable may be named nowhere
+    else in the scanned or production assemblies or in the files git lists, a variable set under a name built at run time
+    turns it off, and the engine removes every `…SNAPSHOT…` variable from the builds and test runs it starts. A native
+    library or another process the tests start can still set one;
   - processes the pull request's code starts are killed only when the job times out.
 
   Each needs deliberate code in the diff, which the person who merges can read. Isolation (the pull request's code in a

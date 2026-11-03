@@ -11,6 +11,8 @@ internal static class ProcessRunner
 
     private static readonly IReadOnlyDictionary<string, string?> NoVariables = new Dictionary<string, string?>(StringComparer.Ordinal);
 
+    private const string SnapshotMark = "SNAPSHOT";
+
     private static readonly string[] RunnerVariables =
     [
         "GITHUB_ENV", "GITHUB_OUTPUT", "GITHUB_PATH", "GITHUB_STATE", "GITHUB_STEP_SUMMARY",
@@ -160,6 +162,13 @@ internal static class ProcessRunner
         // job) must not set the next steps' environment or outputs. A guardrail: the files stay on disk under the runner's
         // temporary folder.
         foreach (string name in RunnerVariables)
+        {
+            startInfo.Environment.Remove(name);
+        }
+
+        // Snapshot tests write their case files when a variable such as SHOP_SNAPSHOTS=record asks for it; a build or test the engine
+        // starts never records, so the host-tampering check can treat a record-mode write as switched off.
+        foreach (string name in startInfo.Environment.Keys.Where(name => name.Contains(SnapshotMark, StringComparison.OrdinalIgnoreCase)).ToArray())
         {
             startInfo.Environment.Remove(name);
         }

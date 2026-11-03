@@ -5,28 +5,35 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// The host-tampering findings of a built tree (<see cref="HostTamperingScanner"/>): its test applications and the repository's
-/// shared test-helper assemblies next to them (any assembly of a project under the tree that is not production code).
+/// shared test-helper assemblies next to them (any assembly of a project under the tree that is not production code), read
+/// together, with the production assemblies next to them read for what could switch a snapshot variable on.
 /// </summary>
 internal static class TamperingScan
 {
-    public static IReadOnlyList<TamperingFinding> Compute(TestWorkspace workspace, string root)
+    public static async Task<IReadOnlyList<TamperingFinding>> ComputeAsync(TestWorkspace workspace, string root, CancellationToken cancellationToken)
     {
         IReadOnlySet<string> production = ProductionProjects.Find(root, workspace.Apps).AssemblyNames;
-        HashSet<string> projects = new(Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Select(Path.GetFileNameWithoutExtension).OfType<string>(), StringComparer.OrdinalIgnoreCase);
-        HashSet<string> scanned = new(StringComparer.OrdinalIgnoreCase);
-        List<TamperingFinding> findings = [];
-        VariableMentions mentions = new(root, production);
+        Dictionary<string, string> projects = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string project in Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
+        {
+            projects.TryAdd(Path.GetFileNameWithoutExtension(project), Path.GetDirectoryName(project)!);
+        }
+
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        List<string> scanned = [];
+        List<string> context = [];
         foreach (TestApp app in workspace.Apps)
         {
             string output = Path.GetDirectoryName(app.AssemblyPath)!;
-            IEnumerable<string> helpers = projects.Where(name => !production.Contains(name) && name != app.AssemblyName)
-                .Select(name => Path.Combine(output, name + ".dll")).Where(File.Exists);
-            foreach (string assembly in helpers.Prepend(app.AssemblyPath).Where(path => scanned.Add(Path.GetFileName(path))))
+            foreach (string assembly in projects.Keys.Where(name => name != app.AssemblyName).Select(name => Path.Combine(output, name + ".dll")).Where(File.Exists)
+                .Prepend(app.AssemblyPath).Where(path => seen.Add(Path.GetFileName(path))))
             {
-                findings.AddRange(HostTamperingScanner.Scan(assembly, mentions.IsNamedOutsideTheTests));
+                (production.Contains(Path.GetFileNameWithoutExtension(assembly)) ? context : scanned).Add(assembly);
             }
         }
 
-        return findings;
+        Dictionary<string, string> testProjects = new(projects.Where(entry => !production.Contains(entry.Key)), StringComparer.OrdinalIgnoreCase);
+        VariableMentions mentions = await VariableMentions.ListAsync(root, testProjects, cancellationToken);
+        return HostTamperingScanner.ScanAll(scanned, context, mentions.IsNamedOutside);
     }
 }

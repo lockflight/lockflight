@@ -21,6 +21,9 @@ internal sealed record TamperingBody(
     /// <summary>For an async or iterator state machine's method, the key of the method it was generated from; null otherwise.</summary>
     public string? StubKey { get; init; }
 
+    /// <summary>What the value-flow pass knows of the arguments of the body's calls (<see cref="IlValueFlow"/>).</summary>
+    public IlValueFlow Flow { get; init; } = IlValueFlow.None;
+
     /// <summary>Whether the body is a constructor: its stores are judged per <see cref="Segments"/>, and it marks no caller.</summary>
     public bool IsConstructor { get; init; }
 
