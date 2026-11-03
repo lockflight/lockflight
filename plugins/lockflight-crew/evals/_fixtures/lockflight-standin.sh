@@ -63,7 +63,7 @@ if [ "$phase" = "tasks" ]; then
   known=$(grep -Eo '^[[:space:]]*[-*][[:space:]]+\*\*FR-[0-9]{3,}\*\*' "$dir/spec.md" | grep -Eo 'FR-[0-9]+' | sort -u | tr '\n' ' ')
   awk -v known="$known" '
     BEGIN { n = split(known, k, " "); for (i = 1; i <= n; i++) isknown[k[i]] = 1 }
-    /^#/ { tests = (tolower($0) ~ /^### tests/); next }
+    /^#/ { tests = (tolower($0) ~ /^### tests/); implementation = (tolower($0) ~ /^### implementation/); next }
     /^[[:space:]]*-[[:space:]]+\[[ xX]\][[:space:]]+T[0-9][0-9][0-9]+/ {
       line = $0; s = ""
       if (match(line, /\[US[0-9]+\]/)) s = substr(line, RSTART + 3, RLENGTH - 4)
@@ -73,7 +73,7 @@ if [ "$phase" = "tasks" ]; then
       ld = tolower(d)
       if (tests || ld ~ /^([a-z]+ +)?(tests?|write tests?|add tests?)( |$)/ && ld !~ /^(make|run|implement|fix) /) role = "test"
       else if (ld ~ /stub|skeleton|notimplementedexception|(declare|scaffold).*signature/) role = "stub"
-      else if (d ~ /Tests?\.cs|\.Tests\// && ld !~ /^(implement|make)/) role = "test"
+      else if (!implementation && d ~ /Tests?\.cs|\.Tests\// && ld !~ /^(implement|make)/) role = "test"
       else role = "impl"
       if (s == "") next
       if (!cites) uncited = uncited " line " NR

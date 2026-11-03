@@ -110,10 +110,14 @@ Lines that are not task lines (headings, prose, notes) are ignored, and so are H
 1. **Test**, when it sits under a heading that starts with `### Tests` (until the next heading of any level), or its
    description starts with test wording: `Tests …`, `Write tests …`, `Add tests …`, `Unit tests …`, `Contract tests …`,
    `Integration tests …`, one qualifying word before them (`xUnit tests …`), `Spec for …`, `Cover … with tests`. "Make tests
-   pass …", "Run tests …", "Implement tests …" and "Fix tests …" write no test and are not test tasks.
+   pass …", "Run tests …", "Implement tests …" and "Fix tests …" write no test and are not test tasks, and a path that starts
+   with a tests folder (`Add tests/Shop.Tests/…`) is a file name, not test wording.
 2. Else **stub**, when it says `stub`, `skeleton`, `NotImplementedException`, or "declare" or "scaffold" with "signature(s)".
 3. Else **test** again, when it names a test file (`…Tests.cs`, `…Test.cs`, a `*.Tests/` project, `*.spec.ts`,
-   `*.test.ts`) and does not start with "Implement" or "Make".
+   `*.test.ts`), does not start with "Implement" or "Make", and does not sit under a heading that starts with
+   `### Implementation` (Spec Kit's `### Implementation for User Story N`, until the next heading of level 3 or higher): there
+   the heading decides, so a task that adds a test harness or fixture under `tests/` is implementation. A test task there
+   needs test wording, or belongs under the story's `### Tests` heading.
 4. Everything else is **implementation**.
 
 **Tests first.** Within each story, every implementation task comes after the story's last test task. Stub tasks may sit
