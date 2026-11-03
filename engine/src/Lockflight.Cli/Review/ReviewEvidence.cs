@@ -113,6 +113,7 @@ internal static class ReviewEvidence
                     ["sha256"] = file.Sha256,
                 })]),
             },
+            ["renamedFiles"] = new JsonArray([.. run.Renamed.Select(path => (JsonNode)JsonValue.Create(path))]),
             ["claudeCodeVersion"] = run.ClaudeCodeVersion,
             ["usage"] = new JsonObject
             {

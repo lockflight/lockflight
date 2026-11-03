@@ -50,6 +50,26 @@ public sealed class ReviewOfRecordTests
     }
 
     [Fact]
+    public void AnOverlongDiffSaysHowMuchOfItIsMoves()
+    {
+        string moved = "diff --git a/src/Old.cs b/src/New/Old.cs\nsimilarity index 100%\nrename from src/Old.cs\nrename to src/New/Old.cs\n";
+        string edited = "diff --git a/src/Taxes.cs b/src/New/Taxes.cs\nsimilarity index 90%\nrename from src/Taxes.cs\nrename to src/New/Taxes.cs\n--- a/src/Taxes.cs\n+++ b/src/New/Taxes.cs\n@@ -1 +1 @@\n-old\n+new\n";
+        ReviewDiff cut = ReviewDiff.Fit(moved + edited + "diff --git a/src/Prices.cs b/src/Prices.cs\n" + new string('+', 400) + "\n", 300, NoTree);
+
+        string reason = ReviewOfRecord.Incomplete(cut);
+
+        Assert.Equal(["src/New/Old.cs", "src/New/Taxes.cs"], cut.Renamed);
+        Assert.Contains($"2 of the 3 changed files are moves or renames, whose diffs are their edits only ({moved.Length + edited.Length} characters)", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnOverlongDiffWithoutMovesSaysNothingAboutThem() =>
+        Assert.DoesNotContain(
+            "moves or renames",
+            ReviewOfRecord.Incomplete(ReviewDiff.Fit("diff --git a/src/Prices.cs b/src/Prices.cs\n" + new string('+', 400) + "\n", 300, NoTree)),
+            StringComparison.Ordinal);
+
+    [Fact]
     public void ADiffFittedToAnotherLimitThanTheManifestsIsNotOfRecord()
     {
         ReviewSettings settings = ReviewSettings.Default with { MaxDiffCharacters = 200_000 };
