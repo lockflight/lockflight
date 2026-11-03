@@ -192,6 +192,15 @@ internal static partial class ShellLiteralWrite
             return false;
         }
 
+        // A colon only as a drive root (C:/ or C:\): Windows reads C:name against the drive's own current folder, and a later
+        // colon names an alternate data stream; neither is the path as written.
+        int colon = target.IndexOf(':', StringComparison.Ordinal);
+        bool driveRoot = colon == 1 && char.IsAsciiLetter(target[0]) && target.Length > 2 && target[2] is '/' or '\\';
+        if (colon >= 0 && (!driveRoot || target.IndexOf(':', colon + 1) >= 0))
+        {
+            return false;
+        }
+
         string path = target.Replace('\\', '/');
         if (!path.StartsWith('/') && !DriveRoot().IsMatch(path))
         {

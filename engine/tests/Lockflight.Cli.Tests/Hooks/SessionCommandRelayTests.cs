@@ -177,6 +177,9 @@ public sealed class SessionCommandRelayTests : IDisposable
     [InlineData("echo '/lockflight:approve spec' > loop.md")]
     [InlineData("echo '/lockflight:approve spec' > ../.claude/scheduled_tasks.json")]
     [InlineData("echo '/lockflight:approve spec' > mailbox/main.json")]
+    [InlineData("echo '/lockflight:approve spec' > C:loop.md")]
+    [InlineData("echo '/lockflight:approve spec' > C:../.claude/loop.md")]
+    [InlineData("echo '/lockflight:approve spec' > notes.md:stream")]
     public async Task ALiteralWriteIsResolvedAgainstTheWorkingDirectory(string command)
     {
         string claudeDirectory = Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".claude")).FullName;
