@@ -33,7 +33,7 @@ internal sealed class PhaseCommand(CliContext context) : ICommand
         await context.Output.WriteLineAsync($"Feature: {feature.Id} · phase: {phase}");
         foreach (PhaseCheckItem item in items)
         {
-            await context.Output.WriteLineAsync($"{(item.Passed ? "PASS" : "FAIL")} {item.Name}: {item.Detail}");
+            await context.Output.WriteLineAsync($"{(item.IsWarning ? "WARN" : item.Passed ? "PASS" : "FAIL")} {item.Name}: {item.Detail}");
         }
 
         return items.All(item => item.Passed) ? ExitCode.Pass : ExitCode.Fail;

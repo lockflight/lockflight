@@ -150,6 +150,29 @@ public sealed class PhaseChecksTests : IDisposable
     }
 
     [Fact]
+    public void ARequirementVerifiedOutsideDotNetWithoutAFrontendTestTaskIsAWarningNotAFailure()
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        File.WriteAllText(Feature.SpecPath, Spec + "\n- **FR-006** [outside .NET: web/src/card.spec.ts]: The card MUST show the total\n- **FR-007** [outside .NET: web/src/badge.spec.ts]: The badge MUST show the weight\n");
+        File.WriteAllText(Feature.TasksPath, """
+            ### Tests for User Story 1
+            - [ ] T010 [US1] (FR-001, FR-002) Shipping tests in tests/Shop.Tests/ShippingTests.cs
+            - [ ] T011 [US1] (FR-006) Write Vitest specs for the card
+            - [ ] T012 [US1] (FR-007) Badge checks
+            ### Implementation for User Story 1
+            - [ ] T013 [US1] (FR-001, FR-002, FR-006, FR-007) Shipping in src/Shop.Api/Shipping.cs and web/src/badge.ts
+            """);
+
+        IReadOnlyList<PhaseCheckItem> items = PhaseChecks.Tasks(Feature, new ApprovalStore(Feature).Check(ApprovalPhase.Spec), [], root.FullName);
+        PhaseCheckItem outside = Assert.Single(items, item => item.Name == "tasks.outside-dotnet");
+
+        Assert.True(outside.Passed);
+        Assert.True(outside.IsWarning);
+        Assert.Contains("FR-007", outside.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("FR-006", outside.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnUnapprovedSpecFailsTheTasksPhase()
     {
         Directory.CreateDirectory(Feature.SpecDirectory);

@@ -1,10 +1,12 @@
 using System.Text;
+using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
 /// What the engine shows a person before they approve in a session: the feature, each artifact with the start of its hash (labelled
 /// as a hash, so it is not taken for the code), what the artifacts hold (requirements and stories, or tasks), open clarifications,
+/// the requirements marked as verified outside .NET with their text and files (trace leaves them out, so a person sees each one),
 /// the current approval, and the one-time code on its own line with the line to type. The engine renders it from the same bytes it hashed (<see cref="ArtifactSnapshot"/>), so it does not depend on the
 /// agent's summary, and a file rewritten while it renders cannot make the digest describe other content than the code binds.
 /// </summary>
@@ -43,6 +45,16 @@ internal static class ApprovalDigest
         yield return spec.Requirements.Count == 0
             ? "Requirements: none found"
             : $"Requirements ({spec.Requirements.Count}): {string.Join(", ", spec.Requirements.Select(requirement => requirement.Id))}";
+        Requirement[] outside = [.. spec.Requirements.Where(requirement => requirement.VerifiedOutside.Count > 0)];
+        if (outside.Length > 0)
+        {
+            yield return $"Verified outside .NET, not traced to .NET tests ({outside.Length}):";
+            foreach (Requirement requirement in outside)
+            {
+                yield return TerminalText.Clean($"  {requirement.Id} {requirement.Text} — {string.Join(", ", requirement.VerifiedOutside)}");
+            }
+        }
+
         yield return spec.Stories.Count == 0
             ? "User stories: none found"
             : $"User stories ({spec.Stories.Count}): {string.Join("; ", spec.Stories.Select(story => $"{story.Number} {story.Title}"))}";

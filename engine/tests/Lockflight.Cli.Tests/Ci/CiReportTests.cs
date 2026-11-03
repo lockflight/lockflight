@@ -261,6 +261,30 @@ public sealed class CiReportTests : IDisposable
         Assert.Contains("/verdict-blocked.png) **Lockflight: NOT-EARNED**", comment, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TheHeadlineCountsRequirementsVerifiedOutsideDotNetAndCallsOutMarkerChangesOnTheBase()
+    {
+        JsonObject evidence = Evidence();
+        evidence["trace"] = new JsonObject
+        {
+            ["excluded"] = 2,
+            ["markerChanges"] = new JsonArray("FR-009: [outside .NET: web/old.spec.ts] added"),
+            ["rows"] = new JsonArray(new JsonObject
+            {
+                ["requirement"] = "FR-009",
+                ["tests"] = new JsonArray(),
+                ["status"] = "excluded",
+                ["note"] = "verified outside .NET (web/old.spec.ts, unchanged in this pull request)",
+            }),
+        };
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("class **behaviour** (interim) · **2 requirements verified outside .NET**", comment, StringComparison.Ordinal);
+        Assert.Contains("FR-009: \\[outside .NET: web/old.spec.ts] added", comment, StringComparison.Ordinal);
+        Assert.Contains("| FR-009 | — | excluded — verified outside .NET (web/old.spec.ts, unchanged in this pull request) |", comment, StringComparison.Ordinal);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(directory);
 
     /// <summary>A valid blocked report, as the judge writes one when the class's review has no key to run.</summary>

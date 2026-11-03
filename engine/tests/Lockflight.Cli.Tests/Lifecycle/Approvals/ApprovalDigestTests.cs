@@ -28,6 +28,19 @@ public sealed class ApprovalDigestTests : IDisposable
     }
 
     [Fact]
+    public void TheDigestListsEachRequirementVerifiedOutsideDotNetWithItsTextAndFiles()
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        File.WriteAllText(Feature.SpecPath, "- **FR-001**: The API MUST return the streak\n- **FR-006** [outside .NET: web/streak-card.spec.ts]: The card MUST show the streak\n");
+        ApprovalStore store = new(Feature);
+
+        string digest = ApprovalDigest.Render(Feature, ApprovalPhase.Spec, store.Snapshot(ApprovalPhase.Spec), store.Check(ApprovalPhase.Spec), "k7m2qx");
+
+        Assert.Contains("Verified outside .NET, not traced to .NET tests (1):", digest, StringComparison.Ordinal);
+        Assert.Contains("FR-006 The card MUST show the streak — web/streak-card.spec.ts", digest, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ASnapshotHashesItsBytesLikeTheFileHash()
     {
         Directory.CreateDirectory(Feature.SpecDirectory);

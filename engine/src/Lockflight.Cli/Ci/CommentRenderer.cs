@@ -23,7 +23,7 @@ internal static class CommentRenderer
 
     private const int MaxSpecDiffPaths = 3;
 
-    /// <summary>The most loosenings the comment lists, so the section leaves room for the others.</summary>
+    /// <summary>The most loosenings (and requirement-marker changes) the comment lists, so the section leaves room for the others.</summary>
     private const int MaxLoosenedShown = 30;
 
     /// <summary>The order the Next line looks for the first required check that did not pass.</summary>
@@ -45,13 +45,14 @@ internal static class CommentRenderer
         string changeClass = verdict["changeClass"]?["class"]?.GetValue<string>() ?? "?";
         string preset = verdict["changeClass"]?["policy"]?["preset"]?.GetValue<string>() is "interim" ? " (interim)" : string.Empty;
         string baseSha = verdict["base"]?["sha"]?.GetValue<string>() ?? string.Empty;
-        top.Append($"{(badge is BadgeSize size ? Badge(verdict, size) + " " : string.Empty)}**Lockflight: {overall}**{feature} · class **{CommentText.Plain(changeClass)}**{preset} · head `{Short(head)}`{(baseSha.Length > 0 ? $" · base `{Short(baseSha)}`" : string.Empty)}\n\n");
+        top.Append($"{(badge is BadgeSize size ? Badge(verdict, size) + " " : string.Empty)}**Lockflight: {overall}**{feature} · class **{CommentText.Plain(changeClass)}**{preset}{Excluded(verdict)} · head `{Short(head)}`{(baseSha.Length > 0 ? $" · base `{Short(baseSha)}`" : string.Empty)}\n\n");
         top.Append(Contexts(verdict));
         if (Next(verdict) is string next)
         {
             top.Append($"> **Next:** {CommentText.Plain(next)}\n\n");
         }
 
+        top.Append(MarkerChanges(verdict));
         top.Append(SpecFromShell(verdict));
         top.Append(SpecDiff(verdict, maxLength));
         top.Append("| Check | Verdict | | Detail |\n|---|---|---|---|\n");
@@ -128,6 +129,34 @@ internal static class CommentRenderer
         return $"<details{open}><summary>Spec changes ({lines} lines): {shown}</summary>\n\n{CommentText.Fenced(cut, "diff")}{note}\n</details>\n\n";
     }
 
+    /// <summary>The count of requirements trace left out as verified outside .NET, for the headline; empty when none.</summary>
+    private static string Excluded(JsonNode verdict) =>
+        verdict["trace"]?["excluded"] is JsonValue value && value.TryGetValue(out int count) && count > 0
+            ? $" · **{count} requirement{(count == 1 ? string.Empty : "s")} verified outside .NET**"
+            : string.Empty;
+
+    /// <summary>Markers put on, changed on or taken off requirements the base already had, open above the checks.</summary>
+    private static string MarkerChanges(JsonNode verdict)
+    {
+        if (verdict["trace"]?["markerChanges"] is not JsonArray { Count: > 0 } changes)
+        {
+            return string.Empty;
+        }
+
+        StringBuilder list = new("> **Requirement markers changed on requirements the base already had** (each takes a requirement out of the usual trace; check it):\n");
+        foreach (JsonNode? change in changes.Take(MaxLoosenedShown))
+        {
+            list.Append($"> - {CommentText.Plain(change is JsonValue text && text.TryGetValue(out string? line) ? line : null)}\n");
+        }
+
+        if (changes.Count > MaxLoosenedShown)
+        {
+            list.Append($"> - … and {changes.Count - MaxLoosenedShown} more, in the evidence's trace.markerChanges\n");
+        }
+
+        return list.Append('\n').ToString();
+    }
+
     /// <summary>In a unit repository of a workspace shell, the spec the pull request was traced against, which lives in the shell.</summary>
     private static string SpecFromShell(JsonNode verdict) =>
         verdict["feature"]?["spec"] is JsonObject { } spec && spec["origin"]?.GetValue<string>() == "shell"
@@ -198,7 +227,8 @@ internal static class CommentRenderer
             foreach (JsonNode? row in rows)
             {
                 string tests = string.Join("<br>", (row?["tests"]?.AsArray() ?? []).Select(test => CommentText.Code(test?.GetValue<string>())));
-                trace.Append($"| {CommentText.Plain(row?["requirement"]?.GetValue<string>())} | {(tests.Length > 0 ? tests : "—")} | {CommentText.Plain(row?["status"]?.GetValue<string>())} |\n");
+                string note = row?["note"] is JsonValue noteValue && noteValue.TryGetValue(out string? noteText) ? $" — {CommentText.Plain(noteText)}" : string.Empty;
+                trace.Append($"| {CommentText.Plain(row?["requirement"]?.GetValue<string>())} | {(tests.Length > 0 ? tests : "—")} | {CommentText.Plain(row?["status"]?.GetValue<string>())}{note} |\n");
             }
 
             yield return trace.Append("\n</details>\n").ToString();

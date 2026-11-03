@@ -7,11 +7,17 @@ namespace Lockflight.Cli.Lifecycle;
 /// Builds the trace rows from the feature's red/green record, re-checked against the current test inventory: a test that went red,
 /// then green counts for a requirement only while it still exists under the same name, still names the requirement in its
 /// <c>Requirement</c> trait, and is neither skipped nor explicit. A test deleted or renamed after its green would otherwise stay in
-/// the matrix forever. A test that asserts nothing still counts, marked assertion-free, so the review sees it.
+/// the matrix forever. A test that asserts nothing still counts, marked assertion-free, so the review sees it. A requirement marked
+/// <c>[outside .NET: …]</c> carries what its files say (<see cref="OutsideVerification"/>); a .NET test that names it still covers it.
 /// </summary>
 internal static class TraceMatrix
 {
-    public static IReadOnlyList<TraceRow> Build(IReadOnlyList<Requirement> requirements, RedGreenRecord record, IReadOnlyList<TestCase> inventory)
+    public static IReadOnlyList<TraceRow> Build(IReadOnlyList<Requirement> requirements, RedGreenRecord record, IReadOnlyList<TestCase> inventory) =>
+        Build(requirements, record, inventory, new Dictionary<string, IReadOnlyList<OutsideFile>>(StringComparer.Ordinal));
+
+    /// <param name="outside">The files of each requirement marked <c>[outside .NET: …]</c>, by requirement ID.</param>
+    public static IReadOnlyList<TraceRow> Build(
+        IReadOnlyList<Requirement> requirements, RedGreenRecord record, IReadOnlyList<TestCase> inventory, IReadOnlyDictionary<string, IReadOnlyList<OutsideFile>> outside)
     {
         Dictionary<string, TestCase> current = inventory.DistinctBy(test => test.Key).ToDictionary(test => test.Key, StringComparer.Ordinal);
         RedGreenTest[] green = [.. record.Cycles.Where(cycle => !cycle.IsOpen).SelectMany(cycle => cycle.Tests)];
@@ -33,7 +39,10 @@ internal static class TraceMatrix
                 }
             }
 
-            rows.Add(new TraceRow(requirement.Id, tests, lost, red.Any(test => test.Requirements.Contains(requirement.Id))));
+            rows.Add(new TraceRow(requirement.Id, tests, lost, red.Any(test => test.Requirements.Contains(requirement.Id)))
+            {
+                Outside = outside.GetValueOrDefault(requirement.Id) ?? [],
+            });
         }
 
         return rows;

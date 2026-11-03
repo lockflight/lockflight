@@ -64,6 +64,14 @@ internal static class JudgeGit
         return show.ExitCode == 0 ? show.Output : null;
     }
 
+    /// <summary>Whether <paramref name="path"/> is a regular file at <paramref name="commit"/>: not a directory, a symbolic link or a submodule.</summary>
+    public static async Task<bool> IsRegularFileAsync(string root, string commit, string path, CancellationToken cancellationToken)
+    {
+        ProcessResult entry = await ProcessRunner.RunAsync(Executable, [.. Pinned, "ls-tree", commit, "--", path], root, cancellationToken);
+        string[] lines = entry.ExitCode == 0 ? entry.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries) : [];
+        return lines.Length == 1 && lines[0].Split('\t')[0].Split(' ') is [string mode, "blob", _] && mode is "100644" or "100755";
+    }
+
     /// <summary>The blob id of <paramref name="path"/> at <paramref name="commit"/>; null when there is none.</summary>
     public static async Task<string?> BlobOfAsync(string root, string commit, string path, CancellationToken cancellationToken)
     {

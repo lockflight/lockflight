@@ -46,6 +46,41 @@ on one line. Plain `Given … When … Then …` does not count. Numbered lines 
 written anywhere else (`FR-001` in a sentence, `**FR-001**` without a bullet) is not a requirement. Each requirement should be
 testable: it is what the tests are traced to with `[Trait("Requirement", "FR-001")]` (NUnit: `[Property("Requirement", "FR-001")]`, MSTest: `[TestProperty("Requirement", "FR-001")]`).
 
+**Requirements verified outside .NET.** While Lockflight runs only .NET tests, a requirement that only a test in another
+language can verify (a UI rule covered by a Vitest or Jest test in the web client of a .NET + Angular project) carries a marker
+between the bold ID and the colon:
+
+```markdown
+- **FR-006** [outside .NET: web/src/app/streak-card.spec.ts]: The streak card MUST show the current streak
+- **FR-007** [outside .NET: web/src/app/streak-card.spec.ts, web/src/app/streak.spec.ts]: The card MUST hide a zero streak
+```
+
+`outside` is lowercase, the marker comes before the colon, and several paths are separated by commas. Each path is relative to
+the project root (in CI, the repository root). A path that is absolute, has a `..` segment, lies under `specs/` (the spec names
+its own requirements) or is a directory or a symbolic link never counts. What the marker does, and what it does not:
+
+- **Trace** (local and in CI) shows the requirement as *excluded — verified outside .NET (path)*: neither covered nor failing,
+  but only while every file it names exists (in CI: at the pull request's head) and contains the requirement ID as a whole
+  word. A missing file, a file that does not name the ID, or a path that does not count leaves the requirement *not covered*,
+  as without the marker. A .NET test that went red, then green and names the requirement still covers it as usual, and a
+  marked requirement whose .NET test no longer counts (deleted, renamed, skipped) is not covered: the marker does not hide it.
+  A requirement ID defined twice with a marker on one of its lines makes trace NOT-EARNED.
+- **Every requirement excluded is N/A, never PASS.** Locally trace exits 5. In CI the trace check is then N/A and, when the
+  pull request's class needs trace, a required check, so the judge's verdict is NOT-EARNED.
+- **Lockflight runs none of those tests.** The check proves only that the pointer leads to a file in the project that
+  contains the ID, which a comment would satisfy as well as a test title. Whether that file is a test, and whether the test
+  verifies the requirement, is for the person approving the spec and for review. In CI, each file's evidence says whether
+  the pull request added or changed it.
+- **It is visible.** The approval digest lists each marked requirement with its text and files, so the person approving the
+  spec sees what leaves trace. When the CI judge evaluates trace (the pull request changes production code), the comment's
+  headline counts the excluded requirements, and a marker added to, changed on or removed from a requirement the base already
+  had is called out above the checks. A pull request that changes only the spec shows the marker in its spec diff alone.
+- **Tasks.** `phase check tasks` warns (`WARN tasks.outside-dotnet`, never a failure) when no task that cites the requirement
+  names Vitest, Jest or one of its files.
+
+Mark only a requirement that has no .NET side. A rule the API enforces stays a normal requirement with a .NET test, even when
+the UI also shows it.
+
 **Placeholders.** The check rejects text left over from a template:
 
 - an ALL-CAPS word of three or more characters in brackets that is not a Markdown link: `[FEATURE NAME]`, `[DATE]`,
@@ -86,6 +121,7 @@ and the tests will call. The crew's test author reads it.
 | `tasks.cover-requirements` | every requirement of `spec.md` is cited by at least one task |
 | `tasks.cite-requirements` | every story task cites at least one requirement, and no task cites an ID that `spec.md` does not define |
 | `tasks.tests-first` | in every story, the story has a test task, and no implementation task comes before its last test task |
+| `tasks.outside-dotnet` | a warning only, never a failure: every requirement marked `[outside .NET: …]` has a task that cites it and names Vitest, Jest or one of its files (shown only when the spec marks one) |
 | `tasks.units` | every `[unit:<path>]` tag names a unit listed in `lockflight.yaml` (shown only when the project has units or a tag is used) |
 
 **A task line** is a checkbox item with a task ID, then optional markers, then the description:
