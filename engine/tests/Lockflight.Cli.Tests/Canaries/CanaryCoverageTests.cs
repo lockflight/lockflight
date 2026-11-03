@@ -31,7 +31,7 @@ public sealed class CanaryCoverageTests
     {
         using CanaryScratch scratch = new(TimeProvider.System);
         CliContext context = new(new StringReader(string.Empty), TextWriter.Null, TextWriter.Null, scratch.Project, TimeProvider.System);
-        string[] rules = [.. GuardRules.OncePerCall.Concat(GuardRules.PerRoot(context, new DirectoryReads())).Select(rule => rule.Id)];
+        string[] rules = [.. GuardRules.OncePerCall(context).Concat(GuardRules.PerRoot(context, new DirectoryReads())).Select(rule => rule.Id)];
 
         IReadOnlyList<CanaryReport> reports = await GuardCanaries.RunAsync(scratch, TestContext.Current.CancellationToken);
 

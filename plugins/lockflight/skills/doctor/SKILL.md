@@ -16,7 +16,7 @@ description: Diagnose a Lockflight setup — manifest, engine pin, linked engine
    If the pin cannot be read (`dotnet-tools.json` is malformed), that file is protected: show the user the error and let them
    fix it.
    If the project has an engine lock (`.lockflight/engine.lock`) and the guard says the linked engine "is not the one
-   .lockflight/engine.lock pins", run exactly `~/.lockflight/bin/lockflight link --installed`; when that says the locked engine
+   .lockflight/engine.lock pins", run exactly the `link --installed` command the message prints (the user's engine by its absolute path, not `~`); when that says the locked engine
    is not installed, ask the user to run `~/.lockflight/bin/lockflight engine install` in a separate terminal window, in the
    project (it installs exactly the locked engine and changes nothing committed).
 2. Report each line. For `FAIL`/`warn`, give the fix shown after `→`. The `docs drift` and `instructions size` lines are

@@ -40,13 +40,13 @@ public sealed partial class ShimSyncTests
     }
 
     [Fact]
-    public void TheShimAllowsTheSameRecoveryCommandsAsTheEngine()
+    public void TheShimAllowsTheSameDotnetRecoveryCommandsAsTheEngine()
     {
         Match commands = RecoveryCommandsCase().Match(Shim.Value);
 
         Assert.True(commands.Success, "the shim's recovery command case was not found");
         string[] shimCommands = [.. QuotedWord().Matches(commands.Groups["commands"].Value).Select(match => match.Groups["word"].Value)];
-        Assert.Equal(RecoveryCommands.Commands.Order(StringComparer.Ordinal), shimCommands.Order(StringComparer.Ordinal));
+        Assert.Equal(RecoveryCommands.DotnetCommands.Order(StringComparer.Ordinal), shimCommands.Order(StringComparer.Ordinal));
     }
 
     [Fact]

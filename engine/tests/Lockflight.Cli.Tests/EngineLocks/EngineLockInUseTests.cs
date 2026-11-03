@@ -5,6 +5,7 @@ using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Doctor;
 using Lockflight.Cli.EngineLocks;
+using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Updating;
@@ -144,12 +145,19 @@ public sealed class EngineLockInUseTests : IDisposable
         Directory.CreateDirectory(Path.Combine(root.FullName, ".lockflight", "bin"));
         EngineRecord.Write(root.FullName, new string('c', 64), Rid);
 
-        (ExitCode write, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], Payload("Write", "file_path", Path.Combine(root.FullName, "a.txt")), root.FullName);
-        (ExitCode recovery, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], Payload("Bash", "command", "~/.lockflight/bin/lockflight link --installed"), root.FullName);
+        string home = Path.Combine(root.FullName, "the home");
+        Dictionary<string, string> environment = new() { [EnvironmentVariables.Home] = home };
+        string linkInstalled = RecoveryCommands.LinkInstalled(home)!;
+
+        (ExitCode write, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], Payload("Write", "file_path", Path.Combine(root.FullName, "a.txt")), root.FullName, environment);
+        (ExitCode recovery, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], Payload("Bash", "command", linkInstalled), root.FullName, environment);
+        (ExitCode tilde, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], Payload("Bash", "command", "~/.lockflight/bin/lockflight link --installed"), root.FullName, environment);
 
         Assert.Equal(ExitCode.HookBlock, write);
         Assert.Contains("is not the one .lockflight/engine.lock pins", error, StringComparison.Ordinal);
+        Assert.Contains($"Run exactly: {linkInstalled} ", error, StringComparison.Ordinal);
         Assert.Equal(ExitCode.Pass, recovery);
+        Assert.Equal(ExitCode.HookBlock, tilde);
     }
 
     [Fact]

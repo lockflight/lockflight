@@ -1,5 +1,8 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Processes;
 
@@ -214,13 +217,47 @@ public sealed class ShimEngineRecordTests : IDisposable
         WriteLock(lockPath, "linux-x64", new string('a', 64));
 
         (int exitCode, string error) = await RunShimAsync(Write);
-        (int recovery, _) = await RunShimAsync("""{"tool_name":"Bash","tool_input":{"command":"~/.lockflight/bin/lockflight link --installed"}}""");
+        (int recovery, _) = await RunShimAsync(BashPayload(RecoveryCommands.LinkInstalled(Home)!));
+        (int tilde, _) = await RunShimAsync("""{"tool_name":"Bash","tool_input":{"command":"~/.lockflight/bin/lockflight link --installed"}}""");
 
         Assert.Equal(2, exitCode);
+        Assert.Contains(RecoveryCommands.LinkInstalled(Home)!, error, StringComparison.Ordinal);
+        Assert.Equal(2, tilde);
         Assert.Contains($"it is not the engine {lockPath} pins for this platform", error, StringComparison.Ordinal);
         Assert.Contains("lockflight engine install", error, StringComparison.Ordinal);
         Assert.Equal(0, recovery);
         Assert.Equal(0, (await RunShimAsync(Read)).ExitCode);
+    }
+
+    [Theory]
+    [InlineData("/home/\u00e9l\u00e8ve")]
+    [InlineData("/home/user/")]
+    [InlineData("/Users/x y")]
+    public async Task TheShimNamesTheInstallAsTheEngineDoesInAUtf8Locale(string home)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        EngineRecord.Write(project.FullName, EngineRecord.HashOf(LinkEngine(AllowingEngine)), "linux-x64");
+        WriteLock(".lockflight/engine.lock", "linux-x64", new string('a', 64));
+
+        ProcessResult run = await RunShimProcessAsync(Write, "pre-tool-use", [$"HOME={home}", "LC_ALL=en_US.UTF-8"]);
+
+        Assert.Equal(2, run.ExitCode);
+        Assert.Contains($"Run exactly: {RecoveryCommands.LinkInstalled(home)} ", run.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithARelativeHomeTheShimOffersNoLinkInstalledCommand()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stand-in engine is a POSIX sh script.");
+        EngineRecord.Write(project.FullName, EngineRecord.HashOf(LinkEngine(AllowingEngine)), "linux-x64");
+        WriteLock(".lockflight/engine.lock", "linux-x64", new string('a', 64));
+
+        ProcessResult run = await RunShimProcessAsync(Write, "pre-tool-use", ["HOME=relative"]);
+        ProcessResult recovery = await RunShimProcessAsync(BashPayload("relative/.lockflight/bin/lockflight link --installed"), "pre-tool-use", ["HOME=relative"]);
+
+        Assert.Equal(2, run.ExitCode);
+        Assert.Contains("Ask the user to open a separate terminal window", run.Error, StringComparison.Ordinal);
+        Assert.Equal(2, recovery.ExitCode);
     }
 
     [Fact]
@@ -231,7 +268,7 @@ public sealed class ShimEngineRecordTests : IDisposable
         EngineRecord.Write(project.FullName, new string('b', 64), "linux-x64");
 
         (int linked, string error) = await RunShimAsync("""{"tool_name":"Bash","tool_input":{"command":".lockflight/bin/lockflight link --installed"}}""");
-        (int user, _) = await RunShimAsync("""{"tool_name":"Bash","tool_input":{"command":"~/.lockflight/bin/lockflight link --installed"}}""");
+        (int user, _) = await RunShimAsync(BashPayload(RecoveryCommands.LinkInstalled(Home)!));
 
         Assert.Equal(2, linked);
         Assert.Contains("it was replaced after linking", error, StringComparison.Ordinal);
@@ -318,6 +355,14 @@ public sealed class ShimEngineRecordTests : IDisposable
 
     private void RecordEngine(string binary) => EngineRecord.Write(project.FullName, EngineRecord.HashOf(binary), rid: null);
 
+    /// <summary>A home folder whose name the shell must quote, so the recovery command is matched as the engine quotes it.</summary>
+    private string Home => project.FullName + " home";
+
+    /// <summary>A Bash call as Claude Code sends it: quotes and spaces as written, not escaped.</summary>
+    private static string BashPayload(string command) =>
+        new JsonObject { ["tool_name"] = "Bash", ["tool_input"] = new JsonObject { ["command"] = command } }
+            .ToJsonString(new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+
     private async Task<(int ExitCode, string Error)> RunShimAsync(string payload, string hookEvent = "pre-tool-use")
     {
         ProcessResult run = await RunShimProcessAsync(payload, hookEvent);
@@ -330,11 +375,13 @@ public sealed class ShimEngineRecordTests : IDisposable
         return (run.ExitCode, run.Output);
     }
 
-    private async Task<ProcessResult> RunShimProcessAsync(string payload, string hookEvent)
+    private Task<ProcessResult> RunShimProcessAsync(string payload, string hookEvent) => RunShimProcessAsync(payload, hookEvent, [$"HOME={Home}"]);
+
+    private async Task<ProcessResult> RunShimProcessAsync(string payload, string hookEvent, string[] environment)
     {
         string input = Path.Combine(project.FullName, "payload.json");
         File.WriteAllText(input, payload);
         return await ProcessRunner.RunAsync(
-            "env", [$"CLAUDE_PROJECT_DIR={project.FullName}", "sh", ShimLocation.Path, hookEvent], project.FullName, TimeSpan.FromSeconds(30), input, TestContext.Current.CancellationToken);
+            "env", [$"CLAUDE_PROJECT_DIR={project.FullName}", .. environment, "sh", ShimLocation.Path, hookEvent], project.FullName, TimeSpan.FromSeconds(30), input, TestContext.Current.CancellationToken);
     }
 }

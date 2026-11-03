@@ -11,7 +11,7 @@ namespace Lockflight.Cli.Hooks.Guard;
 /// exact restore/link command stay allowed so the agent can repair it; a tool manifest that cannot be read blocks the same way.
 /// A lockdown replaces this check: under it only reading passes, which this rule would allow anyway.
 /// </summary>
-internal sealed class EnginePinRule : IGuardRule
+internal sealed class EnginePinRule(EnvironmentReader environment) : IGuardRule
 {
     public const string RuleId = "engine-pin";
 
@@ -20,9 +20,11 @@ internal sealed class EnginePinRule : IGuardRule
     public ValueTask<GuardBlock?> CheckAsync(GuardFacts facts, CancellationToken cancellationToken) =>
         ValueTask.FromResult(LockdownPolicy.IsActive(facts.Manifest.Root) ? null : PinMismatch(facts.Input, facts.Manifest));
 
-    private static GuardBlock? PinMismatch(HookRequest input, Manifest manifest)
+    private GuardBlock? PinMismatch(HookRequest input, Manifest manifest)
     {
-        if (ReadOnlyTools.Allows(input) || RecoveryCommands.Allows(input))
+        // The hook's own HOME, as the plugin shim reads it: the agent's shell may have exported another.
+        string? home = environment.Get(EnvironmentVariables.Home);
+        if (ReadOnlyTools.Allows(input) || RecoveryCommands.Allows(input, home))
         {
             return null;
         }
@@ -41,8 +43,9 @@ internal sealed class EnginePinRule : IGuardRule
                 ? null
                 : new GuardBlock(
                     "stale-engine",
-                    $"lockflight: the linked engine ({ToolPin.RunningVersion}) is not the one {EngineLock.RelativePath} pins ({engineLock.Version}). Run exactly: {RecoveryCommands.LinkInstalled} "
-                    + $"(it links that engine when it is installed); otherwise ask the user to {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} engine install")}"
+                    $"lockflight: the linked engine ({ToolPin.RunningVersion}) is not the one {EngineLock.RelativePath} pins ({engineLock.Version}). "
+                    + (RecoveryCommands.LinkInstalled(home) is string linkInstalled ? $"Run exactly: {linkInstalled} (it links that engine when it is installed); otherwise ask" : "Ask")
+                    + $" the user to {HumanOnlyCommands.OpenATerminalAndRun($"{EngineCommand.UserInstall} engine install")}"
                     + $" (with a Lockflight 0.2 install, which has neither command, `{EngineCommand.UserInstall} update`).");
         }
 

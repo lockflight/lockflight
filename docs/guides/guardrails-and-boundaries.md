@@ -111,12 +111,15 @@ It recognises:
   `git worktree add /tmp/wt`, a second clone, a checkout nested in the project) gets the same rules, anchored at that folder,
   with this session's manifest: that checkout's own extra `protected:` entries are not read. A wildcard is judged from the
   folder before its first wildcard, so one above several checkouts (`rm -rf /tmp/*`) is not judged at theirs.
-- **The user's install.** Parsed writes to `~/.lockflight` (the engine `~/.lockflight/bin/lockflight link --installed` runs,
+- **The user's install.** Parsed writes to `~/.lockflight` (the engine the recovery `link --installed` runs,
   and the engines in `tools/<version>` it links) are blocked, links (`ln`) included, and `init` writes the
-  `Edit(~/.lockflight/**)` deny rule. Only your own `update` and `engine install` write there. It is a guardrail: the recovery
-  command is matched as text, and what `~` means when it runs depends on the shell's state, which the agent can change for
-  later commands (an `export HOME=…` in a file the Bash tool sources), so an agent that does so runs a program of its own
-  under that name.
+  `Edit(~/.lockflight/**)` deny rule. Only your own `update` and `engine install` write there. The recovery command names
+  the install by its absolute path under the hook's own `HOME` (`/home/you/.lockflight/bin/lockflight link --installed`,
+  single-quoted when the path needs it), never `~`, so an `export HOME=…` the agent's shell sources no longer swaps in another
+  program. That removes one redirection, not the class: every recovery command still runs in the agent's shell, so what a
+  file the Bash tool sources runs, or a preload variable it sets, runs with it, and `dotnet tool restore && dotnet lockflight
+  link` also reads `PATH`, `DOTNET_*` (such as `DOTNET_STARTUP_HOOKS`) and `NUGET_PACKAGES` from it. All of them are a
+  guardrail. What holds is the link itself: `link --installed` links only an engine whose hash is the committed lock's.
   `scripts/dev-install.sh` run from a sandboxed session now fails there; run it in your own terminal.
 
 A relative path is checked against the session's working directory, as written, and, after a literal `cd`, `pushd`/`popd` or
