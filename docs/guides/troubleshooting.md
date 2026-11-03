@@ -12,7 +12,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [`git reset --hard` and other whole-tree rewrites](#git-reset---hard-is-blocked-this-command-may-rewrite-) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --self-test` reports MISSED or BROKEN](#doctor---self-test-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [review: changes not committed](#review-says-the-working-tree-has-changes-that-are-not-committed) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
-| CI | [the `gates` check waits: "Expected — Waiting for status to be reported"](#the-gates-check-waits-expected--waiting-for-status-to-be-reported) |
+| CI | [the `gates` check waits: "Expected — Waiting for status to be reported"](#the-gates-check-waits-expected--waiting-for-status-to-be-reported) · [`gates` passes but a local `lockflight ci` fails](#cis-gates-passes-but-a-local-lockflight-ci-fails) |
 | Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) |
 
 ## Every tool call is blocked: "engine not installed in this project"
@@ -160,14 +160,23 @@ and `link --installed` or `engine install` answers "unknown command": that user 
 
 ## The `gates` check waits: "Expected — Waiting for status to be reported"
 
-A pull request shows the required `gates` check as "Expected — Waiting for status to be reported", and `lockflight-gates`
-never runs on it. On a new GitHub repository the usual cause is that workflows are not enabled yet: the Actions tab says
+A pull request shows the required `gates` check as "Expected — Waiting for status to be reported", and the `lockflight`
+workflow (`lockflight-gates` before 0.3.1) never runs on it. On a new GitHub repository the usual cause is that workflows are not enabled yet: the Actions tab says
 "Workflows aren't being run on this repository", no push or pull_request run starts, and the Actions permissions API still answers
 `"enabled": true`. Open the Actions tab, enable workflows, then push to the pull request's branch (or close and reopen it) so
 the workflow runs. With the `gh` CLI signed in, `lockflight doctor` warns about this (**github actions**). Other causes: the
 workflow file is not on the branch yet, or it runs only when started by hand (`init --ci manual`, or a development build pin:
 see [CI with a development build](getting-started.md#ci-with-a-development-build)). See
 [enable workflows on a new repository](ci-hardening.md#enable-workflows-on-a-new-repository).
+
+## CI's `gates` passes but a local `lockflight ci` fails
+
+A workflow that Lockflight 0.2 wrote runs the gates alone: its `gates` check knows nothing of red/green, while
+`lockflight ci` runs the CI judge, which also re-runs each red commit, green at head and trace. `init` never replaces that
+workflow; `lockflight doctor` warns about it (**workflow: CI judge**). Once the project's main branch pins a 0.3 engine, move it with
+`lockflight update --project --judge-workflow` in a branch: see [moving from 0.2](ci-hardening.md#moving-from-lockflight-02s-gates-workflow). With the CI judge's workflow,
+`gates` can still pass while `lockflight/judge` fails: the comment marks the judge "advisory — would block if required", since
+only a check your ruleset requires blocks a merge ([which check is required](ci-hardening.md#which-check-is-required)).
 
 ## "lockflight: internal error" or "the engine failed (exit N)"
 

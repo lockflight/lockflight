@@ -16,6 +16,11 @@ internal static class CiStepMigration
     public static IReadOnlyList<string> KnownFiles { get; } =
         [Templates.WorkflowPath, AzurePipelinesTemplate.Path, BitbucketPipelinesTemplate.Path, BitbucketPipelinesTemplate.FragmentPath, GitLabCiTemplate.Path];
 
+    // The GitHub judge workflow's display name, and the one it had until 0.3.0.
+    private const string WorkflowName = "lockflight";
+
+    private const string LegacyWorkflowName = "lockflight-gates";
+
     /// <summary>The policy file list before the engine lock.</summary>
     private const string LegacyPolicyFiles = "dotnet-tools.json .config/dotnet-tools.json lockflight.yaml .gitleaks.toml .gitleaksignore nuget.config NuGet.config";
 
@@ -172,9 +177,11 @@ internal static class CiStepMigration
         List<string> lines = [.. text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n')];
         ReplaceBlocks(lines, HeaderBlocks);
 
-        // The CI judge's pipelines install the engine from the base's lock already (GitHub's through its action): only the header moves.
+        // The CI judge's pipelines install the engine from the base's lock already (GitHub's through its action): only the header
+        // moves, and GitHub's workflow takes the name of both its checks.
         if (text.Contains("mode: judge", StringComparison.Ordinal) || text.Contains(CiShellScripts.JudgeCommand, StringComparison.Ordinal))
         {
+            RenameJudgeWorkflow(lines);
             return string.Join(newline, lines);
         }
 
@@ -193,6 +200,28 @@ internal static class CiStepMigration
         }
 
         return string.Join(newline, lines);
+    }
+
+    /// <summary>
+    /// The GitHub judge workflow's name, <c>lockflight-gates</c> until 0.3.0, becomes <c>lockflight</c>: it runs the gates and the judge.
+    /// Only the workflow's display name and the comment naming it move; the jobs and their status contexts stay.
+    /// </summary>
+    private static void RenameJudgeWorkflow(List<string> lines)
+    {
+        int[] names = [.. Indexes(lines, line => line == $"name: {LegacyWorkflowName}")];
+        if (names.Length != 1)
+        {
+            return;
+        }
+
+        lines[names[0]] = $"name: {WorkflowName}";
+        for (int index = 0; index < lines.Count; index++)
+        {
+            if (lines[index].StartsWith('#'))
+            {
+                lines[index] = lines[index].Replace($"Actions → {LegacyWorkflowName} → Run workflow", $"Actions → {WorkflowName} → Run workflow", StringComparison.Ordinal);
+            }
+        }
     }
 
     /// <summary>Replaces each block found exactly once, in order, keeping its indent.</summary>
