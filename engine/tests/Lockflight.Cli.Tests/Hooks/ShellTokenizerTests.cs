@@ -16,6 +16,8 @@ public sealed class ShellTokenizerTests
     [InlineData("cat <<A <<B\na1\nA\nb1\nB\nls", "cat|R|H[a1\n]|R|H[b1\n]|;|ls")]
     [InlineData("cat <<< 'a b' > out", "cat|H[a b]|W|out")]
     [InlineData("echo a # rm x\nls", "echo|a|;|ls")]
+    [InlineData("echo ''#a; ls", "echo|#a|;|ls")]
+    [InlineData("echo \"\"# rm x", "echo|#|rm|x")]
     [InlineData("rm a \\\nb", "rm|a|b")]
     [InlineData("echo \"C:\\repo\"", "echo|C:\\repo")]
     [InlineData("echo \"a$(rm x)b\"", "echo|(|rm|x|)|a$__b")]

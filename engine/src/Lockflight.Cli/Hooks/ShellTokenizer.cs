@@ -118,8 +118,9 @@ internal sealed class ShellTokenizer(string command, ShellDialect dialect)
             Flush();
             index++;
         }
-        else if (character == '#' && current.Length == 0)
+        else if (character == '#' && current.Length == 0 && quotedFrom is null)
         {
+            // Only a '#' that starts a word starts a comment: after quotes ('' or "") it is part of the word.
             int lineEnd = command.IndexOf(Newline, index);
             index = lineEnd < 0 ? command.Length : lineEnd;
         }
