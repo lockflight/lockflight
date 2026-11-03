@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Gates.Ef;
 using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
@@ -21,6 +22,7 @@ internal static class ReadinessChecks
     private const string PresetCheck = "lockflight preset";
     private const string AddPreset = "uvx --from specify-cli==1.1.3 specify preset add --dev <plugin>/speckit-preset (https://github.com/lockflight/lockflight/blob/main/docs/guides/getting-started.md)";
     private const string CoverageCheck = "coverage collector";
+    private const string EfToolCheck = "dotnet-ef pin";
     private const int MaxListed = 5;
     private const string Bash = "bash";
     private const string Python = "python3";
@@ -113,16 +115,21 @@ internal static class ReadinessChecks
             checks.Add(CheckClaudeCli());
         }
 
-        Manifest? coverageManifest = ManifestLocator.Discover(root).Manifest;
-        if (coverageManifest?.Gates.Coverage.Collector is CoverageCollector collector && collector != CoverageCollector.None)
+        Manifest? gateManifest = ManifestLocator.Discover(root).Manifest;
+        if (gateManifest?.Gates.Coverage.Collector is CoverageCollector collector && collector != CoverageCollector.None)
         {
             checks.Add(CheckCoverageExtension(root, collector));
         }
-        else if (coverageManifest is not null && PatchCoverageAdvice.AppliesTo(coverageManifest, root) && PatchCoverageAdvice.PrGatesFile(root) is string ciFile)
+        else if (gateManifest is not null && PatchCoverageAdvice.AppliesTo(gateManifest, root) && PatchCoverageAdvice.PrGatesFile(root) is string ciFile)
         {
             checks.Add(new(CoverageCheck, CheckStatus.Warn,
                 $"{ciFile} (Lockflight's CI job) runs the pr profile, but gates.coverage.collector is not set, so its coverage.patch step reports N/A: patch coverage is not judged",
                 PatchCoverageAdvice.Fix(root)));
+        }
+
+        if (gateManifest is not null && CheckEfTool(root, gateManifest) is DoctorCheck efTool)
+        {
+            checks.Add(efTool);
         }
 
         checks.AddRange(await WorkspaceChecks.RunAsync(root, ManifestLocator.Discover(root).Manifest, userHome, time.GetUtcNow(), cancellationToken));
@@ -452,6 +459,20 @@ internal static class ReadinessChecks
     /// Every test project (or a Directory.Build file above it) must reference the configured collector's package — the MTP extension
     /// or the VSTest data collector, by the platform <c>dotnet test</c> uses in that project's directory.
     /// </summary>
+    // Whether dotnet-ef is pinned for the EF Core migrations the pr profile checks; null when the step does not need it.
+    private static DoctorCheck? CheckEfTool(string root, Manifest manifest)
+    {
+        EfToolState state = EfToolAdvice.Inspect(manifest, root);
+        if (!state.HasMigrations)
+        {
+            return null;
+        }
+
+        return state.Unpinned.Count > 0
+            ? new(EfToolCheck, CheckStatus.Warn, EfToolAdvice.Problem(state.Unpinned), EfToolAdvice.Fix(root, state.Unpinned))
+            : new(EfToolCheck, CheckStatus.Pass, $"{EfToolPin.ToolName} is pinned in {string.Join(", ", state.Pins)} for the EF Core migrations ef.pendingModelChanges checks", null);
+    }
+
     private static DoctorCheck CheckCoverageExtension(string root, CoverageCollector collector)
     {
         IReadOnlyList<string> testProjects = ProjectFiles.TestProjects(root);

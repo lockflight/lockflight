@@ -539,7 +539,16 @@ project and context; `dotnet ef` failing for any other reason is an `ERROR`; the
 With `auto` (the default) it runs only when a tool manifest (`dotnet-tools.json` or `.config/dotnet-tools.json`, in the
 unit or above it up to the project root) pins `dotnet-ef`, after `dotnet tool restore`; otherwise it is `N/A` and says so. A
 global `dotnet ef` is not the repository's choice, so it runs only with `fail`. `report` lists a pending change on a `PASS`,
-`off` skips the step. The project files are read as text, not evaluated by MSBuild: a reference added through an imported
+`off` skips the step.
+
+The `N/A` reason appears only in the gate output, so `doctor` warns (**dotnet-ef pin**) when a project with migrations has no
+pin where the step looks for it (from the root, or from each unit that is not `kind: none`, up to the project root) under
+`auto`, and `init` prints the same advice. Neither runs it: from the repository root, `dotnet new tool-manifest` (when there is
+no tool manifest yet), then `dotnet tool install dotnet-ef --version <version>`, with the EF Core version the project's EF Core
+package references (or the nearest `Directory.Packages.props`) state; commit the tool manifest. The check needs EF Core 8 or
+later, so for an older EF Core the advice says to upgrade first. A unit of a workspace shell is left out of both, as for patch
+coverage: its CI runs in the unit's own checkout and takes the stricter of its own and the shell's mode, so pin `dotnet-ef` in
+the unit's repository. The project files are read as text, not evaluated by MSBuild: a reference added through an imported
 file is not seen.
 
 ### Patch coverage needs a collector

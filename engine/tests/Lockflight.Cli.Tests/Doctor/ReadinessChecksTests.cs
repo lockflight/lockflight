@@ -192,6 +192,151 @@ public sealed class ReadinessChecksTests : IDisposable
     }
 
     [Fact]
+    public async Task EfCoreMigrationsWithoutAPinnedDotnetEfWarnWithTheCommandsToPinIt()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
+
+        DoctorCheck ef = await CheckAsync("dotnet-ef pin");
+
+        Assert.Equal(CheckStatus.Warn, ef.Status);
+        Assert.Contains("src/Shop.Data/Shop.Data.csproj (ShopContext)", ef.Detail, StringComparison.Ordinal);
+        Assert.Contains("ef.pendingModelChanges", ef.Detail, StringComparison.Ordinal);
+        Assert.Contains("N/A", ef.Detail, StringComparison.Ordinal);
+        Assert.Equal("dotnet new tool-manifest, then dotnet tool install dotnet-ef --version 9.0.4", ef.Fix);
+        Assert.False(File.Exists(Path.Combine(root.FullName, ".config", "dotnet-tools.json")));
+    }
+
+    [Fact]
+    public async Task AnExistingToolManifestNeedsOnlyTheInstallAndTheVersionComesFromCentralPackages()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Write("dotnet-tools.json", """{ "version": 1, "isRoot": true, "tools": { "lockflight": { "version": "0.3.0", "commands": ["lockflight"] } } }""");
+        Write("Directory.Packages.props", """<Project><ItemGroup><PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" /></ItemGroup></Project>""");
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />""");
+
+        DoctorCheck ef = await CheckAsync("dotnet-ef pin");
+
+        Assert.Equal(CheckStatus.Warn, ef.Status);
+        Assert.Equal("dotnet tool install dotnet-ef --version 8.0.11", ef.Fix);
+    }
+
+    [Fact]
+    public async Task AnUnknownEfCoreVersionIsLeftForThePersonToFillIn()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore" Version="$(EfVersion)" />""");
+
+        DoctorCheck ef = await CheckAsync("dotnet-ef pin");
+
+        Assert.Contains("dotnet tool install dotnet-ef --version <the EF Core version the project uses>", ef.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APinnedDotnetEfPasses()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Write(".config/dotnet-tools.json", """{ "version": 1, "isRoot": true, "tools": { "dotnet-ef": { "version": "9.0.4", "commands": ["dotnet-ef"] } } }""");
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
+
+        DoctorCheck ef = await CheckAsync("dotnet-ef pin");
+
+        Assert.Equal(CheckStatus.Pass, ef.Status);
+        Assert.Contains(".config/dotnet-tools.json", ef.Detail, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""<PackageReference Version="9.0.4" Include="Microsoft.EntityFrameworkCore.Design" />""")]
+    [InlineData("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design"><Version>9.0.4</Version></PackageReference>""")]
+    [InlineData("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" VersionOverride="9.0.4" />""")]
+    [InlineData("""<!-- <PackageReference Include="Microsoft.EntityFrameworkCore" Version="6.0.0" /> --><PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4" />""")]
+    [InlineData("""<PackageReference Include="Microsoft.EntityFrameworkCore.AutoHistory" Version="6.0.0" /><PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.4" />""")]
+    public async Task TheEfCoreVersionIsReadFromTheWaysAProjectStatesIt(string packageReferences)
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Write("Directory.Packages.props", """<Project><ItemGroup><PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0" /></ItemGroup></Project>""");
+        WriteEfProject(packageReferences);
+
+        DoctorCheck ef = await CheckAsync("dotnet-ef pin");
+
+        Assert.EndsWith("dotnet tool install dotnet-ef --version 9.0.4", ef.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EfCoreBeforeVersionEightIsToldTheCheckNeedsAnUpgrade()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="7.0.20" />""");
+
+        DoctorCheck ef = await CheckAsync("dotnet-ef pin");
+
+        Assert.Contains("the check needs EF Core 8 or later", ef.Fix, StringComparison.Ordinal);
+        Assert.Contains("gates.ef.pendingModelChanges: off", ef.Fix, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APinBelowTheDirectoryTheGateRunsInDoesNotCount()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Write("src/Shop.Data/dotnet-tools.json", """{ "version": 1, "isRoot": true, "tools": { "dotnet-ef": { "version": "9.0.4", "commands": ["dotnet-ef"] } } }""");
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
+
+        Assert.Equal(CheckStatus.Warn, (await CheckAsync("dotnet-ef pin")).Status);
+    }
+
+    [Fact]
+    public async Task InAMonorepoEachUnitNeedsThePinAndTheShellOutsideTheUnitsDoesNot()
+    {
+        Write(Manifest.FileName, "version: 2\nunits:\n  - path: services/orders\n  - path: services/stock\n  - path: ops\n    kind: none\n");
+        Write("services/orders/dotnet-tools.json", """{ "version": 1, "isRoot": true, "tools": { "dotnet-ef": { "version": "9.0.4", "commands": ["dotnet-ef"] } } }""");
+        foreach (string directory in new[] { "services/orders", "services/stock", "ops", "tools" })
+        {
+            string name = directory.Split('/')[^1];
+            Write($"{directory}/{name}.Data/{name}.Data.csproj", """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" /></ItemGroup></Project>""");
+            Write($"{directory}/{name}.Data/Migrations/{name}ContextModelSnapshot.cs", $"[DbContext(typeof({name}Context))]\npartial class {name}ContextModelSnapshot {{ }}\n");
+        }
+
+        DoctorCheck ef = await CheckAsync("dotnet-ef pin");
+
+        Assert.Equal(CheckStatus.Warn, ef.Status);
+        Assert.Contains("services/stock/stock.Data/stock.Data.csproj (stockContext) has EF Core migrations", ef.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("orders", ef.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("ops", ef.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("tools/", ef.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AUnitOfAWorkspaceShellGetsNoDotnetEfCheck()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Write(Manifest.UnitFileName, "shell: ../shell\n");
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
+
+        Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "dotnet-ef pin");
+    }
+
+    [Theory]
+    [InlineData("fail")]
+    [InlineData("report")]
+    [InlineData("off")]
+    public async Task OnlyTheAutoModeNeedsThePin(string mode)
+    {
+        Write(Manifest.FileName, $"version: 2\ngates:\n  ef:\n    pendingModelChanges: {mode}\n");
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
+
+        Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "dotnet-ef pin");
+    }
+
+    [Fact]
+    public async Task AProjectWithoutEfCoreMigrationsGetsNoDotnetEfCheck()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        Write("src/Shop/Shop.csproj", """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4" /></ItemGroup></Project>""");
+
+        Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "dotnet-ef pin");
+    }
+
+    [Fact]
     public async Task ACiFileThatCannotBeReadGetsNoPatchCoverageWarningAndNoCrash()
     {
         Write(Manifest.FileName, "version: 2\n");
@@ -642,6 +787,12 @@ public sealed class ReadinessChecksTests : IDisposable
         }
 
         return binary;
+    }
+
+    private void WriteEfProject(string packageReference)
+    {
+        Write("src/Shop.Data/Shop.Data.csproj", $"""<Project Sdk="Microsoft.NET.Sdk"><ItemGroup>{packageReference}</ItemGroup></Project>""");
+        Write("src/Shop.Data/Migrations/ShopContextModelSnapshot.cs", "[DbContext(typeof(ShopContext))]\npartial class ShopContextModelSnapshot { }\n");
     }
 
     private async Task<DoctorCheck> CheckAsync(string name) => Assert.Single(await AllChecksAsync(), check => check.Name == name);
