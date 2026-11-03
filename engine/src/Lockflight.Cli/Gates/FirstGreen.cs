@@ -3,9 +3,10 @@ using System.Globalization;
 namespace Lockflight.Cli.Gates;
 
 /// <summary>
-/// Time to first green: <c>init</c> records when it first ran in <c>.lockflight/local/first-green</c> (git-ignored), and the first
-/// PASS of <c>lockflight gate</c> or a local <c>lockflight ci</c> after it says how long it took, once, and records when. The file
-/// is local, so a CI run never reports it; losing or failing to read it only loses the report.
+/// Time to first green: a project's first <c>init</c> records when it ran in <c>.lockflight/local/first-green</c> (git-ignored),
+/// and the first PASS of <c>lockflight gate</c> (stop or pr profile) or a local <c>lockflight ci</c> after it says how long it
+/// took, once, and records when. The Stop hook's PASS does not count, and a CI run never reports (the file is local); losing or
+/// failing to read the file only loses the report.
 /// </summary>
 internal sealed class FirstGreen(string projectRoot, TimeProvider time)
 {
@@ -63,6 +64,7 @@ internal sealed class FirstGreen(string projectRoot, TimeProvider time)
         { TotalMinutes: < 1 } => "in under a minute",
         { TotalHours: < 1 } => $"in {(int)elapsed.TotalMinutes} min",
         { TotalDays: < 1 } => $"in {(int)elapsed.TotalHours} h {elapsed.Minutes} min",
+        { TotalDays: < 2 } => "in 1 day",
         _ => $"in {(int)elapsed.TotalDays} days",
     };
 }

@@ -98,6 +98,13 @@ internal sealed class GateCommand(CliContext context) : ICommand
             ? await WorkspaceGateRunner.RunAsync(manifest!, run, units, useCache: false, context.Output, cancellationToken)
             : await GateRunner.RunAsync(run, context.Output, cancellationToken);
         long durationMs = (long)context.Time.GetElapsedTime(started).TotalMilliseconds;
+        // Before Scope and Result, which stay the last lines; a format-only edit run is no first green.
+        if (manifest is not null && result.Verdict == Verdict.Pass && profile != GateProfile.Edit
+            && await new FirstGreen(manifest.Root, context.Time).ReportPassAsync(cancellationToken) is string firstGreen)
+        {
+            await context.Output.WriteLineAsync(firstGreen);
+        }
+
         await context.Output.WriteLineAsync($"Scope: {result.Scope}");
         await context.Output.WriteLineAsync($"Result: {VerdictNames.ToContractName(result.Verdict)}");
         await MascotDisplay.DrawAsync(context, MascotDisplay.For(result.Verdict), VerdictNames.ToContractName(result.Verdict));
@@ -114,12 +121,6 @@ internal sealed class GateCommand(CliContext context) : ICommand
         {
             LedgerGateRun gateRun = new(GateTrigger.Command, durationMs, StopCacheResult.None);
             await new LedgerWriter(manifest.Root, context.Time).AppendAsync(GateRunEvents.Completed(result, gateRun), cancellationToken);
-        }
-
-        if (manifest is not null && result.Verdict == Verdict.Pass
-            && await new FirstGreen(manifest.Root, context.Time).ReportPassAsync(cancellationToken) is string firstGreen)
-        {
-            await context.Output.WriteLineAsync(firstGreen);
         }
 
         if (inputsHash is not null && VerdictNames.AllowsNextStep(result.Verdict))

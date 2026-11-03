@@ -33,6 +33,21 @@ public sealed class FirstGreenTests : IDisposable
         Assert.Equal("First green in 1 h 35 min after init.", await firstGreen.ReportPassAsync(cancellationToken));
     }
 
+    [Theory]
+    [InlineData(0.5, "First green in under a minute after init.")]
+    [InlineData(59, "First green in 59 min after init.")]
+    [InlineData(60 * 26, "First green in 1 day after init.")]
+    [InlineData(60 * 24 * 3, "First green in 3 days after init.")]
+    public async Task TheTimeIsSaidInTheLargestUsefulUnit(double minutes, string expected)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        FirstGreen firstGreen = new(root.FullName, time);
+        await firstGreen.RecordInitAsync(cancellationToken);
+        time.Advance(TimeSpan.FromMinutes(minutes));
+
+        Assert.Equal(expected, await firstGreen.ReportPassAsync(cancellationToken));
+    }
+
     [Fact]
     public async Task WithoutInitsRecordThereIsNoReport()
     {
@@ -44,11 +59,23 @@ public sealed class FirstGreenTests : IDisposable
     }
 
     [Fact]
-    public async Task AnUnreadableRecordIsNoReport()
+    public async Task ARecordThatIsNoTimeIsNoReport()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         string path = Path.Combine(root.FullName, FirstGreen.RelativePath);
-        Directory.CreateDirectory(path);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "not a time\n");
+
+        Assert.Null(await new FirstGreen(root.FullName, time).ReportPassAsync(cancellationToken));
+    }
+
+    [Fact]
+    public async Task ARecordInPlaceOfAFolderIsNoFailure()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        File.WriteAllText(Path.Combine(root.FullName, ".lockflight"), "a file where the folder goes");
+
+        await new FirstGreen(root.FullName, time).RecordInitAsync(cancellationToken);
 
         Assert.Null(await new FirstGreen(root.FullName, time).ReportPassAsync(cancellationToken));
     }
