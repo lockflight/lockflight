@@ -1,6 +1,7 @@
-# Lockflight CI: engine tests, Native AOT build, the published engine's self-test and the LLM-free hook compatibility suite on
-# Linux, Windows (Git Bash) and macOS, the engine's canary suite on each, the Windows install and update from a checkout, plus
-# plugin and marketplace validation and the public-tree check.
+# Lockflight CI: engine tests, Native AOT build, the published engine's self-test and the LLM-free hook compatibility suite, and
+# beside them the end-to-end suites with their own published engine, on Linux and Windows (Git Bash) for pull requests and also
+# on macOS for pushes to main and manual runs; the engine's canary suite on each, the Windows install and update from a
+# checkout, plus plugin and marketplace validation and the public-tree check.
 name: ci
 
 on:
@@ -30,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.macos) && '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]') }}
+        include: ${{ fromJSON((github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.macos)) && '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]') }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -44,30 +45,13 @@ jobs:
           dotnet-version: 8.0.x
       # The secrets-step tests run the real gitleaks and skip where it is absent, so every runner installs the pinned release.
       - name: Install gitleaks (pinned, checksum-verified)
-        env:
-          GITLEAKS_VERSION: 8.30.1
-          GITLEAKS_SHA256_LINUX_X64: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-          GITLEAKS_SHA256_WINDOWS_X64: d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e
-          GITLEAKS_SHA256_DARWIN_ARM64: b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5
+        uses: ./.github/actions/install-gitleaks
+      # Windows Defender scans every file a build or test writes; the runner is discarded after the job.
+      - name: Turn off Defender real-time scanning (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          case "$RUNNER_OS" in
-            Linux) archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"; sum="$GITLEAKS_SHA256_LINUX_X64"; binary=gitleaks ;;
-            Windows) archive="gitleaks_${GITLEAKS_VERSION}_windows_x64.zip"; sum="$GITLEAKS_SHA256_WINDOWS_X64"; binary=gitleaks.exe ;;
-            macOS) archive="gitleaks_${GITLEAKS_VERSION}_darwin_arm64.tar.gz"; sum="$GITLEAKS_SHA256_DARWIN_ARM64"; binary=gitleaks ;;
-            *) echo "no gitleaks build for $RUNNER_OS"; exit 1 ;;
-          esac
-          curl -fsSLo "$RUNNER_TEMP/$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
-          if command -v sha256sum >/dev/null; then
-            echo "$sum  $RUNNER_TEMP/$archive" | sha256sum -c -
-          else
-            echo "$sum  $RUNNER_TEMP/$archive" | shasum -a 256 -c -
-          fi
-          case "$archive" in
-            *.zip) unzip -o -q "$RUNNER_TEMP/$archive" "$binary" -d "$RUNNER_TEMP" ;;
-            *) tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" "$binary" ;;
-          esac
-          "$RUNNER_TEMP/$binary" version
-          echo "LOCKFLIGHT_GITLEAKS=$RUNNER_TEMP/$binary" >> "$GITHUB_ENV"
+          try { Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop; "real-time scanning off" } catch { "left as it is: $($_.Exception.Message)" }
       # The canary suite (trait Category=Canary) runs in the canaries jobs.
       - name: Unit tests
         working-directory: engine
@@ -85,6 +69,41 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" sh tests/compat/probe-suite.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lockflight-${{ matrix.rid }}
+          path: |
+            out/lockflight
+            out/lockflight.exe
+          if-no-files-found: error
+
+  # The end-to-end suites with a freshly published engine, beside the unit tests rather than after them.
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON((github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.macos)) && '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]') }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+          # The workspace sample's orders service targets net8.0 (xUnit v2 on VSTest).
+          dotnet-version: 8.0.x
+      - name: Install gitleaks (pinned, checksum-verified)
+        uses: ./.github/actions/install-gitleaks
+      - name: Turn off Defender real-time scanning (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try { Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop; "real-time scanning off" } catch { "left as it is: $($_.Exception.Message)" }
+      - name: Native AOT publish
+        working-directory: engine
+        run: dotnet publish src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o ../out -nologo
       - name: Gate step order and run policies (stand-in SDK)
         if: runner.os != 'Windows'
         shell: bash
@@ -141,13 +160,6 @@ jobs:
           ENGINE="$engine" sh tests/workspace/gates.sh "$RUNNER_TEMP/workspace"
           ENGINE="$engine" bash tests/workspace/lifecycle.sh "$RUNNER_TEMP/workspace-lifecycle"
           ENGINE="$engine" sh tests/workspace/shell-pointer.sh "$RUNNER_TEMP/shell-pointer"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: lockflight-${{ matrix.rid }}
-          path: |
-            out/lockflight
-            out/lockflight.exe
-          if-no-files-found: error
 
   # The Windows user install: scripts/dev-install.ps1 from a checkout in a folder with spaces, then the installed engine runs
   # init, link and the hook suite, and `lockflight update` replaces the engine it runs from, from source and from a package.
@@ -234,7 +246,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.macos) && '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]') }}
+        include: ${{ fromJSON((github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.macos)) && '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"},{"os":"macos-latest","rid":"osx-arm64"}]' || '[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]') }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
