@@ -39,7 +39,8 @@ gates:
     stopFilter: "Category!=Integration"   # tests the stop gate and red/green's regression passes leave out (the pr
                                 #   profile and CI run them); a unit's own test.stopFilter replaces it
   coverage:
-    collector: none             # none | microsoft | coverlet  (patch coverage in the pr profile); every test project
+    collector: none             # none | microsoft | coverlet  (patch coverage in the pr profile; none: N/A, see
+                                #   "Patch coverage needs a collector" below); every test project
                                 #   must reference the collector package (doctor checks): on Microsoft.Testing.Platform
                                 #   Microsoft.Testing.Extensions.CodeCoverage or coverlet.MTP, on VSTest
                                 #   Microsoft.NET.Test.Sdk (built in) or coverlet.collector
@@ -538,6 +539,24 @@ unit or above it up to the project root) pins `dotnet-ef`, after `dotnet tool re
 global `dotnet ef` is not the repository's choice, so it runs only with `fail`. `report` lists a pending change on a `PASS`,
 `off` skips the step. The project files are read as text, not evaluated by MSBuild: a reference added through an imported
 file is not seen.
+
+### Patch coverage needs a collector
+
+`coverage.patch` judges the share of the changed coverable lines the tests execute, so it needs the coverage report a
+collector writes. `gates.coverage.collector` is `none` by default, and then the step is `N/A` on every run of the `pr`
+profile, CI included; the reason ("not configured, so not judged") appears only in the gate output. Lockflight does not
+choose a collector for you, because each one needs a package in every test project:
+
+| Test runner (`global.json` `test.runner`) | `collector: coverlet` | `collector: microsoft` |
+|---|---|---|
+| Microsoft.Testing.Platform | `coverlet.MTP` | `Microsoft.Testing.Extensions.CodeCoverage` |
+| VSTest (the default) | `coverlet.collector` | `Microsoft.NET.Test.Sdk` (built in) |
+
+`init` prints the suggestion for the detected runner when it writes a CI file (on any platform, with `--ci pr` or `manual`)
+and the manifest sets no collector, and `doctor` warns (**coverage collector**) while Lockflight's CI job runs the `pr`
+profile without one. A unit of a workspace shell is left out of both: its CI gates take the shell's collector when the unit
+sets none, so set it in the shell's `lockflight.yaml`. Once a collector is set, `doctor` checks that every test project
+references its package.
 
 ## Baselines (brownfield adoption; human-only)
 

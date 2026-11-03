@@ -113,9 +113,16 @@ internal static class ReadinessChecks
             checks.Add(CheckClaudeCli());
         }
 
-        if (ManifestLocator.Discover(root).Manifest?.Gates.Coverage.Collector is CoverageCollector collector && collector != CoverageCollector.None)
+        Manifest? coverageManifest = ManifestLocator.Discover(root).Manifest;
+        if (coverageManifest?.Gates.Coverage.Collector is CoverageCollector collector && collector != CoverageCollector.None)
         {
             checks.Add(CheckCoverageExtension(root, collector));
+        }
+        else if (coverageManifest is not null && PatchCoverageAdvice.AppliesTo(coverageManifest, root) && PatchCoverageAdvice.PrGatesFile(root) is string ciFile)
+        {
+            checks.Add(new(CoverageCheck, CheckStatus.Warn,
+                $"{ciFile} (Lockflight's CI job) runs the pr profile, but gates.coverage.collector is not set, so its coverage.patch step reports N/A: patch coverage is not judged",
+                PatchCoverageAdvice.Fix(root)));
         }
 
         checks.AddRange(await WorkspaceChecks.RunAsync(root, ManifestLocator.Discover(root).Manifest, userHome, time.GetUtcNow(), cancellationToken));

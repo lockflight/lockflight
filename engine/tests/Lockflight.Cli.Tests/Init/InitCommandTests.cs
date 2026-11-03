@@ -217,6 +217,74 @@ public sealed class InitCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task APullRequestWorkflowWithoutACollectorSuggestsTheOneForTheTestRunner()
+    {
+        File.WriteAllText(Path.Combine(projectRoot.FullName, "global.json"), """{ "test": { "runner": "Microsoft.Testing.Platform" } }""");
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
+        (_, string again, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("coverage.patch", output, StringComparison.Ordinal);
+        Assert.Contains("gates.coverage.collector: coverlet", output, StringComparison.Ordinal);
+        Assert.Contains("coverlet.MTP", output, StringComparison.Ordinal);
+        Assert.Equal(CoverageCollector.None, ManifestLocator.Discover(projectRoot.FullName).Manifest!.Gates.Coverage.Collector);
+        Assert.DoesNotContain("gates.coverage.collector", again, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OnVSTestInitSuggestsTheCoverletCollectorPackage()
+    {
+        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
+
+        Assert.Contains("coverlet.collector", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AProjectThatAlreadySetsACollectorGetsNoCoverageSuggestion()
+    {
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\ngates:\n  coverage:\n    collector: coverlet\n");
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.True(File.Exists(Path.Combine(projectRoot.FullName, Templates.WorkflowPath)));
+        Assert.DoesNotContain("gates.coverage.collector", output, StringComparison.Ordinal);
+        Assert.Equal(CoverageCollector.Coverlet, ManifestLocator.Discover(projectRoot.FullName).Manifest!.Gates.Coverage.Collector);
+    }
+
+    [Theory]
+    [InlineData("--ci", "manual")]
+    [InlineData("--ci-platform", "gitlab")]
+    public async Task AManualOrOtherPlatformCiJobWithoutACollectorGetsTheSuggestionToo(params string[] options)
+    {
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\ngates:\n  coverage:\n    collector: none\n");
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", .. options], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("gates.coverage.collector: coverlet", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AUnitOfAWorkspaceShellGetsNoCoverageSuggestionBecauseItsCiTakesTheShellsCollector()
+    {
+        (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(
+            ["init", "--no-link", "--unit-of", "https://example.com/shell.git", "--unit-path", "services/orders"], "", projectRoot.FullName);
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.DoesNotContain("gates.coverage.collector", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithoutCiInitSuggestsNoCollector()
+    {
+        (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "none"], "", projectRoot.FullName);
+
+        Assert.DoesNotContain("gates.coverage.collector", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task NoCiWritesNoWorkflow()
     {
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "none"], "", projectRoot.FullName);
