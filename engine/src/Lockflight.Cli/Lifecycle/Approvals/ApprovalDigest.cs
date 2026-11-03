@@ -6,7 +6,8 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 /// <summary>
 /// What the engine shows a person before they approve in a session: the feature, each artifact with the start of its hash (labelled
 /// as a hash, so it is not taken for the code), what the artifacts hold (requirements and stories, or tasks), open clarifications,
-/// the requirements marked as verified outside .NET with their text and files (trace leaves them out, so a person sees each one),
+/// the requirements marked as verified outside .NET with their text and files (trace leaves them out, so a person sees each one) and
+/// those marked structural with their text (no red/green cycle traces them),
 /// the current approval, and the one-time code on its own line with the line to type. The engine renders it from the same bytes it hashed (<see cref="ArtifactSnapshot"/>), so it does not depend on the
 /// agent's summary, and a file rewritten while it renders cannot make the digest describe other content than the code binds.
 /// </summary>
@@ -52,6 +53,16 @@ internal static class ApprovalDigest
             foreach (Requirement requirement in outside)
             {
                 yield return TerminalText.Clean($"  {requirement.Id} {requirement.Text} — {string.Join(", ", requirement.VerifiedOutside)}");
+            }
+        }
+
+        Requirement[] structural = [.. spec.Requirements.Where(requirement => requirement.Structural)];
+        if (structural.Length > 0)
+        {
+            yield return $"Structural, traced by new tests that pass on the code before the change and at head, or architecture tests red there ({structural.Length}):";
+            foreach (Requirement requirement in structural)
+            {
+                yield return TerminalText.Clean($"  {requirement.Id} {requirement.Text}");
             }
         }
 

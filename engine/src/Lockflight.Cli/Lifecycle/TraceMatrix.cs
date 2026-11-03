@@ -17,7 +17,16 @@ internal static class TraceMatrix
 
     /// <param name="outside">The files of each requirement marked <c>[outside .NET: …]</c>, by requirement ID.</param>
     public static IReadOnlyList<TraceRow> Build(
-        IReadOnlyList<Requirement> requirements, RedGreenRecord record, IReadOnlyList<TestCase> inventory, IReadOnlyDictionary<string, IReadOnlyList<OutsideFile>> outside)
+        IReadOnlyList<Requirement> requirements, RedGreenRecord record, IReadOnlyList<TestCase> inventory, IReadOnlyDictionary<string, IReadOnlyList<OutsideFile>> outside) =>
+        Build(requirements, record, inventory, outside, []);
+
+    /// <param name="structural">The structural tests as checked on the code before the change and at head (<see cref="StructuralCheck"/>).</param>
+    public static IReadOnlyList<TraceRow> Build(
+        IReadOnlyList<Requirement> requirements,
+        RedGreenRecord record,
+        IReadOnlyList<TestCase> inventory,
+        IReadOnlyDictionary<string, IReadOnlyList<OutsideFile>> outside,
+        IReadOnlyList<StructuralTest> structural)
     {
         Dictionary<string, TestCase> current = inventory.DistinctBy(test => test.Key).ToDictionary(test => test.Key, StringComparer.Ordinal);
         RedGreenTest[] green = [.. record.Cycles.Where(cycle => !cycle.IsOpen).SelectMany(cycle => cycle.Tests)];
@@ -39,9 +48,18 @@ internal static class TraceMatrix
                 }
             }
 
+            StructuralTest[] naming = [.. structural.Where(test => test.Requirements.Contains(requirement.Id))];
+            // A structural test that shows changed behaviour keeps the requirement uncovered, whatever another one shows.
+            if (!naming.Any(test => test.Outcome == StructuralOutcome.BehaviourChanged))
+            {
+                tests.AddRange(naming.Where(test => test.Counts).Select(StructuralCheck.Describe));
+            }
+
             rows.Add(new TraceRow(requirement.Id, tests, lost, red.Any(test => test.Requirements.Contains(requirement.Id)))
             {
                 Outside = outside.GetValueOrDefault(requirement.Id) ?? [],
+                Structural = requirement.Structural,
+                NotStructural = [.. naming.Where(test => !test.Counts).Select(StructuralCheck.Describe)],
             });
         }
 

@@ -11,8 +11,9 @@ namespace Lockflight.Cli.Lifecycle;
 /// <c>lockflight trace [--feature id]</c> — trace-lite: every requirement of the feature's spec must be named by a
 /// <c>Requirement</c> trait on a test that went red and then green in one of <em>this feature's</em> cycles (spec FR numbers repeat
 /// across features, so other features' tests never count), and that test must still be in the current inventory (see
-/// <see cref="TraceMatrix"/>). Listing needs current assemblies, so trace builds (incrementally) and lists the tests; it runs none.
-/// Prints a Markdown matrix for the PR body. A requirement marked <c>[outside .NET: …]</c> whose files name it is excluded — neither
+/// <see cref="TraceMatrix"/>). Listing needs current assemblies, so trace builds (incrementally) and lists the tests; it runs only structural tests.
+/// Prints a Markdown matrix for the PR body. A requirement marked <c>[structural]</c> is covered by a test naming only structural
+/// requirements that passes here and on the start commit's code (<see cref="StructuralCheck"/>), which trace runs. A requirement marked <c>[outside .NET: …]</c> whose files name it is excluded — neither
 /// covered nor failing — and when every requirement is, trace is N/A (exit 5), never a pass.
 /// </summary>
 internal sealed class TraceCommand(CliContext context) : ICommand
@@ -76,12 +77,14 @@ internal sealed class TraceCommand(CliContext context) : ICommand
             return ExitCode.NotEarned;
         }
 
-        if (await CurrentInventoryAsync(manifest, feature, cancellationToken) is not IReadOnlyList<TestCase> inventory)
+        TestWorkspace workspace = TestWorkspaces.For(manifest, feature, context.Time);
+        if (await CurrentInventoryAsync(workspace, cancellationToken) is not IReadOnlyList<TestCase> inventory)
         {
             return ExitCode.NotEarned;
         }
 
-        IReadOnlyList<TraceRow> rows = TraceMatrix.Build(requirements, record, inventory, outside);
+        IReadOnlyList<StructuralTest> structural = await StructuralAsync(manifest, workspace, requirements, record, inventory, cancellationToken);
+        IReadOnlyList<TraceRow> rows = TraceMatrix.Build(requirements, record, inventory, outside, structural);
         await WriteMatrixAsync(feature, rows, manifest.Root);
         await WriteNotesAsync(requirements, record);
         string[] lostLast = [.. rows.Where(row => !row.Covered && row.Lost.Count > 0).Select(row => row.RequirementId)];
@@ -134,9 +137,9 @@ internal sealed class TraceCommand(CliContext context) : ICommand
         {
             string tests = row.Covered ? string.Join("<br>", row.Tests) : "—";
             string status = row.Covered ? "covered"
-                : row.Excluded ? $"excluded — {row.OutsideNote}"
+                : row.Excluded ? $"excluded — {row.Note}"
                 : row.Pending ? "red (cycle open)"
-                : row.OutsideNote is string problem ? $"**not covered** ({problem})"
+                : row.Note is string problem ? $"**not covered** ({problem})"
                 : "**not covered**";
             string lost = row.Lost.Count > 0 ? $"<br>no longer counted: {string.Join(", ", row.Lost)}" : string.Empty;
             await context.Output.WriteLineAsync($"| {row.RequirementId} | {tests}{lost} | {status} |");
@@ -144,10 +147,9 @@ internal sealed class TraceCommand(CliContext context) : ICommand
     }
 
     /// <summary>Builds and lists the tests (none run); null — after saying why — when that is impossible, so trace cannot vouch.</summary>
-    private async Task<IReadOnlyList<TestCase>?> CurrentInventoryAsync(Manifest manifest, Feature feature, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<TestCase>?> CurrentInventoryAsync(TestWorkspace workspace, CancellationToken cancellationToken)
     {
-        await context.Error.WriteLineAsync("lockflight: building to list the current tests (no tests run)…");
-        TestWorkspace workspace = TestWorkspaces.For(manifest, feature, context.Time);
+        await context.Error.WriteLineAsync("lockflight: building to list the current tests…");
         if (await workspace.BuildAsync(cancellationToken) is not null)
         {
             await context.Output.WriteLineAsync("NOT-EARNED the build fails, so the current tests cannot be listed; trace re-checks red/green tests against them. Fix the build, then run trace again.");
@@ -173,6 +175,28 @@ internal sealed class TraceCommand(CliContext context) : ICommand
         }
 
         return inventory;
+    }
+
+    /// <summary>
+    /// The structural tests (naming only <c>[structural]</c> requirements), run in the working tree and on the start commit's code
+    /// (<see cref="StructuralRun"/>); none when the spec marks no requirement structural.
+    /// </summary>
+    private async Task<IReadOnlyList<StructuralTest>> StructuralAsync(
+        Manifest manifest, TestWorkspace workspace, IReadOnlyList<Requirement> requirements, RedGreenRecord record, IReadOnlyList<TestCase> inventory, CancellationToken cancellationToken)
+    {
+        IReadOnlySet<string> structuralIds = StructuralCheck.Ids(requirements);
+        // A test the start commit already had (another feature's among them) proves nothing about this change.
+        TestCase[] tests = [.. inventory.Where(test => StructuralCheck.IsStructural(test.Requirements, structuralIds) && test.SkipReason is null && !test.IsExplicit
+            && !record.BaselineTests.Contains(test.Key))];
+        if (tests.Length == 0)
+        {
+            return [];
+        }
+
+        await context.Error.WriteLineAsync($"lockflight: running {tests.Length} structural tests here and on the start commit {RedGreenSession.Short(record.BaselineCommit)}'s code…");
+        string[] testProjects = [.. record.TestProjects.Union(workspace.Apps.Select(app => Path.GetRelativePath(manifest.Root, app.ProjectDirectory).Replace('\\', '/')), StringComparer.Ordinal)];
+        return await new StructuralRun(workspace, manifest.Root, context.Time, TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds))
+            .RunAsync(tests, record.BaselineCommit, testProjects, cancellationToken);
     }
 
     private async Task WriteNotesAsync(IReadOnlyList<Requirement> requirements, RedGreenRecord record)

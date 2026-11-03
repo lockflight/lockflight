@@ -53,6 +53,13 @@ internal static class TestSourceFiles
         return [.. found.Select(paths => (IReadOnlyList<string>)[.. paths.Order(StringComparer.Ordinal)])];
     }
 
+    /// <summary>Whether a C# source text declares the test's class and a method of that name, as <see cref="Find"/> decides it.</summary>
+    public static bool Declares(string text, string className, string method)
+    {
+        (Regex declaresType, Regex declaresMethod) = Patterns(className, method);
+        return declaresType.IsMatch(text) && declaresMethod.IsMatch(text);
+    }
+
     private static (Regex DeclaresType, Regex DeclaresMethod) Patterns(string className, string method)
     {
         string typeName = className.Split('.', '+')[^1];

@@ -8,4 +8,10 @@ internal sealed record Requirement(string Id, int Line, string Text)
 
     /// <summary>The files, relative to the project root, that verify the requirement outside .NET; empty when it is not so marked.</summary>
     public IReadOnlyList<string> VerifiedOutside { get; init; } = [];
+
+    /// <summary>
+    /// Marked <c>[structural]</c>: a requirement the change must keep (a behaviour-preserving refactoring) or an architecture rule it
+    /// establishes, traced by tests that pass on the code before the change (<see cref="StructuralCheck"/>).
+    /// </summary>
+    public bool Structural { get; init; }
 }

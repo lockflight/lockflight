@@ -7,4 +7,7 @@ internal sealed record RecheckResult(string Key, RecheckOutcome Outcome, RedClas
 {
     /// <summary>The test version's assertion count (<see cref="TestFingerprinter.Assertions"/>); null when unknown.</summary>
     public int? Assertions { get; init; }
+
+    /// <summary>Whether every row of the test passed on the older code; a theory with one failing row there did not.</summary>
+    public bool PassedEveryRow { get; init; }
 }

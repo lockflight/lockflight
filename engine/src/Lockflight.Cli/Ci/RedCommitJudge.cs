@@ -7,11 +7,13 @@ namespace Lockflight.Cli.Ci;
 /// Re-runs every red commit (steps P2 and P3). For each one in topological order: its fork point's inventory, its own tree built
 /// (a build failure is COMPILE_RED), the tests new there (not at the fork point, not new at an earlier red), no known test deleted,
 /// skipped or made explicit, then the new tests run and classified by <see cref="RedEvaluation"/>, as <c>redgreen red</c> does.
-/// A cycle is accepted only when every new test is RED_STUB or RED_ASSERT. The trailer says only where to look.
+/// A cycle is accepted only when every new test is RED_STUB or RED_ASSERT. The trailer says only where to look. Tests that name only
+/// structural requirements are not part of a cycle, as in <c>redgreen red</c>; trace checks them (<see cref="StructuralJudge"/>).
 /// </summary>
 internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
 {
-    public async Task<IReadOnlyList<CycleJudgement>> JudgeAsync(JudgePlan plan, CancellationToken cancellationToken)
+    /// <param name="structuralIds">The head spec's structural requirements: a test naming only those is not part of a cycle.</param>
+    public async Task<IReadOnlyList<CycleJudgement>> JudgeAsync(JudgePlan plan, IReadOnlySet<string> structuralIds, CancellationToken cancellationToken)
     {
         List<CycleJudgement> cycles = [];
         HashSet<string> earlierNew = new(StringComparer.Ordinal);
@@ -26,7 +28,7 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
                 continue;
             }
 
-            CycleJudgement cycle = await JudgeCycleAsync(red, baseInventory, earlierNew, accepted, cancellationToken);
+            CycleJudgement cycle = await JudgeCycleAsync(red, baseInventory, earlierNew, accepted, structuralIds, cancellationToken);
             cycles.Add(cycle);
             earlierNew.UnionWith(cycle.Tests.Select(test => test.Key));
             if (cycle.Accepted)
@@ -39,7 +41,7 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
     }
 
     private async Task<CycleJudgement> JudgeCycleAsync(
-        RedCommit red, IReadOnlyList<TestCase> baseInventory, HashSet<string> earlierNew, List<RedGreenCycle> accepted, CancellationToken cancellationToken)
+        RedCommit red, IReadOnlyList<TestCase> baseInventory, HashSet<string> earlierNew, List<RedGreenCycle> accepted, IReadOnlySet<string> structuralIds, CancellationToken cancellationToken)
     {
         TreeListing tree = await trees.ListAsync(red.Commit, $"red {red.Label}", fresh: true, cancellationToken);
         if (tree.Outcome == TreeOutcome.CompileFailed)
@@ -67,7 +69,8 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
             return Judged(red, tree.Outcome, [], CheckVerdict.Fail, problem);
         }
 
-        TestCase[] fresh = [.. inventory.Where(test => !record.BaselineTests.Contains(test.Key) && !earlierNew.Contains(test.Key))];
+        TestCase[] fresh = [.. inventory.Where(test => !record.BaselineTests.Contains(test.Key) && !earlierNew.Contains(test.Key)
+            && !Lifecycle.StructuralCheck.IsStructural(test.Requirements, structuralIds))];
         if (fresh.Length == 0)
         {
             return Judged(red, tree.Outcome, [], CheckVerdict.Fail, "the red commit adds no tests; add the story's tests to it, or drop its trailer");

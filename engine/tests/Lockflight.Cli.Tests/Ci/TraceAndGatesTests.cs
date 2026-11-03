@@ -155,6 +155,67 @@ public sealed class TraceAndGatesTests : IAsyncLifetime
         Assert.Equal("excluded", document["trace"]!["rows"]!.AsArray().Single(entry => entry!["requirement"]!.GetValue<string>() == "FR-009")!["status"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task AStructuralRequirementIsCoveredByATestThatPassesOnTheBaseAndAtHead()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await repository.CheckoutAsync("main", cancellationToken);
+        main = await repository.WriteCode(Implementation, string.Empty).CommitAsync("shipping", cancellationToken);
+        await repository.CheckoutAsync("001-shipping", cancellationToken);
+        await repository.MergeAsync("main", cancellationToken);
+        string head = await repository.Write("specs/001-shipping/spec.md", "# Feature Specification: Shipping\n\n## Requirements\n\n- **FR-001** [structural]: Shipping MUST keep costing twice the weight\n")
+            .WriteCode("    public decimal Shipping(decimal kilograms) => kilograms + kilograms;", Test)
+            .CommitAsync("refactor(001-shipping): shipping", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head, "001-shipping");
+
+        JsonNode trace = Check(document, "trace");
+        Assert.True(trace["verdict"]!.GetValue<string>() == "PASS", trace.ToJsonString());
+        Assert.Equal(1, document["trace"]!["structural"]!.GetValue<int>());
+        Assert.Equal("PriceTests.ShippingIsTwiceTheWeight (structural)", document["trace"]!["rows"]![0]!["tests"]![0]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ABehaviourChangeMarkedStructuralFailsTrace()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await repository.CheckoutAsync("main", cancellationToken);
+        main = await repository.WriteCode(Implementation, string.Empty).CommitAsync("shipping", cancellationToken);
+        await repository.CheckoutAsync("001-shipping", cancellationToken);
+        await repository.MergeAsync("main", cancellationToken);
+        string head = await repository.Write("specs/001-shipping/spec.md", "# Feature Specification: Shipping\n\n## Requirements\n\n- **FR-001** [structural]: Shipping MUST cost three times the weight\n")
+            .WriteCode("    public decimal Shipping(decimal kilograms) => kilograms * 3m;", Test.Replace("4m", "6m", StringComparison.Ordinal))
+            .CommitAsync("feat(001-shipping): shipping", cancellationToken);
+
+        JsonNode trace = Check(await JudgeAsync(head, "001-shipping"), "trace");
+
+        Assert.Equal("FAIL", trace["verdict"]!.GetValue<string>());
+        Assert.Contains("behaviour changed — not structural", trace["why"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARedCommitLeavesStructuralTestsOutOfItsCycle()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await repository.CheckoutAsync("main", cancellationToken);
+        main = await repository.WriteCode(Implementation, string.Empty).CommitAsync("shipping", cancellationToken);
+        await repository.CheckoutAsync("001-shipping", cancellationToken);
+        await repository.MergeAsync("main", cancellationToken);
+        repository.Write("specs/001-shipping/spec.md", "# Feature Specification: Shipping\n\n## Requirements\n\n- **FR-001**: Free shipping MUST start at 100 kg\n- **FR-002** [structural]: Shipping MUST keep costing twice the weight\n")
+            .Write("tests/Shop.Tests/ShippingStructureTests.cs", "using Shop;\n\nnamespace Shop.Tests;\n\npublic sealed class ShippingStructureTests\n{\n    [Fact]\n    [Trait(\"Requirement\", \"FR-002\")]\n    public void ShippingStaysTwiceTheWeight() => Assert.Equal(4m, new Price().Shipping(2m));\n}\n");
+        const string FreeTest = "    [Fact]\n    [Trait(\"Requirement\", \"FR-001\")]\n    public void HeavyParcelsShipFree() => Assert.True(new Price().Free(100m));";
+        await repository.WriteCode(Implementation + "\n    public bool Free(decimal kilograms) => throw new NotImplementedException();", FreeTest)
+            .CommitAsync("test(001-shipping): red for US1", cancellationToken, null, "Lockflight-Red: 1");
+        string head = await repository.WriteCode(Implementation + "\n    public bool Free(decimal kilograms) => kilograms >= 100m;", FreeTest)
+            .CommitAsync("feat(001-shipping): US1", cancellationToken);
+
+        JsonNode document = await JudgeAsync(head, "001-shipping");
+
+        Assert.True(Check(document, "red")["verdict"]!.GetValue<string>() == "PASS", Check(document, "red").ToJsonString());
+        JsonNode trace = Check(document, "trace");
+        Assert.True(trace["verdict"]!.GetValue<string>() == "PASS", trace.ToJsonString());
+    }
+
     private async Task<string> StoryAsync(string requirements)
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;

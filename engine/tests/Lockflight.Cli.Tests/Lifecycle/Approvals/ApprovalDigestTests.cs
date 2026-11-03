@@ -41,6 +41,19 @@ public sealed class ApprovalDigestTests : IDisposable
     }
 
     [Fact]
+    public void TheDigestListsEachStructuralRequirementWithItsText()
+    {
+        Directory.CreateDirectory(Feature.SpecDirectory);
+        File.WriteAllText(Feature.SpecPath, "- **FR-001**: The API MUST return the streak\n- **FR-007** [structural]: The domain MUST NOT reference the web layer\n");
+        ApprovalStore store = new(Feature);
+
+        string digest = ApprovalDigest.Render(Feature, ApprovalPhase.Spec, store.Snapshot(ApprovalPhase.Spec), store.Check(ApprovalPhase.Spec), "k7m2qx");
+
+        Assert.Contains("Structural, traced by new tests that pass on the code before the change and at head, or architecture tests red there (1):", digest, StringComparison.Ordinal);
+        Assert.Contains("FR-007 The domain MUST NOT reference the web layer", digest, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ASnapshotHashesItsBytesLikeTheFileHash()
     {
         Directory.CreateDirectory(Feature.SpecDirectory);

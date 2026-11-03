@@ -11,7 +11,8 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 /// is flagged assertion-free but not rejected: a test may verify by letting the production code throw (a guard clause, a
 /// validator), which a static reading of the test code cannot tell from a test that verifies nothing. An accepted red keeps a snapshot
 /// of the tree (<see cref="RedSnapshots"/>). While the open cycle has an amend waiting, a red re-checks only the amended tests instead,
-/// on that snapshot (<see cref="AmendRecheck"/>).
+/// on that snapshot (<see cref="AmendRecheck"/>). New tests that name only <c>[structural]</c> requirements are left out of the cycle
+/// and said so: trace checks them on the start commit's code instead (<see cref="StructuralCheck"/>).
 /// </summary>
 /// <remarks>Each test's line is followed by why it got its class; <paramref name="verbose"/> adds the exception, the deciding stack
 /// frame with its source line, and the production call found.</remarks>
@@ -97,10 +98,22 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         }
 
         IReadOnlySet<string> known = record.KnownTests;
-        TestCase[] fresh = [.. inventory.Where(test => !known.Contains(test.Key))];
+        IReadOnlySet<string> structuralIds = StructuralCheck.IdsOf(session.Feature);
+        TestCase[] added = [.. inventory.Where(test => !known.Contains(test.Key))];
+        TestCase[] structural = [.. added.Where(test => StructuralCheck.IsStructural(test.Requirements, structuralIds))];
+        TestCase[] fresh = [.. added.Except(structural)];
+        if (structural.Length > 0)
+        {
+            await session.Output.WriteLineAsync(
+                $"Not part of this red: {structural.Length} structural tests ({string.Join(", ", structural.Take(RedGreenSession.MaxTestsListed).Select(test => TraceMatrix.ShortName(test.MethodFilter)))}) name only [structural] requirements; "
+                + $"no red/green cycle covers them: '{EngineCommand.Linked} trace' runs them on the start commit's code and here.");
+        }
+
         if (fresh.Length == 0)
         {
-            await session.FailAsync("no new tests since the baseline and earlier cycles; write the story's tests first", cancellationToken);
+            await session.FailAsync(structural.Length > 0
+                ? "no new tests besides structural ones, which need no red; run trace to check them, or write the story's tests first"
+                : "no new tests since the baseline and earlier cycles; write the story's tests first", cancellationToken);
             return null;
         }
 

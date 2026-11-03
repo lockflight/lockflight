@@ -129,11 +129,16 @@ internal static class CommentRenderer
         return $"<details{open}><summary>Spec changes ({lines} lines): {shown}</summary>\n\n{CommentText.Fenced(cut, "diff")}{note}\n</details>\n\n";
     }
 
-    /// <summary>The count of requirements trace left out as verified outside .NET, for the headline; empty when none.</summary>
+    /// <summary>
+    /// The counts of requirements trace left out as verified outside .NET and of structural requirements, for the headline; empty
+    /// when none.
+    /// </summary>
     private static string Excluded(JsonNode verdict) =>
-        verdict["trace"]?["excluded"] is JsonValue value && value.TryGetValue(out int count) && count > 0
-            ? $" · **{count} requirement{(count == 1 ? string.Empty : "s")} verified outside .NET**"
-            : string.Empty;
+        Count(verdict["trace"]?["excluded"], "requirement verified outside .NET", "requirements verified outside .NET")
+        + Count(verdict["trace"]?["structural"], "structural requirement", "structural requirements");
+
+    private static string Count(JsonNode? node, string one, string many) =>
+        node is JsonValue value && value.TryGetValue(out int count) && count > 0 ? $" · **{count} {(count == 1 ? one : many)}**" : string.Empty;
 
     /// <summary>Markers put on, changed on or taken off requirements the base already had, open above the checks.</summary>
     private static string MarkerChanges(JsonNode verdict)

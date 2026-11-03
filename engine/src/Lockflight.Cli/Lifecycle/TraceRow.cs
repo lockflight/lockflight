@@ -3,12 +3,22 @@ namespace Lockflight.Cli.Lifecycle;
 /// <summary>
 /// One requirement in the trace matrix: the red-then-green tests that still count for it (short <c>Class.Method</c> names), the
 /// ones that no longer do with the reason (e.g. <c>Shipping.FirstKilo (deleted or renamed)</c>), whether a test in an open
-/// cycle names it, and, for a requirement marked <c>[outside .NET: …]</c>, what its files say.
+/// cycle names it, for a requirement marked <c>[outside .NET: …]</c> what its files say, and for one marked <c>[structural]</c> its
+/// structural tests (those that count are among the tests).
 /// </summary>
 internal sealed record TraceRow(string RequirementId, IReadOnlyList<string> Tests, IReadOnlyList<string> Lost, bool Pending)
 {
     /// <summary>The files of the requirement's <c>[outside .NET: …]</c> marker; empty when it has none.</summary>
     public IReadOnlyList<OutsideFile> Outside { get; init; } = [];
+
+    /// <summary>Whether the requirement is marked <c>[structural]</c>.</summary>
+    public bool Structural { get; init; }
+
+    /// <summary>The requirement's structural tests that do not count, each with why (<see cref="StructuralCheck.Describe"/>).</summary>
+    public IReadOnlyList<string> NotStructural { get; init; } = [];
+
+    /// <summary>What the row's marker came to beyond its tests: the outside .NET files, or the structural tests that do not count; null when nothing.</summary>
+    public string? Note => OutsideNote ?? (NotStructural.Count > 0 ? string.Join("; ", NotStructural) : null);
 
     public bool Covered => Tests.Count > 0;
 

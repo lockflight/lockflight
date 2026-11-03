@@ -42,6 +42,9 @@ it; report it in the `Security note:` line of your final message.
   may be marked `- **FR-006** [outside .NET: web/src/app/streak-card.spec.ts]: …` (lowercase `outside`, before the colon;
   several paths comma-separated, never a file under `specs/`). Trace then leaves it out instead of failing it, but only while
   each named file exists and contains the ID, and the approval digest lists it for the user. Mark only what has no .NET side; a rule the API enforces stays a normal requirement with a .NET test.
+- **Structural requirements.** In a behaviour-preserving refactoring, a requirement that the change must keep, or an
+  architecture rule it establishes, may be marked `- **FR-007** [structural]: …`. Its tests then pass before and after the
+  change instead of going red. Anything whose behaviour changes stays a normal requirement.
 - **No open questions.** No `[NEEDS CLARIFICATION: …]` left.
 - **No placeholders.** No template text: no ALL-CAPS word in brackets (`[FEATURE NAME]`, `[DATE]`, and also `[US1]`,
   `[FR-001]`, `[API]`: write IDs and acronyms without brackets), no bracket holding `e.g.`, no `[###-…]`, no stock prompts
