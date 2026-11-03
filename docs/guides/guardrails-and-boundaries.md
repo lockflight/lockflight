@@ -32,7 +32,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 
 | Control | Label | Why |
 |---|---|---|
-| PreToolUse guard on protected paths (Edit/Write, and the common Bash and PowerShell writes) | G | it catches common accidental writes; a command whose writes it does not parse (a script, an interpreter, a pipeline into `xargs`, a `cd` before a relative path) is allowed. Test-file hashes at green and review, and the CI gates, catch what it misses |
+| PreToolUse guard on protected paths (Edit/Write, and the common Bash and PowerShell writes) | G | it catches common accidental writes; a command whose writes it does not parse (a script, an interpreter, a pipeline into `xargs`, a relative path after a `cd` to a variable) is allowed. Test-file hashes at green and review, and the CI gates, catch what it misses |
 | Human-only commands refused inside Claude Code (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `update`) | G | detected via `CLAUDECODE=1` and command tokens, also inside one level of a literal command string (`bash -c '…'`, `eval '…'`, `pwsh -Command '…'`); `--help` or `-h` passes, because the engine then only prints its usage (the guard counts it only when the engine is the program itself, not under a wrapper such as `xargs` or `find -exec`, and not when the command line defines a function or alias); the variable can be unset |
 | `init --speckit-preset` (the Spec Kit upgrade) refused inside Claude Code | G | the engine refuses it when `CLAUDECODE=1` is set (the variable can be unset), and the guard blocks a shell command that runs it, as it does a human-only command. The rest of `init` runs for the agent too, but only the init that creates `lockflight.yaml` marks features as predating Lockflight, and units for an existing manifest are printed for you to add |
 | In-session human commands (`/lockflight:approve`, `/lockflight:baseline`, `/lockflight:reset`, `/lockflight:amend`, typed by you) | G | They work only in an interactive session, and bind the decision to what the engine showed you: the artifacts' content, the entries a baseline accepts and the state of the files, the red/green record's exact bytes, the amended test and its reason. A prompt Claude Code starts by itself (a scheduled task, a loop, a message from another session) expands slash commands like a typed one: Claude Code's documentation says `UserPromptExpansion` runs for user-typed commands, but a live probe saw it fire for a prompt a `CronCreate` task queued, so this is re-probed before every release. The guard therefore blocks any tool call other than a file read or write whose input mentions one of the four commands (a Bash command, a scheduled task, a message, a subagent prompt), and every write, by a file tool or a shell command, to the files Claude Code reads such prompts from (`.claude/scheduled_tasks.json`, `.claude/loop.md`, `.claude/routines/`, `.claude/mailbox/` and team inboxes under `~/.claude/teams/`); the code is shown in the session transcript, so it binds content, it is not a secret; a fifth wrong code discards it, and a typed command is refused rather than passed on to the agent when the engine is missing or fails. It cannot stop a message sent from a session outside this project, a write to those files the guard does not see (a script, an interpreter), or an agent that drives your terminal (tmux, AppleScript). The boundary is the platform's review of the pull request, with CODEOWNERS on `specs/**` ([CI hardening](ci-hardening.md#approvals-of-record-the-platforms-review)). |
@@ -119,8 +119,10 @@ It recognises:
   under that name.
   `scripts/dev-install.sh` run from a sandboxed session now fails there; run it in your own terminal.
 
-A relative path is checked against the session's working directory, as written: a `cd` earlier in the same command line is not
-followed. A command that may rewrite a whole directory (`git restore .`, `git checkout -- <dir>`, `rm -r`, `git clean`) is
+A relative path is checked against the session's working directory, as written, and, after a literal `cd`, `pushd`/`popd` or
+`Set-Location` earlier in the same command line, also in the folder it moved to (`cd tests && rm FooTests.cs` is judged as
+`FooTests.cs` and as `tests/FooTests.cs`), so a move never hides a write; it may block one the move made harmless
+(`cd ~ && rm -rf .lockflight`). A move inside a subshell, a substitution or a nested shell ends with it. A command that may rewrite a whole directory (`git restore .`, `git checkout -- <dir>`, `rm -r`, `git clean`) is
 blocked when a locked test project or a protected file lies inside it; for rules without a fixed directory
 (`**/Directory.Build.props`) the files that exist there are checked, and a directory is walked only for the rules that could
 match below it. Because `lockflight.yaml` sits at the root, whole-repository rewrites such as `git stash`, `git restore .`,
@@ -134,7 +136,8 @@ It does **not** see, and so allows:
 - **script files** (`./fix.sh`, `bash fix.sh`), commands a shell reads on stdin (`bash <<EOF`, `curl … | sh`), a shell inside a
   nested command string, and other runners (`find -exec`, `find -delete`, `parallel`, `watch`, `script`, `ssh`, `tmux`);
 - the files `xargs` or `while read` get from a pipe, and paths built from variables or command output;
-- a relative path after a `cd` (`cd tests && rm FooTests.cs` is judged as `FooTests.cs` in the working directory);
+- the folder a `cd` to a variable, to `-` or to a pattern moves to (later relative paths are judged as written), and a
+  `$PWD` after a `cd` (taken as the session's folder);
 - other writers: `ln`, `rsync`, `tar`, `unzip`, `patch`, `dd`, `curl -o`, `wget -O`, `sort -o`, `chmod`, `Rename-Item`,
   `Set-Item`, `Invoke-WebRequest -OutFile`, `Expand-Archive`, `robocopy`, `xcopy`, .NET file APIs;
 - **git commands that switch the working tree to committed states** (`git switch <branch>`, `git checkout <branch>`,

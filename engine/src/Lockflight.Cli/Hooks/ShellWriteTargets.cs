@@ -5,10 +5,13 @@ namespace Lockflight.Cli.Hooks;
 /// <summary>
 /// Finds the common writes in a shell command line, to catch accidents: output redirections (<c>&gt;</c>, <c>&gt;&gt;</c>,
 /// <c>2&gt;</c>, <c>&amp;&gt;</c>), the writers known to <see cref="CommandWriters"/>, the commands inside substitutions and subshells,
-/// and the literal command string of one nested shell (<c>bash -c '…'</c>, <c>pwsh -Command '…'</c>, <c>eval '…'</c>). Nothing else
-/// is followed: a <c>cd</c> before a relative path, variables other than <c>$HOME</c> and <c>$PWD</c>, what <c>xargs</c> reads,
-/// a shell inside a nested shell, scripts, interpreters and build tools are not seen, and what is not seen is allowed. A guardrail
-/// against accidents, not a boundary.
+/// and the literal command string of one nested shell (<c>bash -c '…'</c>, <c>pwsh -Command '…'</c>, <c>eval '…'</c>). A relative
+/// target after a literal <c>cd</c>, <c>pushd</c>, <c>popd</c> or <c>Set-Location</c> is judged as written and in the folder it moved
+/// to, until a subshell or substitution that moved ends (<see cref="WorkingFolder"/>), so a move never hides a write but may block
+/// one it made harmless (<c>cd ~ &amp;&amp; rm -rf .lockflight</c>). Nothing else is followed: a <c>cd</c> to a variable,
+/// <c>-</c> or a pattern leaves later targets where they were, <c>$PWD</c> stays the session's folder, and variables other than
+/// <c>$HOME</c> and <c>$PWD</c>, what <c>xargs</c> reads, a shell inside a nested shell, scripts, interpreters and build tools are
+/// not seen, and what is not seen is allowed. A guardrail against accidents, not a boundary.
 /// </summary>
 internal sealed class ShellWriteTargets
 {
@@ -19,6 +22,7 @@ internal sealed class ShellWriteTargets
     private readonly List<string> files = [];
     private readonly List<string> trees = [];
     private readonly List<string> sourceTrees = [];
+    private readonly WorkingFolder folder = new();
     private string? humanOnly;
     private string? humanOnlyIgnoringHelp;
 
@@ -45,7 +49,7 @@ internal sealed class ShellWriteTargets
             switch (token.Kind)
             {
                 case ShellTokenKind.Word when pending == ShellTokenKind.WriteRedirect:
-                    files.Add(token.Text);
+                    files.AddRange(folder.Locate(token.Text));
                     break;
                 case ShellTokenKind.Word when pending is null:
                     words.Add(token.Text);
@@ -57,12 +61,12 @@ internal sealed class ShellWriteTargets
                 case ShellTokenKind.SubshellOpen:
                     // A subshell is a command of its own, and so were the words before it.
                     Run(words, dialect, nested);
-                    groups.Push(new OpenGroup([], null));
+                    groups.Push(new OpenGroup([], null, folder.Save()));
                     words = [];
                     break;
                 case ShellTokenKind.SubstitutionOpen or ShellTokenKind.GroupOpen:
                     // The enclosing command continues after it: its output stands for a word, or for a redirection's target.
-                    groups.Push(new OpenGroup(words, pending));
+                    groups.Push(new OpenGroup(words, pending, folder.Save()));
                     words = [];
                     break;
                 case ShellTokenKind.Close:
@@ -72,6 +76,7 @@ internal sealed class ShellWriteTargets
                     {
                         words = group.Words;
                         redirect = group.Redirect;
+                        folder.Restore(group.Folder);
                     }
 
                     break;
@@ -94,16 +99,24 @@ internal sealed class ShellWriteTargets
         {
             if (!nested)
             {
+                // The nested shell starts where its parent is, and its moves end with it.
+                WorkingFolder.State saved = folder.Save();
                 Scan(text, nestedDialect, nested: true);
+                folder.Restore(saved);
             }
 
             return;
         }
 
+        if (folder.Follow(command, dialect))
+        {
+            return;
+        }
+
         CommandWrites writes = CommandWriters.Of(command, dialect);
-        files.AddRange(writes.Files);
-        trees.AddRange(writes.Trees);
-        sourceTrees.AddRange(writes.SourceTrees);
+        files.AddRange(writes.Files.SelectMany(folder.Locate));
+        trees.AddRange(writes.Trees.SelectMany(folder.Locate));
+        sourceTrees.AddRange(writes.SourceTrees.SelectMany(folder.Locate));
     }
 
     /// <summary>
@@ -156,6 +169,9 @@ internal sealed class ShellWriteTargets
 
     private static List<string> Distinct(List<string> paths) => [.. paths.Where(path => path.Length > 0).Distinct(StringComparer.Ordinal)];
 
-    /// <summary>An open substitution, subshell or PowerShell group: the words of the command around it, and the redirection it is the target of.</summary>
-    private sealed record OpenGroup(List<string> Words, ShellTokenKind? Redirect);
+    /// <summary>
+    /// An open substitution, subshell or PowerShell group: the words of the command around it, the redirection it is the target of,
+    /// and the folder it started in.
+    /// </summary>
+    private sealed record OpenGroup(List<string> Words, ShellTokenKind? Redirect, WorkingFolder.State Folder);
 }

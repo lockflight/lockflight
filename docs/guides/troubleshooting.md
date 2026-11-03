@@ -173,7 +173,7 @@ printed `git apply` command at the project root. See
 ## A shell write is allowed although it touches a protected file
 
 The guard catches common accidental writes (redirections, `tee`, `cp`/`mv`, `sed -i`, `rm`, `git checkout`/`restore`,
-`dotnet format`, their PowerShell equivalents). It does not follow a `cd` before a relative path, variables, `xargs`, scripts
+`dotnet format`, their PowerShell equivalents). It follows a literal `cd`, but not a `cd` to a variable, other variables, `xargs`, scripts
 or interpreters, and allows what it does not parse. A changed test file is still caught by its red-time hash at
 `redgreen green` and at review, and a protected path by CI. See
 [what the shell write detection sees](guardrails-and-boundaries.md#what-the-shell-write-detection-sees).
