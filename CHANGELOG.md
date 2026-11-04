@@ -5,6 +5,56 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-11-04
+
+0.3.1 comes from running the whole lifecycle on real projects, including a large behaviour-preserving refactoring. Approving
+the spec or the tasks takes one typed step and is offered when it is due; requirements that Lockflight cannot test in .NET,
+and structural requirements of a refactoring, have markers that trace checks and the judge shows; red runs tests as
+`dotnet test` does; and CI on a pull request takes about 12 minutes instead of about 40.
+
+### Changed
+- **One-step approval in the session.** `/lockflight:approve` (the phase is optional; the waiting one is chosen) records the
+  approval at once, bound to the files' hashes. Content changed since the agent's last turn ended is shown first, and the
+  same command then approves what was shown. When a phase check passes and its approval is missing or stale, the person is
+  offered the approval at the end of the agent's turn and on the status line. Baseline, reset and amend keep their two
+  steps (#247, #257, earlier #230).
+- **Ticking a task (`- [x]`) leaves the tasks approval valid**; any other edit still makes it stale (#225).
+- **Red runs each test app as `dotnet test` does** (its output folder, a VSTest run's runsettings environment), prints a
+  repro command, and re-runs a GREEN_BEFORE test through plain `dotnet test`, warning when the outcome differs (#249).
+- **The reviewer's diff collapses moves and renames**, so a large refactoring fits the diff limit (#236).
+- **The generated GitHub workflow is named `lockflight`**; its status contexts (`gates`, `lockflight/judge`) are unchanged.
+  The judge's comment says when its verdict is advisory (#251).
+- **An implementation heading wins over a test file name** in a task's text (#237). Facts count architecture test projects
+  without an architecture library (#238).
+- **Generated CI headers** say what is read from the base branch instead of claiming a pull request cannot loosen its own
+  checks; policy loosenings are listed in full (#219).
+- **`workspace sync` is deprecated** in favour of the shell pointer (`init --unit-of`); it still works and says so (#223).
+
+### Added
+- **`[outside .NET: <path>]`** on a requirement: trace reports it as verified outside Lockflight when the named file exists
+  and names it, never as covered; all excluded is N/A, not PASS (#250).
+- **`[structural]`** on a requirement: its tests leave red/green and count when they pass at head and on the code before the
+  change; a test that fails there without calling production code counts as the rule the change establishes (#252).
+- **The approval digest and the judge's comment list and count both markers**, and call out a marker changed on a
+  requirement the base already had (#250, #252).
+- **`update --project --judge-workflow`** moves a 0.2 gates-only GitHub workflow to the CI judge's after showing the diff
+  (#251).
+- **`init` reports the time to first green** once (#222). **`doctor`** warns when a new GitHub repository has not run the
+  workflow on push or pull request, when patch coverage has no collector, and when EF Core migrations have no pinned
+  `dotnet-ef`; `init` gives the same advice (#227, #228, #240, #248).
+- **A host-tampering finding shows the exact baseline entry** that accepts it (#253).
+- **`redgreen red` warns** when a later cycle's tests land in a test file an earlier red already had (#231); the amend
+  output says where its re-check runs (#235).
+
+### Fixed
+- **Guard:** follows a literal `cd`, `pushd`/`popd` and `Set-Location` (#221); reads here-documents and empty words as bash
+  and zsh do (#239); a shell command that only writes literal text to files can save a note that mentions a session command
+  (#226); a blocked whole-tree git rewrite names a safer command (#229); the recovery command names the install by its
+  absolute path (#224).
+- **Policy:** the loosening check compares globs by what they match, so rewriting `src/Payments/**` to `src/**` in a
+  protected or critical list is no longer named a loosening (#220).
+- **The review skill stashes by name** instead of `git stash -u`, which the guard blocks (#234).
+
 ## [0.3.0] — 2026-10-31
 
 0.3.0 makes a CI check the judge of record and the plugin the local assistant. The CI judge re-runs each red commit,
@@ -534,7 +584,8 @@ The first public release. Earlier versions were private previews; this entry sum
 - Levi, the pixel lock-keeper, in your terminal and, if you like, in Claude Code's status line (`lockflight statusline`). Only
   people see him.
 
-[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/lockflight/lockflight/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.9...v0.3.0
 [0.2.0-alpha.9]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.8...v0.2.0-alpha.9
 [0.2.0-alpha.8]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.7...v0.2.0-alpha.8
