@@ -62,6 +62,19 @@ public sealed class TemplatesTests
     }
 
     [Fact]
+    public void TheWorkflowIsNamedForBothChecksAndKeepsTheirStatusContexts()
+    {
+        string workflow = Templates.Workflow(["10.0.x"], CiTrigger.Manual, developmentPin: false);
+
+        Assert.Contains("\nname: lockflight\n", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("lockflight-gates", workflow.Replace(Templates.WorkflowPath, string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+        Assert.Contains("Actions → lockflight → Run workflow", workflow, StringComparison.Ordinal);
+        Assert.Contains("context: gates\n", workflow, StringComparison.Ordinal);
+        Assert.Contains("context: lockflight/judge\n", workflow, StringComparison.Ordinal);
+        Assert.Equal(".github/workflows/lockflight-gates.yml", Templates.WorkflowPath);
+    }
+
+    [Fact]
     public void NoPullRequestValueIsInterpolatedIntoAScriptAndOnlyTheReportPostsComments()
     {
         string[] lines = Templates.Workflow(["10.0.x"]).Split('\n');

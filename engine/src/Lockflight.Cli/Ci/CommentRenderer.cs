@@ -15,6 +15,13 @@ internal static class CommentRenderer
     public const string Marker = "<!-- lockflight:ci:v1";
     public const int MaxCommentLength = 65_536;
 
+    private const string AdvisoryMark = " (advisory — would block if required)";
+
+    private const string AdvisoryNote =
+        "> `lockflight/judge` blocks a merge only where the platform requires that check (a ruleset or branch protection, a merge "
+        + "check, a pipeline policy); Lockflight cannot see which, and `gates` passed. Fix what the judge found (`lockflight ci` gives "
+        + "the same verdict locally), or, where the check is not required, merge knowing it blocks nothing.";
+
     private const string Disclaimer = "this comment says what the CI re-ran; it does not show the tests were written first.";
     private const string Truncated = "\n… more in the job summary\n";
 
@@ -134,10 +141,25 @@ internal static class CommentRenderer
             ? $"Spec: {CommentText.Code(spec["path"]?.GetValue<string>())} from the workspace shell {CommentText.Code(spec["shell"]?["url"]?.GetValue<string>())} at `{Short(spec["shell"]?["commit"]?.GetValue<string>() ?? string.Empty)}`\n\n"
             : string.Empty;
 
-    private static string Contexts(JsonNode verdict) =>
-        verdict["contexts"] is JsonObject contexts
-            ? $"Status: {string.Join(" · ", contexts.Select(context => $"{CommentText.Code(context.Key)} {CommentText.Plain(context.Value?.GetValue<string>())}"))}\n\n"
-            : string.Empty;
+    /// <summary>
+    /// The status contexts and their verdicts. A <c>lockflight/judge</c> that did not pass while <c>gates</c> did is marked advisory, with
+    /// what to do: it blocks a merge only where a person made it a required check, which the report cannot see.
+    /// </summary>
+    private static string Contexts(JsonNode verdict)
+    {
+        if (verdict["contexts"] is not JsonObject contexts)
+        {
+            return string.Empty;
+        }
+
+        string gates = StatusContextNames.ToName(StatusContext.Gates);
+        string judge = StatusContextNames.ToName(StatusContext.Judge);
+        string pass = CheckVerdictNames.ToName(CheckVerdict.Pass);
+        bool advisory = contexts[gates]?.GetValue<string>() == pass && contexts[judge]?.GetValue<string>() is string judged && judged != pass;
+        string line = string.Join(" · ", contexts.Select(context =>
+            $"{CommentText.Code(context.Key)} {CommentText.Plain(context.Value?.GetValue<string>())}{(advisory && context.Key == judge ? AdvisoryMark : string.Empty)}"));
+        return advisory ? $"Status: {line}\n\n{AdvisoryNote}\n\n" : $"Status: {line}\n\n";
+    }
 
     private static IEnumerable<string> Sections(JsonNode verdict)
     {
