@@ -242,8 +242,7 @@ Lockflight is free and MIT-licensed. CI time grows with the number of red commit
 
 ## Status
 
-**Alpha.** The engine has thousands of unit tests and end-to-end suites on macOS, Linux and Windows, and Lockflight is built
-with its own lifecycle. Expect rough edges; [the changelog](CHANGELOG.md) says what changed and how to upgrade.
+**Alpha.** The engine has thousands of unit tests and end-to-end suites on macOS, Linux and Windows. Expect rough edges; [the changelog](CHANGELOG.md) says what changed and how to upgrade.
 
 ## Documentation
 
@@ -268,4 +267,4 @@ find it.
 
 ## License
 
-[MIT](LICENSE). Built with its own lifecycle; Levi keeps the lock.
+[MIT](LICENSE). Levi keeps the lock.
