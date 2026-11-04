@@ -26,6 +26,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
     private const string SourceOption = "--source";
     private const string DryRunOption = "--dry-run";
     private const string ProjectOption = "--project";
+    private const string JudgeWorkflowOption = "--judge-workflow";
 
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
@@ -34,7 +35,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         switch (options)
         {
             case [ProjectOption, ..] when ProjectArguments(options[1..]) is { } project:
-                return await UpdateProjectAsync(project.DryRun, project.Feed, cancellationToken);
+                return await UpdateProjectAsync(project.DryRun, project.Feed, project.JudgeWorkflow, cancellationToken);
             case []:
                 feed = null;
                 break;
@@ -42,7 +43,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
                 feed = value;
                 break;
             default:
-                await context.Error.WriteLineAsync($"lockflight: update takes only {SourceOption} <feed> (a package source URL or folder); `update --project {DryRunOption}` shows what the project step would change");
+                await context.Error.WriteLineAsync($"lockflight: update takes only {SourceOption} <feed> (a package source URL or folder); `update --project {DryRunOption}` shows what the project step would change, and `update --project {JudgeWorkflowOption}` replaces a gates-only GitHub workflow with the CI judge's");
                 return ExitCode.Config;
         }
 
@@ -120,17 +121,35 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         return ExitCode.Pass;
     }
 
-    /// <summary>The new engine updates the project, so the pin names its own version and the block is its own text.</summary>
-    /// <summary>The options after <c>--project</c>: <c>--dry-run</c> and <c>--source &lt;feed&gt;</c>, in any order; null when others are given.</summary>
-    private static (bool DryRun, string? Feed)? ProjectArguments(string[] rest) => rest switch
+    /// <summary>
+    /// The options after <c>--project</c>, in any order: <c>--dry-run</c>, <c>--source &lt;feed&gt;</c> and <c>--judge-workflow</c>; null
+    /// when another is given or one is given twice.
+    /// </summary>
+    private static (bool DryRun, string? Feed, bool JudgeWorkflow)? ProjectArguments(string[] rest)
     {
-        [] => (false, null),
-        [DryRunOption] => (true, null),
-        [SourceOption, string feed] when feed.Length > 0 => (false, feed),
-        [DryRunOption, SourceOption, string feed] when feed.Length > 0 => (true, feed),
-        [SourceOption, string feed, DryRunOption] when feed.Length > 0 => (true, feed),
-        _ => null,
-    };
+        bool dryRun = false;
+        bool judgeWorkflow = false;
+        string? feed = null;
+        for (int index = 0; index < rest.Length; index++)
+        {
+            switch (rest[index])
+            {
+                case DryRunOption when !dryRun:
+                    dryRun = true;
+                    break;
+                case JudgeWorkflowOption when !judgeWorkflow:
+                    judgeWorkflow = true;
+                    break;
+                case SourceOption when feed is null && index + 1 < rest.Length && rest[index + 1].Length > 0 && !rest[index + 1].StartsWith("--", StringComparison.Ordinal):
+                    feed = rest[++index];
+                    break;
+                default:
+                    return null;
+            }
+        }
+
+        return (dryRun, feed, judgeWorkflow);
+    }
 
     private async Task<ExitCode> HandOverAsync(string home, string? feed, CancellationToken cancellationToken)
     {
@@ -156,7 +175,8 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
 
     /// <param name="dryRun">Print what would change and write nothing.</param>
     /// <param name="feed">Where the release's hashes are read from for the engine lock; null for <c>LOCKFLIGHT_NUGET_FEED</c>, else nuget.org.</param>
-    private async Task<ExitCode> UpdateProjectAsync(bool dryRun, string? feed, CancellationToken cancellationToken)
+    /// <param name="judgeWorkflow">Replace a gates-only GitHub workflow Lockflight wrote with the CI judge's (<see cref="JudgeWorkflowMigration"/>).</param>
+    private async Task<ExitCode> UpdateProjectAsync(bool dryRun, string? feed, bool judgeWorkflow, CancellationToken cancellationToken)
     {
         ManifestLoadResult loaded = ManifestLocator.Discover(context.WorkingDirectory);
         if (loaded.Error is ManifestError invalid)
@@ -210,9 +230,18 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             root, ToolPin.RunningVersion, context.Engine.Path, feed is null ? EnginePackageFeed.FromEnvironment(context.Environment) : new EnginePackageFeed(feed, context.Environment),
             GitHubReleaseHashes.FetchAsync, context.Processes, cancellationToken);
         await PlanLockAsync(root, lockPlan, writes, cancellationToken);
+
+        // The CI judge's workflow runs the engine the target branch pins, so it cannot arrive with the pin that brings that engine.
+        bool engineMoves = pinChanged || (lockPlan.Committed && writes.Any(write => write.Path == lockPlan.LockPath));
+        JudgeWorkflowUpdate workflowUpdate = await PlanJudgeWorkflowAsync(root, writes, judgeWorkflow, engineMoves, dryRun, lockPlan.Committed, cancellationToken);
+        if (workflowUpdate == JudgeWorkflowUpdate.Refused)
+        {
+            return ExitCode.Config;
+        }
+
         if (lockPlan.Committed)
         {
-            await PlanCiFilesAsync(root, writes, dryRun, cancellationToken);
+            await PlanCiFilesAsync(root, writes, dryRun, skipWorkflow: workflowUpdate == JudgeWorkflowUpdate.Planned, cancellationToken);
         }
 
         string claudeMd = Path.Combine(root, "CLAUDE.md");
@@ -327,9 +356,9 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
     /// be found exactly as Lockflight wrote them is left alone, and the new step is written to
     /// <c>.lockflight/local/migration/&lt;path&gt;</c> for a person to merge.
     /// </summary>
-    private async Task PlanCiFilesAsync(string root, List<PlannedWrite> writes, bool dryRun, CancellationToken cancellationToken)
+    private async Task PlanCiFilesAsync(string root, List<PlannedWrite> writes, bool dryRun, bool skipWorkflow, CancellationToken cancellationToken)
     {
-        foreach (string relative in CiStepMigration.KnownFiles)
+        foreach (string relative in CiStepMigration.KnownFiles.Where(file => !skipWorkflow || file != Templates.WorkflowPath))
         {
             string path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
             if (!File.Exists(path))
@@ -358,6 +387,63 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             Directory.CreateDirectory(Path.GetDirectoryName(fallback)!);
             await File.WriteAllTextAsync(fallback, $"# Replace the engine install step of {relative} with this, and add .lockflight/engine.lock and .lockflight/ci to its policy restore; on Azure and GitLab take a pull request's base from the target branch's tip, as lockflight init writes it:\n{CiShellScripts.InstallEngine}\n", cancellationToken);
             await context.Output.WriteLineAsync($"note: {relative} does not hold the engine install step or the pull request's base as Lockflight wrote it, so it was left alone; merge {Path.GetRelativePath(root, fallback).Replace('\\', '/')} into it by hand");
+        }
+    }
+
+    /// <summary>
+    /// The GitHub workflow's move to the CI judge's. A gates-only workflow Lockflight wrote is replaced with <paramref name="replace"/>
+    /// (refused while <paramref name="engineMoves"/>: the new workflow runs the engine the target branch pins, so the pin is merged
+    /// first); without it, the option is named, and under <paramref name="dryRun"/> the diff shown. A gates-only workflow with a
+    /// person's edits is refused with <paramref name="replace"/>, noted without. A 0.3.0 judge workflow is renamed here when no
+    /// committed lock lets the CI step migration do it.
+    /// </summary>
+    private async Task<JudgeWorkflowUpdate> PlanJudgeWorkflowAsync(
+        string root, List<PlannedWrite> writes, bool replace, bool engineMoves, bool dryRun, bool lockCommitted, CancellationToken cancellationToken)
+    {
+        string path = Path.Combine(root, Templates.WorkflowPath.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(path))
+        {
+            return JudgeWorkflowUpdate.Unchanged;
+        }
+
+        string text = await File.ReadAllTextAsync(path, cancellationToken);
+        JudgeWorkflowPlan plan = JudgeWorkflowMigration.Plan(text, EngineVersion.IsDevelopmentBuild(ToolPin.RunningVersion));
+        string command = $"lockflight update --project {JudgeWorkflowOption}";
+        switch (plan.Status)
+        {
+            case JudgeWorkflowStatus.Recognised when replace && engineMoves:
+                await context.Error.WriteLineAsync(
+                    $"lockflight: this update also moves the engine pin, and the CI judge's workflow runs the engine the target branch pins, so it cannot come in the same pull request; nothing was changed. Run `lockflight update --project`, merge that, then run `{command}` in a second pull request");
+                return JudgeWorkflowUpdate.Refused;
+            case JudgeWorkflowStatus.Recognised when replace:
+                writes.Add(new PlannedWrite(Templates.WorkflowPath, path, text, plan.Replacement));
+                return JudgeWorkflowUpdate.Planned;
+            case JudgeWorkflowStatus.Recognised:
+                await context.Output.WriteLineAsync(
+                    $"note: {Templates.WorkflowPath} runs the gates only. The CI judge's workflow also re-runs each red commit, green at head and trace, and sets the lockflight/judge status next to gates (whose name stays). "
+                    + $"To move to it, run `{command}` in a branch{(engineMoves ? " once this update's engine pin is merged" : string.Empty)} and merge it with a person's review{(dryRun ? "; it would change the file so (not part of this update):" : "; `--dry-run` with it shows the diff.")}");
+                if (dryRun)
+                {
+                    await context.Output.WriteLineAsync(await new PlannedWrite(Templates.WorkflowPath, path, text, plan.Replacement).DiffAsync(cancellationToken));
+                }
+
+                return JudgeWorkflowUpdate.Unchanged;
+            case JudgeWorkflowStatus.Edited when replace:
+                await context.Error.WriteLineAsync(
+                    $"lockflight: {Templates.WorkflowPath} runs the gates only but was edited outside the lines Lockflight wrote, so update does not replace it; nothing was changed. Move your edits by hand: in a branch, delete it, run `lockflight init` to write the CI judge's workflow, and add them back");
+                return JudgeWorkflowUpdate.Refused;
+            case JudgeWorkflowStatus.Edited:
+                await context.Output.WriteLineAsync(
+                    $"note: {Templates.WorkflowPath} runs the gates only and was edited outside the lines Lockflight wrote; to move to the CI judge's workflow, delete it in a branch, run `lockflight init`, and add your edits back");
+                return JudgeWorkflowUpdate.Unchanged;
+            default:
+                if (!lockCommitted && CiStepMigration.Migrate(text) is string renamed && renamed != text && text.Contains("mode: judge", StringComparison.Ordinal))
+                {
+                    writes.Add(new PlannedWrite(Templates.WorkflowPath, path, text, renamed));
+                    return JudgeWorkflowUpdate.Planned;
+                }
+
+                return JudgeWorkflowUpdate.Unchanged;
         }
     }
 

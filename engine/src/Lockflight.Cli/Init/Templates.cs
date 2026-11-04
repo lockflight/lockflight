@@ -23,7 +23,7 @@ internal static class Templates
         """;
 
     private const string ManualTrigger = """
-        # Runs only when started by hand (Actions → lockflight-gates → Run workflow), written by `lockflight init --ci manual`.
+        # Runs only when started by hand (Actions → lockflight → Run workflow), written by `lockflight init --ci manual`.
         # To judge every pull request, replace this block with the pull_request and push (branches: [main]) triggers.
         on:
           workflow_dispatch:
@@ -32,7 +32,7 @@ internal static class Templates
     private const string PreviewTrigger = """
         # CI during the preview: this project pins a development build of the engine (built from source by
         # scripts/dev-install.sh), which no package feed has, so the engine install below cannot pass yet and `lockflight init`
-        # made this workflow run only when started by hand (Actions → lockflight-gates → Run workflow). Once the project pins a
+        # made this workflow run only when started by hand (Actions → lockflight → Run workflow). Once the project pins a
         # published release, replace this block with the pull_request and push (branches: [main]) triggers.
         on:
           workflow_dispatch:
@@ -91,7 +91,7 @@ internal static class Templates
         # guardrail, not a boundary: it blocks a merge only where a ruleset or branch protection requires the check. Route
         # .github/workflows/** and .github/actions/** to a code owner: GitHub runs the pull request's own copy of this file.
         # judge's timeout is ci.timeoutMinutes (45) + 10.
-        name: lockflight-gates
+        name: lockflight
 
         on:
           pull_request:

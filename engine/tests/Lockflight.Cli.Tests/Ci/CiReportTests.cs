@@ -112,6 +112,32 @@ public sealed class CiReportTests : IDisposable
     }
 
     [Fact]
+    public void AJudgeThatFailsWhileTheGatesPassSaysItIsAdvisoryAndWhatToDo()
+    {
+        string comment = CommentRenderer.Render(CiReportCommand.Join(Evidence(redVerdict: "FAIL"), Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("Status: `gates` PASS · `lockflight/judge` FAIL (advisory — would block if required)", comment, StringComparison.Ordinal);
+        Assert.Contains("> `lockflight/judge` blocks a merge only where the platform requires that check", comment, StringComparison.Ordinal);
+        Assert.Contains("lockflight ci", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AJudgeThatPassesIsNotCalledAdvisory() =>
+        Assert.DoesNotContain("advisory —", CommentRenderer.Render(CiReportCommand.Join(Evidence(), Head, null), CommentRenderer.MaxCommentLength), StringComparison.Ordinal);
+
+    [Fact]
+    public void AJudgeThatFailsWithTheGatesIsNotCalledAdvisory()
+    {
+        JsonObject evidence = Evidence(redVerdict: "FAIL");
+        evidence["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == "gates")!["verdict"] = "FAIL";
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("`gates` FAIL", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("advisory —", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WithoutAReviewAnAdvisoryReviewDoesNotBlock() =>
         Assert.Equal("PASS", CiReportCommand.Join(Evidence(), Head, null)["verdict"]!.GetValue<string>());
 
