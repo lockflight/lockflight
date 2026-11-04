@@ -100,7 +100,7 @@ def banner(dark):
         f'<circle cx="1010" cy="200" r="250" fill="none" stroke="{ring}" stroke-opacity="0.18" stroke-width="2"/>'
         f'<text x="88" y="168" font-family="{FONT}" font-size="96" font-weight="800" letter-spacing="-3" fill="{title}">Lockflight</text>'
         f'<text x="92" y="232" font-family="{FONT}" font-size="38" font-weight="700" fill="{accent}">LLMs propose. Checks decide.</text>'
-        f'<text x="92" y="288" font-family="{FONT}" font-size="22" fill="{body}">Gated, spec-driven delivery for Claude Code agents on .NET.</text>'
+        f'<text x="92" y="288" font-family="{FONT}" font-size="22" fill="{body}">Test-first guardrails for AI coding agents on .NET.</text>'
         f'<g shape-rendering="crispEdges">{rects("pass", 850, 70, 15)}</g></svg>\n')
 
 
@@ -118,7 +118,7 @@ def social_preview():
         '<circle cx="1010" cy="320" r="250" fill="none" stroke="#7FE3EC" stroke-opacity="0.18" stroke-width="2"/>'
         f'<text x="88" y="288" font-family="{FONT}" font-size="96" font-weight="800" letter-spacing="-3" fill="#FFFFFF">Lockflight</text>'
         f'<text x="92" y="352" font-family="{FONT}" font-size="38" font-weight="700" fill="#7FE3EC">LLMs propose. Checks decide.</text>'
-        f'<text x="92" y="408" font-family="{FONT}" font-size="22" fill="#B7C9D1">Gated, spec-driven delivery for Claude Code agents on .NET.</text>'
+        f'<text x="92" y="408" font-family="{FONT}" font-size="22" fill="#B7C9D1">Test-first guardrails for AI coding agents on .NET.</text>'
         f'<g shape-rendering="crispEdges">{rects("pass", 850, 190, 15)}</g></svg>\n')
 
 

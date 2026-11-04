@@ -4,16 +4,8 @@ The shortest path to a first `PASS` from the CI judge, on a new .NET solution, i
 make one red commit (a failing test and a stub), one commit that makes it pass, and run the judge on the branch. The judge
 re-runs both and gives the verdict. The same command runs in the GitHub Action.
 
-> [!NOTE]
-> **The CI judge ships in Lockflight 0.3.0, which is not released yet.** The latest prerelease on nuget.org
-> (`0.2.0-alpha.9`) has the gates workflow but not the judge, `init --ci-only` or `init --native`. Until 0.3.0 is out,
-> install from source as below and run the judge on your machine. The GitHub workflow `init` writes for a development build
-> runs only when started by hand and cannot install that build, so the [GitHub steps](#4-on-github) apply from 0.3.0 on.
-
-**Measured:** 1 minute 17 seconds of machine time from `git clone` to `PASS`, on an Apple M1 Pro with the .NET 10.0.102 SDK
-and an empty NuGet package cache: 51 s to clone and install the engine from source, 6 s to create the solution and run
-`init`, 20 s for the judge. Typing the commands and the network add to that; a slower machine or a cold `dotnet` first run
-take longer.
+**Measured** with the 0.3.1 engine from nuget.org on an Apple M1 Pro: each `lockflight ci` run on this solution took 13 to 18
+seconds. The first `dotnet` run on a machine, package restores and typing the commands add to that.
 
 ## What you need
 
@@ -26,14 +18,15 @@ take longer.
 ## 1. Install the engine
 
 ```sh
-git clone https://github.com/lockflight/lockflight
-cd lockflight
-scripts/dev-install.sh --no-plugin     # the engine into ~/.lockflight/bin/lockflight; adds it to PATH for new terminals
-cd ..
+cd ~                                   # outside any project: a global.json there could pick an SDK older than 10
+dotnet tool install Lockflight.Cli --tool-path ~/.lockflight/bin
+~/.lockflight/bin/lockflight version
+cd -
 ```
 
-`--no-plugin` skips the Claude Code plugin, which the CI-only level does not use. `--no-modify-path` leaves your shell's
-startup file alone. The rest of this page calls the engine as `~/.lockflight/bin/lockflight`.
+The engine is one native binary for your user. The rest of this page calls it as `~/.lockflight/bin/lockflight`; add
+`~/.lockflight/bin` to `PATH` to type `lockflight`. To try unreleased changes from `main`, install from source instead
+([getting started](docs/guides/getting-started.md#install-from-source)).
 
 ## 2. Create a solution and set up Lockflight
 
@@ -144,8 +137,6 @@ Without any red commit the verdict is `NOT-EARNED`: nothing showed that the new 
 hand as above (`--trailer "Lockflight-Red: 1"`); with the full lifecycle, `lockflight redgreen red` makes it.
 
 ## 4. On GitHub
-
-From 0.3.0 on, with a project set up from the released engine:
 
 1. Push `main` with the commit `init` made, then push the feature branch and open a pull request. The workflow's `judge` job
    runs the same `lockflight ci` with the engine and the policy of the target branch, and two checks appear: `gates` (the

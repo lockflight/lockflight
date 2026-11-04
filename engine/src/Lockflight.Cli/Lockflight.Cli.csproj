@@ -20,11 +20,11 @@
     <ToolCommandName>lockflight</ToolCommandName>
     <PackageId>Lockflight.Cli</PackageId>
     <Authors>Bohdan Ivaniichuk</Authors>
-    <Description>Lockflight engine for Claude Code agents on .NET projects: deterministic quality gates (format, build, test, patch coverage, vulnerable dependencies, secrets), protected paths enforced by Claude Code hooks, and a spec-driven lifecycle with hash-bound approvals, red/green test-first evidence, requirement trace and an evidence-bound review of record.</Description>
+    <Description>Test-first guardrails for AI coding agents on .NET. Lockflight makes Claude Code and other agents prove their work: new tests must fail before the code exists and pass after it, the build and tests run before an agent can say done, protected files are guarded, and a CI judge re-runs the evidence on every pull request. Quality gates for format, build, tests, patch coverage, vulnerable packages and secrets.</Description>
     <Copyright>Copyright (c) 2026 Bohdan Ivaniichuk</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/lockflight/lockflight</PackageProjectUrl>
-    <PackageTags>claude-code;quality-gates;dotnet-tool;tdd;spec-driven;hooks</PackageTags>
+    <PackageTags>claude-code;claude;ai-agents;ai-coding;coding-agent;tdd;test-driven-development;red-green;quality-gates;guardrails;spec-driven;ci;github-actions;code-review;dotnet-tool;xunit;nunit;mstest</PackageTags>
     <PackageReadmeFile>PACKAGE.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReleaseNotes>https://github.com/lockflight/lockflight/blob/main/CHANGELOG.md</PackageReleaseNotes>

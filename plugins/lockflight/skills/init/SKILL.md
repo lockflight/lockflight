@@ -34,7 +34,7 @@ Windows, Git Bash; for the standard profile with Spec Kit, `uv` and a working `p
 
 - **`~/.lockflight/bin/lockflight` exists** (`lockflight.exe` on Windows)**:** use it. It works whatever SDK the project's `global.json` pins.
 - **It does not:** the install changes the user's home, so never run it yourself. Ask the user to open a separate terminal
-  window (not `!` in Claude Code) and run `cd ~ && dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin`
+  window (not `!` in Claude Code) and run `cd ~ && dotnet tool install Lockflight.Cli --tool-path ~/.lockflight/bin`
   there (from the home directory: a project's `global.json` could pick an SDK older than 10). On Windows the install is from
   source: "Install on Windows" in docs/guides/getting-started.md. Wait until the file exists. If the install fails, point them
   to "The engine package is not found" in docs/guides/troubleshooting.md. Never suggest storing a feed token in a NuGet

@@ -3,8 +3,8 @@
 <table>
 <tr>
 <td width="140" align="center"><img src="assets/levi-on-duty.svg" alt="Levi the pixel beaver, on duty" width="120"></td>
-<td>Guides for people who set up and run Lockflight, a CI check for .NET pull requests written by coding agents, and for people
-who change Lockflight itself. New here? Start with the <a href="../QUICKSTART.md">quickstart</a> (a first verdict from the
+<td>Guides for people who set up and run Lockflight, test-first guardrails for AI coding agents on .NET, and for people who
+change Lockflight itself. New here? Start with the <a href="../QUICKSTART.md">quickstart</a> (a first verdict from the
 CI judge), then <a href="guides/getting-started.md">getting started</a>, and read
 <a href="guides/guardrails-and-boundaries.md">guardrails and boundaries</a> to see what each control can promise.</td>
 </tr>

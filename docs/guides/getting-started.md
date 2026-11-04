@@ -126,12 +126,12 @@ and your projects.
 
 ## Install from a package
 
-`Lockflight.Cli` is published on nuget.org, as a prerelease during the preview. Install the engine for your user, then the
+`Lockflight.Cli` is published on nuget.org. Install the engine for your user, then the
 plugin:
 
 ```sh
 cd ~                                   # outside any project: a global.json there could pick an SDK older than 10
-dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin
+dotnet tool install Lockflight.Cli --tool-path ~/.lockflight/bin
 ~/.lockflight/bin/lockflight version
 claude plugin marketplace add lockflight/lockflight
 claude plugin install lockflight@lockflight --scope user
