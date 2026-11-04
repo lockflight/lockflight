@@ -71,6 +71,20 @@ public sealed class CiStepMigrationTests
     }
 
     [Theory]
+    [InlineData((int)CiTrigger.PullRequest, false)]
+    [InlineData((int)CiTrigger.Manual, false)]
+    [InlineData((int)CiTrigger.Manual, true)]
+    public void ALockflight030JudgeWorkflowTakesTheNameOfBothChecks(int trigger, bool developmentPin)
+    {
+        string current = Templates.Workflow(["10.0.x"], (CiTrigger)trigger, developmentPin);
+        string previous = current.Replace("\nname: lockflight\n", "\nname: lockflight-gates\n", StringComparison.Ordinal)
+            .Replace("Actions → lockflight → Run workflow", "Actions → lockflight-gates → Run workflow", StringComparison.Ordinal);
+
+        Assert.NotEqual(current, previous);
+        Assert.Equal(current, CiStepMigration.Migrate(previous));
+    }
+
+    [Theory]
     [MemberData(nameof(Platforms))]
     public void APipelineWithoutTheThirdNuGetConfigSpellingGetsIt(string platform)
     {
