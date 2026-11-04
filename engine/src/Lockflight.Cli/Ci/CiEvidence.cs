@@ -25,6 +25,9 @@ internal static class CiEvidence
     /// <summary>The longest string from the pull request kept in evidence; longer ones are cut and end with an ellipsis.</summary>
     public const int MaxTextLength = 300;
 
+    /// <summary>The longest host-tampering baseline entry the evidence carries; a longer one is left out rather than cut, since a cut entry accepts nothing.</summary>
+    public const int MaxBaselineEntryLength = 2_000;
+
     /// <summary>The most policy loosenings kept in evidence; past it, one last line counts the rest.</summary>
     public const int MaxLoosened = 200;
 
@@ -236,6 +239,7 @@ internal static class CiEvidence
         ["kind"] = finding.Kind,
         ["location"] = Cap(finding.Location),
         ["member"] = Cap(finding.Member),
+        ["baselineEntry"] = HostTamperingJudge.BaselineEntry(finding) is { Length: <= MaxBaselineEntryLength } entry ? entry : null,
     };
 
     private static JsonObject GreenNode(GreenJudgement green) => new()

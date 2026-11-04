@@ -96,13 +96,50 @@ public sealed class HostTamperingTests : IAsyncLifetime
         Assert.Equal("PASS", Check(await JudgeAsync(head))["verdict"]!.GetValue<string>());
     }
 
-    private async Task<JsonNode> JudgeAsync(string head)
+    [Fact]
+    public async Task ThePrintedBaselineEntryOnTheTargetAcceptsThatFindingAndNoOther()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string head = await repository.WriteCode(Stub, Test).Write("tests/Shop.Tests/Snapshots.cs", """
+            namespace Shop.Tests;
+
+            internal static class Snapshots
+            {
+                public static void Save(string text) => File.WriteAllText("shipping.verified.json", text);
+
+                public static void Run() => System.Diagnostics.Process.Start("dotnet", "--info");
+            }
+
+            """).CommitAsync("test: red", cancellationToken, null, "Lockflight-Red: 1");
+        (JsonNode first, string output) = await JudgeWithOutputAsync(head);
+        JsonNode save = first["hostTampering"]!["new"]!.AsArray().Single(finding => finding!["location"]!.GetValue<string>() == "Shop.Tests.Snapshots::Save")!;
+        string entry = save["baselineEntry"]!.GetValue<string>();
+
+        await repository.CheckoutAsync("main", cancellationToken);
+        main = await repository.Write(".lockflight/baselines/host-tampering.json", $$"""{ "schema": "lockflight.baseline.host-tampering/v1", "findings": [ {{entry}} ] }""")
+            .CommitAsync("accept the snapshot store", cancellationToken);
+        await repository.CheckoutAsync("001-shipping", cancellationToken);
+        string merged = await repository.MergeAsync("main", cancellationToken);
+        JsonNode second = await JudgeAsync(merged);
+
+        Assert.Contains(entry, output, StringComparison.Ordinal);
+        Assert.Contains("a person's decision", output, StringComparison.Ordinal);
+        Assert.Contains("push to this pull request or update it from the target branch", output, StringComparison.Ordinal);
+        Assert.Contains("protected change", output, StringComparison.Ordinal);
+        Assert.Equal("NOT-EARNED", Check(second)["verdict"]!.GetValue<string>());
+        Assert.Equal("Shop.Tests.Snapshots::Run", Assert.Single(second["hostTampering"]!["new"]!.AsArray())!["location"]!.GetValue<string>());
+        Assert.Contains(second["hostTampering"]!["existing"]!.AsArray(), finding => finding!["location"]!.GetValue<string>() == "Shop.Tests.Snapshots::Save");
+    }
+
+    private async Task<JsonNode> JudgeAsync(string head) => (await JudgeWithOutputAsync(head)).Document;
+
+    private async Task<(JsonNode Document, string Output)> JudgeWithOutputAsync(string head)
     {
         (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(
             ["ci", "--platform", "github", "--head", head, "--base", main, "--evidence", evidence.FullName], string.Empty, repository.Root, new Dictionary<string, string> { [EnvironmentVariables.Temp] = evidence.FullName });
         string path = Path.Combine(evidence.FullName, "evidence.json");
         Assert.True(File.Exists(path), $"exit {(int)exitCode}: {output}\n{error}");
-        return JsonNode.Parse(await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken))!;
+        return (JsonNode.Parse(await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken))!, output);
     }
 
     private static JsonNode Check(JsonNode document) => document["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == "tests.hostTampering")!;
