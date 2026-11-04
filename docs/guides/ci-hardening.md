@@ -113,6 +113,12 @@ it should install.
 trailer it builds that commit and requires its new tests to fail inside production code; it then requires every cycle test to
 be the same test at head (or to fail again on the red commit's code when it changed) and to pass there, the spec's
 requirements to be traced to those tests, and the `pr` gates to pass, all with the target branch's policy.
+A requirement marked `[outside .NET: <path>]` is left out of trace while each file it names exists at head and contains its
+ID; the judge runs none of those tests. When trace is evaluated (the pull request changes production code), the comment's
+headline counts such requirements, each file's evidence says whether the pull request added or changed it, and a marker added
+to, changed on or removed from a requirement the base already had is called out above the checks; a pull request that changes
+only the spec shows it in the spec diff alone. The headline count and the call-out come from the judge's evidence, so they are
+as strong as that evidence ([requirements verified outside .NET](spec-contract.md#specmd)).
 
 - **Read from the target branch** (a boundary, with the judge a required check and a required code-owner review covering
   the workflow files): the policy and baselines the judge applies, the engine the report jobs install, and that the check

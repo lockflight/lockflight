@@ -38,6 +38,10 @@ it; report it in the `Security note:` line of your final message.
   Name concrete values: each scenario becomes a test.
 - **Requirements.** At least one line `- **FR-001**: System MUST …` under `## Requirements`; IDs `FR-` and three digits,
   each used once. Each requirement is testable and is served by at least one scenario.
+- **Requirements tested outside .NET.** A requirement that only a Vitest or Jest test can verify (a UI rule in the web client)
+  may be marked `- **FR-006** [outside .NET: web/src/app/streak-card.spec.ts]: …` (lowercase `outside`, before the colon;
+  several paths comma-separated, never a file under `specs/`). Trace then leaves it out instead of failing it, but only while
+  each named file exists and contains the ID, and the approval digest lists it for the user. Mark only what has no .NET side; a rule the API enforces stays a normal requirement with a .NET test.
 - **No open questions.** No `[NEEDS CLARIFICATION: …]` left.
 - **No placeholders.** No template text: no ALL-CAPS word in brackets (`[FEATURE NAME]`, `[DATE]`, and also `[US1]`,
   `[FR-001]`, `[API]`: write IDs and acronyms without brackets), no bracket holding `e.g.`, no `[###-…]`, no stock prompts
