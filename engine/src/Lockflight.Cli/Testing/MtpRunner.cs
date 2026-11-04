@@ -13,15 +13,15 @@ internal sealed class MtpRunner(TimeProvider time) : ITestRunner
 
     public RunnerMode Mode => RunnerMode.Mtp;
 
-    public async Task<TestListing> ListAsync(TestApp app, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
+    public async Task<TestListing> ListAsync(TestApp app, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         // MTP's --xunit-list has no JSON format; its "full" listing is text.
         ProcessResult mtp = await ProcessRunner.RunAsync(
-            "dotnet", [app.AssemblyPath, "--xunit-list", "full", "--no-ansi", "--no-progress"], workingDirectory, timeLimit, cancellationToken);
+            "dotnet", [app.AssemblyPath, "--xunit-list", "full", "--no-ansi", "--no-progress"], app.OutputDirectory, timeLimit, app.Environment, cancellationToken);
         return mtp.ExitCode is 0 or ZeroTests ? TestListing.Of(TestInventory.ParseText(app.AssemblyName, mtp.Output), RunnerMode.Mtp) : TestListing.NotListed;
     }
 
     public async Task<TestRunOutcome> RunAsync(
-        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
-        TestRunOutcome.Of(await NativeTestRunner.RunAsync(app, RunnerMode.Mtp, methodFilters, suiteFilter, workingDirectory, timeLimit, time, cancellationToken));
+        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, TimeSpan timeLimit, CancellationToken cancellationToken) =>
+        TestRunOutcome.Of(await NativeTestRunner.RunAsync(app, RunnerMode.Mtp, methodFilters, suiteFilter, timeLimit, time, cancellationToken));
 }
