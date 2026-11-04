@@ -11,7 +11,8 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 /// is flagged assertion-free but not rejected: a test may verify by letting the production code throw (a guard clause, a
 /// validator), which a static reading of the test code cannot tell from a test that verifies nothing. An accepted red keeps a snapshot
 /// of the tree (<see cref="RedSnapshots"/>). While the open cycle has an amend waiting, a red re-checks only the amended tests instead,
-/// on that snapshot (<see cref="AmendRecheck"/>).
+/// on that snapshot (<see cref="AmendRecheck"/>). Each red prints a <c>dotnet test</c> line per test application for its new tests, and
+/// re-runs a GREEN_BEFORE test through <c>dotnet test</c> to warn when only the runner made it pass (<see cref="RunnerCrossCheck"/>).
 /// </summary>
 /// <remarks>Each test's line is followed by why it got its class; <paramref name="verbose"/> adds the exception, the deciding stack
 /// frame with its source line, and the production call found.</remarks>
@@ -142,6 +143,9 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
             await judge.WriteWhyAsync(verdicts[test.Key]);
         }
 
+        RunnerCrossCheck crossCheck = new(session.Output, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), session.Context.Time);
+        await crossCheck.WriteReproductionsAsync(session.Workspace.Apps, fresh);
+        await crossCheck.CheckGreenBeforeAsync(session.Workspace.Apps, classified, fresh, deadline, cancellationToken);
         await judge.WarnAssertionFreeAsync(classified);
 
         if (flakyCheck.BudgetExhausted)

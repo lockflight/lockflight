@@ -8,8 +8,9 @@ namespace Lockflight.Cli.Hooks.Events;
 
 /// <summary>
 /// Stop: the stop gate (<see cref="StopGate"/>). While the agent waits on a person's approval (<see cref="PendingApproval"/>), it
-/// stops cleanly with one message for the person instead of running the gate on tests that may be red on purpose. An engine error
-/// is reported and never bricks the session.
+/// stops cleanly with one message for the person instead of running the gate on tests that may be red on purpose. When the turn
+/// does end, it records what the person can now see and offers the approval that waits for them (<see cref="ApprovalOffer"/>),
+/// whether the stop gate is on or off; only in a session a person attends, since only there can they see it. An engine error is reported and never bricks the session.
 /// </summary>
 internal sealed class StopHandler : IHookHandler
 {
@@ -28,11 +29,18 @@ internal sealed class StopHandler : IHookHandler
         {
             LedgerEvent skipped = new(LedgerEventType.EvidenceRecorded, StopWaitingSignature, waiting, Detail: null);
             await new LedgerWriter(manifest.Root, invocation.Context.Time).AppendAsync(skipped, cancellationToken);
-            return new HookReply(HookDecision.Allow, SystemMessage(waiting));
+            string? offer = ApprovalOffer.AtTurnEnd(invocation);
+            return new HookReply(HookDecision.Allow, SystemMessage(offer is null ? waiting : $"{waiting}\n{offer}"));
         }
 
         HookDecision decision = await StopGate.DecideAsync(manifest, invocation.Input.Session.Id, invocation.Context.Time, cancellationToken);
-        return HookReply.Of(decision);
+        if (decision.Outcome == HookOutcome.Block)
+        {
+            // The agent goes on: the turn has not ended, so nothing is recorded as seen.
+            return HookReply.Of(decision);
+        }
+
+        return ApprovalOffer.AtTurnEnd(invocation) is string ready ? new HookReply(decision, SystemMessage(ready)) : HookReply.Of(decision);
     }
 
     private static string SystemMessage(string message)

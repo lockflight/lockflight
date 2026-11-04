@@ -195,6 +195,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task EfCoreMigrationsWithoutAPinnedDotnetEfWarnWithTheCommandsToPinIt()
     {
         Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
         WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
 
         DoctorCheck ef = await CheckAsync("dotnet-ef pin");
@@ -211,6 +212,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task AnExistingToolManifestNeedsOnlyTheInstallAndTheVersionComesFromCentralPackages()
     {
         Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
         Write("dotnet-tools.json", """{ "version": 1, "isRoot": true, "tools": { "lockflight": { "version": "0.3.0", "commands": ["lockflight"] } } }""");
         Write("Directory.Packages.props", """<Project><ItemGroup><PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" /></ItemGroup></Project>""");
         WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />""");
@@ -225,6 +227,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task AnUnknownEfCoreVersionIsLeftForThePersonToFillIn()
     {
         Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
         WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore" Version="$(EfVersion)" />""");
 
         DoctorCheck ef = await CheckAsync("dotnet-ef pin");
@@ -236,6 +239,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task APinnedDotnetEfPasses()
     {
         Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
         Write(".config/dotnet-tools.json", """{ "version": 1, "isRoot": true, "tools": { "dotnet-ef": { "version": "9.0.4", "commands": ["dotnet-ef"] } } }""");
         WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
 
@@ -254,6 +258,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task TheEfCoreVersionIsReadFromTheWaysAProjectStatesIt(string packageReferences)
     {
         Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
         Write("Directory.Packages.props", """<Project><ItemGroup><PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0" /></ItemGroup></Project>""");
         WriteEfProject(packageReferences);
 
@@ -266,6 +271,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task EfCoreBeforeVersionEightIsToldTheCheckNeedsAnUpgrade()
     {
         Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
         WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="7.0.20" />""");
 
         DoctorCheck ef = await CheckAsync("dotnet-ef pin");
@@ -278,6 +284,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task APinBelowTheDirectoryTheGateRunsInDoesNotCount()
     {
         Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
         Write("src/Shop.Data/dotnet-tools.json", """{ "version": 1, "isRoot": true, "tools": { "dotnet-ef": { "version": "9.0.4", "commands": ["dotnet-ef"] } } }""");
         WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
 
@@ -288,6 +295,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task InAMonorepoEachUnitNeedsThePinAndTheShellOutsideTheUnitsDoesNot()
     {
         Write(Manifest.FileName, "version: 2\nunits:\n  - path: services/orders\n  - path: services/stock\n  - path: ops\n    kind: none\n");
+        WriteCiWorkflow();
         Write("services/orders/dotnet-tools.json", """{ "version": 1, "isRoot": true, "tools": { "dotnet-ef": { "version": "9.0.4", "commands": ["dotnet-ef"] } } }""");
         foreach (string directory in new[] { "services/orders", "services/stock", "ops", "tools" })
         {
@@ -309,6 +317,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task AUnitOfAWorkspaceShellGetsNoDotnetEfCheck()
     {
         Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
         Write(Manifest.UnitFileName, "shell: ../shell\n");
         WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
 
@@ -322,6 +331,7 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task OnlyTheAutoModeNeedsThePin(string mode)
     {
         Write(Manifest.FileName, $"version: 2\ngates:\n  ef:\n    pendingModelChanges: {mode}\n");
+        WriteCiWorkflow();
         WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
 
         Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "dotnet-ef pin");
@@ -331,9 +341,50 @@ public sealed class ReadinessChecksTests : IDisposable
     public async Task AProjectWithoutEfCoreMigrationsGetsNoDotnetEfCheck()
     {
         Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
         Write("src/Shop/Shop.csproj", """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4" /></ItemGroup></Project>""");
 
         Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "dotnet-ef pin");
+    }
+
+    [Fact]
+    public async Task WithoutACiJobThatRunsThePrProfileThereIsNoDotnetEfCheck()
+    {
+        Write(Manifest.FileName, "version: 2\n");
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
+
+        Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "dotnet-ef pin");
+    }
+
+    [Fact]
+    public async Task ADirectoryThatCannotBeReadLeavesTheDotnetEfCheckOutAndDoesNotCrash()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Uses Unix file permissions.");
+            return;
+        }
+
+        Write(Manifest.FileName, "version: 2\n");
+        WriteCiWorkflow();
+        WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
+        string locked = Path.Combine(root.FullName, "src", "Locked");
+        Directory.CreateDirectory(locked);
+        File.SetUnixFileMode(locked, UnixFileMode.None);
+        try
+        {
+            if (CanList(locked))
+            {
+                Assert.Skip("Permissions do not apply to this user (root).");
+                return;
+            }
+
+            Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "dotnet-ef pin");
+        }
+        finally
+        {
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 
     [Fact]
@@ -787,6 +838,22 @@ public sealed class ReadinessChecksTests : IDisposable
         }
 
         return binary;
+    }
+
+    // The CI job init writes runs the pr profile, where ef.pendingModelChanges runs.
+    private void WriteCiWorkflow() => Write(Templates.WorkflowPath, Templates.Workflow(["10.0.x"]));
+
+    private static bool CanList(string directory)
+    {
+        try
+        {
+            _ = Directory.EnumerateFileSystemEntries(directory).Any();
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private void WriteEfProject(string packageReference)

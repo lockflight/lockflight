@@ -45,7 +45,9 @@ public sealed class FindingLifecycleTests
     {
         ReviewFinding open = Major("Discount off by one", FindingOutcome.Confirmed) with
         {
-            State = FindingState.Open, OriginalSeverity = FindingSeverity.Minor, Escalation = SeverityEscalation.Escalated,
+            State = FindingState.Open,
+            OriginalSeverity = FindingSeverity.Minor,
+            Escalation = SeverityEscalation.Escalated,
         };
 
         ReviewFinding raised = Assert.Single(FindingLifecycle.Carry(
@@ -61,7 +63,9 @@ public sealed class FindingLifecycleTests
     {
         ReviewFinding open = Major("Discount off by one", FindingOutcome.Confirmed) with
         {
-            State = FindingState.Open, OriginalSeverity = FindingSeverity.Minor, Escalation = SeverityEscalation.Escalated,
+            State = FindingState.Open,
+            OriginalSeverity = FindingSeverity.Minor,
+            Escalation = SeverityEscalation.Escalated,
         };
 
         ReviewFinding raised = Assert.Single(FindingLifecycle.Carry(

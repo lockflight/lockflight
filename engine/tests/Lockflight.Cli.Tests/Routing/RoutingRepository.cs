@@ -12,6 +12,9 @@ internal sealed class RoutingRepository : IDisposable
 {
     public const string BaseBranch = "main";
 
+    // Written once into .git/config rather than by one git process per setting.
+    private const string FixtureConfig = "[user]\n\tname = Fixture\n\temail = fixture@example.com\n[commit]\n\tgpgsign = false\n[core]\n\tautocrlf = false\n";
+
     private readonly DirectoryInfo directory = Directory.CreateTempSubdirectory("lockflight-routing-");
 
     public string Root => directory.FullName;
@@ -20,10 +23,7 @@ internal sealed class RoutingRepository : IDisposable
     {
         RoutingRepository repository = new();
         await repository.GitAsync(["init", "-q", "-b", BaseBranch], cancellationToken);
-        await repository.GitAsync(["config", "user.name", "Fixture"], cancellationToken);
-        await repository.GitAsync(["config", "user.email", "fixture@example.com"], cancellationToken);
-        await repository.GitAsync(["config", "commit.gpgsign", "false"], cancellationToken);
-        await repository.GitAsync(["config", "core.autocrlf", "false"], cancellationToken);
+        await File.AppendAllTextAsync(Path.Combine(repository.Root, ".git", "config"), FixtureConfig, cancellationToken);
         foreach ((string path, string content) in baseFiles)
         {
             repository.Write(path, content);
@@ -58,12 +58,13 @@ internal sealed class RoutingRepository : IDisposable
         return this;
     }
 
-    public async Task<string> CommitAsync(string subject, CancellationToken cancellationToken)
+    public async Task CommitAsync(string subject, CancellationToken cancellationToken)
     {
         await GitAsync(["add", "-A"], cancellationToken);
         await GitAsync(["commit", "-q", "--allow-empty", "-m", subject], cancellationToken);
-        return (await GitAsync(["rev-parse", "HEAD"], cancellationToken)).Trim();
     }
+
+    public async Task<string> HeadAsync(CancellationToken cancellationToken) => (await GitAsync(["rev-parse", "HEAD"], cancellationToken)).Trim();
 
     public async Task<string> GitAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {

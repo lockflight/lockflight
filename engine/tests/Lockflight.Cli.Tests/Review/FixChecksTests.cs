@@ -10,7 +10,7 @@ public sealed class FixChecksTests
 
     private static readonly ReviewFinding Confirmed = new ReviewFinding(
         FindingSeverity.Major, "src/Quotes.cs", 12, "FR-003", "Caller cancellation is swallowed", "x", "[Fact]\npublic void CallerCancellationSurfaces() { }", FindingOutcome.Confirmed)
-        { Fix = "--- a/src/Quotes.cs\n+++ b/src/Quotes.cs\n", Reproduced = ReproductionResult.Failed };
+    { Fix = "--- a/src/Quotes.cs\n+++ b/src/Quotes.cs\n", Reproduced = ReproductionResult.Failed };
 
     [Fact]
     public void AFixThatMakesTheReproductionPassAndKeepsTheOwnTestsGreenHolds()
