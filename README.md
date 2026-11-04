@@ -7,8 +7,8 @@
 
 ### Test-first guardrails for AI coding agents on .NET
 
-**Make Claude Code prove its work.** Lockflight makes every change go red → green, runs the build and tests before an agent
-can say "done", and re-checks that evidence in CI on every pull request.
+**Make Claude Code show its work.** New behaviour goes red → green, the build and tests can run before an agent says
+"done", and a CI judge re-checks that evidence on every pull request.
 
 [![CI](https://github.com/lockflight/lockflight/actions/workflows/ci.yml/badge.svg)](https://github.com/lockflight/lockflight/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/Lockflight.Cli?label=nuget&color=14808F)](https://www.nuget.org/packages/Lockflight.Cli)
@@ -17,7 +17,7 @@ can say "done", and re-checks that evidence in CI on every pull request.
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-14808F)
 [![License: MIT](https://img.shields.io/badge/license-MIT-123A4F)](LICENSE)
 
-[**Quick start**](#quick-start) · [How it works](#how-it-works) · [Features](#features) · [FAQ](#faq) ·
+[**Quick start**](#quick-start) · [How it works](#how-it-works) · [Features](#features) · [Limits](#honest-about-its-limits) · [FAQ](#faq) ·
 [Docs](docs/README.md) · [Changelog](CHANGELOG.md)
 
 <br>
@@ -29,35 +29,36 @@ can say "done", and re-checks that evidence in CI on every pull request.
 
 ## Why Lockflight?
 
-Coding agents write code faster than anyone can review it. They also say *"all tests pass"* when nothing ran, edit the
-config that was supposed to stop them, and write tests after the code, where they pass by construction.
+Coding agents write code faster than anyone can review it. They can say *"all tests pass"* when nothing ran, edit the
+config that was supposed to stop them, or write tests after the code, where they pass by construction.
 
-Rules in `CLAUDE.md` ask an agent to behave. **Lockflight checks that it did**, with exit codes it cannot talk its way past.
+Rules in `CLAUDE.md` ask an agent to behave. **Lockflight checks that it did**, with exit codes, not instructions. On your
+machine they catch accidents; in CI, as a required check, they decide.
 
 <table>
 <tr>
 <td width="33%" valign="top">
 
-**🧪 Tests come first, provably**
+**🧪 Tests that fail first**
 
-Every new test must fail on a stub before the implementation exists, then pass unchanged after it. The judge re-runs both
-commits itself, so a test written after the code is caught.
+When a change adds behaviour, its new tests must fail at a red commit, inside production code, and pass unchanged at the
+head. The judge re-runs both. A test committed with its implementation earns nothing.
 
 </td>
 <td width="33%" valign="top">
 
 **🚦 "Done" means green**
 
-Before an agent's turn can end, the Stop gate builds and tests. A failing test keeps the agent working instead of reporting
-success.
+Turn on the Stop gate (`stop.gate: true`) and it builds and tests before the agent's turn ends, sending it back on a failure.
+It is best effort; CI is the definition of done.
 
 </td>
 <td width="33%" valign="top">
 
-**🔒 Rules the agent can't edit**
+**🔒 Rules the agent shouldn't edit**
 
-The policy, CI workflow, build config and red tests are protected. An `echo … >> lockflight.yaml` from the agent is blocked
-before it runs.
+The guard blocks the agent's common edits to the policy, CI and build config, `echo … >> lockflight.yaml` included. CI
+judges every pull request with the target branch's policy, so what slips past is still caught there.
 
 </td>
 </tr>
@@ -66,7 +67,8 @@ before it runs.
 ## Quick start
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) to install the engine. Your projects can target .NET 8, 9
-or 10. On Windows, follow [install on Windows](docs/guides/getting-started.md#install-on-windows) instead of step 1.
+or 10. On Windows, follow [install on Windows](docs/guides/getting-started.md#install-on-windows) instead of step 1. The CI
+judge runs on GitHub-hosted Linux runners for now.
 
 ### With Claude Code (recommended)
 
@@ -82,12 +84,13 @@ claude plugin install lockflight@lockflight --scope user
 Then open Claude Code in your repository and ask:
 
 ```text
-> Set up Lockflight
+> Set up Lockflight with the standard profile
 ```
 
 The `lockflight:init` skill writes the policy (`lockflight.yaml`), pins the engine, adds the CI workflow and runs `doctor`.
-To build something, ask *"build feature X"*: the agent writes a spec, you approve it with `/lockflight:approve`, and the
-work goes red → green story by story.
+The **lite** profile (the default) gives you the guard and the gates; **standard** adds the lifecycle. With standard, ask
+*"build feature X"*: the agent writes a spec, you approve it with `/lockflight:approve`, and the work goes red → green story
+by story. Set `stop.gate: true` in `lockflight.yaml` to turn on the Stop gate.
 
 ### CI only (any agent, or none)
 
@@ -114,11 +117,13 @@ flowchart LR
     F -- no --> B
 ```
 
-1. **On your machine**, the Claude Code plugin keeps the agent on the path: the guard blocks edits to protected files, the
-   Stop gate runs the build and tests before a turn ends, and `redgreen red` records the failing tests as a red commit.
-2. **In CI**, the judge takes the policy and engine version from the *target* branch, so a pull request can't loosen the rules
-   that judge it. It checks out each red commit, confirms the tests fail in production code, then confirms the same tests
-   pass at the head.
+1. **On your machine**, the Claude Code plugin keeps the agent on the path: the guard blocks common edits to protected files,
+   the Stop gate (when on) runs the build and tests before a turn ends, and `redgreen red` records the failing tests as a red
+   commit.
+2. **In CI**, the judge takes the policy, baselines and engine version from the *target* branch, so a pull request can't
+   change `lockflight.yaml`, the baselines or the engine it is judged with; build files and the workflow need CODEOWNERS
+   ([CI hardening](docs/guides/ci-hardening.md)). It checks out each red commit, confirms the tests fail in production code,
+   then confirms the same tests pass at the head.
 3. **On the pull request**, you get two checks, `gates` and `lockflight/judge`, and a comment with the verdict.
 
 <picture>
@@ -136,10 +141,10 @@ flowchart LR
 
 | | |
 |---|---|
-| **Guard** | A `PreToolUse` hook blocks the agent's edits to the policy, CI, build config and tests while they are red, including through `sed`, `echo >>` and `cd`. |
-| **Stop gate** | Builds and tests before the agent's turn can end. A red test means the agent keeps working. |
+| **Guard** | A `PreToolUse` hook blocks the agent's common edits to the policy, CI, build config and tests while they are red, including through `sed`, `echo >>` and `cd`. Scripts and interpreters are not parsed: it is a guardrail. |
+| **Stop gate** (opt-in) | With `stop.gate: true`, builds and tests before the agent's turn ends. A red test sends the agent back to work. |
 | **Spec-driven lifecycle** | `/lockflight:feature` takes a feature through spec → plan → tasks → red/green per story → trace → review. [Spec Kit](https://github.com/github/spec-kit) is optional. |
-| **Your approvals** | You approve the spec and the tasks with `/lockflight:approve`, one typed command. It records the files exactly as they were when you read them. |
+| **Your approvals** | You approve the spec and the tasks with `/lockflight:approve`, one typed command. It records them as the agent's last turn left them; if they changed since, it shows them and records nothing until you type it again. The approval that counts is the pull request review, with CODEOWNERS on `specs/**`. |
 | **Review of record** | An independent reviewer checks the diff against the spec. A blocking finding counts only when a failing test reproduces it. |
 | **The crew** (optional) | A spec writer, a planner and a test author, each judged by the same checks as everyone else. |
 | **Levi in the status line** | The last verdict at a glance, and a prompt when something waits for you. |
@@ -151,7 +156,7 @@ flowchart LR
 | **Red** | At each commit with a `Lockflight-Red` trailer, the new tests compile and fail because of production code. The judge re-runs that commit; the trailer is never trusted. |
 | **Green** | At the head the same tests pass, nothing else fails beyond the accepted baseline, and no test was deleted or skipped. |
 | **Tests since red** | Each test that went red is the same test at the head (compared by its compiled code), or an amended one still fails on the red commit. |
-| **Trace** | With a spec, every requirement has a test that went red, then green. |
+| **Trace** | With a spec, every requirement has a test that went red, then green, or a `[structural]` or `[outside .NET]` marker that a person accepts in review. |
 | **Gates** | Format, build with no new warnings, tests, patch coverage, vulnerable packages and secrets. |
 | **Risk routing** | The diff picks the evidence a PR needs: a typo fix needs less than a new API or a database change. [More](docs/guides/risk-routing.md) |
 | **Host tampering** | A static scan for code in test assemblies that could forge a result: module initializers, process exits, setting CI variables and more. |
@@ -173,26 +178,47 @@ flowchart LR
 </tr>
 </table>
 
+## What it asks of you
+
+- **A red commit in every pull request that adds behaviour,** humans and hotfixes included: the new tests with a stub,
+  committed with a `Lockflight-Red: <n>` trailer before the implementation. With the plugin, `redgreen red` makes it; without
+  it, `git commit --trailer "Lockflight-Red: 1"`. Without one, `lockflight/judge` is `NOT-EARNED`.
+- **A spec for a feature-class change** (a new API, a database change): `specs/<id>/spec.md`, by hand, with Spec Kit or with
+  the crew ([the spec contract](docs/guides/spec-contract.md)).
+- **CI time:** the judge builds and tests the fork point, every red commit and the head.
+- **A plan that can block a merge:** required checks on a private GitHub repository need GitHub Pro, Team or Enterprise.
+
+## Honest about its limits
+
+- The judge makes faking test-first hard and visible. It does not prove the agent worked test-first, or that a test fully
+  checks its requirement: a person still reads the test diff.
+- The judge computes its evidence in the same job that runs the pull request's code. It is a strong guardrail, not a
+  boundary; running that code isolated from the judge is planned.
+- Everything on your machine (the guard, the Stop gate, local approvals) is a guardrail: the agent runs with your credentials.
+
+Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-and-boundaries.md).
+
 ## Why not just…
 
 | | `CLAUDE.md` rules | Regular CI | **Lockflight** |
 |---|:---:|:---:|:---:|
 | Tells the agent to write tests first | ✅ | — | ✅ |
-| Proves the tests failed before the code existed | — | — | ✅ |
-| Stops the agent from editing the rules | — | — | ✅ |
-| Runs build and tests before the agent says "done" | — | — | ✅ |
+| Re-runs the tests on a commit without the implementation | — | — | ✅ |
+| Blocks the agent's common edits to the rules (a guardrail) | — | — | ✅ |
+| Runs build and tests before the agent says "done" (opt-in Stop gate) | — | — | ✅ |
 | Checks every requirement has a test | — | — | ✅ |
-| Blocks the merge | — | ✅ | ✅ |
+| Blocks the merge when required | — | ✅ | ✅ |
 | A PR can't weaken the checks that judge it | — | — | ✅¹ |
 
-<sub>¹ With `lockflight/judge` as a required check and the policy and workflow under CODEOWNERS ([CI hardening](docs/guides/ci-hardening.md)).</sub>
+<sub>¹ With `lockflight/judge` required, and CODEOWNERS with required code-owner review on `lockflight.yaml`, `.lockflight/`, `.github/workflows/**`, `.github/actions/**` and build files ([CI hardening](docs/guides/ci-hardening.md)).</sub>
 
 ## Works with
 
 - **.NET:** SDK-style projects on .NET 8, 9 and 10
 - **Tests:** xUnit (v2 and v3), NUnit, MSTest
-- **OS:** macOS, Linux and Windows; the engine is a Native AOT binary for each
-- **CI:** GitHub Actions; Bitbucket Pipelines (template); GitLab and Azure Pipelines (gates only, experimental)
+- **Your machine:** macOS, Linux and Windows; the engine is a Native AOT binary for each
+- **CI judge:** GitHub Actions on GitHub-hosted Linux x64 runners (Windows runners planned); Bitbucket Pipelines (template,
+  not yet verified live); GitLab and Azure Pipelines (gates only, experimental)
 - **Agents:** Claude Code with the plugin; any agent, or a person, with CI only
 
 ## FAQ
@@ -201,14 +227,16 @@ flowchart LR
 <summary><b>Do I need Claude Code?</b></summary>
 
 No. `init --ci-only` sets up only the CI judge. It judges pull requests from any agent (Copilot, Cursor, Codex…) or from
-people. The plugin adds the local loop for Claude Code: the guard, the Stop gate and the lifecycle.
+people. The plugin adds the local loop for Claude Code: the guard, the Stop gate and the lifecycle. The judge needs a red commit
+from whoever writes the code: `git commit --trailer "Lockflight-Red: 1"` works from any terminal or IDE.
 </details>
 
 <details>
 <summary><b>Do I need an API key?</b></summary>
 
 No. The judge and the gates run without one. Only the optional review of record calls a model; with the default preset,
-critical changes (the policy, build-wide files, a new project) need that review.
+critical changes (the policy, build-wide files, a new project) need that review. The review job runs the pull request's
+code, which can read the key: use a spend-capped key. Pull requests from forks get no review.
 </details>
 
 <details>
@@ -222,9 +250,11 @@ Put them in a baseline: Lockflight then judges only what each pull request chang
 <summary><b>Can't the agent just get around it?</b></summary>
 
 On your machine, the agent runs with your credentials, so the guard catches accidents and common workarounds, not a
-determined attacker. The CI judge is the verdict of record: it takes its policy from the target branch and, as a required
-check with CODEOWNERS on the policy, the pull request can't change what judges it. A test can still check too little: a
-person still reads the tests. Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-and-boundaries.md).
+determined attacker. The CI judge is the verdict of record: it takes its policy and engine from the target branch, so as a
+required check, with CODEOWNERS on the policy and the workflow, a pull request can't change the policy or engine that judge
+it. The test results come from running its code, so deliberate code in the diff could forge them; the host-tampering scan
+lists the plain forms, and a person still reads the tests. Every control is labelled in
+[guardrails and boundaries](docs/guides/guardrails-and-boundaries.md).
 </details>
 
 <details>
