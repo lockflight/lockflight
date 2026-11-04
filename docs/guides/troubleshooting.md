@@ -239,9 +239,8 @@ Until then, `~/.lockflight/bin/lockflight` works everywhere, and in a set-up pro
 
 ## The engine package is not found
 
-`Lockflight.Cli` is published as a prerelease, so `dotnet tool install Lockflight.Cli` without `--prerelease` finds no
-version. Install it as [install from a package](getting-started.md#install-from-a-package) shows: with `--prerelease`, with
-the .NET 10 SDK, from your home directory rather than a project whose `global.json` pins an older SDK. Behind a mirror, add
+Install the engine as [install from a package](getting-started.md#install-from-a-package) shows: with the .NET 10 SDK,
+from your home directory rather than a project whose `global.json` pins an older SDK. Behind a mirror, add
 `--add-source <feed>`. Without access to any feed, [install from source](getting-started.md#install-from-source) with
 `scripts/dev-install.sh`: it packs the engine into a local feed (`~/.lockflight/feed`) and needs no package feed and no token.
 

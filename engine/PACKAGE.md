@@ -1,16 +1,22 @@
 # Lockflight.Cli
 
-The engine of [Lockflight](https://github.com/lockflight/lockflight), a gated, spec-driven delivery framework for Claude Code
-agents on .NET projects. **LLMs propose. Checks decide.** One pinned engine gives the same verdict in the Claude Code session, in
-your terminal and in CI:
+**Test-first guardrails for AI coding agents on .NET.** Lockflight makes Claude Code prove its work: every change goes
+red → green, the build and tests run before an agent can say "done", and a CI judge re-checks that evidence on every pull
+request. *LLMs propose. Checks decide.*
 
-- **Quality gates:** format, build, tests, patch coverage, vulnerable packages and secrets, each with a deterministic verdict.
-- **Protected paths:** Claude Code hooks block agent edits to the manifest, the tool pin, CI and build configuration.
-- **Spec-driven lifecycle:** hash-bound human approvals, red/green test-first evidence, a requirement trace and an
-  evidence-bound review of record.
+This package is the engine of [Lockflight](https://github.com/lockflight/lockflight). One pinned engine gives the same
+verdict in the Claude Code session, in your terminal and in CI:
 
-The package is a .NET tool with a Native AOT engine for each supported platform: macOS (arm64, x64), Linux (x64, arm64) and
-Windows (x64). Other platforms are not supported.
+- **Red → green, proven.** New tests must fail on a stub before the implementation exists, then pass unchanged after it. The
+  CI judge re-runs both commits itself.
+- **"Done" means green.** The Stop gate builds and tests before an agent's turn can end.
+- **Rules the agent can't edit.** Claude Code hooks block the agent's edits to the policy, CI and build configuration, and to
+  tests while they are red.
+- **Quality gates:** format, build with no new warnings, tests, patch coverage, vulnerable packages and secrets.
+- **Spec-driven lifecycle:** your approvals, a requirement trace and an evidence-bound review of record.
+
+Native AOT for macOS (arm64, x64), Linux (x64, arm64) and Windows (x64). Projects on .NET 8, 9 and 10; xUnit, NUnit and
+MSTest.
 
 ## Install
 
@@ -18,27 +24,26 @@ Install the engine for your user, outside any project, then the Claude Code plug
 
 ```sh
 cd ~                                   # outside any project: a global.json there could pick an SDK older than 10
-dotnet tool install Lockflight.Cli --prerelease --tool-path ~/.lockflight/bin
-~/.lockflight/bin/lockflight version
+dotnet tool install Lockflight.Cli --tool-path ~/.lockflight/bin
 claude plugin marketplace add lockflight/lockflight
 claude plugin install lockflight@lockflight --scope user
 ```
 
-Then, at your repository's root (or ask Claude Code to *"Set up Lockflight"*; the `lockflight:init` skill runs the same
-steps):
+Then open Claude Code in your repository and ask *"Set up Lockflight"*, or run it yourself:
 
 ```sh
-~/.lockflight/bin/lockflight init      # manifest, tool pin, Claude settings, CI workflow, linked engine
-.lockflight/bin/lockflight doctor      # the linked engine, the way the agent runs every command from here on
+~/.lockflight/bin/lockflight init             # with the Claude Code plugin
+~/.lockflight/bin/lockflight init --ci-only   # only the CI judge, for any agent or none
 ```
 
-The engine is installed with `--tool-path`, not as a local tool in the project: the package is built for each platform and
-only the .NET 10 SDK can install it, so a local install fails in a repository whose `global.json` pins an older SDK. The
-installed engine is a native binary that works whatever SDK the project pins. To update, run
-`~/.lockflight/bin/lockflight update` in a project, in a separate terminal window (not with `!` in Claude Code).
+Why `--tool-path` and not a local tool: the package is built for each platform and only the .NET 10 SDK can install it, so a
+local install fails in a repository whose `global.json` pins an older SDK. The installed engine is a native binary that works
+whatever SDK the project pins. To update, run `~/.lockflight/bin/lockflight update` in a project, in a separate terminal
+window.
 
 ## Documentation
 
+- [Quickstart: a first PASS in two minutes](https://github.com/lockflight/lockflight/blob/main/QUICKSTART.md)
 - [Getting started](https://github.com/lockflight/lockflight/blob/main/docs/guides/getting-started.md)
 - [Commands](https://github.com/lockflight/lockflight/blob/main/docs/guides/commands.md)
 - [What it guarantees, and what it does not](https://github.com/lockflight/lockflight/blob/main/docs/guides/guardrails-and-boundaries.md)
