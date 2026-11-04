@@ -27,7 +27,7 @@ internal static class SessionCommands
 
     /// <summary>
     /// For the status line: the line to type for a code that waits and is still valid (newest first), as
-    /// <c>approval waiting: type /lockflight:approve spec &lt;code&gt;</c>; null when none waits. Only a hash of the code is kept, so the
+    /// <c>reset waiting: type /lockflight:reset &lt;code&gt;</c>; null when none waits. Only a hash of the code is kept, so the
     /// line names it as a placeholder.
     /// </summary>
     public static string? WaitingLine(Manifest manifest, TimeProvider time, RandomSource random)

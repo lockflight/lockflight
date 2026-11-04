@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Routing;
@@ -12,9 +13,13 @@ namespace Lockflight.Cli.Tests.Routing;
 /// </summary>
 public abstract class ChangeClassifierCases
 {
-    // A test class runs its rows one after another, and a row that adds a file reads its case twice, so that theory's cases are
-    // split in two classes at the first feature case; the two halves hold every case exactly once.
+    // A test class runs its rows one after another, and a row that adds a file builds a repository of its own, so that theory's
+    // cases are split in two classes at the first feature case; the two halves hold every case exactly once.
     private const string FirstFeatureCase = "feature-";
+
+    // Each fixture's change as read from git, shared by every theory that reads it unchanged: one repository per case instead of
+    // one per row. A change set and a manifest are immutable records, and the repository is gone once they are read.
+    private static readonly ConcurrentDictionary<string, Lazy<Task<(ChangeSet ChangeSet, Manifest? Manifest)>>> CaseReadings = new(StringComparer.Ordinal);
 
     public static TheoryData<string> Cases => [.. RoutingCase.Names()];
 
@@ -44,7 +49,27 @@ public abstract class ChangeClassifierCases
     internal static RoutingPolicy Policy(Manifest? manifest) =>
         RoutingPolicy.From(manifest, new PolicySource(RoutingRepository.BaseBranch, "base", ManifestBlob: null, "default"));
 
-    internal static async Task<(ChangeSet ChangeSet, Manifest? Manifest)> ReadAsync(string name, string? extraFile, CancellationToken cancellationToken)
+    // The case's change and base manifest; with an extra file, read afresh with that file added.
+    internal static Task<(ChangeSet ChangeSet, Manifest? Manifest)> ReadAsync(string name, string? extraFile, CancellationToken cancellationToken) =>
+        extraFile is not null
+            ? ReadFromRepositoryAsync(name, extraFile, cancellationToken)
+            : CaseReadings.GetOrAdd(name, caseName => new Lazy<Task<(ChangeSet ChangeSet, Manifest? Manifest)>>(
+                () => ReadFromRepositoryAsync(caseName, extraFile: null, cancellationToken))).Value;
+
+    internal static void VerifyFixtureGolden(string name, string actual)
+    {
+        string path = Path.Combine(RoutingCase.FixturesDirectory, name + ".expected.txt");
+        if (Environment.GetEnvironmentVariable("LOCKFLIGHT_UPDATE_GOLDENS") == "1")
+        {
+            File.WriteAllText(path, actual);
+            return;
+        }
+
+        Assert.True(File.Exists(path), $"{path} does not exist; run with LOCKFLIGHT_UPDATE_GOLDENS=1 to write it, then review it");
+        Assert.Equal(File.ReadAllText(path).ReplaceLineEndings("\n"), actual);
+    }
+
+    private static async Task<(ChangeSet ChangeSet, Manifest? Manifest)> ReadFromRepositoryAsync(string name, string? extraFile, CancellationToken cancellationToken)
     {
         RoutingCase routingCase = RoutingCase.Load(name);
         using RoutingRepository repository = await RoutingRepository.CreateAsync(routingCase.BaseFiles, cancellationToken);
@@ -66,18 +91,5 @@ public abstract class ChangeClassifierCases
         }
 
         return (reading.ChangeSet!, manifest);
-    }
-
-    internal static void VerifyFixtureGolden(string name, string actual)
-    {
-        string path = Path.Combine(RoutingCase.FixturesDirectory, name + ".expected.txt");
-        if (Environment.GetEnvironmentVariable("LOCKFLIGHT_UPDATE_GOLDENS") == "1")
-        {
-            File.WriteAllText(path, actual);
-            return;
-        }
-
-        Assert.True(File.Exists(path), $"{path} does not exist; run with LOCKFLIGHT_UPDATE_GOLDENS=1 to write it, then review it");
-        Assert.Equal(File.ReadAllText(path).ReplaceLineEndings("\n"), actual);
     }
 }

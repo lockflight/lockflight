@@ -8,6 +8,9 @@ namespace Lockflight.Cli.Tests.Ci;
 /// </summary>
 internal sealed class GitHistoryFixture : IDisposable
 {
+    // Written once into .git/config rather than by one git process per setting.
+    private const string FixtureConfig = "[user]\n\tname = Fixture\n\temail = fixture@example.com\n[commit]\n\tgpgsign = false\n";
+
     private static readonly TimeSpan GitTimeLimit = TimeSpan.FromSeconds(60);
 
     private readonly DirectoryInfo directory = Directory.CreateTempSubdirectory("lockflight-ci-");
@@ -18,9 +21,7 @@ internal sealed class GitHistoryFixture : IDisposable
     {
         GitHistoryFixture fixture = new();
         await fixture.GitAsync(["init", "-q", "-b", "main"], cancellationToken);
-        await fixture.GitAsync(["config", "user.name", "Fixture"], cancellationToken);
-        await fixture.GitAsync(["config", "user.email", "fixture@example.com"], cancellationToken);
-        await fixture.GitAsync(["config", "commit.gpgsign", "false"], cancellationToken);
+        await File.AppendAllTextAsync(Path.Combine(fixture.Root, ".git", "config"), FixtureConfig, cancellationToken);
         return fixture;
     }
 

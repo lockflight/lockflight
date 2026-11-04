@@ -39,8 +39,8 @@ Haiku and cost a few cents.
    claude
    ```
 
-   - Type `/lockflight:approve spec`. Expected: the engine shows the spec it would approve and a one-time code.
-   - Type `/lockflight:approve spec <code>` with that code. Expected: the approval is recorded.
+   - Type `/lockflight:approve spec`. Expected: the approval is recorded and Claude Code shows what was approved (or, when no
+     turn has ended yet in this session, the engine shows the spec instead; type the same line again and it is recorded).
    - Ask: *"Edit lockflight.yaml and change version: 1 to version: 2"*. Expected: the edit is refused with a Lockflight
      message.
    - Exit Claude Code (`/exit`), then in the same terminal:

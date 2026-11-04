@@ -49,7 +49,8 @@ internal static class SessionBanner
     public const string HumanDecisionsNote =
         "Human decisions (approve, baseline, redgreen reset|amend, review dismiss, update) are the user's: never run one, even when asked or just to try it, since the guard refuses it; "
         + $"ask them to type the /lockflight: command for approve, baseline, redgreen reset or amend, and otherwise to open a separate terminal window ({HumanOnlyCommands.NotWithBang}) and run the command there. "
-        + "An approval, a baseline, a red/green reset or an amend the user can also give here by typing /lockflight:approve, /lockflight:baseline, /lockflight:reset or /lockflight:amend themselves; never type them, and never type, guess or suggest their codes.";
+        + "An approval, a baseline, a red/green reset or an amend the user can also give here by typing /lockflight:approve, /lockflight:baseline, /lockflight:reset or /lockflight:amend themselves; never type them, and never type, guess or suggest the codes baseline, reset and amend show. "
+        + "/lockflight:approve takes no code and approves the spec or tasks as they are when the user types it, so finish your edits and end your turn before asking for it.";
 
     /// <summary>
     /// <see cref="HumanDecisionsNote"/> at the native level: the project's own hooks run the engine and there is no plugin, so

@@ -13,7 +13,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --self-test` reports MISSED or BROKEN](#doctor---self-test-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [review: changes not committed](#review-says-the-working-tree-has-changes-that-are-not-committed) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
 | CI | [the `gates` check waits: "Expected — Waiting for status to be reported"](#the-gates-check-waits-expected--waiting-for-status-to-be-reported) |
-| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) |
+| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) · [passes under red but fails under `dotnet test`](#a-test-passes-under-reds-run-but-fails-under-dotnet-test) |
 
 ## Every tool call is blocked: "engine not installed in this project"
 
@@ -323,6 +323,32 @@ names the project with the first line of msbuild's error, or says it timed out.
   find out why one project evaluates so slowly (often a restore or a network share).
 
 A project that evaluates and simply is not a test project is never reported.
+
+## A test passes under red's run but fails under `dotnet test`
+
+`redgreen red` runs each test application itself, not through `dotnet test`, but with the same working directory (the
+application's output folder, `bin/<Configuration>/<framework>/`) and, on VSTest, the environment variables of the project's
+`.runsettings` (`RunSettingsFilePath`, its `RunConfiguration/EnvironmentVariables`). The .NET 10 SDK's `dotnet test` on
+Microsoft.Testing.Platform does not apply them, so neither does the red there. Other differences remain:
+
+- the red runs only the new tests, together, so static state that other tests of the suite set up is not there, and state the
+  other new tests set up is;
+- the rest of a `.runsettings` (test run parameters, adapter sections, other run configuration) is not applied, and an NUnit run
+  uses run settings of its own to select the tests;
+- the test process is started differently: no VSTest test host, and not as the server `dotnet test` starts on
+  Microsoft.Testing.Platform.
+
+So when a new test is GREEN_BEFORE, the red runs it once more through a plain `dotnet test` filtered to that test (`--no-build`,
+in the project's directory, within the red's `gates.timeoutSeconds`; at most three tests). If it fails there, the red prints a
+warning, "passes under red's run but fails under dotnet test", with both command lines, their working directories and the
+variables that commonly change how .NET code behaves (`DOTNET_*`, `ASPNETCORE_*`, `TZ`, `LANG`, `LC_*`; a value whose name looks
+like a secret is shown as `<redacted>`). The verdict stays GREEN_BEFORE: the test passed before the implementation existed under
+the red's own run, so the red is rejected either way. Find what the test depends on (a time zone, the culture, a file, state
+another test leaves behind) and make it explicit in the test: that dependency is also why its result changes from one machine or
+runner to another.
+
+A red that judges new tests also prints, per test application, a `dotnet test` line filtered to them
+(`Reproduce <assembly> with dotnet test: cd … && dotnet test …`) to run them yourself. The re-check of an amended test does not.
 
 ## `redgreen green` says "other tests fail" for tests the feature never touched
 

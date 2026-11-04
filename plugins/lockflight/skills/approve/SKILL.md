@@ -10,10 +10,11 @@ argument-hint: "[spec | tasks] [--feature <id>]"
 An approval is the user's decision, recorded by the engine against the exact content of the artifacts. Only the user gives it,
 in one of two ways:
 
-- **In this session:** the user types `/lockflight:approve spec` (or `tasks`; typed alone, it picks the phase that waits for
-  an approval). The engine's hook, not you, shows them what would be approved with a one-time code on its own `Your code:`
-  line; they type `/lockflight:approve spec <code>` and the engine records the approval. The hashes shown above that line are
-  not the code. Claude Code labels the message "blocked by hook"; it is not an error.
+- **In this session:** the user types `/lockflight:approve` (one step; typed alone it picks the phase that waits, or they
+  name it: `/lockflight:approve spec`, `/lockflight:approve tasks`). The engine's hook, not you, runs the phase check and
+  records the approval for the files as they are at that moment, and shows the user what was approved. When the files changed
+  since your last turn ended, it shows the user the content instead, and the same command typed again approves it. No code is
+  involved. Claude Code labels that message "blocked by hook"; it is not an error.
 - **In a separate terminal window:** `lockflight approve spec|tasks` (not with `!` in Claude Code: that runs inside the
   session and is refused).
 
@@ -22,8 +23,9 @@ is the engine the hooks run, and it works whatever way Lockflight was installed.
 
 ## Never
 
-- Never type, guess, repeat or pre-fill an approval code, and never ask the user to paste one to you. The code is for the user
-  to read from the engine's message and type themselves.
+- Never type `/lockflight:approve` or ask for a code: there is none, and only the user's own typing counts.
+- Never edit `spec.md`, `plan.md` or `tasks.md` after asking the user to approve them: end your turn instead, so they approve
+  what they read.
 - Never run `lockflight approve spec|tasks` yourself and never edit files under `.lockflight/`.
 - Never assume an approval happened because of this skill's arguments or the conversation: the hook may not have run (an
   engine that is not linked, a hook that failed or timed out). Only the engine's approval state counts.
@@ -46,10 +48,9 @@ is the engine the hooks run, and it works whatever way Lockflight was installed.
    - Summarise what would be approved, briefly and faithfully: for `spec` the requirements (FR IDs and one line each) and
      the user stories; for `tasks` the stories, their tests-first order and which requirements each covers. Mention anything
      that looks unclear or risky — the user approves the content, not your summary.
-   - Tell the user to type `/lockflight:approve <spec|tasks>` themselves (add `--feature <id>` when it is not the active
-     feature).
-     The engine then shows them the content and the code to type. Or, in a separate terminal window, with the absolute
-     project root:
+   - Tell the user to type `/lockflight:approve` themselves (add the phase and `--feature <id>` when it is not the active
+     feature's waiting phase), then end your turn without editing the files.
+     Or, in a separate terminal window, with the absolute project root:
 
      ```
      cd <project root> && .lockflight/bin/lockflight approve <spec|tasks>

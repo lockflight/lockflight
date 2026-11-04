@@ -29,9 +29,11 @@ applies, for this whole feature:
   in this session to the rules in steps 1 and 3, or let them write the files and run the checks for them.
 
 **Approvals.** Whenever a step below asks for an approval, the user gives it in one of two ways: they type
-`/lockflight:approve spec` (or `tasks`) in this session, or they open a separate terminal window (not with `!` in Claude
-Code: that runs inside the session and is refused) and run `.lockflight/bin/lockflight approve spec|tasks` there, from the
-project root.
+`/lockflight:approve` in this session (one step; it picks the spec or the tasks, whichever waits), or they open a separate
+terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run
+`.lockflight/bin/lockflight approve spec|tasks` there, from the project root. The approval binds the files as they are when
+the user types it, so finish every edit and end your turn before asking for it; content you change after that is shown to the
+user again instead of approved.
 Never approve for them.
 
 1. **Specify.** The feature lives in `specs/<NNN-slug>/` (the next free three-digit number, `001`, `002`, …, and a short
@@ -51,7 +53,7 @@ Never approve for them.
      every template placeholder and delete unused example lines.
    - **By hand:** ask the user what is open, write `spec.md` to the rules above, and run the check.
    In every case, copy a `Security note:` line from an agent's report verbatim into your reply, in every round.
-2. **Human gate — spec.** Ask the user to review `spec.md` and approve it (`/lockflight:approve spec`, see Approvals). Wait.
+2. **Human gate — spec.** Ask the user to review `spec.md` and approve it (`/lockflight:approve`, see Approvals). Wait.
 3. **Plan and tasks.** `plan.md` (optional, but write it) holds the approach, the files and the declared signatures of the
    members the stubs declare. `tasks.md` has task lines `- [ ] T010 [US1] (FR-001) …`: every story task cites its
    requirements `(FR-001)`, every requirement is cited, and within a story the stub declaration comes first, then the test
@@ -72,7 +74,7 @@ Never approve for them.
    - **Spec Kit:** run `/speckit-plan`, then `/speckit-tasks`. Tests are mandatory whatever the stock `/speckit-tasks`
      text says (the Lockflight preset appends these rules to it).
    - **By hand:** write both files to the rules above, and run the check.
-4. **Human gate — tasks.** Ask the user to approve the tasks (`/lockflight:approve tasks`, see Approvals). Wait.
+4. **Human gate — tasks.** Ask the user to review `plan.md` and `tasks.md` and approve them (`/lockflight:approve`, see Approvals). Wait.
 5. **Start.** `.lockflight/bin/lockflight redgreen start` records the test inventory (once per feature) and runs the suite once.
    If it warns that tests already fail, tell the user: they decide whether to accept them, by typing
    `/lockflight:baseline tests` in Claude Code, and merge that baseline in its own pull request first.

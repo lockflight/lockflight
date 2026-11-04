@@ -33,7 +33,7 @@ public sealed class TestRunnersTests
         {
             TestApp app = new(output.FullName, Path.Combine(output.FullName, "Shop.Tests.dll"), (RunnerMode)mode);
 
-            TestListing listing = await TestRunners.ListAsync(app, output.FullName, TimeSpan.FromSeconds(10), TimeProvider.System, TestContext.Current.CancellationToken);
+            TestListing listing = await TestRunners.ListAsync(app, TimeSpan.FromSeconds(10), TimeProvider.System, TestContext.Current.CancellationToken);
 
             Assert.False(listing.Listed);
             Assert.Contains(package, listing.Problem, StringComparison.Ordinal);
@@ -55,7 +55,7 @@ public sealed class TestRunnersTests
             await File.WriteAllTextAsync(Path.Combine(output.FullName, "testhost.dll"), string.Empty, TestContext.Current.CancellationToken);
 
             TestListing listing = await TestRunners.ListAsync(
-                new TestApp(output.FullName, assembly, RunnerMode.NUnitMtp), output.FullName, TimeSpan.FromSeconds(10), TimeProvider.System, TestContext.Current.CancellationToken);
+                new TestApp(output.FullName, assembly, RunnerMode.NUnitMtp), TimeSpan.FromSeconds(10), TimeProvider.System, TestContext.Current.CancellationToken);
 
             Assert.True(listing.Listed);
             Assert.Equal(RunnerMode.NUnit, listing.Mode);
@@ -78,7 +78,7 @@ public sealed class TestRunnersTests
     {
         TestApp app = new(Path.GetTempPath(), Path.Combine(Path.GetTempPath(), $"lockflight-missing-{Guid.CreateVersion7()}.dll")) { Mode = RunnerMode.VSTest };
 
-        TestListing listing = await TestRunners.ListAsync(app, Path.GetTempPath(), TimeSpan.FromSeconds(10), TimeProvider.System, TestContext.Current.CancellationToken);
+        TestListing listing = await TestRunners.ListAsync(app, TimeSpan.FromSeconds(10), TimeProvider.System, TestContext.Current.CancellationToken);
 
         Assert.False(listing.Listed);
     }

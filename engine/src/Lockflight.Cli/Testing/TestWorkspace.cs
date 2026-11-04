@@ -68,7 +68,7 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
         List<TestApp> probed = [];
         foreach (TestApp app in Apps)
         {
-            TestListing listing = await TestRunners.ListAsync(app, root, timeLimit, time, cancellationToken);
+            TestListing listing = await TestRunners.ListAsync(app, timeLimit, time, cancellationToken);
             if (!listing.Listed)
             {
                 FailedApp = listing.Problem is null ? Path.GetRelativePath(root, app.AssemblyPath) : $"{Path.GetRelativePath(root, app.AssemblyPath)} ({listing.Problem})";
@@ -154,7 +154,7 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
             }
 
             TraitCondition? suiteFilter = suiteFilters?.GetValueOrDefault(app);
-            TestRunOutcome run = await TestRunners.For(app.Mode, time).RunAsync(app, filters, suiteFilter, root, left < timeLimit ? left : timeLimit, cancellationToken);
+            TestRunOutcome run = await TestRunners.For(app.Mode, time).RunAsync(app, filters, suiteFilter, left < timeLimit ? left : timeLimit, cancellationToken);
             if (!run.Reported)
             {
                 FailedApp = Path.GetRelativePath(root, app.AssemblyPath);

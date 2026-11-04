@@ -7,15 +7,15 @@ internal sealed class XunitConsoleRunner(TimeProvider time) : ITestRunner
 {
     public RunnerMode Mode => RunnerMode.Native;
 
-    public async Task<TestListing> ListAsync(TestApp app, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
+    public async Task<TestListing> ListAsync(TestApp app, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
-        ProcessResult native = await ProcessRunner.RunAsync("dotnet", [app.AssemblyPath, "-list", "full/json", "-noColor"], workingDirectory, timeLimit, cancellationToken);
+        ProcessResult native = await ProcessRunner.RunAsync("dotnet", [app.AssemblyPath, "-list", "full/json", "-noColor"], app.OutputDirectory, timeLimit, app.Environment, cancellationToken);
         return native.ExitCode == 0 && TestInventory.Parse(app.AssemblyName, native.Output) is IReadOnlyList<TestCase> tests
             ? TestListing.Of(tests, RunnerMode.Native)
             : TestListing.NotListed;
     }
 
     public async Task<TestRunOutcome> RunAsync(
-        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
-        TestRunOutcome.Of(await NativeTestRunner.RunAsync(app, RunnerMode.Native, methodFilters, suiteFilter, workingDirectory, timeLimit, time, cancellationToken));
+        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, TimeSpan timeLimit, CancellationToken cancellationToken) =>
+        TestRunOutcome.Of(await NativeTestRunner.RunAsync(app, RunnerMode.Native, methodFilters, suiteFilter, timeLimit, time, cancellationToken));
 }

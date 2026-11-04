@@ -103,7 +103,8 @@ call no production code (architecture tests that read types or sources). Mark su
   not structural*, and it keeps the requirement uncovered even when another structural test passes.
   The one exception is a test that fails there on an assertion **without calling production code** (RED_NO_PRODUCTION) and
   passes at head. That is how an architecture test that reads types or sources looks, and it shows as
-  `(structural: architecture rule the change establishes)`. The production-call scan is static, though: a test that reaches
+  `(structural: architecture rule the change establishes)`. A test that calls production code and fails on an assertion
+  there (RED_ASSERT) never counts as an architecture rule: that is what a behaviour change looks like. The production-call scan is static, though: a test that reaches
   production code only through reflection, a type argument (`WebApplicationFactory<Program>`) or a process, or that only checks
   that a file or type exists, looks the same. Review each architecture rule the trace lists.
 - **What it proves, and what it does not.** Passing on both sides shows only that the test's own assertions held there. A
