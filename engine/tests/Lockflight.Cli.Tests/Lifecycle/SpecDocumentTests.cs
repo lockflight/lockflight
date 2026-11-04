@@ -82,4 +82,22 @@ public sealed class SpecDocumentTests
 
         Assert.Empty(spec.Placeholders);
     }
+
+    [Fact]
+    public void AnOutsideDotNetMarkerIsReadWithItsPathsAndLeftOutOfTheText()
+    {
+        SpecDocument spec = SpecDocument.Parse("""
+            - **FR-006** [outside .NET: web/src/app/streak-card.spec.ts, web/src/app/streak.spec.ts]: The streak card MUST show the current streak
+            - **FR-007**: The API MUST return the streak
+            """);
+
+        Requirement outside = spec.Requirements[0];
+        Assert.Equal("FR-006", outside.Id);
+        Assert.Equal("The streak card MUST show the current streak", outside.Text);
+        Assert.Equal(["web/src/app/streak-card.spec.ts", "web/src/app/streak.spec.ts"], outside.VerifiedOutside);
+        Assert.Equal("outside .NET: web/src/app/streak-card.spec.ts, web/src/app/streak.spec.ts", outside.Marker);
+        Assert.Empty(spec.Requirements[1].VerifiedOutside);
+        Assert.Null(spec.Requirements[1].Marker);
+        Assert.Empty(spec.Placeholders);
+    }
 }

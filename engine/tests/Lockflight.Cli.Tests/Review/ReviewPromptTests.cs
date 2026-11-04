@@ -30,6 +30,16 @@ public sealed class ReviewPromptTests
     }
 
     [Fact]
+    public void ThePromptSaysAMoveShowsOnlyItsEdits()
+    {
+        string prompt = ReviewPrompt.Build(new ReviewPromptData("FR-001", "specs/001/spec.md", "+x", null, string.Empty, string.Empty, Marker)).ReplaceLineEndings(" ");
+
+        Assert.Matches(@"`rename from`\s+and\s+`rename to`", prompt);
+        Assert.Matches(@"similarity index 100%`?\s+has no hunks", prompt);
+        Assert.Matches(@"new\s+where it now lives", prompt);
+    }
+
+    [Fact]
     public void TheReproductionContextIsFencedAsData()
     {
         string prompt = ReviewPrompt.Build(new ReviewPromptData("FR-001", "specs/001/spec.md", "+x", null, string.Empty, "- tests/Shop.Tests/Shop.Tests.csproj: net10.0", Marker));

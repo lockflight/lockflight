@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.ApprovalsOfRecord;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Evidence.Blocked;
+using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Routing;
 
@@ -23,6 +24,9 @@ internal static class CiEvidence
 
     /// <summary>The longest string from the pull request kept in evidence; longer ones are cut and end with an ellipsis.</summary>
     public const int MaxTextLength = 300;
+
+    /// <summary>The longest host-tampering baseline entry the evidence carries; a longer one is left out rather than cut, since a cut entry accepts nothing.</summary>
+    public const int MaxBaselineEntryLength = 2_000;
 
     /// <summary>The most policy loosenings kept in evidence; past it, one last line counts the rest.</summary>
     public const int MaxLoosened = 200;
@@ -88,13 +92,10 @@ internal static class CiEvidence
                 ? new JsonObject
                 {
                     ["verdict"] = CheckVerdictNames.ToName(trace.Verdict),
-                    ["rows"] = new JsonArray([.. trace.Rows.Select(row => new JsonObject
-                    {
-                        ["requirement"] = Cap(row.RequirementId),
-                        ["tests"] = Strings(row.Tests.Select(Cap)),
-                        ["lost"] = Strings(row.Lost.Select(Cap)),
-                        ["status"] = row.Covered ? "covered" : "not-covered",
-                    })]),
+                    ["excluded"] = trace.Rows.Count(row => row.Excluded),
+                    ["structural"] = trace.Rows.Count(row => row.Structural),
+                    ["markerChanges"] = Strings(trace.MarkerChanges.Select(Cap)),
+                    ["rows"] = new JsonArray([.. trace.Rows.Select(TraceRowNode)]),
                 }
                 : null,
             ["gates"] = run.Findings.Gates?.Result?.DeepClone(),
@@ -238,6 +239,7 @@ internal static class CiEvidence
         ["kind"] = finding.Kind,
         ["location"] = Cap(finding.Location),
         ["member"] = Cap(finding.Member),
+        ["baselineEntry"] = HostTamperingJudge.BaselineEntry(finding) is { Length: <= MaxBaselineEntryLength } entry ? entry : null,
     };
 
     private static JsonObject GreenNode(GreenJudgement green) => new()
@@ -247,6 +249,25 @@ internal static class CiEvidence
         ["failed"] = green.Failed,
         ["problems"] = Strings(green.Problems.Select(Cap)),
         ["flaky"] = Strings(green.Flaky.Select(Cap)),
+    };
+
+    /// <summary>
+    /// A trace row: <c>covered</c>, <c>excluded</c> (verified outside .NET) or <c>not-covered</c>, with what the outside .NET marker's
+    /// files came to.
+    /// </summary>
+    private static JsonObject TraceRowNode(TraceRow row) => new()
+    {
+        ["requirement"] = Cap(row.RequirementId),
+        ["tests"] = Strings(row.Tests.Select(Cap)),
+        ["lost"] = Strings(row.Lost.Select(Cap)),
+        ["status"] = row.Covered ? "covered" : row.Excluded ? "excluded" : "not-covered",
+        ["note"] = row.Note is string note ? Cap(note) : null,
+        ["outside"] = new JsonArray([.. row.Outside.Select(file => new JsonObject
+        {
+            ["path"] = Cap(file.Path),
+            ["state"] = OutsideFileStateNames.ToName(file.State),
+            ["change"] = file.Change,
+        })]),
     };
 
     private static JsonObject CycleNode(CycleJudgement cycle, JudgeFindings findings) => new()

@@ -154,7 +154,8 @@ internal static partial class HumanOnlyCommands
                 continue;
             }
 
-            List<string> arguments = [.. words.Skip(index + 1).Where(word => !word.StartsWith('-'))];
+            // An empty word ('') is no command the engine runs: skipping it, like an option, keeps the reserved command in view.
+            List<string> arguments = [.. words.Skip(index + 1).Where(word => word.Length > 0 && !word.StartsWith('-'))];
             if (IsReserved(arguments))
             {
                 return string.Join(' ', arguments.Take(CommandWords));

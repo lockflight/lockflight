@@ -45,7 +45,8 @@ public sealed class SessionAmendTests : IDisposable
         [
             new RedGreenTest("T:Shop.Tests.ShippingTests.FirstKilogramCostsFive", "Shop.Tests.ShippingTests.FirstKilogramCostsFive", RedClass.RedStub, []),
             new RedGreenTest("T:Shop.Tests.ShippingTests.EveryKilogramCostsMore", "Shop.Tests.ShippingTests.EveryKilogramCostsMore", RedClass.RedStub, []),
-        ]));
+        ])
+        { Snapshot = "0123456789abcdef0123456789abcdef01234567" });
         record.Save(RecordPath, "f1");
     }
 
@@ -79,9 +80,29 @@ public sealed class SessionAmendTests : IDisposable
         Assert.True(exitCode == ExitCode.Pass, error);
         Assert.StartsWith("Step 2 of 2 — amended: Shop.Tests.ShippingTests.FirstKilogramCostsFive", SessionTyping.SystemMessage(output), StringComparison.Ordinal);
         Assert.Contains("redgreen red", output, StringComparison.Ordinal);
+        Assert.Contains("The re-check runs on the red-time snapshot of cycle 1 with the cycle's amended files laid over it", SessionTyping.SystemMessage(output), StringComparison.Ordinal);
+        string context = output.Replace(SessionTyping.SystemMessage(output), string.Empty, StringComparison.Ordinal);
+        Assert.Contains("The re-check runs on the red-time snapshot of cycle 1", context, StringComparison.Ordinal);
+        Assert.Contains("do not undo the implementation", context, StringComparison.Ordinal);
         RedGreenAmend amend = Assert.Single(RedGreenRecord.Load(RecordPath)!.Amends);
         Assert.Equal((Person, "the rate is 5.50", time.Now), (amend.By, amend.Reason, amend.At));
         Assert.Equal([ShippingFile], TestLock.AmendedFiles(new Manifest(root.FullName, [], StopGate: false, StopTarget: null, GateSettings.Default)));
+    }
+
+    [Fact]
+    public async Task TheSecondStepTellsTheAgentNotToBreakTheImplementationWhenTheCycleHasNoSnapshot()
+    {
+        RedGreenRecord record = RedGreenRecord.Load(RecordPath)!;
+        record.Cycles[0] = record.Cycles[0] with { Snapshot = null };
+        record.Save(RecordPath, "f1");
+        await TypeAsync($"{Test} --reason \"the rate is 5.50\"");
+
+        (ExitCode exitCode, string output, string error) = await TypeAsync($"{Test} {Code}");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        string context = output.Replace(SessionTyping.SystemMessage(output), string.Empty, StringComparison.Ordinal);
+        Assert.Contains("Cycle 1 has no red-time snapshot, so the re-check runs on the current tree", context, StringComparison.Ordinal);
+        Assert.Contains("Do not break the implementation to get a red", context, StringComparison.Ordinal);
     }
 
     [Fact]

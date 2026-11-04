@@ -43,8 +43,9 @@ internal static class InPlaceEditTargets
                 scriptByOption |= clusterScript;
                 index += takesNext ? 1 : 0;
             }
-            else
+            else if (argument.Length > 0)
             {
+                // An empty word is BSD sed's backup suffix (sed -i '' …), not the script.
                 operands.Add(argument);
             }
         }

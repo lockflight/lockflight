@@ -23,6 +23,16 @@ internal sealed class OverlayRecheck(TreeBuilder trees, TimeProvider time)
             .Where(path => !kept.Contains(path))];
         HashSet<string> overlaid = [.. overlay];
         string[] deleted = [.. older.Where(side.IsTestSide).Where(path => !overlaid.Contains(path) && !kept.Contains(path))];
+        return await RunOverlaidAsync(plan, olderCommit, keys, overlay, deleted, head, purpose, cancellationToken);
+    }
+
+    /// <summary>
+    /// As <see cref="RunAsync"/>, with the head's files to lay over the older commit and the paths to delete there given: the
+    /// structural check lays over only the files that declare its tests and the test projects' project files.
+    /// </summary>
+    public async Task<IReadOnlyList<RecheckResult>> RunOverlaidAsync(
+        JudgePlan plan, string olderCommit, IReadOnlyList<string> keys, IReadOnlyList<string> overlay, IReadOnlyList<string> deleted, TreeListing head, string purpose, CancellationToken cancellationToken)
+    {
         TreeListing tree = await trees.ListOverlaidAsync(olderCommit, plan.Inputs.Head, overlay, deleted, purpose, cancellationToken);
         if (tree.Inventory is not IReadOnlyList<TestCase> inventory)
         {
@@ -55,6 +65,7 @@ internal sealed class OverlayRecheck(TreeBuilder trees, TimeProvider time)
             evaluation.Verdicts.TryGetValue(test.Key, out RedVerdict? verdict) ? verdict.Why : RedClassNames.ToName(test.RedClass))
         {
             Assertions = assertions.TryGetValue(test.Key, out int count) ? count : null,
+            PassedEveryRow = SuiteChecks.PassedEveryRow(run, test.Key),
         }));
         return results;
     }

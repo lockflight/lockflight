@@ -171,7 +171,7 @@ stderr: lockflight: unknown init option 'x'; use --profile lite|standard, --pres
 $ lockflight update x
 exit: 4 Config
 stdout: 
-stderr: lockflight: update takes only --source <feed> (a package source URL or folder); `update --project --dry-run` shows what the project step would change
+stderr: lockflight: update takes only --source <feed> (a package source URL or folder); `update --project --dry-run` shows what the project step would change, and `update --project --judge-workflow` replaces a gates-only GitHub workflow with the CI judge's
 
 $ lockflight foo
 exit: 4 Config

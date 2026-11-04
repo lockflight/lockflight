@@ -31,7 +31,7 @@ checktask() {
   printf '%-44s expected=%s got=%s %s\n' "$1" "$2" "$got" "$r"
 }
 # A typed slash command (UserPromptExpansion); $1=dir $2=command name $3=arguments.
-expansion() { printf '{"cwd":"%s","hook_event_name":"UserPromptExpansion","expansion_type":"slash_command","command_name":"%s","command_args":"%s","command_source":"plugin"}' "$(winpath "$1")" "$2" "$3"; }
+expansion() { printf '{"cwd":"%s","session_id":"probe","hook_event_name":"UserPromptExpansion","expansion_type":"slash_command","command_name":"%s","command_args":"%s","command_source":"plugin"}' "$(winpath "$1")" "$2" "$3"; }
 checkexp() { # $1=name $2=expected exit $3=entrypoint $4=attended $5=json [$6=text stderr must contain]
   printf '%s' "$5" | CLAUDE_CODE_ENTRYPOINT="$3" CLAUDE_CODE_SESSION_ATTENDED="$4" "$SHIM" user-prompt-expansion >/dev/null 2>"$WORK/err"; got=$?
   if [ "$got" = "$2" ] && { [ -z "${6:-}" ] || grep -qF -- "$6" "$WORK/err"; }; then pass=$((pass+1)); r=ok; else fail=$((fail+1)); r="FAIL ($(head -c 400 "$WORK/err"))"; fi
@@ -113,9 +113,9 @@ mkdir -p "$proj/specs/001-probe" && printf -- '### User Story 1 - Probe\n\n1. **
 checkexp "linked: other slash command ignored"  0 sdk-cli 0 "$(expansion "$proj" lockflight:status "")"
 checkexp "linked: approve, headless refused"    2 sdk-cli 0 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
 checkexp "linked: approve, unattended refused"  2 cli 0 "$(expansion "$proj" lockflight:approve spec)" "nothing was approved"
-checkexp "linked: approve, attended shows code" 2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "/lockflight:approve spec "
-checkexp "linked: approve, wrong code refused"  2 cli 1 "$(expansion "$proj" lockflight:approve "spec zzzzzz")" "not the code shown"
-checkexp "linked: approve alone, code waiting"  2 cli 1 "$(expansion "$proj" lockflight:approve "")" "Step 2 of 2 — type: /lockflight:approve spec"
+checkexp "linked: approve, no turn ended, shown" 2 cli 1 "$(expansion "$proj" lockflight:approve spec)" "not approved yet"
+checkexp "linked: approve, typed again, records" 0 cli 1 "$(expansion "$proj" lockflight:approve spec)"
+checkexp "linked: approve alone, nothing waits" 2 cli 1 "$(expansion "$proj" lockflight:approve "")" "no approval is waiting"
 checkexp "linked: baseline, headless refused"   2 sdk-cli 0 "$(expansion "$proj" lockflight:baseline build)" "nothing was accepted"
 checkexp "linked: baseline, unknown kind"       2 cli 1 "$(expansion "$proj" lockflight:baseline everything)" "lockflight baseline build|tests|deps"
 checkexp "linked: reset, unattended refused"    2 cli 0 "$(expansion "$proj" lockflight:reset "")" "nothing was reset"

@@ -33,4 +33,8 @@ recorded, and trace and the review's pull request summary show the amend. Only t
    `/lockflight:amend ShippingTests.FirstKilogramCostsFive --reason "FR-001 says 5.50, not 5.00"`.
 3. Once `redgreen status` shows the amend, change only that test, as the reason says. Then run
    `.lockflight/bin/lockflight redgreen red`: the amended test must fail in production code again (RED_STUB or RED_ASSERT).
-   Then go on to green.
+   That red re-checks it on the cycle's red-time snapshot with the current content of the cycle's amended files laid over
+   it, so the implementation written since the red cannot make it pass: never undo or break the implementation to get a red.
+   The amended test must therefore compile against the code as it was at red. A cycle without a snapshot is re-checked on the
+   current tree, as the amend's output says; if the implementation makes the test pass there, tell the user (they can move it
+   aside for this red, or reset the cycle) instead of breaking it. Then go on to green.

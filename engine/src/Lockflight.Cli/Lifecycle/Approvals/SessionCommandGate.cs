@@ -9,11 +9,12 @@ namespace Lockflight.Cli.Lifecycle.Approvals;
 /// What every in-session human command (<c>/lockflight:approve</c>, <c>/lockflight:baseline</c>, <c>/lockflight:reset</c>,
 /// <c>/lockflight:amend</c>) checks the same way. The <c>UserPromptExpansion</c> hook fires only for a prompt that expands a slash
 /// command, never for the agent's own Skill call. The command must come from the Lockflight plugin and be typed in an interactive
-/// session a person attends. It runs in two steps: without a code the engine shows the person, and not the agent, what would be
-/// recorded, with a one-time code bound to that state (<see cref="SessionCodes"/>); with the code, and only while the state is
-/// unchanged, it records the decision as the terminal command does. A refusal ends with the command for a separate terminal. A
-/// guardrail: it keeps the agent, headless sessions and scheduled turns from deciding, and binds the decision to what was shown; it
-/// cannot stop something that types into the person's terminal.
+/// session a person attends. The commands that discard or unlock evidence run in two steps: without a code the engine shows the
+/// person, and not the agent, what would be recorded, with a one-time code bound to that state (<see cref="SessionCodes"/>); with
+/// the code, and only while the state is unchanged, it records the decision as the terminal command does. <c>/lockflight:approve</c>
+/// takes one step (<see cref="SessionApproval"/>). A refusal ends with the command for a separate terminal. A guardrail: it keeps
+/// the agent, headless sessions and scheduled turns from deciding, and binds the decision to what was shown; it cannot stop
+/// something that types into the person's terminal.
 /// </summary>
 internal sealed class SessionCommandGate(CliContext context, Manifest manifest, SessionCommandSpec spec)
 {
@@ -36,7 +37,7 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
 
     /// <summary>
     /// Refusals that stop something other than the person's own typing (a command from another source, an unattended session, a
-    /// tampered code store): guard blocks. Every other refusal is an answer to what the person typed.
+    /// tampered state store): guard blocks. Every other refusal is an answer to what the person typed.
     /// </summary>
     private static readonly HashSet<string> Blocking = ["not-plugin", "unattended", "unsafe-state"];
 
@@ -59,7 +60,7 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
             return new SessionRefusal("not-plugin", $"/{spec.Name} here comes from '{input.Prompt?.Source ?? "(unknown)"}', not from the Lockflight plugin");
         }
 
-        return UnattendedReason() is string unattended
+        return UnattendedReason(context.Environment) is string unattended
             ? new SessionRefusal("unattended", $"/{spec.Name} {whatItDoes} only when you type it in an interactive Claude Code session, and this one {unattended}")
             : null;
     }
@@ -156,13 +157,6 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
             $"lockflight: {spec.NothingDone} yet: a code is waiting for {shownFor}, valid until {waiting.ExpiresAt.ToUniversalTime():HH:mm} UTC.\n"
             + $"Step 2 of 2 — type: {line} <the code shown with it>\n{again}.\n{NotAnError}");
 
-    /// <summary>
-    /// The refusal of a second step whose code no longer works, followed by step 1 again (<paramref name="digest"/>, with a new
-    /// code) for <paramref name="what"/> (<c>the spec</c>): what the person would see by typing the command again.
-    /// </summary>
-    public SessionCommandResult RefuseAndShowAgain(SessionRefusal refusal, string what, string digest) =>
-        SessionCommandResult.Answered($"{spec.RefusalPrefix}:{refusal.Code}", $"lockflight: {spec.NothingDone}: {refusal.Reason}. Here is {what} again, with a new code.\n{digest}");
-
     /// <summary>A refusal that ends with the command for a separate terminal (<paramref name="terminalArguments"/> after the engine), never with the code.</summary>
     public SessionCommandResult Refuse(SessionRefusal refusal, string terminalArguments)
     {
@@ -187,10 +181,10 @@ internal sealed class SessionCommandGate(CliContext context, Manifest manifest, 
     /// <c>cli</c> and attended <c>1</c>; a headless one (<c>claude -p</c>, also when the agent starts it) is <c>sdk-cli</c> and
     /// <c>0</c>. Anything missing or unknown counts as unattended.
     /// </summary>
-    private string? UnattendedReason()
+    public static string? UnattendedReason(EnvironmentReader environment)
     {
-        string? entrypoint = context.Environment.Get(EnvironmentVariables.ClaudeCodeEntrypoint);
-        string? attended = context.Environment.Get(EnvironmentVariables.ClaudeCodeSessionAttended);
+        string? entrypoint = environment.Get(EnvironmentVariables.ClaudeCodeEntrypoint);
+        string? attended = environment.Get(EnvironmentVariables.ClaudeCodeSessionAttended);
         if (entrypoint != InteractiveEntrypoint)
         {
             return $"is not interactive ({EnvironmentVariables.ClaudeCodeEntrypoint}={entrypoint ?? "unset"})";

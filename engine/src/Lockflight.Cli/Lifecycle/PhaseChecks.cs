@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Lifecycle.Approvals;
 
@@ -9,7 +10,7 @@ namespace Lockflight.Cli.Lifecycle;
 /// before the implementation tasks (stub declarations may come anywhere). A failure names each task, its line and why it was
 /// classified as it was, because the agent fixing tasks.md cannot see the classification rules.
 /// </summary>
-internal static class PhaseChecks
+internal static partial class PhaseChecks
 {
     public const string SpecifyPhase = "specify";
 
@@ -18,8 +19,8 @@ internal static class PhaseChecks
     private const int MaxListed = 5;
 
     private const string HowToMark = "Mark a test task with a '### Tests for …' heading above it, test wording at the start "
-        + "('Write tests …', 'Spec for …', 'Cover … with tests') or the test file it writes (*.spec.ts, *.test.ts, *Tests.cs, a *.Tests/ "
-        + "project); mark a stub declaration with 'stub', 'skeleton', 'declare signatures' or 'NotImplementedException' so it may "
+        + "('Write tests …', 'Spec for …', 'Cover … with tests') or, outside a '### Implementation' heading, the test file it writes "
+        + "(*.spec.ts, *.test.ts, *Tests.cs, a *.Tests/ project); mark a stub declaration with 'stub', 'skeleton', 'declare signatures' or 'NotImplementedException' so it may "
         + "come first; move implementation tasks after the story's last test task";
 
     /// <summary>The checks of the phase named <paramref name="phase"/> (<c>specify</c> or <c>tasks</c>); null for any other name.</summary>
@@ -72,7 +73,8 @@ internal static class PhaseChecks
             return items;
         }
 
-        HashSet<string> known = [.. SpecDocument.Parse(File.ReadAllText(feature.SpecPath)).Requirements.Select(requirement => requirement.Id)];
+        SpecDocument spec = SpecDocument.Parse(File.ReadAllText(feature.SpecPath));
+        HashSet<string> known = [.. spec.Requirements.Select(requirement => requirement.Id)];
         IReadOnlyList<TaskLine> tasks = TasksDocument.Parse(File.ReadAllText(feature.TasksPath));
         TaskLine[] storyTasks = [.. tasks.Where(task => task.Story is not null)];
         HashSet<string> cited = [.. tasks.SelectMany(task => task.Requirements)];
@@ -96,6 +98,17 @@ internal static class PhaseChecks
             ? "in every story the tests come before the implementation"
             : $"{Listed(outOfOrder)}. {HowToMark}"));
 
+        if (OutsideWithoutTask(spec, tasks) is string[] untested)
+        {
+            items.Add(new("tasks.outside-dotnet", true, untested.Length == 0
+                ? "every requirement verified outside .NET has a task for its Vitest or Jest test"
+                : $"requirements verified outside .NET with no task that names Vitest, Jest or the marked file: {string.Join(", ", untested.Take(MaxListed))}; "
+                    + "add the task that writes that test, since Lockflight runs none of them")
+            {
+                IsWarning = untested.Length > 0,
+            });
+        }
+
         string[] unknownUnits = [.. Testing.TestWorkspaces.UnitsNamedIn(feature).Where(unit => !units.Contains(unit, StringComparer.OrdinalIgnoreCase)).Order(StringComparer.Ordinal)];
         if (unknownUnits.Length > 0 || units.Count > 0)
         {
@@ -105,6 +118,23 @@ internal static class PhaseChecks
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// The requirements marked <c>[outside .NET: …]</c> that no task citing them names Vitest, Jest or one of their files for; null
+    /// when the spec marks none.
+    /// </summary>
+    private static string[]? OutsideWithoutTask(SpecDocument spec, IReadOnlyList<TaskLine> tasks)
+    {
+        Requirement[] outside = [.. spec.Requirements.Where(requirement => requirement.VerifiedOutside.Count > 0)];
+        if (outside.Length == 0)
+        {
+            return null;
+        }
+
+        return [.. outside.Where(requirement => !tasks.Any(task => task.Requirements.Contains(requirement.Id)
+                && (FrontendRunner().IsMatch(task.Description) || requirement.VerifiedOutside.Any(path => task.Description.Contains(path, StringComparison.Ordinal)))))
+            .Select(requirement => requirement.Id).Distinct(StringComparer.Ordinal)];
     }
 
     /// <summary>The story's implementation tasks that come before its last test task, or the story itself when it has no test task.</summary>
@@ -127,4 +157,7 @@ internal static class PhaseChecks
         : string.Join("; ", entries);
 
     private static string Lines(IReadOnlyList<int> lines) => string.Join(", ", lines.Take(MaxListed));
+
+    [GeneratedRegex(@"\b(vitest|jest)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex FrontendRunner();
 }

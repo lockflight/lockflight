@@ -10,13 +10,22 @@ namespace Lockflight.Cli.Ci;
 /// Trace in CI: every requirement of the spec must be named by a test that went red at one of this pull request's red commits, is
 /// unchanged since (or its amend was accepted) and passes at head (<see cref="TraceMatrix"/>). Tests without a red never count.
 /// When the spec was on the base already, the pull request answers for the requirements it adds or changes and those its red
-/// tests name, so a feature can be delivered one story per pull request. In a unit repository of a workspace shell the spec is the
+/// tests name, so a feature can be delivered one story per pull request. A requirement marked <c>[outside .NET: …]</c> is excluded
+/// when every file it names exists at head and names it (<see cref="OutsideVerification"/>); when every requirement is, trace is
+/// N/A, never PASS. A requirement marked <c>[structural]</c> is covered by a structural test that passes at head and on the base's
+/// code (<see cref="StructuralJudge"/>, the rule shared with local trace in <see cref="StructuralCheck"/>). In a unit repository of a workspace shell the spec is the
 /// shell's (<see cref="ShellSpecSource"/>) and the pull request answers for the requirements its red tests name.
 /// </summary>
 internal static class TraceJudge
 {
     public static async Task<TraceJudgement> DecideAsync(
-        JudgePlan plan, IReadOnlyList<TestCase>? headInventory, IReadOnlyList<CycleJudgement> cycles, IReadOnlyList<SinceRedTest>? sinceRed, GreenJudgement? green, CancellationToken cancellationToken)
+        JudgePlan plan,
+        IReadOnlyList<TestCase>? headInventory,
+        IReadOnlyList<CycleJudgement> cycles,
+        IReadOnlyList<SinceRedTest>? sinceRed,
+        GreenJudgement? green,
+        IReadOnlyList<StructuralTest> structural,
+        CancellationToken cancellationToken)
     {
         // Trace counts tests that pass at head: when green could not decide that, trace cannot either, and must not blame the tests.
         RedGreenTest[] accepted = [.. cycles.Where(cycle => cycle.Accepted).SelectMany(cycle => cycle.Tests)];
@@ -47,7 +56,13 @@ internal static class TraceJudge
             return new TraceJudgement(spec, CheckVerdict.NotEarned, spec.Problem ?? "the spec could not be read", Applies: true, []);
         }
 
-        IReadOnlyList<Requirement> requirements = SpecDocument.Parse(text).Requirements;
+        SpecDocument document = SpecDocument.Parse(text);
+        IReadOnlyList<Requirement> requirements = document.Requirements;
+        if (document.DuplicateMarkedIds.Count > 0)
+        {
+            return new TraceJudgement(spec, CheckVerdict.NotEarned, $"{spec.SpecPath} defines {string.Join(", ", document.DuplicateMarkedIds)} more than once, with a marker on one line; give each requirement one line", Applies: true, []);
+        }
+
         if (requirements.Count == 0)
         {
             return new TraceJudgement(spec, CheckVerdict.NotEarned, $"{spec.SpecPath} defines no requirements (FR-001 …); there is nothing to trace", Applies: true, []);
@@ -73,34 +88,93 @@ internal static class TraceJudge
             }
         }
 
-        // A feature delivered over several pull requests: this one answers for the requirements its spec diff adds or changes and
-        // those its own red tests name; the others were traced when they were added.
-        else if (plan.MergeBase is string mergeBase && spec.SpecPath is string specPath
+        // A feature delivered over several pull requests: this one answers for the requirements its spec diff adds or changes (text
+        // or marker) and those its own red tests name; the others were traced when they were added.
+        IReadOnlyList<string> markerChanges = [];
+        if (spec.Origin != SpecOrigin.Shell && plan.MergeBase is string mergeBase && spec.SpecPath is string specPath
             && await JudgeGit.ShowFileAsync(plan.Inputs.Root, mergeBase, specPath, cancellationToken) is string baseText)
         {
-            Dictionary<string, string> before = SpecDocument.Parse(baseText).Requirements.GroupBy(requirement => requirement.Id).ToDictionary(group => group.Key, group => group.First().Text, StringComparer.Ordinal);
-            requirements = [.. requirements.Where(requirement => !before.TryGetValue(requirement.Id, out string? old) || old != requirement.Text || named.Contains(requirement.Id))];
+            IReadOnlyList<Requirement> baseRequirements = SpecDocument.Parse(baseText).Requirements;
+            markerChanges = RequirementMarkers.ChangesSince(baseRequirements, requirements);
+            Dictionary<string, Requirement> before = baseRequirements.DistinctBy(requirement => requirement.Id).ToDictionary(requirement => requirement.Id, StringComparer.Ordinal);
+            requirements = [.. requirements.Where(requirement => !before.TryGetValue(requirement.Id, out Requirement? old)
+                || old.Text != requirement.Text || old.Marker != requirement.Marker || named.Contains(requirement.Id))];
             if (requirements.Count == 0)
             {
                 return new TraceJudgement(spec, CheckVerdict.NotApplicable, $"no requirement of {spec.FeatureId} was added or changed in this pull request, and no red test names one", Applies: false, []);
             }
         }
 
-        if (headInventory is null)
+        Dictionary<string, IReadOnlyList<OutsideFile>> outside = await OutsideAtHeadAsync(plan, requirements, cancellationToken);
+        bool everyOutside = requirements.All(requirement => outside.TryGetValue(requirement.Id, out IReadOnlyList<OutsideFile>? files)
+            && files.All(file => file.State == OutsideFileState.Names));
+        if (headInventory is null && !(everyOutside && counted.Length == 0))
         {
-            return new TraceJudgement(spec, CheckVerdict.NotEarned, "the head's tests could not be listed to trace them", Applies: true, []);
+            return new TraceJudgement(spec, CheckVerdict.NotEarned, "the head's tests could not be listed to trace them", Applies: true, []) { MarkerChanges = markerChanges };
         }
 
         RedGreenRecord record = GreenJudge.Synthesized([], []) with
         {
             Cycles = [new RedGreenCycle(1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, counted)],
         };
-        IReadOnlyList<TraceRow> rows = TraceMatrix.Build(requirements, record, headInventory);
-        string[] uncovered = [.. rows.Where(row => !row.Covered).Select(row => row.RequirementId)];
-        int covered = rows.Count - uncovered.Length;
-        return uncovered.Length == 0
-            ? new TraceJudgement(spec, CheckVerdict.Pass, $"{covered}/{rows.Count} requirements of {spec.FeatureId}", Applies: true, rows)
-            : new TraceJudgement(spec, CheckVerdict.Fail, $"{covered}/{rows.Count} requirements of {spec.FeatureId} covered; not covered by a test that went red, then green: {string.Join(", ", uncovered)}", Applies: true, rows);
+        IReadOnlyList<TraceRow> rows = TraceMatrix.Build(requirements, record, headInventory ?? [], outside, structural);
+        TraceTally tally = TraceTally.Of(rows);
+        string excluded = tally.Excluded > 0 ? $"; {tally.Excluded} verified outside .NET" : string.Empty;
+        TraceJudgement judgement = tally.Outcome switch
+        {
+            TraceOutcome.Pass => new TraceJudgement(spec, CheckVerdict.Pass, $"{tally.Covered}/{rows.Count} requirements of {spec.FeatureId}{excluded}", Applies: true, rows),
+            // Applies, so a class that would need trace gets N/A as a required check (NOT-EARNED), never a pass by omission.
+            TraceOutcome.NotApplicable => new TraceJudgement(spec, CheckVerdict.NotApplicable,
+                $"every requirement of {spec.FeatureId} this pull request answers for ({rows.Count}) is verified outside .NET by the files its marker names; Lockflight runs none of those tests", Applies: true, rows),
+            _ => new TraceJudgement(spec, CheckVerdict.Fail,
+                $"{tally.Covered}/{rows.Count} requirements of {spec.FeatureId} covered{excluded}; not covered by a test that went red, then green: {string.Join(", ", rows.Where(row => tally.Uncovered.Contains(row.RequirementId)).Select(Uncovered))}", Applies: true, rows),
+        };
+        return judgement with { MarkerChanges = markerChanges };
+    }
+
+    private static string Uncovered(TraceRow row) => row.Note is string problem ? $"{row.RequirementId} ({problem})" : row.RequirementId;
+
+    /// <summary>
+    /// The files of each requirement marked <c>[outside .NET: …]</c> as they are at head, each with whether the pull request added or
+    /// changed it.
+    /// </summary>
+    private static async Task<Dictionary<string, IReadOnlyList<OutsideFile>>> OutsideAtHeadAsync(JudgePlan plan, IReadOnlyList<Requirement> requirements, CancellationToken cancellationToken)
+    {
+        Dictionary<string, IReadOnlyList<OutsideFile>> outside = new(StringComparer.Ordinal);
+        foreach (Requirement requirement in requirements.Where(requirement => requirement.VerifiedOutside.Count > 0).DistinctBy(requirement => requirement.Id))
+        {
+            List<OutsideFile> files = [];
+            foreach (string path in requirement.VerifiedOutside)
+            {
+                if (!OutsideVerification.IsInsideProject(path))
+                {
+                    files.Add(OutsideVerification.Judge(requirement.Id, path, null));
+                    continue;
+                }
+
+                string gitPath = path.Replace('\\', '/');
+                string? content = !OutsideVerification.IsInSpecs(path) && await JudgeGit.IsRegularFileAsync(plan.Inputs.Root, plan.Inputs.Head, gitPath, cancellationToken)
+                    ? await JudgeGit.ShowFileAsync(plan.Inputs.Root, plan.Inputs.Head, gitPath, cancellationToken)
+                    : null;
+                files.Add(OutsideVerification.Judge(requirement.Id, path, content) with { Change = await ChangeAsync(plan, gitPath, cancellationToken) });
+            }
+
+            outside[requirement.Id] = files;
+        }
+
+        return outside;
+    }
+
+    private static async Task<string?> ChangeAsync(JudgePlan plan, string path, CancellationToken cancellationToken)
+    {
+        if (await JudgeGit.BlobOfAsync(plan.Inputs.Root, plan.Inputs.Head, path, cancellationToken) is not string atHead || plan.MergeBase is not string mergeBase)
+        {
+            return null;
+        }
+
+        return await JudgeGit.BlobOfAsync(plan.Inputs.Root, mergeBase, path, cancellationToken) is not string onBase ? "added in this pull request"
+            : onBase == atHead ? "unchanged in this pull request"
+            : "changed in this pull request";
     }
 
     /// <summary>A cycle test counts when it is still the test that went red and passes at head.</summary>

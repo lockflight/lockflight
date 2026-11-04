@@ -67,8 +67,11 @@ internal static class ReviewOfRecord
         string named = string.Join(", ", diff.NotShown.Take(MaxNamedFiles));
         string more = diff.NotShown.Count > MaxNamedFiles ? $" and {diff.NotShown.Count - MaxNamedFiles} more" : string.Empty;
         string generated = diff.Generated.Count > 0 ? $" without the {diff.Generated.Count} generated files listed" : string.Empty;
+        string moves = diff.Renamed.Count > 0
+            ? $"; {diff.Renamed.Count} of the {diff.Files} changed files are moves or renames, whose diffs are their edits only ({diff.RenamedLength} characters)"
+            : string.Empty;
         return $"the diff ({diff.ReviewedLength} characters{generated}) is larger than the {diff.Limit} the reviewer is shown (review.maxDiffCharacters), so the reviewer did not see the whole change "
-            + $"({diff.NotShown.Count} of {diff.Files} changed files not shown in full: {named}{more}): split the change into smaller pull requests "
+            + $"({diff.NotShown.Count} of {diff.Files} changed files not shown in full: {named}{more}{moves}): split the change into smaller pull requests "
             + $"and review each, or raise review.maxDiffCharacters (at most {ReviewSettings.DiffCharactersCeiling}; a larger diff costs more, so review.maxUsd may need "
             + "raising too); a review against a later commit of this branch (--base <commit>) checks only the commits after it and is not of record";
     }
@@ -103,7 +106,7 @@ internal static class ReviewOfRecord
         }
 
         return $"the working tree has changes that are not committed in the paths the review reads ({string.Join("; ", parts)}), so the run "
-            + "does not review a commit: commit them, or stash them ('git stash -u' also stashes untracked files), and review again "
+            + "does not review a commit: commit them, or stash them by name ('git stash push --include-untracked -- <files>'), and review again "
             + "(ignored files, .lockflight/ and .claude/worktrees/ do not count)";
     }
 

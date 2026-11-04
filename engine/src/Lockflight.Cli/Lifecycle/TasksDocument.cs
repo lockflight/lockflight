@@ -8,17 +8,23 @@ namespace Lockflight.Cli.Lifecycle;
 /// starts with test wording ("Test …", "Write tests …", "Spec for …", "Cover … with tests") or it names a test file
 /// (<c>*.spec.ts</c>, <c>*.test.tsx</c>, <c>*Tests.cs</c>, a <c>*.Tests/</c> project) without starting with "Implement" or
 /// "Make". Otherwise it is a stub task when it says stub, skeleton, NotImplementedException, or declares or scaffolds signatures;
-/// everything else is implementation. Requirement IDs count wherever they appear on the line.
+/// everything else is implementation. Under a <c>### Implementation …</c> heading (and its deeper subheadings) the heading
+/// decides over a named test file: a task there that only names a test file (a harness, a fixture) is implementation.
+/// Requirement IDs count wherever they appear on the line.
 /// </summary>
 internal static partial class TasksDocument
 {
     private const string NotATest = "no test heading, no test verb, no test file";
+    private const string TestsHeading = "### Tests";
+    private const string ImplementationHeading = "### Implementation";
+    private const string DeeperThanSection = "####";
 
     public static IReadOnlyList<TaskLine> Parse(string text)
     {
         string[] lines = text.ReplaceLineEndings("\n").Split('\n');
         List<TaskLine> tasks = [];
         bool underTestsHeading = false;
+        bool underImplementationHeading = false;
         bool inComment = false;
 
         for (int index = 0; index < lines.Length; index++)
@@ -32,7 +38,9 @@ internal static partial class TasksDocument
 
             if (line.StartsWith('#'))
             {
-                underTestsHeading = line.StartsWith("### Tests", StringComparison.OrdinalIgnoreCase);
+                underTestsHeading = line.StartsWith(TestsHeading, StringComparison.OrdinalIgnoreCase);
+                underImplementationHeading = line.StartsWith(ImplementationHeading, StringComparison.OrdinalIgnoreCase)
+                    || (underImplementationHeading && line.StartsWith(DeeperThanSection, StringComparison.Ordinal));
                 continue;
             }
 
@@ -44,17 +52,17 @@ internal static partial class TasksDocument
             string description = task.Groups["description"].Value.Trim();
             string[] requirements = [.. RequirementId().Matches(line).Select(match => match.Value).Distinct()];
             int? story = task.Groups["story"].Success ? int.Parse(task.Groups["story"].Value, CultureInfo.InvariantCulture) : null;
-            tasks.Add(new TaskLine(task.Groups["id"].Value, story, requirements, Classify(description, underTestsHeading), task.Groups["done"].Value is "x" or "X", index + 1, description));
+            tasks.Add(new TaskLine(task.Groups["id"].Value, story, requirements, Classify(description, underTestsHeading, underImplementationHeading), task.Groups["done"].Value is "x" or "X", index + 1, description));
         }
 
         return tasks;
     }
 
-    private static TaskClassification Classify(string description, bool underTestsHeading)
+    private static TaskClassification Classify(string description, bool underTestsHeading, bool underImplementationHeading)
     {
         if (underTestsHeading)
         {
-            return new(TaskRole.Test, "test (under a '### Tests' heading)");
+            return new(TaskRole.Test, $"test (under a '{TestsHeading}' heading)");
         }
 
         if (TestVerb().IsMatch(description) || TestNoun().IsMatch(description) || CoverWithTests().IsMatch(description))
@@ -72,6 +80,11 @@ internal static partial class TasksDocument
             return new(TaskRole.Implementation, $"implementation ({NotATest}, no stub marker)");
         }
 
+        if (underImplementationHeading)
+        {
+            return new(TaskRole.Implementation, $"implementation (under a '{ImplementationHeading}' heading; naming {testFile.Value} does not make it a test)");
+        }
+
         return ImplementationVerb().IsMatch(description)
             ? new(TaskRole.Implementation, $"implementation (starts with an implementation verb; naming {testFile.Value} does not make it a test)")
             : new(TaskRole.Test, $"test (names the test file {testFile.Value})");
@@ -84,8 +97,9 @@ internal static partial class TasksDocument
     private static partial Regex RequirementId();
 
     // One leading word may qualify the tests ("Vitest tests …"), but not a verb that runs or satisfies them ("Make tests pass …",
-    // "Run tests …"): those tasks write no test.
-    [GeneratedRegex(@"^(?!(make|run|rerun|execute|implement|fix|get|keep)\s)(\w+\s+)?(tests?|write tests?|add tests?|contract tests?|integration tests?|unit tests?)\b", RegexOptions.IgnoreCase)]
+    // "Run tests …"): those tasks write no test. A path that starts with a tests folder ("Add tests/Shop.Tests/Harness.cs") is not
+    // test wording; the file it names decides.
+    [GeneratedRegex(@"^(?!(make|run|rerun|execute|implement|fix|get|keep)\s)(\w+\s+)?(tests?|write tests?|add tests?|contract tests?|integration tests?|unit tests?)\b(?![/\\]|\.\w)", RegexOptions.IgnoreCase)]
     private static partial Regex TestVerb();
 
     // "Spec" only as the first word (optionally after "Write"/"Add" or a test framework), so "Specify …" and "Update spec.md"

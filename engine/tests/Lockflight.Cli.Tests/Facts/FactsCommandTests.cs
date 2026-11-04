@@ -117,6 +117,57 @@ public sealed class FactsCommandTests : IDisposable
         Assert.Contains("approve spec", facts.RootElement.GetProperty("humanOnlyCommands").EnumerateArray().Select(command => command.GetString()));
     }
 
+    [Theory]
+    [InlineData("tests/Shop.ArchitectureTests/SourceLayoutTests.cs")]
+    [InlineData("tests/Shop.Architecture.Tests/Rules/SourceLayoutTests.cs")]
+    [InlineData("test/ArchitectureTests/SourceLayoutTests.cs")]
+    [InlineData("tests/Shop.ArchTests/SourceLayoutTests.cs")]
+    [InlineData("tests/shop.architecturetests/SourceLayoutTests.cs")]
+    [InlineData("tests/Shop.UnitTests/ArchitectureTests.cs")]
+    public async Task TestsInAnArchitectureTestProjectCountWithoutAnArchitectureLibrary(string path)
+    {
+        Write(Manifest.FileName, "version: 1\n");
+        Write(path, "public sealed class SourceLayoutTests\n{\n    [Fact]\n    public void NoFileInDomainReadsTheDatabase() { }\n}\n");
+        Write($"{path[..path.LastIndexOf('/')]}/SourceFiles.cs", "internal static class SourceFiles { }\n");
+        Write("tests/Shop.Tests/PriceTests.cs", "public sealed class PriceTests\n{\n    [Fact]\n    public void Rounds() { }\n}\n");
+        await CommitAsync();
+
+        using JsonDocument facts = await FactsAsync();
+
+        JsonElement architecture = facts.RootElement.GetProperty("architectureTests");
+        Assert.True(architecture.GetProperty("present").GetBoolean());
+        Assert.Equal([path], architecture.GetProperty("files").EnumerateArray().Select(file => file.GetString()));
+    }
+
+    [Fact]
+    public async Task AnNUnitTestInAnArchitectureTestProjectCounts()
+    {
+        Write(Manifest.FileName, "version: 1\n");
+        Write("tests/Shop.ArchitectureTests/SourceLayoutTests.cs", "public sealed class SourceLayoutTests\n{\n    [Test]\n    public void NoFileInDomainReadsTheDatabase() { }\n}\n");
+        await CommitAsync();
+
+        using JsonDocument facts = await FactsAsync();
+
+        Assert.True(facts.RootElement.GetProperty("architectureTests").GetProperty("present").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("tests/Shop.Tests/SourceLayoutTests.cs")]
+    [InlineData("tests/Shop.ArchiveTests/SourceLayoutTests.cs")]
+    [InlineData("src/Shop.Architecture/SourceLayoutTests.cs")]
+    [InlineData("tests/March.Tests/SourceLayoutTests.cs")]
+    [InlineData("tests/Shop.Search.Tests/SourceLayoutTests.cs")]
+    public async Task TestsOutsideAnArchitectureTestProjectNeedAnArchitectureLibrary(string path)
+    {
+        Write(Manifest.FileName, "version: 1\n");
+        Write(path, "public sealed class SourceLayoutTests\n{\n    [Fact]\n    public void NoFileInDomainReadsTheDatabase() { }\n}\n");
+        await CommitAsync();
+
+        using JsonDocument facts = await FactsAsync();
+
+        Assert.False(facts.RootElement.GetProperty("architectureTests").GetProperty("present").GetBoolean());
+    }
+
     [Fact]
     public async Task TheSameTreeGivesTheSameBytes()
     {

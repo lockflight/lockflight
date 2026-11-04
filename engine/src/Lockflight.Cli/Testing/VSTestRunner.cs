@@ -19,7 +19,7 @@ internal sealed partial class VSTestRunner(TimeProvider time) : ITestRunner
     public RunnerMode Mode => RunnerMode.VSTest;
 
     /// <summary>The tests from the assembly's metadata (xUnit v2 attributes): VSTest's own listing runs a test host for nothing.</summary>
-    public Task<TestListing> ListAsync(TestApp app, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
+    public Task<TestListing> ListAsync(TestApp app, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         try
         {
@@ -32,9 +32,9 @@ internal sealed partial class VSTestRunner(TimeProvider time) : ITestRunner
     }
 
     public async Task<TestRunOutcome> RunAsync(
-        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
+        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, TimeSpan timeLimit, CancellationToken cancellationToken) =>
         TestRunOutcome.Of(await TrxTestRun.RunAsync(
-            app, TestRunnerKind.VSTest, FilterBatches(methodFilters, suiteFilter), TrxFailureMessages.XunitV2, workingDirectory, timeLimit, time, cancellationToken));
+            app, TestRunnerKind.VSTest, FilterBatches(methodFilters, suiteFilter), TrxFailureMessages.XunitV2, timeLimit, time, cancellationToken));
 
     /// <summary>
     /// One <c>--filter</c> per batch of methods; for the whole suite (<paramref name="methodFilters"/> null) one run, filtered by

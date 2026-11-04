@@ -29,9 +29,11 @@ applies, for this whole feature:
   in this session to the rules in steps 1 and 3, or let them write the files and run the checks for them.
 
 **Approvals.** Whenever a step below asks for an approval, the user gives it in one of two ways: they type
-`/lockflight:approve spec` (or `tasks`) in this session, or they open a separate terminal window (not with `!` in Claude
-Code: that runs inside the session and is refused) and run `.lockflight/bin/lockflight approve spec|tasks` there, from the
-project root.
+`/lockflight:approve` in this session (one step; it picks the spec or the tasks, whichever waits), or they open a separate
+terminal window (not with `!` in Claude Code: that runs inside the session and is refused) and run
+`.lockflight/bin/lockflight approve spec|tasks` there, from the project root. The approval binds the files as they are when
+the user types it, so finish every edit and end your turn before asking for it; content you change after that is shown to the
+user again instead of approved.
 Never approve for them.
 
 1. **Specify.** The feature lives in `specs/<NNN-slug>/` (the next free three-digit number, `001`, `002`, …, and a short
@@ -51,7 +53,7 @@ Never approve for them.
      every template placeholder and delete unused example lines.
    - **By hand:** ask the user what is open, write `spec.md` to the rules above, and run the check.
    In every case, copy a `Security note:` line from an agent's report verbatim into your reply, in every round.
-2. **Human gate — spec.** Ask the user to review `spec.md` and approve it (`/lockflight:approve spec`, see Approvals). Wait.
+2. **Human gate — spec.** Ask the user to review `spec.md` and approve it (`/lockflight:approve`, see Approvals). Wait.
 3. **Plan and tasks.** `plan.md` (optional, but write it) holds the approach, the files and the declared signatures of the
    members the stubs declare. `tasks.md` has task lines `- [ ] T010 [US1] (FR-001) …`: every story task cites its
    requirements `(FR-001)`, every requirement is cited, and within a story the stub declaration comes first, then the test
@@ -60,7 +62,8 @@ Never approve for them.
    `.lockflight/bin/lockflight phase check tasks --feature <id>`; run it until it passes; a failure names each misplaced
    task, its line and why it counted as implementation. A task counts as a **test** when it sits under a `### Tests`
    heading, starts with test wording ("Write tests …", "Contract tests …", "Cover … with tests") or names a test file
-   (`…Tests.cs`, `….Tests/`) without starting with "Implement" or "Make"; as a **stub** when it says stub, skeleton,
+   (`…Tests.cs`, `….Tests/`) without starting with "Implement" or "Make" and outside a `### Implementation` heading (there,
+   a task that only names a test file, such as a harness, is implementation); as a **stub** when it says stub, skeleton,
    `NotImplementedException` or "declare … signatures"; anything else is **implementation**.
    - **Crew:** call the Agent tool with `subagent_type: "lockflight-crew:planner"` and a prompt naming the feature
      directory (`specs/<id>`). Your very next action when it returns MUST be
@@ -71,7 +74,7 @@ Never approve for them.
    - **Spec Kit:** run `/speckit-plan`, then `/speckit-tasks`. Tests are mandatory whatever the stock `/speckit-tasks`
      text says (the Lockflight preset appends these rules to it).
    - **By hand:** write both files to the rules above, and run the check.
-4. **Human gate — tasks.** Ask the user to approve the tasks (`/lockflight:approve tasks`, see Approvals). Wait.
+4. **Human gate — tasks.** Ask the user to review `plan.md` and `tasks.md` and approve them (`/lockflight:approve`, see Approvals). Wait.
 5. **Start.** `.lockflight/bin/lockflight redgreen start` records the test inventory (once per feature) and runs the suite once.
    If it warns that tests already fail, tell the user: they decide whether to accept them, by typing
    `/lockflight:baseline tests` in Claude Code, and merge that baseline in its own pull request first.
@@ -101,6 +104,13 @@ Never approve for them.
       | GREEN_BEFORE | the test passes before the code exists | test behaviour that is still missing |
       | SKIPPED | skipped or not run | remove `Skip` / `Explicit` / `[Ignore]`, `Assert.Ignore`, `Assert.Inconclusive` |
       | FLAKY | repeated runs disagree | make the test deterministic |
+
+      **Structural requirements.** In a behaviour-preserving refactoring, or for an architecture rule, the spec may mark a
+      requirement `[structural]`. Tests that name only structural requirements (characterisation, snapshot, architecture
+      tests) are not part of a cycle: `redgreen red` leaves them out and says so. `trace` runs them here and on the start
+      commit's code, where they must pass too; one that fails there means behaviour changed, which needs a normal
+      requirement and a red. Never mark a requirement structural yourself, and never to get past GREEN_BEFORE: the marker is
+      the spec's, which the user approves.
 
       Under each test, `redgreen red` says why it got its class; `redgreen red --verbose` adds the exception, the deciding
       stack frame with its line, and the production member the test reaches.
@@ -141,8 +151,9 @@ Never approve for them.
       locked test, and never amend or reset yourself. Tell them which test and why, and that they can let exactly that test
       change by typing `/lockflight:amend <Class.Method> --reason <why>` here. Never type the command or its code yourself. Check
       `.lockflight/bin/lockflight redgreen status`: it names the file the amend unlocks. Then change only what the amend
-      allows, run `.lockflight/bin/lockflight redgreen red` (the amended test must fail in production code again), and go on
-      to green. Discarding the whole cycle is `redgreen reset` (or `/lockflight:reset`), also theirs.
+      allows, run `.lockflight/bin/lockflight redgreen red` (the amended test must fail in production code again; it is
+      re-checked on the red-time snapshot with the cycle's amended files laid over it, so leave the implementation as it is,
+      and the test must compile against the code as it was at red), and go on to green. Discarding the whole cycle is `redgreen reset` (or `/lockflight:reset`), also theirs.
       **If a test written in this cycle turns out wrong after red, ask the user for `/lockflight:amend <test>`. Never change
       production code just to satisfy a wrong test, and `baseline` does not excuse this cycle's tests.**
    5. If `red` or `green` refuses because an approval is stale (spec.md, plan.md or tasks.md changed after approval), show the

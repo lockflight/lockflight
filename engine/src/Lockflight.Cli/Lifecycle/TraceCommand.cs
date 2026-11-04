@@ -11,8 +11,10 @@ namespace Lockflight.Cli.Lifecycle;
 /// <c>lockflight trace [--feature id]</c> — trace-lite: every requirement of the feature's spec must be named by a
 /// <c>Requirement</c> trait on a test that went red and then green in one of <em>this feature's</em> cycles (spec FR numbers repeat
 /// across features, so other features' tests never count), and that test must still be in the current inventory (see
-/// <see cref="TraceMatrix"/>). Listing needs current assemblies, so trace builds (incrementally) and lists the tests; it runs none.
-/// Prints a Markdown matrix for the PR body.
+/// <see cref="TraceMatrix"/>). Listing needs current assemblies, so trace builds (incrementally) and lists the tests; it runs only structural tests.
+/// Prints a Markdown matrix for the PR body. A requirement marked <c>[structural]</c> is covered by a test naming only structural
+/// requirements that passes here and on the start commit's code (<see cref="StructuralCheck"/>), which trace runs. A requirement marked <c>[outside .NET: …]</c> whose files name it is excluded — neither
+/// covered nor failing — and when every requirement is, trace is N/A (exit 5), never a pass.
 /// </summary>
 internal sealed class TraceCommand(CliContext context) : ICommand
 {
@@ -39,7 +41,8 @@ internal sealed class TraceCommand(CliContext context) : ICommand
             return ExitCode.Config;
         }
 
-        IReadOnlyList<Requirement> requirements = SpecDocument.Parse(File.ReadAllText(feature.SpecPath)).Requirements;
+        SpecDocument spec = SpecDocument.Parse(File.ReadAllText(feature.SpecPath));
+        IReadOnlyList<Requirement> requirements = spec.Requirements;
         RedGreenRecord? record = RedGreenRecord.Load(RedGreenRecord.PathFor(feature));
         if (record is null && new AdoptedFeatures(manifest.Root).Load().Contains(feature.Id))
         {
@@ -53,18 +56,35 @@ internal sealed class TraceCommand(CliContext context) : ICommand
             return ExitCode.NotEarned;
         }
 
+        if (spec.DuplicateMarkedIds.Count > 0)
+        {
+            await context.Output.WriteLineAsync($"NOT-EARNED {Path.GetRelativePath(manifest.Root, feature.SpecPath)} defines {string.Join(", ", spec.DuplicateMarkedIds)} more than once, with a marker on one line; give each requirement one line");
+            return ExitCode.NotEarned;
+        }
+
+        Dictionary<string, IReadOnlyList<OutsideFile>> outside = requirements.Where(requirement => requirement.VerifiedOutside.Count > 0).DistinctBy(requirement => requirement.Id)
+            .ToDictionary(requirement => requirement.Id, requirement => OutsideVerification.ReadLocal(requirement, manifest.Root), StringComparer.Ordinal);
         if (record is null)
         {
+            TraceRow[] outsideOnly = [.. requirements.Select(requirement => new TraceRow(requirement.Id, [], [], Pending: false) { Outside = outside.GetValueOrDefault(requirement.Id) ?? [] })];
+            if (TraceTally.Of(outsideOnly).Outcome == TraceOutcome.NotApplicable)
+            {
+                await WriteMatrixAsync(feature, outsideOnly, manifest.Root);
+                return await NotApplicableAsync(feature, requirements.Count);
+            }
+
             await context.Output.WriteLineAsync($"NOT-EARNED {feature.Id} has no red/green evidence; trace needs 'lockflight redgreen' cycles");
             return ExitCode.NotEarned;
         }
 
-        if (await CurrentInventoryAsync(manifest, feature, cancellationToken) is not IReadOnlyList<TestCase> inventory)
+        TestWorkspace workspace = TestWorkspaces.For(manifest, feature, context.Time);
+        if (await CurrentInventoryAsync(workspace, cancellationToken) is not IReadOnlyList<TestCase> inventory)
         {
             return ExitCode.NotEarned;
         }
 
-        IReadOnlyList<TraceRow> rows = TraceMatrix.Build(requirements, record, inventory);
+        IReadOnlyList<StructuralTest> structural = await StructuralAsync(manifest, workspace, requirements, record, inventory, cancellationToken);
+        IReadOnlyList<TraceRow> rows = TraceMatrix.Build(requirements, record, inventory, outside, structural);
         await WriteMatrixAsync(feature, rows, manifest.Root);
         await WriteNotesAsync(requirements, record);
         string[] lostLast = [.. rows.Where(row => !row.Covered && row.Lost.Count > 0).Select(row => row.RequirementId)];
@@ -73,9 +93,31 @@ internal sealed class TraceCommand(CliContext context) : ICommand
             await context.Output.WriteLineAsync($"\n{string.Join(", ", lostLast)} lost every test that went red, then green (deleted, renamed or switched off since); a renamed test needs a new red/green cycle.");
         }
 
-        int covered = rows.Count(row => row.Covered);
-        await context.Output.WriteLineAsync($"\n{covered} of {requirements.Count} requirements covered by tests that went red, then green, and still exist.");
-        return covered == requirements.Count ? ExitCode.Pass : ExitCode.Fail;
+        string[] alsoDotNet = [.. rows.Where(row => row.Covered && row.Outside.Count > 0).Select(row => row.RequirementId)];
+        if (alsoDotNet.Length > 0)
+        {
+            await context.Output.WriteLineAsync($"\nNote: {string.Join(", ", alsoDotNet)} {(alsoDotNet.Length == 1 ? "is" : "are")} marked [outside .NET: …] but named by a .NET test that went red, then green: counted as covered by that test.");
+        }
+
+        TraceTally tally = TraceTally.Of(rows);
+        if (tally.Outcome == TraceOutcome.NotApplicable)
+        {
+            return await NotApplicableAsync(feature, requirements.Count);
+        }
+
+        string excluded = tally.Excluded > 0
+            ? $"; {tally.Excluded} verified outside .NET by the files their marker names (Lockflight runs none of those tests: check them in review)"
+            : string.Empty;
+        await context.Output.WriteLineAsync($"\n{tally.Covered} of {requirements.Count} requirements covered by tests that went red, then green, and still exist{excluded}.");
+        return tally.Outcome == TraceOutcome.Pass ? ExitCode.Pass : ExitCode.Fail;
+    }
+
+    /// <summary>Every requirement verified outside .NET: trace has no .NET test to vouch for, which is never a pass.</summary>
+    private async Task<ExitCode> NotApplicableAsync(Feature feature, int requirements)
+    {
+        await context.Output.WriteLineAsync(
+            $"\nN/A all {requirements} requirements of {feature.Id} are verified outside .NET by the files their marker names; Lockflight runs none of those tests, so trace has nothing to vouch for (check them in review).");
+        return ExitCode.NotEarned;
     }
 
     /// <summary>The Markdown matrix, after a warning for each approval that no longer covers the artifacts.</summary>
@@ -94,17 +136,20 @@ internal sealed class TraceCommand(CliContext context) : ICommand
         foreach (TraceRow row in rows)
         {
             string tests = row.Covered ? string.Join("<br>", row.Tests) : "—";
-            string status = row.Covered ? "covered" : row.Pending ? "red (cycle open)" : "**not covered**";
+            string status = row.Covered ? "covered"
+                : row.Excluded ? $"excluded — {row.Note}"
+                : row.Pending ? "red (cycle open)"
+                : row.Note is string problem ? $"**not covered** ({problem})"
+                : "**not covered**";
             string lost = row.Lost.Count > 0 ? $"<br>no longer counted: {string.Join(", ", row.Lost)}" : string.Empty;
             await context.Output.WriteLineAsync($"| {row.RequirementId} | {tests}{lost} | {status} |");
         }
     }
 
     /// <summary>Builds and lists the tests (none run); null — after saying why — when that is impossible, so trace cannot vouch.</summary>
-    private async Task<IReadOnlyList<TestCase>?> CurrentInventoryAsync(Manifest manifest, Feature feature, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<TestCase>?> CurrentInventoryAsync(TestWorkspace workspace, CancellationToken cancellationToken)
     {
-        await context.Error.WriteLineAsync("lockflight: building to list the current tests (no tests run)…");
-        TestWorkspace workspace = TestWorkspaces.For(manifest, feature, context.Time);
+        await context.Error.WriteLineAsync("lockflight: building to list the current tests…");
         if (await workspace.BuildAsync(cancellationToken) is not null)
         {
             await context.Output.WriteLineAsync("NOT-EARNED the build fails, so the current tests cannot be listed; trace re-checks red/green tests against them. Fix the build, then run trace again.");
@@ -130,6 +175,28 @@ internal sealed class TraceCommand(CliContext context) : ICommand
         }
 
         return inventory;
+    }
+
+    /// <summary>
+    /// The structural tests (naming only <c>[structural]</c> requirements), run in the working tree and on the start commit's code
+    /// (<see cref="StructuralRun"/>); none when the spec marks no requirement structural.
+    /// </summary>
+    private async Task<IReadOnlyList<StructuralTest>> StructuralAsync(
+        Manifest manifest, TestWorkspace workspace, IReadOnlyList<Requirement> requirements, RedGreenRecord record, IReadOnlyList<TestCase> inventory, CancellationToken cancellationToken)
+    {
+        IReadOnlySet<string> structuralIds = StructuralCheck.Ids(requirements);
+        // A test the start commit already had (another feature's among them) proves nothing about this change.
+        TestCase[] tests = [.. inventory.Where(test => StructuralCheck.IsStructural(test.Requirements, structuralIds) && test.SkipReason is null && !test.IsExplicit
+            && !record.BaselineTests.Contains(test.Key))];
+        if (tests.Length == 0)
+        {
+            return [];
+        }
+
+        await context.Error.WriteLineAsync($"lockflight: running {tests.Length} structural tests here and on the start commit {RedGreenSession.Short(record.BaselineCommit)}'s code…");
+        string[] testProjects = [.. record.TestProjects.Union(workspace.Apps.Select(app => Path.GetRelativePath(manifest.Root, app.ProjectDirectory).Replace('\\', '/')), StringComparer.Ordinal)];
+        return await new StructuralRun(workspace, manifest.Root, context.Time, TimeSpan.FromSeconds(manifest.Gates.TimeoutSeconds))
+            .RunAsync(tests, record.BaselineCommit, testProjects, cancellationToken);
     }
 
     private async Task WriteNotesAsync(IReadOnlyList<Requirement> requirements, RedGreenRecord record)

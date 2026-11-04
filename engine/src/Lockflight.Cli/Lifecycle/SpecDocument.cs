@@ -11,9 +11,21 @@ namespace Lockflight.Cli.Lifecycle;
 internal sealed partial record SpecDocument(
     IReadOnlyList<Requirement> Requirements, IReadOnlyList<UserStory> Stories, IReadOnlyList<int> OpenClarificationLines, IReadOnlyList<TemplatePlaceholder> Placeholders)
 {
+    /// <summary>The marker that says a requirement is verified by the named files outside .NET, which Lockflight does not run.</summary>
+    public const string OutsideMarker = "outside .NET:";
+
+    /// <summary>The marker of a requirement a change must keep, or an architecture rule it establishes (<see cref="StructuralCheck"/>).</summary>
+    public const string StructuralMarker = "structural";
 
     public IReadOnlyList<string> DuplicateRequirementIds =>
         [.. Requirements.GroupBy(requirement => requirement.Id).Where(group => group.Count() > 1).Select(group => group.Key)];
+
+    /// <summary>
+    /// Requirement IDs defined more than once where a line carries a marker: trace could not tell whether the marker or the plain line
+    /// is the requirement, so it refuses to judge rather than spread the marker to its twin.
+    /// </summary>
+    public IReadOnlyList<string> DuplicateMarkedIds =>
+        [.. Requirements.GroupBy(requirement => requirement.Id).Where(group => group.Count() > 1 && group.Any(requirement => requirement.Marker is not null)).Select(group => group.Key)];
 
     public static SpecDocument Parse(string text)
     {
@@ -49,7 +61,7 @@ internal sealed partial record SpecDocument(
 
             if (RequirementLine().Match(line) is { Success: true } requirement)
             {
-                requirements.Add(new Requirement(requirement.Groups["id"].Value, lineNumber, requirement.Groups["text"].Value.Trim()));
+                requirements.Add(ReadRequirement(requirement, lineNumber));
             }
 
             if (StoryHeading().Match(line) is { Success: true } heading)
@@ -72,6 +84,23 @@ internal sealed partial record SpecDocument(
         return new SpecDocument(requirements, stories, clarifications, placeholders);
     }
 
+    private static Requirement ReadRequirement(Match line, int lineNumber)
+    {
+        Requirement requirement = new(line.Groups["id"].Value, lineNumber, line.Groups["text"].Value.Trim());
+        if (line.Groups["structural"].Success)
+        {
+            return requirement with { Marker = StructuralMarker, Structural = true };
+        }
+
+        if (!line.Groups["outside"].Success)
+        {
+            return requirement;
+        }
+
+        string[] paths = [.. line.Groups["outside"].Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+        return requirement with { Marker = $"{OutsideMarker} {string.Join(", ", paths)}", VerifiedOutside = paths };
+    }
+
     private static void Close(List<UserStory> stories, (int Number, string Title, int Line, bool Scenarios)? story)
     {
         if (story is { } done)
@@ -80,7 +109,12 @@ internal sealed partial record SpecDocument(
         }
     }
 
-    [GeneratedRegex(@"^\s*[-*]\s+\*\*(?<id>FR-\d{3,})\*\*\s*:?\s*(?<text>.*)$")]
+    /// <summary>
+    /// A bullet, the bold ID, an optional marker in brackets before the colon (<c>[outside .NET: web/a.spec.ts, web/b.spec.ts]</c> or
+    /// <c>[structural]</c>),
+    /// then the text.
+    /// </summary>
+    [GeneratedRegex(@"^\s*[-*]\s+\*\*(?<id>FR-\d{3,})\*\*(\s*\[(outside \.NET:\s*(?<outside>[^\]\s][^\]]*)|(?<structural>structural))\])?\s*:?\s*(?<text>.*)$")]
     private static partial Regex RequirementLine();
 
     [GeneratedRegex(@"^###\s+User Story\s+(?<number>\d+)\s*[-–—:]\s*(?<title>.+?)(\s*\(Priority:.*\))?\s*$")]

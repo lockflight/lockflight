@@ -1,7 +1,9 @@
+using System.Runtime.CompilerServices;
 using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Init;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Updating;
 
@@ -186,6 +188,105 @@ public sealed class UpdateCommandTests : IDisposable
     }
 
     [Fact]
+    public async Task AProjectUpdateOffersTheCiJudgesWorkflowWithItsDiffAndLeavesTheGatesWorkflowAlone()
+    {
+        string workflow = GatesOnlyProject();
+        string before = File.ReadAllText(workflow);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["update", "--project", "--dry-run"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains($"{Templates.WorkflowPath} runs the gates only", output, StringComparison.Ordinal);
+        Assert.Contains("+  judge:", output, StringComparison.Ordinal);
+        Assert.Contains("lockflight update --project --judge-workflow", output, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(workflow));
+    }
+
+    [Fact]
+    public async Task TheJudgeWorkflowOptionReplacesAGatesWorkflowLockflightWrote()
+    {
+        string workflow = GatesOnlyProject();
+        string engine = Path.Combine(home.FullName, "lockflight-native");
+        File.WriteAllText(engine, "native engine");
+
+        (ExitCode exitCode, string output, string error) = await ProjectUpdateAsync(new RunningEngine(engine, IsSingleFile: true), "--judge-workflow");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        bool developmentPin = EngineVersion.IsDevelopmentBuild(ToolPin.RunningVersion);
+        Assert.Equal(Templates.Workflow(["10.0.x"], developmentPin ? CiTrigger.Manual : CiTrigger.PullRequest, developmentPin), File.ReadAllText(workflow));
+        Assert.Contains(Templates.WorkflowPath, output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADryRunWithTheJudgeWorkflowOptionListsTheReplacementAndWritesNothing()
+    {
+        string workflow = GatesOnlyProject();
+        string before = File.ReadAllText(workflow);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["update", "--project", "--judge-workflow", "--dry-run"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains($"--- {Templates.WorkflowPath}", output, StringComparison.Ordinal);
+        Assert.Contains("+  judge:", output, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(workflow));
+    }
+
+    [Fact]
+    public async Task TheJudgeWorkflowOptionWaitsForTheEnginePinToBeMergedFirst()
+    {
+        string workflow = GatesOnlyProject(pinned: false);
+        string before = File.ReadAllText(workflow);
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["update", "--project", "--judge-workflow"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("second pull request", error, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(workflow));
+        Assert.False(File.Exists(Path.Combine(root.FullName, "dotnet-tools.json")));
+    }
+
+    [Fact]
+    public async Task AGatesWorkflowWithAPersonsEditsIsNotedAndLeftAlone()
+    {
+        string workflow = GatesOnlyProject(legacy => legacy.Replace("      - name: Gates\n", "      - run: ./scripts/our-own-check.sh\n      - name: Gates\n", StringComparison.Ordinal));
+        string before = File.ReadAllText(workflow);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["update", "--project", "--dry-run"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("was edited outside the lines Lockflight wrote", output, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(workflow));
+    }
+
+    [Theory]
+    [InlineData("--source", "--dry-run")]
+    [InlineData("--judge-workflow", "--judge-workflow")]
+    [InlineData("--dry-run", "--source")]
+    public async Task AProjectUpdateRefusesAnOptionItCannotRead(string first, string second)
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["update", "--project", first, second], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("--judge-workflow", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheJudgeWorkflowOptionRefusesAGatesWorkflowEditedOutsideLockflightsLinesAndWritesNothing()
+    {
+        string workflow = GatesOnlyProject(legacy => legacy.Replace("      - name: Gates\n", "      - run: ./scripts/our-own-check.sh\n      - name: Gates\n", StringComparison.Ordinal));
+        string before = File.ReadAllText(workflow);
+        string manifest = File.ReadAllText(Path.Combine(root.FullName, Manifest.FileName));
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["update", "--project", "--judge-workflow"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("edited outside the lines Lockflight wrote", error, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(workflow));
+        Assert.Equal(manifest, File.ReadAllText(Path.Combine(root.FullName, Manifest.FileName)));
+        Assert.False(Directory.Exists(Path.Combine(root.FullName, ".lockflight", "local", "migration")));
+    }
+
+    [Fact]
     public async Task AnInvalidVersionOneManifestStopsTheUpdateBeforeAnythingIsWritten()
     {
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\ngates:\n  nonsense: 1\n");
@@ -259,7 +360,7 @@ public sealed class UpdateCommandTests : IDisposable
         return (exitCode, output.ToString().Trim(), error.ToString().Trim());
     }
 
-    private async Task<(ExitCode ExitCode, string Output, string Error)> ProjectUpdateAsync(RunningEngine engine)
+    private async Task<(ExitCode ExitCode, string Output, string Error)> ProjectUpdateAsync(RunningEngine engine, params string[] options)
     {
         using StringWriter output = new();
         using StringWriter error = new();
@@ -269,8 +370,27 @@ public sealed class UpdateCommandTests : IDisposable
             Engine = engine,
         };
 
-        ExitCode exitCode = await CliApplication.RunAsync(["update", "--project"], context, TestContext.Current.CancellationToken);
+        ExitCode exitCode = await CliApplication.RunAsync(["update", "--project", .. options], context, TestContext.Current.CancellationToken);
         return (exitCode, output.ToString().Trim(), error.ToString().Trim());
+    }
+
+    /// <summary>
+    /// A version 2 manifest and the GitHub workflow Lockflight 0.2 wrote, with <paramref name="edit"/> applied to it, and, when
+    /// <paramref name="pinned"/>, the running engine pinned already; the workflow's path.
+    /// </summary>
+    private string GatesOnlyProject(Func<string, string>? edit = null, bool pinned = true, [CallerFilePath] string source = "")
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), Templates.Manifest(InitProfile.Lite, RoutingPreset.Default));
+        string workflow = Path.Combine(root.FullName, Templates.WorkflowPath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(workflow)!);
+        string legacy = File.ReadAllText(Path.Combine(Path.GetDirectoryName(source)!, "..", "Init", "CiMigrationCases", "github.yml")).ReplaceLineEndings("\n");
+        File.WriteAllText(workflow, edit is null ? legacy : edit(legacy));
+        if (pinned)
+        {
+            File.WriteAllText(Path.Combine(root.FullName, "dotnet-tools.json"), ToolManifestWriter.Pin(null).Json);
+        }
+
+        return workflow;
     }
 
     private Dictionary<string, string> Home() => new() { [EnvironmentVariables.Home] = home.FullName };

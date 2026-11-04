@@ -13,11 +13,11 @@ internal sealed class NUnitRunner(TimeProvider time, TestRunnerKind platform) : 
 {
     public RunnerMode Mode => platform == TestRunnerKind.MicrosoftTestingPlatform ? RunnerMode.NUnitMtp : RunnerMode.NUnit;
 
-    public Task<TestListing> ListAsync(TestApp app, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
+    public Task<TestListing> ListAsync(TestApp app, TimeSpan timeLimit, CancellationToken cancellationToken) =>
         Task.FromResult(TrxTestListing.List(app, platform, TestFrameworkKind.NUnit, Mode));
 
     public async Task<TestRunOutcome> RunAsync(
-        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
+        TestApp app, IReadOnlyList<string>? methodFilters, TraitCondition? suiteFilter, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         if (methodFilters is { Count: 0 })
         {
@@ -33,7 +33,7 @@ internal sealed class NUnitRunner(TimeProvider time, TestRunnerKind platform) : 
             }
 
             IReadOnlyList<string> selection = settings is null ? VSTestRunner.SuiteArguments(suiteFilter) : ["--settings", settings];
-            return TestRunOutcome.Of(await TrxTestRun.RunAsync(app, platform, [selection], TrxFailureMessages.NUnit, workingDirectory, timeLimit, time, cancellationToken));
+            return TestRunOutcome.Of(await TrxTestRun.RunAsync(app, platform, [selection], TrxFailureMessages.NUnit, timeLimit, time, cancellationToken));
         }
         finally
         {

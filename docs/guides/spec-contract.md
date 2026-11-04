@@ -46,6 +46,83 @@ on one line. Plain `Given … When … Then …` does not count. Numbered lines 
 written anywhere else (`FR-001` in a sentence, `**FR-001**` without a bullet) is not a requirement. Each requirement should be
 testable: it is what the tests are traced to with `[Trait("Requirement", "FR-001")]` (NUnit: `[Property("Requirement", "FR-001")]`, MSTest: `[TestProperty("Requirement", "FR-001")]`).
 
+**Requirements verified outside .NET.** While Lockflight runs only .NET tests, a requirement that only a test in another
+language can verify (a UI rule covered by a Vitest or Jest test in the web client of a .NET + Angular project) carries a marker
+between the bold ID and the colon:
+
+```markdown
+- **FR-006** [outside .NET: web/src/app/streak-card.spec.ts]: The streak card MUST show the current streak
+- **FR-007** [outside .NET: web/src/app/streak-card.spec.ts, web/src/app/streak.spec.ts]: The card MUST hide a zero streak
+```
+
+`outside` is lowercase, the marker comes before the colon, and several paths are separated by commas. Each path is relative to
+the project root (in CI, the repository root). A path that is absolute, has a `..` segment, lies under `specs/` (the spec names
+its own requirements) or is a directory or a symbolic link never counts. What the marker does, and what it does not:
+
+- **Trace** (local and in CI) shows the requirement as *excluded — verified outside .NET (path)*: neither covered nor failing,
+  but only while every file it names exists (in CI: at the pull request's head) and contains the requirement ID as a whole
+  word. A missing file, a file that does not name the ID, or a path that does not count leaves the requirement *not covered*,
+  as without the marker. A .NET test that went red, then green and names the requirement still covers it as usual, and a
+  marked requirement whose .NET test no longer counts (deleted, renamed, skipped) is not covered: the marker does not hide it.
+  A requirement ID defined twice with a marker on one of its lines makes trace NOT-EARNED.
+- **Every requirement excluded is N/A, never PASS.** Locally trace exits 5. In CI the trace check is then N/A and, when the
+  pull request's class needs trace, a required check, so the judge's verdict is NOT-EARNED.
+- **Lockflight runs none of those tests.** The check proves only that the pointer leads to a file in the project that
+  contains the ID, which a comment would satisfy as well as a test title. Whether that file is a test, and whether the test
+  verifies the requirement, is for the person approving the spec and for review. In CI, each file's evidence says whether
+  the pull request added or changed it.
+- **It is visible.** The approval digest lists each marked requirement with its text and files, so the person approving the
+  spec sees what leaves trace. When the CI judge evaluates trace (the pull request changes production code), the comment's
+  headline counts the excluded requirements, and a marker added to, changed on or removed from a requirement the base already
+  had is called out above the checks. A pull request that changes only the spec shows the marker in its spec diff alone.
+- **Tasks.** `phase check tasks` warns (`WARN tasks.outside-dotnet`, never a failure) when no task that cites the requirement
+  names Vitest, Jest or one of its files.
+
+Mark only a requirement that has no .NET side. A rule the API enforces stays a normal requirement with a .NET test, even when
+the UI also shows it.
+
+**Structural requirements.** A behaviour-preserving refactoring, or an architecture rule a change establishes, has
+requirements that no red/green cycle can prove: their tests pass before the change (characterisation and snapshot tests) or
+call no production code (architecture tests that read types or sources). Mark such a requirement `[structural]`:
+
+```markdown
+- **FR-007** [structural]: Order totals MUST stay as they are after the pricing code moves to the Pricing module
+- **FR-008** [structural]: The Domain project MUST NOT reference the Web project
+```
+
+- **Structural tests.** A test whose `Requirement` traits name only structural requirements is a structural test. It is
+  not part of a red/green cycle: `redgreen red` (and the CI judge at a red commit) leaves it out and says so, so it never
+  turns a cycle GREEN_BEFORE.
+- **Trace runs them.** A structural requirement is covered by a structural test that is new since the code before the
+  change and passes at head *and* on that code, with the files that declare the structural tests and every non-C# file of the
+  test projects (project files, snapshots, expected-value data) laid over it. Every row of a theory must pass there. Locally
+  that code is the commit `redgreen start` recorded. In CI it is the pull request's fork point (merge base). Such a test shows
+  as `Class.Method (structural)`. A test that existed before the change (another feature's among them) does not count.
+- **A structural test that fails on the code before the change does not count.** That covers a failure on an assertion
+  about what production code returns, a stub, another exception, or one failing row. Such a test shows *behaviour changed —
+  not structural*, and it keeps the requirement uncovered even when another structural test passes.
+  The one exception is a test that fails there on an assertion **without calling production code** (RED_NO_PRODUCTION) and
+  passes at head. That is how an architecture test that reads types or sources looks, and it shows as
+  `(structural: architecture rule the change establishes)`. A test that calls production code and fails on an assertion
+  there (RED_ASSERT) never counts as an architecture rule: that is what a behaviour change looks like. The production-call scan is static, though: a test that reaches
+  production code only through reflection, a type argument (`WebApplicationFactory<Program>`) or a process, or that only checks
+  that a file or type exists, looks the same. Review each architecture rule the trace lists.
+- **What it proves, and what it does not.** Passing on both sides shows only that the test's own assertions held there. A
+  test that asserts little, or that behaves differently in the temporary worktree, passes on both. Whether a structural test
+  pins the behaviour its requirement names is for the person approving the spec and for review.
+- **Keep structural tests in files of their own**, using only APIs the older code has. Their files are built against it,
+  and a file that also holds tests needing newer code does not build there, so its structural tests show as *could not be
+  checked* and cover nothing (trace FAIL, also when the cause is the build environment).
+- **Local and CI can differ.** The two compare against different commits, CI also requires each test's compiled code to be
+  the head's there, and a unit repository of a workspace shell does not get the structural check in CI, so its structural
+  tests are judged as ordinary new tests at a red commit there.
+- **It is visible.** The approval digest lists structural requirements with their text, the CI comment's headline counts
+  them, and a marker added to, changed on or removed from a requirement the base already had is called out, as for
+  `[outside .NET: …]`.
+
+Mark only what the change must keep or the rule it establishes. A behaviour change, even inside a refactoring, stays a
+normal requirement with a test that goes red, then green.
+
 **Placeholders.** The check rejects text left over from a template:
 
 - an ALL-CAPS word of three or more characters in brackets that is not a Markdown link: `[FEATURE NAME]`, `[DATE]`,
@@ -86,6 +163,7 @@ and the tests will call. The crew's test author reads it.
 | `tasks.cover-requirements` | every requirement of `spec.md` is cited by at least one task |
 | `tasks.cite-requirements` | every story task cites at least one requirement, and no task cites an ID that `spec.md` does not define |
 | `tasks.tests-first` | in every story, the story has a test task, and no implementation task comes before its last test task |
+| `tasks.outside-dotnet` | a warning only, never a failure: every requirement marked `[outside .NET: …]` has a task that cites it and names Vitest, Jest or one of its files (shown only when the spec marks one) |
 | `tasks.units` | every `[unit:<path>]` tag names a unit listed in `lockflight.yaml` (shown only when the project has units or a tag is used) |
 
 **A task line** is a checkbox item with a task ID, then optional markers, then the description:
@@ -110,10 +188,14 @@ Lines that are not task lines (headings, prose, notes) are ignored, and so are H
 1. **Test**, when it sits under a heading that starts with `### Tests` (until the next heading of any level), or its
    description starts with test wording: `Tests …`, `Write tests …`, `Add tests …`, `Unit tests …`, `Contract tests …`,
    `Integration tests …`, one qualifying word before them (`xUnit tests …`), `Spec for …`, `Cover … with tests`. "Make tests
-   pass …", "Run tests …", "Implement tests …" and "Fix tests …" write no test and are not test tasks.
+   pass …", "Run tests …", "Implement tests …" and "Fix tests …" write no test and are not test tasks, and a path that starts
+   with a tests folder (`Add tests/Shop.Tests/…`) is a file name, not test wording.
 2. Else **stub**, when it says `stub`, `skeleton`, `NotImplementedException`, or "declare" or "scaffold" with "signature(s)".
 3. Else **test** again, when it names a test file (`…Tests.cs`, `…Test.cs`, a `*.Tests/` project, `*.spec.ts`,
-   `*.test.ts`) and does not start with "Implement" or "Make".
+   `*.test.ts`), does not start with "Implement" or "Make", and does not sit under a heading that starts with
+   `### Implementation` (Spec Kit's `### Implementation for User Story N`, until the next heading of level 3 or higher): there
+   the heading decides, so a task that adds a test harness or fixture under `tests/` is implementation. A test task there
+   needs test wording, or belongs under the story's `### Tests` heading.
 4. Everything else is **implementation**.
 
 **Tests first.** Within each story, every implementation task comes after the story's last test task. Stub tasks may sit

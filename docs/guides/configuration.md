@@ -94,7 +94,9 @@ reviewer to read, so an attribute cannot hide a change from the review; a real b
 exits NOT-EARNED when it finds nothing.
 
 **Diff limit.** `review.maxDiffCharacters` (default 120,000) is how much of the diff the reviewer is shown; a longer diff is
-cut, the reviewer is told which files to read, and the run is not of record. Raise it for a change that cannot be split, up to
+cut, the reviewer is told which files to read, and the run is not of record. Moved and renamed files count only with their
+edits (a file moved unchanged is a few lines naming the old and new path), so a refactoring that mostly moves files is
+much smaller than its file count suggests. Raise it for a change that cannot be split, up to
 the engine's ceiling of 400,000 (a value outside 10,000 to 400,000 is a configuration error). A larger diff costs more tokens,
 so `review.maxUsd` may need raising with it. Generated files (package lock files, EF Core model snapshots and migration
 designer files, chosen by path and, for the EF files, by the shape of their content) are listed by path, size and hash instead
@@ -537,7 +539,17 @@ project and context; `dotnet ef` failing for any other reason is an `ERROR`; the
 With `auto` (the default) it runs only when a tool manifest (`dotnet-tools.json` or `.config/dotnet-tools.json`, in the
 unit or above it up to the project root) pins `dotnet-ef`, after `dotnet tool restore`; otherwise it is `N/A` and says so. A
 global `dotnet ef` is not the repository's choice, so it runs only with `fail`. `report` lists a pending change on a `PASS`,
-`off` skips the step. The project files are read as text, not evaluated by MSBuild: a reference added through an imported
+`off` skips the step.
+
+The `N/A` reason appears only in the gate output, so `doctor` warns (**dotnet-ef pin**) when a project with migrations has no
+pin where the step looks for it (from the root, or from each unit that is not `kind: none`, up to the project root) under
+`auto`, and `init` prints the same advice. Like the patch coverage advice, both apply only when a Lockflight CI job runs the
+`pr` profile: `doctor` when one of the CI files `init` writes is there, `init` when it writes one (not with `--ci none`). Neither runs it: from the repository root, `dotnet new tool-manifest` (when there is
+no tool manifest yet), then `dotnet tool install dotnet-ef --version <version>`, with the EF Core version the project's EF Core
+package references (or the nearest `Directory.Packages.props`) state; commit the tool manifest. The check needs EF Core 8 or
+later, so for an older EF Core the advice says to upgrade first. A unit of a workspace shell is left out of both, as for patch
+coverage: its CI runs in the unit's own checkout and takes the stricter of its own and the shell's mode, so pin `dotnet-ef` in
+the unit's repository. The project files are read as text, not evaluated by MSBuild: a reference added through an imported
 file is not seen.
 
 ### Patch coverage needs a collector
@@ -567,7 +579,7 @@ references its package.
 | `lockflight baseline deps` | current vulnerable-package advisories | `.lockflight/baselines/vulnerable-packages.json` |
 | `lockflight baseline suppressions` | the suppressions the branch adds since it left the default branch, by file and rule, added to those accepted before | `.lockflight/baselines/suppressions.json` |
 | `.gitleaksignore` | known false-positive secrets (gitleaks' own format) | repository root |
-| written by a person | test-assembly code the CI judge's host-tampering check may accept (a fixture that starts a process, writes a file), one id per finding as the judge's evidence names it (`<assembly>\|<kind>\|<Type::Method>\|<member>`), or every finding of its kind in one method (`<assembly>\|<kind>\|<Type::Method>`), so a method not written yet can be accepted (never a whole kind in an assembly, which would switch the check off for it), as `{ "schema": "lockflight.baseline.host-tampering/v1", "findings": [ … ] }` | `.lockflight/baselines/host-tampering.json` |
+| written by a person | test-assembly code the CI judge's host-tampering check may accept (a fixture that starts a process, writes a file), one id per finding as the judge's evidence names it (`<assembly>\|<kind>\|<Type::Method>\|<member>`; copy it from the evidence's `baselineEntry`, the pull request comment or `lockflight ci`'s output, which print each new finding's entry ready to paste: it accepts that method's use of that member and nothing else, and counts once the baseline is on the target branch and the pull request is pushed or updated again), or every finding of its kind in one method (`<assembly>\|<kind>\|<Type::Method>`), so a method not written yet can be accepted (never a whole kind in an assembly, which would switch the check off for it), as `{ "schema": "lockflight.baseline.host-tampering/v1", "findings": [ … ] }` | `.lockflight/baselines/host-tampering.json` |
 
 ## Lifecycle commands (standard profile)
 

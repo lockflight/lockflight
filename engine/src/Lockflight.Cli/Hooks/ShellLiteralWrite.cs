@@ -9,7 +9,7 @@ namespace Lockflight.Cli.Hooks;
 /// <c>;</c>, newlines, <c>&amp;&amp;</c>, <c>||</c> and <c>|</c>, and at least one file is written. Anything that could run
 /// something else or write somewhere unseen fails the test: substitutions, subshells, groups, background jobs, other programs,
 /// variable assignments, a <c>$</c> or a backtick anywhere in a word or a here-text (quoted or not, since quoting is not kept),
-/// an empty quoted word (the tokenizer drops it), a here-string over several lines, unusual whitespace, input read from a file,
+/// an empty quoted word, a here-string over several lines, unusual whitespace, input read from a file,
 /// and a target that is a pattern, starts with <c>~</c> or <c>=</c>, holds a <c>!</c> (zsh's <c>&gt;!</c>), lies under
 /// <c>/dev</c> or <c>/proc</c> (except <c>/dev/null</c>), has a name ending in a dot or a space, or is a prompt queue file once
 /// resolved against the working directory (a relative target with no working directory fails). A here-document is checked
@@ -134,7 +134,7 @@ internal static partial class ShellLiteralWrite
 
     /// <summary>
     /// Here-text with no <c>$</c> or backtick expands to itself whether or not its delimiter was quoted; a line ending in a backslash
-    /// is joined to the next one by the shell, which can end the body where the tokenizer does not.
+    /// would be joined to the next one, or kept, depending on the quoting, so such text is never taken as literal.
     /// </summary>
     private static bool IsLiteralHereText(string text) =>
         !text.AsSpan().ContainsAny(Expansions) && !text.Split('\n').Any(line => line.EndsWith('\\'));
@@ -181,7 +181,10 @@ internal static partial class ShellLiteralWrite
         return quote is null;
     }
 
-    /// <summary>The tokenizer drops an empty quoted word, so the text around it would be read differently from the shell.</summary>
+    /// <summary>
+    /// An empty quoted word has no place in a note and changes how the lines around it are read (<c>&lt;&lt;''</c> ends its body at
+    /// the first empty line), so a command with one is never exempt.
+    /// </summary>
     private static bool HasEmptyQuotes(string text) =>
         text.Contains("''", StringComparison.Ordinal) || text.Contains("\"\"", StringComparison.Ordinal);
 

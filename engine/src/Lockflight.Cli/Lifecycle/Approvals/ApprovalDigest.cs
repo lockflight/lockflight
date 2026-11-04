@@ -1,12 +1,15 @@
 using System.Text;
+using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
-/// What the engine shows a person before they approve in a session: the feature, each artifact with the start of its hash (labelled
-/// as a hash, so it is not taken for the code), what the artifacts hold (requirements and stories, or tasks), open clarifications,
-/// the current approval, and the one-time code on its own line with the line to type. The engine renders it from the same bytes it hashed (<see cref="ArtifactSnapshot"/>), so it does not depend on the
-/// agent's summary, and a file rewritten while it renders cannot make the digest describe other content than the code binds.
+/// What the engine shows a person about an approval in a session, before (when the content changed since they could last see it) or
+/// once it is recorded: each artifact with the start of its hash, what the artifacts hold (requirements and stories, or tasks), the
+/// requirements marked as verified outside .NET with their text and files (trace leaves them out, so a person sees each one) and
+/// those marked structural with their text (no red/green cycle traces them), open clarifications and, before, the current approval.
+/// The engine renders it from the same bytes it hashed (<see cref="ArtifactSnapshot"/>), so it does not depend on the agent's
+/// summary, and a file rewritten while it renders cannot make it describe other content than the approval binds.
 /// </summary>
 internal static class ApprovalDigest
 {
@@ -14,11 +17,11 @@ internal static class ApprovalDigest
     private const string ClarificationMarker = "[NEEDS CLARIFICATION";
 
     /// <param name="artifacts">The phase's artifacts as read once (<see cref="ApprovalStore.Snapshot"/>), its main one first.</param>
-    public static string Render(Feature feature, ApprovalPhase phase, IReadOnlyList<ArtifactSnapshot> artifacts, ApprovalCheck current, string code)
+    /// <param name="current">The approval recorded now, for a line saying so; null leaves the line out (the approval was just recorded).</param>
+    /// <returns>Indented lines, without a final line break.</returns>
+    public static string Render(ApprovalPhase phase, IReadOnlyList<ArtifactSnapshot> artifacts, ApprovalCheck? current)
     {
-        string phaseName = ApprovalPhaseNames.ToName(phase);
         StringBuilder digest = new();
-        digest.AppendLine(SessionCommandGate.Opening("Nothing has been approved yet", $"Check the {phaseName} of {feature.Id} you are approving"));
         foreach (ArtifactSnapshot artifact in artifacts)
         {
             string hash = artifact.Hash;
@@ -31,9 +34,12 @@ internal static class ApprovalDigest
             digest.AppendLine($"  {line}");
         }
 
-        digest.AppendLine($"  Open [NEEDS CLARIFICATION] markers: {Clarifications(artifacts)}");
-        digest.AppendLine($"  Current approval: {Describe(current)}");
-        digest.Append(SessionCommandGate.Closing(code, $"/lockflight:approve {phaseName} {code}", "the files stay as shown"));
+        digest.Append($"  Open [NEEDS CLARIFICATION] markers: {Clarifications(artifacts)}");
+        if (current is not null)
+        {
+            digest.Append($"\n  Current approval: {Describe(current)}");
+        }
+
         return digest.ToString();
     }
 
@@ -43,6 +49,26 @@ internal static class ApprovalDigest
         yield return spec.Requirements.Count == 0
             ? "Requirements: none found"
             : $"Requirements ({spec.Requirements.Count}): {string.Join(", ", spec.Requirements.Select(requirement => requirement.Id))}";
+        Requirement[] outside = [.. spec.Requirements.Where(requirement => requirement.VerifiedOutside.Count > 0)];
+        if (outside.Length > 0)
+        {
+            yield return $"Verified outside .NET, not traced to .NET tests ({outside.Length}):";
+            foreach (Requirement requirement in outside)
+            {
+                yield return TerminalText.Clean($"  {requirement.Id} {requirement.Text} — {string.Join(", ", requirement.VerifiedOutside)}");
+            }
+        }
+
+        Requirement[] structural = [.. spec.Requirements.Where(requirement => requirement.Structural)];
+        if (structural.Length > 0)
+        {
+            yield return $"Structural, traced by new tests that pass on the code before the change and at head, or architecture tests red there ({structural.Length}):";
+            foreach (Requirement requirement in structural)
+            {
+                yield return TerminalText.Clean($"  {requirement.Id} {requirement.Text}");
+            }
+        }
+
         yield return spec.Stories.Count == 0
             ? "User stories: none found"
             : $"User stories ({spec.Stories.Count}): {string.Join("; ", spec.Stories.Select(story => $"{story.Number} {story.Title}"))}";

@@ -112,6 +112,32 @@ public sealed class CiReportTests : IDisposable
     }
 
     [Fact]
+    public void AJudgeThatFailsWhileTheGatesPassSaysItIsAdvisoryAndWhatToDo()
+    {
+        string comment = CommentRenderer.Render(CiReportCommand.Join(Evidence(redVerdict: "FAIL"), Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("Status: `gates` PASS · `lockflight/judge` FAIL (advisory — would block if required)", comment, StringComparison.Ordinal);
+        Assert.Contains("> `lockflight/judge` blocks a merge only where the platform requires that check", comment, StringComparison.Ordinal);
+        Assert.Contains("lockflight ci", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AJudgeThatPassesIsNotCalledAdvisory() =>
+        Assert.DoesNotContain("advisory —", CommentRenderer.Render(CiReportCommand.Join(Evidence(), Head, null), CommentRenderer.MaxCommentLength), StringComparison.Ordinal);
+
+    [Fact]
+    public void AJudgeThatFailsWithTheGatesIsNotCalledAdvisory()
+    {
+        JsonObject evidence = Evidence(redVerdict: "FAIL");
+        evidence["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == "gates")!["verdict"] = "FAIL";
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("`gates` FAIL", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("advisory —", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WithoutAReviewAnAdvisoryReviewDoesNotBlock() =>
         Assert.Equal("PASS", CiReportCommand.Join(Evidence(), Head, null)["verdict"]!.GetValue<string>());
 
@@ -153,6 +179,72 @@ public sealed class CiReportTests : IDisposable
         Assert.True(File.Exists(Path.Combine(output, "verdict.json")));
         Assert.StartsWith("<!-- lockflight:ci:v1 head=", File.ReadAllText(Path.Combine(output, "comment.md")), StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(output, "summary.md")));
+    }
+
+    [Fact]
+    public void ANewHostTamperingFindingInTheCommentCarriesItsBaselineEntry()
+    {
+        JsonObject evidence = Evidence();
+        evidence["hostTampering"] = new JsonObject
+        {
+            ["new"] = new JsonArray(new JsonObject
+            {
+                ["id"] = "Shop.Tests|file-write|Shop.Tests.Snapshots::Save|System.IO.File.WriteAllText",
+                ["kind"] = "file-write",
+                ["location"] = "Shop.Tests.Snapshots::Save",
+                ["member"] = "System.IO.File.WriteAllText",
+                ["baselineEntry"] = "\"Shop.Tests|file-write|Shop.Tests.Snapshots::Save|System.IO.File.WriteAllText\"",
+            }),
+            ["existing"] = new JsonArray(),
+        };
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("```json\n\"Shop.Tests|file-write|Shop.Tests.Snapshots::Save|System.IO.File.WriteAllText\"\n```", comment, StringComparison.Ordinal);
+        Assert.Contains(".lockflight/baselines/host-tampering.json", comment, StringComparison.Ordinal);
+        Assert.Contains("a person's decision", comment, StringComparison.Ordinal);
+        Assert.Contains("so the judge runs again. An entry accepts that method's use of that member and nothing else. The new findings' entries:", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("more entr", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCommentShowsOnlyEntriesThatNameTheirFindingAndCountsTheRest()
+    {
+        JsonObject evidence = Evidence();
+        string generic = "Shop.Tests|file-write|Shop.Tests.Store``1::Save|System.IO.File.WriteAllText";
+        evidence["hostTampering"] = new JsonObject
+        {
+            ["new"] = new JsonArray(
+                Finding(generic, $"\"{generic}\""),
+                Finding("Shop.Tests|exit|Shop.Tests.Guard::Stop|System.Environment.Exit", "\"Shop.Tests|exit|Shop.Tests.Guard::Stop\""),
+                Finding("Shop.Tests|exit|Shop.Tests.Guard::Halt|System.Environment.Exit", "\"Shop.Tests|exit|Shop.Tests.Other::Halt|System.Environment.Exit\""),
+                Finding("Shop.Tests|exit|Shop.Tests.Guard::Quit|System.Environment.Exit", null)),
+            ["existing"] = new JsonArray(),
+        };
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains($"```json\n\"{generic}\"\n```", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Shop.Tests|exit|Shop.Tests.Guard::Stop\"", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("Shop.Tests.Other::Halt", comment, StringComparison.Ordinal);
+        Assert.Contains("3 more entries are in the `lockflight ci` output of the job log.", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheCommentShowsThirtyEntriesAndCountsTheRest()
+    {
+        JsonObject evidence = Evidence();
+        evidence["hostTampering"] = new JsonObject
+        {
+            ["new"] = new JsonArray([.. Enumerable.Range(1, 35).Select(index => (JsonNode?)Finding($"Shop.Tests|exit|Shop.Tests.Guard::Stop{index}|System.Environment.Exit", $"\"Shop.Tests|exit|Shop.Tests.Guard::Stop{index}|System.Environment.Exit\""))]),
+            ["existing"] = new JsonArray(),
+        };
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), int.MaxValue);
+
+        Assert.Contains("\"Shop.Tests|exit|Shop.Tests.Guard::Stop30|System.Environment.Exit\"", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Shop.Tests|exit|Shop.Tests.Guard::Stop31|System.Environment.Exit\"", comment, StringComparison.Ordinal);
+        Assert.Contains("5 more entries are in the `lockflight ci` output of the job log.", comment, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -261,6 +353,31 @@ public sealed class CiReportTests : IDisposable
         Assert.Contains("/verdict-blocked.png) **Lockflight: NOT-EARNED**", comment, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TheHeadlineCountsRequirementsVerifiedOutsideDotNetAndCallsOutMarkerChangesOnTheBase()
+    {
+        JsonObject evidence = Evidence();
+        evidence["trace"] = new JsonObject
+        {
+            ["excluded"] = 2,
+            ["structural"] = 3,
+            ["markerChanges"] = new JsonArray("FR-009: [outside .NET: web/old.spec.ts] added"),
+            ["rows"] = new JsonArray(new JsonObject
+            {
+                ["requirement"] = "FR-009",
+                ["tests"] = new JsonArray(),
+                ["status"] = "excluded",
+                ["note"] = "verified outside .NET (web/old.spec.ts, unchanged in this pull request)",
+            }),
+        };
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("class **behaviour** (interim) · **2 requirements verified outside .NET** · **3 structural requirements**", comment, StringComparison.Ordinal);
+        Assert.Contains("FR-009: \\[outside .NET: web/old.spec.ts] added", comment, StringComparison.Ordinal);
+        Assert.Contains("| FR-009 | — | excluded — verified outside .NET (web/old.spec.ts, unchanged in this pull request) |", comment, StringComparison.Ordinal);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(directory);
 
     /// <summary>A valid blocked report, as the judge writes one when the class's review has no key to run.</summary>
@@ -300,4 +417,13 @@ public sealed class CiReportTests : IDisposable
 
     private static JsonObject Check(string id, string context, string verdict, string level, string why) =>
         new() { ["id"] = id, ["context"] = context, ["verdict"] = verdict, ["requirement"] = level, ["why"] = why };
+
+    private static JsonObject Finding(string id, string? entry) => new()
+    {
+        ["id"] = id,
+        ["kind"] = id.Split('|')[1],
+        ["location"] = id.Split('|')[2],
+        ["member"] = id.Split('|')[3],
+        ["baselineEntry"] = entry,
+    };
 }

@@ -9,8 +9,8 @@ using Lockflight.Cli.Paths;
 namespace Lockflight.Cli.Lifecycle.Approvals;
 
 /// <summary>
-/// One-time codes for the human decisions a person gives inside a Claude Code session, one per slot (an approval phase,
-/// <c>baseline-build</c>, <c>reset</c>, …), in <c>.lockflight/local/session-approvals/&lt;slot&gt;.json</c> (git-ignored, protected).
+/// One-time codes for the human decisions a person gives inside a Claude Code session, one per slot (<c>baseline-build</c>,
+/// <c>reset</c>, <c>amend</c>, …), in <c>.lockflight/local/session-approvals/&lt;slot&gt;.json</c> (git-ignored, protected).
 /// A code binds what the person was shown with it: the subject (a feature, a unit), named hashes of the state, and the entries a
 /// baseline would accept. Only a slow salted hash of the code is stored: the agent can read the file, and a fast hash of a short
 /// code could be reversed within its lifetime. A code survives <see cref="MaxAttempts"/> wrong codes at most.

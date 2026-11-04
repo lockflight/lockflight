@@ -33,7 +33,9 @@ public sealed class WorkflowTriggerCheckTests : IDisposable
     {
         Write("lockflight-gates.yml", "jobs:\n  gates:\n    steps:\n      - run: lockflight gate run --profile pr\n");
 
-        Assert.Equal(CheckStatus.Warn, WorkflowJudgeCheck.Check(root.FullName)?.Status);
+        DoctorCheck? warning = WorkflowJudgeCheck.Check(root.FullName);
+        Assert.Equal(CheckStatus.Warn, warning?.Status);
+        Assert.Contains("lockflight update --project --judge-workflow", warning!.Fix, StringComparison.Ordinal);
 
         Write("lockflight-gates.yml", Templates.Workflow(["10.0.x"]));
 

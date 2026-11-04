@@ -17,6 +17,22 @@ internal static class ProcessRunner
         "ACTIONS_RUNTIME_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_URL",
     ];
 
+    /// <summary>The variables every process the engine starts gets, on top of the engine's own environment.</summary>
+    public static IReadOnlyDictionary<string, string?> EngineVariables { get; } = new Dictionary<string, string?>(StringComparer.Ordinal)
+    {
+        // MSBuild node reuse leaves server processes behind, which breaks hooks and sandboxes.
+        ["MSBUILDDISABLENODEREUSE"] = "1",
+        ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
+        ["DOTNET_NOLOGO"] = "1",
+
+        // Read-only git calls (status, diff) must not take index.lock and collide with the user's or the agent's own commit.
+        ["GIT_OPTIONAL_LOCKS"] = "0",
+
+        // Snapshot libraries (Verify and others built on DiffEngine) open the developer's diff tool on a failed comparison; a test run
+        // the engine starts (gates, red/green, reviews) must never pop windows on the person's screen.
+        ["DiffEngine_Disabled"] = "true",
+    };
+
     public static Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, string workingDirectory, CancellationToken cancellationToken) =>
         RunAsync(fileName, arguments, workingDirectory, Timeout.InfiniteTimeSpan, cancellationToken);
 
@@ -53,7 +69,8 @@ internal static class ProcessRunner
         CancellationToken cancellationToken)
     {
         ProcessStartInfo startInfo = StartInfo(fileName, arguments, workingDirectory, redirectInput: standardInputPath is not null);
-        foreach ((string name, string? value) in variables)
+        // A caller's variables (a test project's run settings among them) cannot put back the CI runner's files and tokens.
+        foreach ((string name, string? value) in variables.Where(variable => !RunnerVariables.Contains(variable.Key, StringComparer.OrdinalIgnoreCase)))
         {
             if (value is null)
             {
@@ -147,15 +164,11 @@ internal static class ProcessRunner
             startInfo.ArgumentList.Add(argument);
         }
 
-        // MSBuild node reuse leaves server processes behind, which breaks hooks and sandboxes.
-        startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
-        startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
-        startInfo.Environment["DOTNET_NOLOGO"] = "1";
-        // Read-only git calls (status, diff) must not take index.lock and collide with the user's or the agent's own commit.
-        startInfo.Environment["GIT_OPTIONAL_LOCKS"] = "0";
-        // Snapshot libraries (Verify and others built on DiffEngine) open the developer's diff tool on a failed comparison; a test run
-        // the engine starts (gates, red/green, reviews) must never pop windows on the person's screen.
-        startInfo.Environment["DiffEngine_Disabled"] = "true";
+        foreach ((string name, string? value) in EngineVariables)
+        {
+            startInfo.Environment[name] = value;
+        }
+
         // The CI runner's file commands and tokens: a build or test the engine starts (the pull request's code, in the CI judge's
         // job) must not set the next steps' environment or outputs. A guardrail: the files stay on disk under the runner's
         // temporary folder.

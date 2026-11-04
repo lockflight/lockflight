@@ -74,6 +74,32 @@ public sealed class AmendStepTests : IDisposable
     }
 
     [Fact]
+    public async Task AnAmendSaysTheReCheckRunsOnTheRedTimeSnapshotSoTheImplementationStays()
+    {
+        SaveRecord(openCycle: true, snapshot: "0123456789abcdef0123456789abcdef01234567");
+
+        (ExitCode exitCode, string output, string error) = await RunAsync("redgreen", "amend", "FirstKilogramCostsFive", "--reason", "the rate is 5.50", "--feature", "f1");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Contains("The re-check runs on the red-time snapshot of cycle 1 with the cycle's amended files laid over it", output, StringComparison.Ordinal);
+        Assert.Contains("do not undo the implementation", output, StringComparison.Ordinal);
+        Assert.Contains("must compile against the code as it was at red", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnAmendOfACycleWithoutASnapshotSaysTheReCheckRunsOnTheCurrentTree()
+    {
+        SaveRecord(openCycle: true);
+
+        (ExitCode exitCode, string output, string error) = await RunAsync("redgreen", "amend", "FirstKilogramCostsFive", "--reason", "the rate is 5.50", "--feature", "f1");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Contains("Cycle 1 has no red-time snapshot, so the re-check runs on the current tree", output, StringComparison.Ordinal);
+        Assert.Contains("Do not break the implementation to get a red: a person can move it aside", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("laid over it", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task StatusShowsAnOpenAmendAndItsFile()
     {
         SaveRecord(openCycle: true);
@@ -224,7 +250,7 @@ public sealed class AmendStepTests : IDisposable
 
     private Manifest ProjectManifest() => new(root.FullName, [], StopGate: false, StopTarget: null, GateSettings.Default);
 
-    private void SaveRecord(bool openCycle, RedGreenTest? extraTest = null)
+    private void SaveRecord(bool openCycle, RedGreenTest? extraTest = null, string? snapshot = null)
     {
         RedGreenRecord record = new()
         {
@@ -239,7 +265,7 @@ public sealed class AmendStepTests : IDisposable
             new("T:Shop.Tests.ShippingTests.EveryStartedKilogramCostsTwoFifty", "Shop.Tests.ShippingTests.EveryStartedKilogramCostsTwoFifty", RedClass.RedStub, ["FR-001"]),
             .. extraTest is null ? [] : new[] { extraTest },
         ];
-        record.Cycles.Add(new RedGreenCycle(1, DateTimeOffset.UnixEpoch, openCycle ? null : DateTimeOffset.UnixEpoch, tests));
+        record.Cycles.Add(new RedGreenCycle(1, DateTimeOffset.UnixEpoch, openCycle ? null : DateTimeOffset.UnixEpoch, tests) { Snapshot = snapshot });
         record.Save(RedGreenRecord.PathFor(Feature), Feature.Id);
     }
 }

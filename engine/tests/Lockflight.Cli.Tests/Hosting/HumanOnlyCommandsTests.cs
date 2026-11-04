@@ -25,6 +25,12 @@ public sealed class HumanOnlyCommandsTests : IDisposable
     [InlineData("dotnet lockflight init --speckit-preset ~/lockflight/plugins/lockflight/speckit-preset", "init --speckit-preset")]
     [InlineData(".lockflight/bin/lockflight init --speckit-preset=/tmp/preset", "init --speckit-preset")]
     [InlineData("bash -c 'lockflight init --profile standard --speckit-preset /tmp/preset'", "init --speckit-preset")]
+    [InlineData("cat >f <<'' x\nhi\n\nlockflight approve spec\nx", "approve spec")]
+    [InlineData("echo $(cat <<EOF)\nlockflight approve spec\nEOF", "approve spec")]
+    [InlineData("cat <<EOF\nE\\\nOF\nlockflight approve spec\nEOF", "approve spec")]
+    [InlineData("lockflight '' approve spec", "approve spec")]
+    [InlineData("cat <<EOF\n$(lockflight approve spec)\nEOF", "approve spec")]
+    [InlineData("cat <<<$(lockflight approve spec)", "approve spec")]
     public void ReservedCommandsAreFoundWhateverTheSpelling(string command, string expected) =>
         Assert.Equal(expected, HumanOnlyCommands.FindIn(command, ShellDialect.Posix));
 

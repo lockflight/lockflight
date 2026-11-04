@@ -12,8 +12,8 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [`git reset --hard` and other whole-tree rewrites](#git-reset---hard-is-blocked-this-command-may-rewrite-) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --self-test` reports MISSED or BROKEN](#doctor---self-test-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [review: changes not committed](#review-says-the-working-tree-has-changes-that-are-not-committed) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
-| CI | [the `gates` check waits: "Expected — Waiting for status to be reported"](#the-gates-check-waits-expected--waiting-for-status-to-be-reported) |
-| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) |
+| CI | [the `gates` check waits: "Expected — Waiting for status to be reported"](#the-gates-check-waits-expected--waiting-for-status-to-be-reported) · [`gates` passes but a local `lockflight ci` fails](#cis-gates-passes-but-a-local-lockflight-ci-fails) |
+| Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) · [passes under red but fails under `dotnet test`](#a-test-passes-under-reds-run-but-fails-under-dotnet-test) |
 
 ## Every tool call is blocked: "engine not installed in this project"
 
@@ -160,14 +160,23 @@ and `link --installed` or `engine install` answers "unknown command": that user 
 
 ## The `gates` check waits: "Expected — Waiting for status to be reported"
 
-A pull request shows the required `gates` check as "Expected — Waiting for status to be reported", and `lockflight-gates`
-never runs on it. On a new GitHub repository the usual cause is that workflows are not enabled yet: the Actions tab says
+A pull request shows the required `gates` check as "Expected — Waiting for status to be reported", and the `lockflight`
+workflow (`lockflight-gates` before 0.3.1) never runs on it. On a new GitHub repository the usual cause is that workflows are not enabled yet: the Actions tab says
 "Workflows aren't being run on this repository", no push or pull_request run starts, and the Actions permissions API still answers
 `"enabled": true`. Open the Actions tab, enable workflows, then push to the pull request's branch (or close and reopen it) so
 the workflow runs. With the `gh` CLI signed in, `lockflight doctor` warns about this (**github actions**). Other causes: the
 workflow file is not on the branch yet, or it runs only when started by hand (`init --ci manual`, or a development build pin:
 see [CI with a development build](getting-started.md#ci-with-a-development-build)). See
 [enable workflows on a new repository](ci-hardening.md#enable-workflows-on-a-new-repository).
+
+## CI's `gates` passes but a local `lockflight ci` fails
+
+A workflow that Lockflight 0.2 wrote runs the gates alone: its `gates` check knows nothing of red/green, while
+`lockflight ci` runs the CI judge, which also re-runs each red commit, green at head and trace. `init` never replaces that
+workflow; `lockflight doctor` warns about it (**workflow: CI judge**). Once the project's main branch pins a 0.3 engine, move it with
+`lockflight update --project --judge-workflow` in a branch: see [moving from 0.2](ci-hardening.md#moving-from-lockflight-02s-gates-workflow). With the CI judge's workflow,
+`gates` can still pass while `lockflight/judge` fails: the comment marks the judge "advisory — would block if required", since
+only a check your ruleset requires blocks a merge ([which check is required](ci-hardening.md#which-check-is-required)).
 
 ## "lockflight: internal error" or "the engine failed (exit N)"
 
@@ -190,7 +199,10 @@ The block is intended even when the commit you want to drop touched no protected
 message names what to run instead. For a reset: `git revert <commit>` undoes a commit with a new one (when the commit changed
 no protected file), and `git restore --source <commit> --staged --worktree -- <files>` takes named files back from a commit.
 The others name their files the same way: `git restore --staged -- <files>`, `git clean -f -- <files>`,
-`git stash push -- <files>`. Name only files no protected rule covers.
+`git stash push --include-untracked -- <files>`. Name only files no protected rule covers. `git stash pop` is blocked for the
+same reason; take the files back by name: `git checkout "stash@{0}" -- <files>` for changed files and
+`git checkout "stash@{0}^3" -- <files>` for files that were untracked (both stage them; `git restore --staged -- <files>`
+unstages), then check `git status` before `git stash drop`.
 
 ## A shell write is allowed although it touches a protected file
 
@@ -321,6 +333,32 @@ names the project with the first line of msbuild's error, or says it timed out.
 
 A project that evaluates and simply is not a test project is never reported.
 
+## A test passes under red's run but fails under `dotnet test`
+
+`redgreen red` runs each test application itself, not through `dotnet test`, but with the same working directory (the
+application's output folder, `bin/<Configuration>/<framework>/`) and, on VSTest, the environment variables of the project's
+`.runsettings` (`RunSettingsFilePath`, its `RunConfiguration/EnvironmentVariables`). The .NET 10 SDK's `dotnet test` on
+Microsoft.Testing.Platform does not apply them, so neither does the red there. Other differences remain:
+
+- the red runs only the new tests, together, so static state that other tests of the suite set up is not there, and state the
+  other new tests set up is;
+- the rest of a `.runsettings` (test run parameters, adapter sections, other run configuration) is not applied, and an NUnit run
+  uses run settings of its own to select the tests;
+- the test process is started differently: no VSTest test host, and not as the server `dotnet test` starts on
+  Microsoft.Testing.Platform.
+
+So when a new test is GREEN_BEFORE, the red runs it once more through a plain `dotnet test` filtered to that test (`--no-build`,
+in the project's directory, within the red's `gates.timeoutSeconds`; at most three tests). If it fails there, the red prints a
+warning, "passes under red's run but fails under dotnet test", with both command lines, their working directories and the
+variables that commonly change how .NET code behaves (`DOTNET_*`, `ASPNETCORE_*`, `TZ`, `LANG`, `LC_*`; a value whose name looks
+like a secret is shown as `<redacted>`). The verdict stays GREEN_BEFORE: the test passed before the implementation existed under
+the red's own run, so the red is rejected either way. Find what the test depends on (a time zone, the culture, a file, state
+another test leaves behind) and make it explicit in the test: that dependency is also why its result changes from one machine or
+runner to another.
+
+A red that judges new tests also prints, per test application, a `dotnet test` line filtered to them
+(`Reproduce <assembly> with dotnet test: cd … && dotnet test …`) to run them yourself. The re-check of an amended test does not.
+
 ## `redgreen green` says "other tests fail" for tests the feature never touched
 
 `redgreen start` runs the suite once and warns when tests already fail before any change (often for environmental reasons,
@@ -340,8 +378,10 @@ separate terminal window (`.lockflight/bin/lockflight approve spec` or `approve 
 The review of record is a review of a commit. The run found files in the paths the review reads (the diff's paths and the
 feature's `spec.md`) that differ from HEAD: changed or staged files, which the diff shows but no commit holds, and untracked
 files, which the diff does not show at all. The run is still reviewed and recorded, and its findings count, but it is not the
-review of record. Commit the files that belong to the change, stash or delete the rest (`git stash -u` also stashes untracked
-files), and run `review` again. Files git ignores, `.lockflight/`, `.claude/worktrees/`, untracked `bin/` and `obj/` folders and
+review of record. Commit the files that belong to the change, stash or delete the rest by name
+(`git stash push --include-untracked -- <files>`; a bare `git stash` rewrites the whole working tree, so the guard blocks it,
+and [the guard section](#git-reset---hard-is-blocked-this-command-may-rewrite-) says how to take them back), and run `review`
+again. Files git ignores, `.lockflight/`, `.claude/worktrees/`, untracked `bin/` and `obj/` folders and
 the other files under `specs/` never count. A local file that should never be committed belongs in `.gitignore` or
 `.git/info/exclude`.
 

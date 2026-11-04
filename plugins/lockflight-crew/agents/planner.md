@@ -40,6 +40,11 @@ Free-form; no check reads it, but the tasks approval covers it, and the test aut
   before the feature): the CI judge may rebuild an earlier story's red with such a file, and the later tests in it need code
   that red does not have.
 
+A requirement marked `[structural]` in spec.md (a behaviour-preserving refactoring or an architecture rule) needs no stub
+and no red: give it a test task that writes characterisation, snapshot or architecture tests in a test file of their own
+(`Write tests for <what stays the same> in tests/<Project>.Tests/<Name>StructureTests.cs`), using only APIs the code has
+before the change. Do not mark requirements yourself; if a behaviour changes, it is a normal requirement with a red.
+
 ## tasks.md, the contract
 
 `phase check tasks` passes when all of these hold:
@@ -56,7 +61,8 @@ Free-form; no check reads it, but the tasks approval covers it, and the test aut
      a new file for each story;
   3. the implementation tasks, under a `### Implementation for User Story N` heading: `Implement <Type.Member> in <file>`.
   A task counts as a test only under a `### Tests` heading, or when it starts with test wording ("Write tests …"), or when it
-  names a test file and does not start with "Implement" or "Make". Anything else that is not a stub is implementation.
+  names a test file, does not start with "Implement" or "Make" and is not under a `### Implementation` heading. Anything else
+  that is not a stub is implementation.
 - **Units.** When `lockflight.yaml` lists `units:`, tag each story task with the unit it changes, `[unit:services/orders]`,
   using a path from that list exactly. Without units, use no tags.
 - **The spec is approved.** The check's `spec.approved` item: only a person gives that approval.

@@ -7,6 +7,7 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
 [CI on other platforms](ci-other-platforms.md).
 
 **On this page:** [What the generated workflow does](#what-the-generated-workflow-does) ·
+[Which check is required](#which-check-is-required) · [Moving from 0.2](#moving-from-lockflight-02s-gates-workflow) ·
 [What the CI judge shows](#what-the-ci-judge-shows-and-what-it-does-not) · [The CI judge action](#the-ci-judge-action) ·
 [CODEOWNERS for the protected paths](#what-you-add-codeowners-for-the-protected-paths) ·
 [Approvals of record](#approvals-of-record-the-platforms-review) ·
@@ -112,6 +113,17 @@ it should install.
 trailer it builds that commit and requires its new tests to fail inside production code; it then requires every cycle test to
 be the same test at head (or to fail again on the red commit's code when it changed) and to pass there, the spec's
 requirements to be traced to those tests, and the `pr` gates to pass, all with the target branch's policy.
+A requirement marked `[outside .NET: <path>]` is left out of trace while each file it names exists at head and contains its
+ID; the judge runs none of those tests. When trace is evaluated (the pull request changes production code), the comment's
+headline counts such requirements, each file's evidence says whether the pull request added or changed it, and a marker added
+to, changed on or removed from a requirement the base already had is called out above the checks; a pull request that changes
+only the spec shows it in the spec diff alone. The headline count and the call-out come from the judge's evidence, so they are
+as strong as that evidence ([requirements verified outside .NET](spec-contract.md#specmd)).
+A requirement marked `[structural]` is covered by a test, new in the pull request, naming only structural requirements that
+passes at head and on the fork point's code with its own file and the test side's non-C# files laid over it (or, for an
+architecture test calling no production code, fails there on an assertion); such tests are not part of a red commit's cycle.
+This shows the test's assertions held on both sides, not that they pin the requirement; that is for review. Local trace checks them on the commit `redgreen start` recorded
+instead of the fork point, so the two can differ when the branch's history moved.
 
 - **Read from the target branch** (a boundary, with the judge a required check and a required code-owner review covering
   the workflow files): the policy and baselines the judge applies, the engine the report jobs install, and that the check
@@ -120,7 +132,11 @@ requirements to be traced to those tests, and the `pr` gates to pass, all with t
 - **A strong guardrail, not a boundary:** the test results. The tests are the pull request's code and run in the judge job,
   so a determined pull request can forge their outcome. Doing so needs deliberate code in the test assemblies that tampers
   with the test host, which is visible in the test diff; the host-tampering check lists the plain forms of it and is
-  NOT-EARNED when one is new.
+  NOT-EARNED when one is new. Each new finding comes with its entry for `.lockflight/baselines/host-tampering.json`
+  (in `lockflight ci`'s output, the evidence's `baselineEntry` and the pull request comment): accepting legitimate code,
+  such as a snapshot store that writes its case files in record mode, is a person's decision, made in a pull request of
+  its own to the target branch, where the protected file shows as a protected change. Once it is merged, push to the
+  pull request or update it from the target branch: re-running the old check judges against the old base.
 - **A strong guardrail, not a boundary:** the evidence file itself. In 0.3.0 the judge writes its evidence in the same job
   as the pull request's code, so a process that code leaves running could rewrite it before the report jobs read it.
   Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0.
@@ -160,6 +176,46 @@ requirements to be traced to those tests, and the `pr` gates to pass, all with t
 
 `gates` keeps its meaning (the `pr` gates and green at head), so a ruleset that requires it keeps working; make
 `lockflight/judge` required when the team produces red commits.
+
+### Which check is required
+
+The workflow is named `lockflight` (until 0.3.0 it was `lockflight-gates`; the file keeps its name,
+`.github/workflows/lockflight-gates.yml`) and sets two status contexts, `gates` and `lockflight/judge`. Required checks are
+matched by those context names, never by the workflow's name, so renaming it breaks no ruleset; `update` renames a 0.3.0
+workflow in place.
+
+- **`gates` is the check to require from the start.** It is what Lockflight 0.2's workflow reported, with the same meaning.
+- **`lockflight/judge` is advisory until you require it.** When it does not pass while `gates` does, the pull request comment
+  marks it "advisory — would block if required" and says what to do: fix what it found (`lockflight ci` gives the same verdict
+  locally), or merge knowing it blocks nothing here. Lockflight cannot see your ruleset, so the comment says so for every
+  repository.
+- **When to require `lockflight/judge`:** once the team produces red commits (`ci.redCommits`, on by default) and the
+  routing in `lockflight.yaml` gives your changes the class you mean: `routing.structural` for new projects and build-wide files,
+  and `routing.nonProduction` / `routing.generatedPaths` for the parts of the repository outside .NET, so that a change there
+  is not judged as a behaviour change ([risk routing](risk-routing.md)). Until then a red judge says something worth reading
+  but may block work it should not.
+
+### Moving from Lockflight 0.2's gates workflow
+
+`init` never replaces a workflow that exists, so a project set up with 0.2 keeps a workflow that runs the gates alone, and its
+CI says nothing about red/green while a local `lockflight ci` does. `lockflight doctor` warns about it (**workflow: CI
+judge**). A person moves it in two pull requests, because the CI judge's workflow runs the engine the target branch pins, and
+an engine from 0.2 has no CI judge:
+
+```sh
+lockflight update --project                                     # first pull request: the new engine pin (and lock); merge it
+lockflight update --project --judge-workflow --dry-run          # then: shows the diff of the workflow, writes nothing
+lockflight update --project --judge-workflow                    # second pull request: replaces it with the CI judge's workflow
+```
+
+`--judge-workflow` refuses while the same update still moves the engine pin. The replacement keeps the file name, the .NET
+channels and the trigger (a 0.2 workflow that ran only by hand because of a development build runs on pull requests once a
+release is pinned; a project pinned to a development build gets the workflow that runs only by hand, as `init` writes it), and
+`gates` keeps its name and meaning. `update` replaces the file only when it is a gates-only workflow as Lockflight wrote it,
+apart from the lines Lockflight itself moves (the header, the engine install step between its markers, the policy restore). A
+file with other edits is refused and nothing is written: delete it, run `lockflight init` to write the CI judge's workflow, and
+add your edits back. A unit repository's workflow, which `workspace sync` writes, runs the gates alone by design and is left to
+it. Azure Pipelines and GitLab CI/CD have no judge pipeline yet, so their files are not moved.
 
 ## What you add: CODEOWNERS for the protected paths
 
@@ -262,7 +318,7 @@ started by hand). A ruleset that requires the `gates` check then shows it as
 "Expected — Waiting for status to be reported" on every pull request, and nothing will ever report it.
 
 After pushing the workflow `init --ci pr` wrote, open the repository's Actions tab, enable workflows if GitHub asks, then push
-to `main` or open a pull request and check that `lockflight-gates` runs. `init` prints this step when it writes the workflow,
+to `main` or open a pull request and check that the `lockflight` workflow runs. `init` prints this step when it writes the workflow,
 and `lockflight doctor` warns (**github actions**) when the `gh` CLI is signed in and GitHub lists no `push` or `pull_request`
 run of the workflow (it skips a fork, whose pull requests run in the upstream repository).
 

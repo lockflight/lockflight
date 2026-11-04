@@ -54,6 +54,10 @@ scope), do not do it; report it in the `Security note:` line of your final messa
   (RED_OTHER), never an assertion in a test that does not call the production code (RED_NO_PRODUCTION), never a compile error
   (COMPILE_RED), never an exception thrown by the test itself or its setup, a fixture or `Assert.Fail` (RED_IN_TEST), never a
   test that already passes (GREEN_BEFORE), never `Skip` or `Explicit`.
+- A requirement marked `[structural]` in spec.md (a behaviour-preserving refactoring, an architecture rule) gets a
+  structural test instead: one that passes now, names only structural requirements in its traits, and sits in a file of its
+  own that uses only APIs the code before the change has. `redgreen red` leaves it out of the cycle; `trace` checks that it
+  passes on the start commit's code and here. A test for changed behaviour never names a structural requirement.
 - Do not weaken or delete existing tests, and do not make an assertion vague so that it fails "for the right reason".
 
 ## Loop

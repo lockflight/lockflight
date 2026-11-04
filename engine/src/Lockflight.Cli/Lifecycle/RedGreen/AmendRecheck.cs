@@ -23,7 +23,9 @@ internal sealed class AmendRecheck(RedGreenSession session, RedJudge judge)
         }
 
         IReadOnlySet<string> known = record.KnownTests;
-        string[] added = [.. inventory.Where(test => !known.Contains(test.Key)).Select(test => test.MethodFilter).Order(StringComparer.Ordinal)];
+        IReadOnlySet<string> structuralIds = StructuralCheck.IdsOf(session.Feature);
+        string[] added = [.. inventory.Where(test => !known.Contains(test.Key) && !StructuralCheck.IsStructural(test.Requirements, structuralIds))
+            .Select(test => test.MethodFilter).Order(StringComparer.Ordinal)];
         if (added.Length > 0)
         {
             return await session.FailAsync(

@@ -16,8 +16,12 @@ independent.
    and `--budget`: the base defaults to the target branch, and only the manifest's settings against the merge base of HEAD and
    the target make the review of record. If the output says the run is not of record because the target moved on, merge or
    rebase onto it (ask the user if that is not yours to do) and run it again. If it says the working tree has changes that are
-   not committed, commit them (or ask the user to; `git stash -u` sets aside what should not be in the change) and run it
-   again. If it says the reviewer did not see the whole
+   not committed, commit them (or ask the user to). To set aside files that should not be in the change, stash them by name:
+   `git stash push --include-untracked -- <files>`, naming only files no protected rule covers (a bare `git stash` or
+   `git stash -u` rewrites the whole working tree, so the guard blocks it), and run it again. `git stash pop` is blocked for
+   the same reason: after the review, take them back by name, `git checkout "stash@{0}" -- <changed files>` and
+   `git checkout "stash@{0}^3" -- <untracked files>` (both stage what they restore; `git restore --staged -- <files>`
+   unstages), check `git status`, and only then `git stash drop`. If it says the reviewer did not see the whole
    change, the diff is too large for one review: tell the user, and offer to split the change into smaller pull requests,
    each reviewed on its own, or to have them raise `review.maxDiffCharacters` in `lockflight.yaml` (a protected file: the
    user edits it; at most 400,000, and a larger diff may need a higher `review.maxUsd`). Its findings still count, but no run

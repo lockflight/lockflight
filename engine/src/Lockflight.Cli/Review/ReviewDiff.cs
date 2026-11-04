@@ -11,6 +11,7 @@ namespace Lockflight.Cli.Review;
 internal sealed record ReviewDiff(string Whole, string Shown, int Limit, int Files, IReadOnlyList<string> NotShown)
 {
     private const string FileHeader = "diff --git ";
+    private const string RenameLine = "\nrename from ";
 
     /// <summary>The whole diff's length in characters.</summary>
     public int Length => Whole.Length;
@@ -26,6 +27,15 @@ internal sealed record ReviewDiff(string Whole, string Shown, int Limit, int Fil
     /// reviewer cannot read their change.
     /// </summary>
     public IReadOnlyList<string> TextShownAsBinary { get; init; } = [];
+
+    /// <summary>
+    /// The new paths (with a unit's path in a workspace) of the files git found moved or renamed (<c>rename from</c>/<c>rename to</c>):
+    /// their diff is the move and its edits only, none at all for a pure move.
+    /// </summary>
+    public IReadOnlyList<string> Renamed { get; init; } = [];
+
+    /// <summary>The length in characters of the moved or renamed files' diffs, part of <see cref="ReviewedLength"/>.</summary>
+    public int RenamedLength { get; init; }
 
     /// <summary>Whether the diff was cut at the limit, so some files are not shown in full.</summary>
     public bool IsCut => NotShown.Count > 0;
@@ -55,7 +65,8 @@ internal sealed record ReviewDiff(string Whole, string Shown, int Limit, int Fil
         List<GeneratedFile> generated = [];
         foreach (string section in sections)
         {
-            if (GeneratedFiles.Find(PathOf(section), paths, root) is GeneratedFile file)
+            // A move is never listed as generated: renaming a source file to a lock file's name would hide its removal.
+            if (!IsRename(section) && GeneratedFiles.Find(PathOf(section), paths, root) is GeneratedFile file)
             {
                 generated.Add(file);
             }
@@ -67,9 +78,17 @@ internal sealed record ReviewDiff(string Whole, string Shown, int Limit, int Fil
 
         string reviewedDiff = string.Concat(reviewed);
         string listing = GeneratedFiles.Note(generated);
+        string[] renamed = [.. reviewed.Where(IsRename)];
+        ReviewDiff whole = new(diff, reviewedDiff + listing, maxCharacters, sections.Length, [])
+        {
+            ReviewedLength = reviewedDiff.Length,
+            Generated = generated,
+            Renamed = [.. renamed.Select(PathOf)],
+            RenamedLength = renamed.Sum(section => section.Length),
+        };
         if (reviewedDiff.Length <= maxCharacters)
         {
-            return new ReviewDiff(diff, reviewedDiff + listing, maxCharacters, sections.Length, []) { ReviewedLength = reviewedDiff.Length, Generated = generated };
+            return whole;
         }
 
         List<string> shown = [];
@@ -90,8 +109,14 @@ internal sealed record ReviewDiff(string Whole, string Shown, int Limit, int Fil
 
         string text = shown.Count > 0 ? string.Concat(shown) : reviewedDiff[..maxCharacters] + "\n";
         string note = $"[diff truncated: {notShown.Count} of {sections.Length} changed files not shown in full; read them: {string.Join(", ", notShown)}]";
-        return new ReviewDiff(diff, text + note + listing, maxCharacters, sections.Length, notShown) { ReviewedLength = reviewedDiff.Length, Generated = generated };
+        return whole with { Shown = text + note + listing, NotShown = notShown };
     }
+
+    /// <summary>
+    /// Whether a file's diff is a move or rename: its extended header has a <c>rename from</c> line (a line of a hunk starts with
+    /// a space, '+', '-' or '\', so content cannot pass for one).
+    /// </summary>
+    private static bool IsRename(string section) => section.Contains(RenameLine, StringComparison.Ordinal);
 
     /// <summary>The diff split before each file header; text before the first header, if any, stays with the first section.</summary>
     private static string[] Sections(string diff)

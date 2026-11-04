@@ -15,9 +15,9 @@ namespace Lockflight.Cli.Tests.Lifecycle.Approvals;
 public sealed class SessionApprovalTests : IDisposable
 {
     private const string FeatureId = "001-orders";
-    private const string Code = "k7m2qx";
-    private const string SecondCode = "p3w9ha";
+    private const string OldStyleCode = "k7m2qx";
     private const string ApproverEmail = "approver@example.com";
+    private const string SeenRecord = ".lockflight/local/approval-seen.json";
 
     private static readonly Dictionary<string, string> AttendedSession = new()
     {
@@ -28,15 +28,14 @@ public sealed class SessionApprovalTests : IDisposable
 
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-session-approval-");
     private readonly ManualTime time = new(new DateTimeOffset(2026, 10, 15, 9, 0, 0, TimeSpan.Zero));
-    private readonly RandomSource codes = RandomSource.WithCodes(Code, SecondCode);
 
     private string SpecDirectory => Path.Combine(root.FullName, "specs", FeatureId);
 
     private string SpecPath => Path.Combine(SpecDirectory, "spec.md");
 
-    private string RecordPath(string phase) => Path.Combine(root.FullName, ".lockflight", "features", FeatureId, "approvals", $"{phase}.json");
+    private string SeenRecordPath => Path.Combine(root.FullName, SeenRecord.Replace('/', Path.DirectorySeparatorChar));
 
-    private string WaitingCodePath(string phase) => Path.Combine(root.FullName, SessionCodes.RelativeDirectory, $"{phase}.json");
+    private string RecordPath(string phase) => Path.Combine(root.FullName, ".lockflight", "features", FeatureId, "approvals", $"{phase}.json");
 
     [Fact]
     public async Task AnotherSlashCommandIsIgnoredWithoutAWord()
@@ -60,6 +59,7 @@ public sealed class SessionApprovalTests : IDisposable
     public async Task AnApprovalOutsideAnAttendedInteractiveSessionIsRefused(string? entrypoint, string? attended)
     {
         await CreateProjectAsync();
+        await EndTurnAsync();
         Dictionary<string, string> environment = new() { [EnvironmentVariables.ClaudeCode] = "1" };
         if (entrypoint is not null)
         {
@@ -78,7 +78,6 @@ public sealed class SessionApprovalTests : IDisposable
         Assert.Contains("nothing was approved", error, StringComparison.Ordinal);
         Assert.Contains($"Or open a separate terminal window ({HumanOnlyCommands.NotWithBang}) and run `cd ", error, StringComparison.Ordinal);
         Assert.Contains($"approve spec --feature {FeatureId}`.", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(WaitingCodePath("spec")));
         Assert.False(File.Exists(RecordPath("spec")));
     }
 
@@ -86,71 +85,48 @@ public sealed class SessionApprovalTests : IDisposable
     public async Task TheApprovalCommandFromAnotherSourceIsRefused()
     {
         await CreateProjectAsync();
+        await EndTurnAsync();
 
         (ExitCode exitCode, _, string error) = await TypeAsync("spec", AttendedSession, source: "projectSettings");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Contains("not from the Lockflight plugin", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(WaitingCodePath("spec")));
-    }
-
-    [Fact]
-    public async Task TheFirstStepShowsTheDigestAndStoresOnlyAHashOfTheCode()
-    {
-        await CreateProjectAsync();
-
-        (ExitCode exitCode, string output, string error) = await TypeAsync("spec");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Empty(output);
-        Assert.StartsWith(
-            "Step 1 of 2 — not an error: review below, then type the line with the code.\nNothing has been approved yet. Check the spec of 001-orders you are approving",
-            error,
-            StringComparison.Ordinal);
-        Assert.Contains($"spec.md    hash {ArtifactHash.Of(SpecPath)[..12]}", error, StringComparison.Ordinal);
-        Assert.Contains("Requirements (2): FR-001, FR-002", error, StringComparison.Ordinal);
-        Assert.Contains("User stories (1): 1 Place an order", error, StringComparison.Ordinal);
-        Assert.Contains("Open [NEEDS CLARIFICATION] markers: none", error, StringComparison.Ordinal);
-        Assert.Contains("Current approval: none", error, StringComparison.Ordinal);
-        Assert.Contains($"\nYour code: {Code} — type within 10 minutes: /lockflight:approve spec {Code}\n", error, StringComparison.Ordinal);
-        string waiting = await File.ReadAllTextAsync(WaitingCodePath("spec"), TestContext.Current.CancellationToken);
-        Assert.DoesNotContain(Code, waiting, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(ArtifactHash.Of(SpecPath), waiting, StringComparison.Ordinal);
-        Assert.Contains(FeatureId, waiting, StringComparison.Ordinal);
         Assert.False(File.Exists(RecordPath("spec")));
     }
 
     [Fact]
-    public async Task TheDigestSaysAnEarlierApprovalIsStale()
+    public async Task ASpecUnchangedSinceTheAgentsTurnEndedIsApprovedInOneStep()
     {
         await CreateProjectAsync();
-        await TypeAsync("spec");
-        await TypeAsync($"spec {Code}");
-        await File.AppendAllTextAsync(SpecPath, "- **FR-003**: Refunds\n", TestContext.Current.CancellationToken);
+        await EndTurnAsync();
 
-        (_, _, string error) = await TypeAsync("spec");
+        (ExitCode exitCode, string output, string error) = await TypeAsync("spec");
 
-        Assert.Contains("Current approval: an earlier approval is stale (spec.md changed since)", error, StringComparison.Ordinal);
-        Assert.Contains($"/lockflight:approve spec {SecondCode}", error, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task TheSecondStepRecordsTheSameRecordAsTheCommandLine()
-    {
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-
-        (ExitCode exitCode, string output, string error) = await TypeAsync($"spec {Code.ToUpperInvariant()}");
-
-        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.True(exitCode == ExitCode.Pass, error);
         Assert.Empty(error);
         using JsonDocument hookOutput = JsonDocument.Parse(output);
-        Assert.Equal($"Step 2 of 2 — approved: the spec of {FeatureId} (spec.md {ArtifactHash.Of(SpecPath)[..12]}).", hookOutput.RootElement.GetProperty("systemMessage").GetString());
+        string message = hookOutput.RootElement.GetProperty("systemMessage").GetString()!;
+        Assert.StartsWith($"Approved: the spec of {FeatureId}.\n", message, StringComparison.Ordinal);
+        Assert.Contains($"spec.md    hash {ArtifactHash.Of(SpecPath)[..12]}", message, StringComparison.Ordinal);
+        Assert.Contains("Requirements (2): FR-001, FR-002", message, StringComparison.Ordinal);
+        Assert.Contains("User stories (1): 1 Place an order", message, StringComparison.Ordinal);
+        Assert.Contains("Open [NEEDS CLARIFICATION] markers: none", message, StringComparison.Ordinal);
         JsonElement specific = hookOutput.RootElement.GetProperty("hookSpecificOutput");
         Assert.Equal("UserPromptExpansion", specific.GetProperty("hookEventName").GetString());
         Assert.Contains($"approve verify --feature {FeatureId} --require spec", specific.GetProperty("additionalContext").GetString(), StringComparison.Ordinal);
-        Assert.False(File.Exists(WaitingCodePath("spec")));
+        Assert.True(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
+    public async Task TheOneStepRecordIsTheSameRecordAsTheCommandLine()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await CreateProjectAsync();
+        await EndTurnAsync();
+
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
         JsonObject sessionRecord = await ReadRecordAsync("spec", cancellationToken);
         Assert.Equal(time.Now, DateTimeOffset.Parse(sessionRecord["at"]!.GetValue<string>(), CultureInfo.InvariantCulture));
 
@@ -165,90 +141,165 @@ public sealed class SessionApprovalTests : IDisposable
     }
 
     [Fact]
-    public async Task AWrongCodeIsRefusedAndTheShownCodeStillWorks()
+    public async Task ASpecChangedSinceTheAgentsTurnEndedIsShownAndApprovedOnlyWhenTypedAgain()
     {
         await CreateProjectAsync();
-        await TypeAsync("spec");
+        await EndTurnAsync();
+        await File.AppendAllTextAsync(SpecPath, "- **FR-003**: Refunds\n", TestContext.Current.CancellationToken);
 
-        (ExitCode wrongExit, _, string error) = await TypeAsync("spec aaaaaa");
-
-        Assert.Equal(ExitCode.HookBlock, wrongExit);
-        Assert.Contains("not the code shown", error, StringComparison.Ordinal);
-        Assert.Contains("that code still works until 09:10 UTC (it is discarded after 4 more wrong codes)", error, StringComparison.Ordinal);
-        Assert.DoesNotContain("aaaaaa", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(RecordPath("spec")));
-
-        (ExitCode rightExit, _, _) = await TypeAsync($"spec {Code}");
-
-        Assert.Equal(ExitCode.Pass, rightExit);
-    }
-
-    [Fact]
-    public async Task AnExpiredCodeIsRefusedAndTheDigestIsShownAgainWithANewCode()
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-        time.Advance(SessionCodes.Lifetime);
-
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
+        (ExitCode exitCode, string output, string error) = await TypeAsync("spec");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.StartsWith("lockflight: nothing was approved: the code expired and no longer works (codes last 10 minutes). Here is the spec again, with a new code.\n", error, StringComparison.Ordinal);
-        Assert.Contains("Step 1 of 2 — not an error", error, StringComparison.Ordinal);
-        Assert.Contains($"Your code: {SecondCode} — type within 10 minutes: /lockflight:approve spec {SecondCode}", error, StringComparison.Ordinal);
+        Assert.Empty(output);
+        Assert.StartsWith("lockflight: not approved yet (not an error): the spec changed since the agent's last turn ended (spec.md).", error, StringComparison.Ordinal);
+        Assert.Contains("Requirements (3): FR-001, FR-002, FR-003", error, StringComparison.Ordinal);
+        Assert.Contains($"spec.md    hash {ArtifactHash.Of(SpecPath)[..12]}", error, StringComparison.Ordinal);
+        Assert.Contains("type /lockflight:approve spec again", error, StringComparison.Ordinal);
+        Assert.Contains("The agent does not see this message.", error, StringComparison.Ordinal);
         Assert.False(File.Exists(RecordPath("spec")));
-        Assert.Contains("session-approval:code-expired", Ledger(), StringComparison.Ordinal);
+        Assert.Contains("session-approval:changed", Ledger(), StringComparison.Ordinal);
+        Assert.DoesNotContain("hook.blocked", Ledger(), StringComparison.Ordinal);
 
-        (ExitCode oldExit, _, _) = await TypeAsync($"spec {Code}");
-        (ExitCode newExit, _, string newError) = await TypeAsync($"spec {SecondCode}");
+        (ExitCode againExit, _, string againError) = await TypeAsync("spec");
 
-        Assert.Equal(ExitCode.HookBlock, oldExit);
-        Assert.True(newExit == ExitCode.Pass, newError);
+        Assert.True(againExit == ExitCode.Pass, againError);
+        Assert.Equal(ArtifactHash.Of(SpecPath), (await ReadRecordAsync("spec", TestContext.Current.CancellationToken))["artifacts"]!["spec.md"]!.GetValue<string>());
     }
 
     [Fact]
-    public async Task AUsedCodeDoesNotApproveAgain()
+    public async Task WithoutARecordOfTheAgentsTurnTheSpecIsShownFirst()
     {
         await CreateProjectAsync();
-        await TypeAsync("spec");
-        await TypeAsync($"spec {Code}");
-        File.Delete(RecordPath("spec"));
 
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("no approval code is waiting for the spec (it was used, or never shown), so there is no code to type now; type /lockflight:approve spec", error, StringComparison.Ordinal);
+        Assert.StartsWith("lockflight: not approved yet (not an error): there is no record of the spec from the end of the agent's last turn", error, StringComparison.Ordinal);
+        Assert.Contains("Requirements (2): FR-001, FR-002", error, StringComparison.Ordinal);
+        Assert.Contains("Current approval: none", error, StringComparison.Ordinal);
         Assert.False(File.Exists(RecordPath("spec")));
+
+        (ExitCode againExit, _, string againError) = await TypeAsync("spec");
+
+        Assert.True(againExit == ExitCode.Pass, againError);
     }
 
     [Fact]
-    public async Task ASpecChangedBetweenTheStepsIsNotApprovedAndTheNewContentIsShownWithANewCode()
+    public async Task ASpecChangedAfterItWasShownIsShownAgainAndNotApproved()
     {
         await CreateProjectAsync();
         await TypeAsync("spec");
         await File.AppendAllTextAsync(SpecPath, "- **FR-003**: Refunds\n", TestContext.Current.CancellationToken);
 
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.StartsWith(
-            "lockflight: nothing was approved: the spec changed since you saw it (spec.md), so that code was discarded and no longer works. Here is the spec again, with a new code.\n",
-            error,
-            StringComparison.Ordinal);
+        Assert.Contains("the spec changed since", error, StringComparison.Ordinal);
         Assert.Contains("Requirements (3): FR-001, FR-002, FR-003", error, StringComparison.Ordinal);
-        Assert.Contains($"Your code: {SecondCode}", error, StringComparison.Ordinal);
         Assert.False(File.Exists(RecordPath("spec")));
-
-        (ExitCode oldExit, _, _) = await TypeAsync($"spec {Code}");
-        (ExitCode newExit, _, _) = await TypeAsync($"spec {SecondCode}");
-
-        Assert.Equal(ExitCode.HookBlock, oldExit);
-        Assert.Equal(ExitCode.Pass, newExit);
-        Assert.Equal(ArtifactHash.Of(SpecPath), (await ReadRecordAsync("spec", TestContext.Current.CancellationToken))["artifacts"]!["spec.md"]!.GetValue<string>());
     }
 
     [Fact]
-    public async Task AnExpiredCodeShownForAnotherFeatureIsShownAgainForThatFeature()
+    public async Task AHeadlessSessionsTurnEndDoesNotCountAsSeen()
+    {
+        await CreateProjectAsync();
+        await EndTurnAsync();
+        await File.AppendAllTextAsync(SpecPath, "- **FR-003**: Refunds\n", TestContext.Current.CancellationToken);
+        Dictionary<string, string> headless = new()
+        {
+            [EnvironmentVariables.ClaudeCodeEntrypoint] = "sdk-cli",
+            [EnvironmentVariables.ClaudeCodeSessionAttended] = "0",
+            [EnvironmentVariables.ClaudeCode] = "1",
+        };
+        await SessionTyping.EndTurnAsync(root.FullName, time, "session-1", headless);
+
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("the spec changed since the agent's last turn ended (spec.md)", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
+    public async Task AnotherSessionsTurnEndDoesNotCountAsSeen()
+    {
+        await CreateProjectAsync();
+        await SessionTyping.EndTurnAsync(root.FullName, time, "session-2", AttendedSession);
+
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("there is no record of the spec from the end of the agent's last turn", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
+    public async Task TasksUnchangedSinceTheTurnEndedStayApprovableAfterTheSpecWasShown()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await CreateProjectAsync();
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, cancellationToken);
+        await EndTurnAsync();
+        await File.AppendAllTextAsync(SpecPath, "- **FR-003**: Refunds\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks.Replace("(FR-001, FR-002)", "(FR-001, FR-002, FR-003)", StringComparison.Ordinal), cancellationToken);
+        await EndTurnAsync();
+        await File.AppendAllTextAsync(SpecPath, "\nMore context.\n", cancellationToken);
+        await TypeAsync("spec");
+        await TypeAsync("spec");
+
+        (ExitCode exitCode, _, string error) = await TypeAsync("tasks");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.True(File.Exists(RecordPath("tasks")));
+    }
+
+    [Fact]
+    public async Task ReapprovingAStaleSpecSaysWhichApprovalItReplaces()
+    {
+        await CreateProjectAsync();
+        await ApproveSpecInATerminalAsync();
+        await File.AppendAllTextAsync(SpecPath, "- **FR-003**: Refunds\n", TestContext.Current.CancellationToken);
+        await EndTurnAsync();
+
+        (ExitCode exitCode, string output, string error) = await TypeAsync("spec");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Contains("Replaces an approval that went stale (spec.md changed since)", SessionTyping.SystemMessage(output), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithoutASessionIdTheApprovalSaysWhyInsteadOfShowingTheSpecOverAndOver()
+    {
+        await CreateProjectAsync();
+        await EndTurnAsync();
+
+        (ExitCode firstExit, _, string first) = await TypeAsync("spec", AttendedSession, sessionId: null);
+        (ExitCode againExit, _, string again) = await TypeAsync("spec", AttendedSession, sessionId: null);
+
+        Assert.Equal(ExitCode.HookBlock, firstExit);
+        Assert.Equal(ExitCode.HookBlock, againExit);
+        Assert.StartsWith("lockflight: nothing was approved: the hook call carries no session id", again, StringComparison.Ordinal);
+        Assert.Contains("approve spec`.", again, StringComparison.Ordinal);
+        Assert.DoesNotContain("not approved yet", first + again, StringComparison.Ordinal);
+        Assert.Contains("session-approval:no-session", Ledger(), StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
+    public async Task TheDigestSaysAnEarlierApprovalIsStale()
+    {
+        await CreateProjectAsync();
+        await ApproveSpecInATerminalAsync();
+        await File.AppendAllTextAsync(SpecPath, "- **FR-003**: Refunds\n", TestContext.Current.CancellationToken);
+
+        (_, _, string error) = await TypeAsync("spec");
+
+        Assert.Contains("Current approval: an earlier approval is stale (spec.md changed since)", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnEndOfTurnRecordOfAnotherFeatureApprovesNothing()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await CreateProjectAsync();
@@ -257,81 +308,34 @@ public sealed class SessionApprovalTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(other, "spec.md"), ApprovableArtifacts.Spec, cancellationToken);
         Directory.CreateDirectory(Path.Combine(root.FullName, ".specify"));
         await File.WriteAllTextAsync(Path.Combine(root.FullName, ".specify", "feature.json"), $"{{\"feature_directory\": \"specs/{FeatureId}\"}}", cancellationToken);
-        await TypeAsync("spec --feature 002-other");
-        time.Advance(SessionCodes.Lifetime);
+        await EndTurnAsync();
 
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec --feature 002-other");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("Check the spec of 002-other you are approving", error, StringComparison.Ordinal);
-        Assert.DoesNotContain($"Check the spec of {FeatureId}", error, StringComparison.Ordinal);
+        Assert.Contains("Check the spec of 002-other", error, StringComparison.Ordinal);
+        Assert.Contains("type /lockflight:approve spec --feature 002-other again", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(root.FullName, ".lockflight", "features", "002-other", "approvals", "spec.json")));
     }
 
     [Fact]
-    public async Task TheStartOfAnArtifactHashTypedAsTheCodeIsNamedAsTheHash()
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-        string hashStart = ArtifactHash.Of(SpecPath)[..5];
-
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {hashStart}");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains($"{hashStart} is the start of spec.md's hash, not the code; the code is on the 'Your code' line", error, StringComparison.Ordinal);
-        Assert.Contains("that code still works until 09:10 UTC", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(RecordPath("spec")));
-
-        (ExitCode rightExit, _, _) = await TypeAsync($"spec {Code}");
-
-        Assert.Equal(ExitCode.Pass, rightExit);
-    }
-
-    [Fact]
-    public async Task ASecondStepWithAnExtraWordSaysTheWaitingCodeStillWorks()
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code} extra");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains($"the code waiting for the spec of {FeatureId} still works until 09:10 UTC", error, StringComparison.Ordinal);
-        Assert.True(File.Exists(WaitingCodePath("spec")));
-    }
-
-    [Fact]
-    public async Task ACodeShownForOneFeatureDoesNotApproveAnother()
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code} --feature 002-other");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains($"shown for feature {FeatureId}, not 002-other; it still works for {FeatureId} until 09:10 UTC", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(RecordPath("spec")));
-    }
-
-    [Fact]
-    public async Task TheTasksDigestCountsTasksAndTheApprovalBindsThePlan()
+    public async Task TheTasksAreApprovedInOneStepAndBindThePlan()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await CreateProjectAsync();
         await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, cancellationToken);
         await ApproveSpecInATerminalAsync();
+        await EndTurnAsync();
 
-        (ExitCode showExit, _, string digest) = await TypeAsync($"tasks --feature {FeatureId}");
+        (ExitCode exitCode, string output, string error) = await TypeAsync($"tasks --feature {FeatureId}");
 
-        Assert.Equal(ExitCode.HookBlock, showExit);
-        Assert.Contains("Tasks (2): 1 test, 0 stub, 1 implementation; 0 already done; 1 user stories", digest, StringComparison.Ordinal);
-        Assert.Contains("Requirements covered (2): FR-001, FR-002", digest, StringComparison.Ordinal);
-        Assert.Contains("plan.md", digest, StringComparison.Ordinal);
-        Assert.Contains($"/lockflight:approve tasks {Code}", digest, StringComparison.Ordinal);
-
-        (ExitCode recordExit, _, _) = await TypeAsync($"tasks {Code}");
-
-        Assert.Equal(ExitCode.Pass, recordExit);
+        Assert.True(exitCode == ExitCode.Pass, error);
+        string message = SessionTyping.SystemMessage(output);
+        Assert.StartsWith($"Approved: the tasks of {FeatureId}.", message, StringComparison.Ordinal);
+        Assert.Contains("Tasks (2): 1 test, 0 stub, 1 implementation; 0 already done; 1 user stories", message, StringComparison.Ordinal);
+        Assert.Contains("Requirements covered (2): FR-001, FR-002", message, StringComparison.Ordinal);
+        Assert.Contains("plan.md", message, StringComparison.Ordinal);
         JsonObject record = await ReadRecordAsync("tasks", cancellationToken);
         Assert.Equal("tasks", record["phase"]!.GetValue<string>());
         Assert.NotNull(record["artifacts"]!["plan.md"]);
@@ -339,18 +343,35 @@ public sealed class SessionApprovalTests : IDisposable
     }
 
     [Fact]
+    public async Task APlanDeletedSinceTheTurnEndedIsNotApproved()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await CreateProjectAsync();
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, cancellationToken);
+        await ApproveSpecInATerminalAsync();
+        await EndTurnAsync();
+        File.Delete(Path.Combine(SpecDirectory, "plan.md"));
+
+        (ExitCode exitCode, _, string error) = await TypeAsync("tasks");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("the tasks changed since the agent's last turn ended (plan.md)", error, StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("tasks")));
+    }
+
+    [Fact]
     public async Task ASessionApprovalIsLedgeredWithItsChannel()
     {
         await CreateProjectAsync();
-        await TypeAsync("spec");
+        await EndTurnAsync();
 
-        await TypeAsync($"spec {Code}");
+        await TypeAsync("spec");
 
         string line = Assert.Single(File.ReadAllLines(Assert.Single(Directory.GetFiles(Path.Combine(root.FullName, LedgerWriter.RelativeDirectory)))));
         using JsonDocument document = JsonDocument.Parse(line);
         Assert.Equal("approval.recorded", document.RootElement.GetProperty("type").GetString());
         Assert.Equal("session", document.RootElement.GetProperty("channel").GetString());
-        Assert.DoesNotContain(Code, line, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -358,8 +379,8 @@ public sealed class SessionApprovalTests : IDisposable
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await CreateProjectAsync();
+        await EndTurnAsync();
         await TypeAsync("spec");
-        await TypeAsync($"spec {Code}");
         await File.WriteAllTextAsync(RecordPath("spec") + ".sig", "-----BEGIN SSH SIGNATURE-----\nnot a signature\n", cancellationToken);
 
         (ExitCode verifyExit, string verifyOutput, _) = await TestConsole.RunAsync(
@@ -374,177 +395,62 @@ public sealed class SessionApprovalTests : IDisposable
     [InlineData("[]")]
     [InlineData("{}")]
     [InlineData("")]
-    public async Task AnUnreadableWaitingCodeApprovesNothing(string content)
+    [InlineData("{\"schema\":\"lockflight.approval-seen/v1\",\"feature\":\"001-orders\",\"artifacts\":[\"spec.md\"]}")]
+    [InlineData("{\"schema\":\"lockflight.approval-seen/v0\",\"feature\":\"001-orders\",\"artifacts\":{}}")]
+    public async Task AnUnreadableEndOfTurnRecordApprovesNothing(string content)
     {
         await CreateProjectAsync();
-        await TypeAsync("spec");
-        await File.WriteAllTextAsync(WaitingCodePath("spec"), content, TestContext.Current.CancellationToken);
+        await EndTurnAsync();
+        await File.WriteAllTextAsync(SeenRecordPath, content, TestContext.Current.CancellationToken);
 
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("no approval code is waiting", error, StringComparison.Ordinal);
+        Assert.Contains("not approved yet", error, StringComparison.Ordinal);
         Assert.False(File.Exists(RecordPath("spec")));
-        Assert.False(File.Exists(WaitingCodePath("spec")));
-    }
-
-    [Theory]
-    [InlineData("schema", "\"lockflight.session-code/v0\"")]
-    [InlineData("command", "\"tasks\"")]
-    [InlineData("subject", "\"../001-orders\"")]
-    [InlineData("subject", "\"specs/001-orders\"")]
-    [InlineData("subject", "\"..\"")]
-    [InlineData("subject", "42")]
-    [InlineData("payload", "[1]")]
-    [InlineData("salt", "\"not hex\"")]
-    [InlineData("codeHash", "null")]
-    [InlineData("expiresAt", "\"tomorrow\"")]
-    [InlineData("bound", "[\"spec.md\"]")]
-    public async Task AWaitingCodeWithABadFieldApprovesNothing(string field, string json)
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-        JsonObject entry = JsonNode.Parse(await File.ReadAllTextAsync(WaitingCodePath("spec"), TestContext.Current.CancellationToken))!.AsObject();
-        entry[field] = JsonNode.Parse(json);
-        await File.WriteAllTextAsync(WaitingCodePath("spec"), entry.ToJsonString(), TestContext.Current.CancellationToken);
-
-        (ExitCode exitCode, _, _) = await TypeAsync($"spec {Code}");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.False(File.Exists(RecordPath("spec")));
-        Assert.False(File.Exists(WaitingCodePath("spec")));
-    }
-
-    [Fact]
-    public async Task AWaitingCodeCopiedToAnotherPhaseApprovesNothing()
-    {
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await CreateProjectAsync();
-        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), "- [ ] T001 [US1] (FR-001) Test placing an order\n", cancellationToken);
-        await TypeAsync("spec");
-        File.Copy(WaitingCodePath("spec"), WaitingCodePath("tasks"));
-
-        (ExitCode exitCode, _, string error) = await TypeAsync($"tasks {Code}");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("no approval code is waiting for the tasks", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(RecordPath("tasks")));
-        Assert.False(File.Exists(WaitingCodePath("tasks")));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ALinkInPlaceOfTheWaitingCodeIsRefusedAndNotFollowed(bool codeTyped)
+    public async Task ALinkInPlaceOfTheEndOfTurnRecordIsRefusedAndNotFollowed(bool turnEnded)
     {
         Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await CreateProjectAsync();
         string target = Path.Combine(root.FullName, "elsewhere.json");
         await File.WriteAllTextAsync(target, "untouched", cancellationToken);
-        Directory.CreateDirectory(Path.GetDirectoryName(WaitingCodePath("spec"))!);
-        File.CreateSymbolicLink(WaitingCodePath("spec"), target);
+        Directory.CreateDirectory(Path.GetDirectoryName(SeenRecordPath)!);
+        File.CreateSymbolicLink(SeenRecordPath, target);
+        if (turnEnded)
+        {
+            await EndTurnAsync();
+        }
 
-        (ExitCode exitCode, _, string error) = await TypeAsync(codeTyped ? $"spec {Code}" : "spec");
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("spec.json is a symbolic link", error, StringComparison.Ordinal);
+        Assert.Contains("approval-seen.json is a symbolic link", error, StringComparison.Ordinal);
         Assert.Equal("untouched", await File.ReadAllTextAsync(target, cancellationToken));
         Assert.False(File.Exists(RecordPath("spec")));
     }
 
     [Fact]
-    public async Task AWaitingCodesDirectoryThatIsALinkIsRefused()
+    public async Task ALocalStateDirectoryThatIsALinkIsRefused()
     {
         Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         await CreateProjectAsync();
         DirectoryInfo elsewhere = Directory.CreateDirectory(Path.Combine(root.FullName, "elsewhere"));
-        Directory.CreateDirectory(Path.Combine(root.FullName, ".lockflight", "local"));
-        Directory.CreateSymbolicLink(Path.Combine(root.FullName, SessionCodes.RelativeDirectory), elsewhere.FullName);
+        Directory.CreateDirectory(Path.Combine(root.FullName, ".lockflight"));
+        Directory.CreateSymbolicLink(Path.Combine(root.FullName, ".lockflight", "local"), elsewhere.FullName);
 
+        await EndTurnAsync();
         (ExitCode exitCode, _, string error) = await TypeAsync("spec");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains($"{SessionCodes.RelativeDirectory} is a symbolic link", error, StringComparison.Ordinal);
+        Assert.Contains(".lockflight/local is a symbolic link", error, StringComparison.Ordinal);
         Assert.Empty(elsewhere.GetFileSystemInfos());
-    }
-
-    [Fact]
-    public async Task ADirectoryInPlaceOfTheWaitingCodeIsRefused()
-    {
-        await CreateProjectAsync();
-        Directory.CreateDirectory(WaitingCodePath("spec"));
-
-        (ExitCode exitCode, _, string error) = await TypeAsync("spec");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("spec.json is a directory", error, StringComparison.Ordinal);
         Assert.False(File.Exists(RecordPath("spec")));
-    }
-
-    [Fact]
-    public async Task AClockThatWentBackDoesNotStretchTheCodesLife()
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-        time.Advance(TimeSpan.FromHours(-1));
-
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
-        (ExitCode againExit, _, _) = await TypeAsync($"spec {Code}");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("the code expired", error, StringComparison.Ordinal);
-        Assert.Equal(ExitCode.HookBlock, againExit);
-        Assert.False(File.Exists(RecordPath("spec")));
-    }
-
-    [Fact]
-    public async Task AClockSyncStepBackKeepsTheCode()
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-        time.Advance(TimeSpan.FromSeconds(-30));
-
-        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {Code}");
-
-        Assert.True(exitCode == ExitCode.Pass, error);
-    }
-
-    [Fact]
-    public async Task ANewerDigestReplacesTheOlderCode()
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-        await TypeAsync("spec");
-
-        (ExitCode olderExit, _, string error) = await TypeAsync($"spec {Code}");
-
-        Assert.Equal(ExitCode.HookBlock, olderExit);
-        Assert.Contains("not the code shown", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(RecordPath("spec")));
-
-        (ExitCode newerExit, _, _) = await TypeAsync($"spec {SecondCode}");
-
-        Assert.Equal(ExitCode.Pass, newerExit);
-    }
-
-    [Fact]
-    public async Task APlanDeletedBetweenTheStepsIsNotApproved()
-    {
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await CreateProjectAsync();
-        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, cancellationToken);
-        await ApproveSpecInATerminalAsync();
-        await TypeAsync("tasks");
-        File.Delete(Path.Combine(SpecDirectory, "plan.md"));
-
-        (ExitCode exitCode, _, string error) = await TypeAsync($"tasks {Code}");
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("the tasks changed since you saw it (plan.md)", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(RecordPath("tasks")));
     }
 
     [Theory]
@@ -553,12 +459,11 @@ public sealed class SessionApprovalTests : IDisposable
     [InlineData("spec --feature specs\\001-orders")]
     [InlineData("spec --feature ..")]
     [InlineData("spec --feature .")]
-    [InlineData("spec k7m2qx --feature ../001-orders")]
-    [InlineData("spec k7m2qx --feature ./001-orders")]
+    [InlineData("--feature ../001-orders")]
     public async Task AFeatureGivenAsAPathIsRefused(string arguments)
     {
         await CreateProjectAsync();
-        await TypeAsync("spec");
+        await EndTurnAsync();
 
         (ExitCode exitCode, _, string error) = await TypeAsync(arguments);
 
@@ -572,34 +477,63 @@ public sealed class SessionApprovalTests : IDisposable
     [InlineData("spec --sign")]
     [InlineData("spec --feature")]
     [InlineData("spec --key approver-key")]
+    [InlineData("spec approved")]
     [InlineData("spec k7m2qx extra")]
-    [InlineData("spec k7m2qx --yes")]
-    [InlineData("spec k7m2qx --feature 001-orders --feature 001-orders")]
-    [InlineData("specs k7m2qx")]
-    [InlineData("spec-tasks k7m2qx")]
+    [InlineData("spec --yes")]
+    [InlineData("spec --feature 001-orders --feature 001-orders")]
+    [InlineData("specs")]
+    [InlineData("spec-tasks")]
     public async Task AnUnknownOrMalformedArgumentIsAUsageRefusal(string arguments)
     {
         await CreateProjectAsync();
-        await TypeAsync("spec");
+        await EndTurnAsync();
 
         (ExitCode exitCode, _, string error) = await TypeAsync(arguments);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Contains("nothing was approved", error, StringComparison.Ordinal);
+        Assert.Contains("session-approval:usage", Ledger(), StringComparison.Ordinal);
         Assert.False(File.Exists(RecordPath("spec")));
-        Assert.True(File.Exists(WaitingCodePath("spec")));
+    }
+
+    [Fact]
+    public async Task AnOldStyleCodeApprovesWhenTheOneStepRulesPassAndSaysCodesAreNoLongerNeeded()
+    {
+        await CreateProjectAsync();
+        await EndTurnAsync();
+
+        (ExitCode exitCode, string output, string error) = await TypeAsync($"spec {OldStyleCode}");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.StartsWith($"Approved: the spec of {FeatureId} (codes are no longer needed: /lockflight:approve alone approves).", SessionTyping.SystemMessage(output), StringComparison.Ordinal);
+        Assert.True(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
+    public async Task AnOldStyleCodeForContentNotSeenIsAUsageRefusal()
+    {
+        await CreateProjectAsync();
+
+        (ExitCode exitCode, _, string error) = await TypeAsync($"spec {OldStyleCode}");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.StartsWith("lockflight: nothing was approved: codes are no longer needed; type /lockflight:approve spec", error, StringComparison.Ordinal);
+        Assert.Contains("session-approval:usage", Ledger(), StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+
+        (ExitCode plainExit, _, string plainError) = await TypeAsync("spec");
+
+        Assert.Equal(ExitCode.HookBlock, plainExit);
+        Assert.Contains("there is no record of the spec", plainError, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task ExtraWhitespaceAroundTheWordsIsIgnored()
     {
         await CreateProjectAsync();
-        (ExitCode showExit, _, string digest) = await TypeAsync("   spec \t ");
+        await EndTurnAsync();
 
-        Assert.Equal(ExitCode.HookBlock, showExit);
-        Assert.Contains($"/lockflight:approve spec {Code}", digest, StringComparison.Ordinal);
-
-        (ExitCode recordExit, _, string error) = await TypeAsync($"\tSPEC \n  {Code}   ");
+        (ExitCode recordExit, _, string error) = await TypeAsync("\tSPEC \n   ");
 
         Assert.True(recordExit == ExitCode.Pass, error);
         Assert.True(File.Exists(RecordPath("spec")));
@@ -611,13 +545,14 @@ public sealed class SessionApprovalTests : IDisposable
     public async Task TheCommandInAnotherCaseIsStillCheckedByTheEngine(string commandName)
     {
         await CreateProjectAsync();
+        await EndTurnAsync();
 
         (ExitCode exitCode, string output, string error) = await TypeAsync("spec", new Dictionary<string, string>(), commandName);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Empty(output);
         Assert.Contains("nothing was approved", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(WaitingCodePath("spec")));
+        Assert.False(File.Exists(RecordPath("spec")));
     }
 
     [Theory]
@@ -625,16 +560,14 @@ public sealed class SessionApprovalTests : IDisposable
     [InlineData("Plugin")]
     [InlineData("")]
     [InlineData(null)]
-    public async Task AnySourceButThePluginIsRefusedAtBothSteps(string? source)
+    public async Task AnySourceButThePluginIsRefused(string? source)
     {
         await CreateProjectAsync();
-        await TypeAsync("spec");
+        await EndTurnAsync();
 
-        (ExitCode showExit, _, _) = await TypeAsync("spec", AttendedSession, source: source);
-        (ExitCode recordExit, _, string error) = await TypeAsync($"spec {SecondCode}", AttendedSession, source: source);
+        (ExitCode exitCode, _, string error) = await TypeAsync("spec", AttendedSession, source: source);
 
-        Assert.Equal(ExitCode.HookBlock, showExit);
-        Assert.Equal(ExitCode.HookBlock, recordExit);
+        Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Contains("not from the Lockflight plugin", error, StringComparison.Ordinal);
         Assert.False(File.Exists(RecordPath("spec")));
     }
@@ -666,28 +599,6 @@ public sealed class SessionApprovalTests : IDisposable
     }
 
     [Fact]
-    public async Task AfterFiveWrongCodesTheShownCodeIsDiscarded()
-    {
-        await CreateProjectAsync();
-        await TypeAsync("spec");
-        for (int attempt = 1; attempt < 5; attempt++)
-        {
-            (_, _, string wrong) = await TypeAsync("spec aaaaaa");
-            Assert.Contains("not the code shown", wrong, StringComparison.Ordinal);
-        }
-
-        (ExitCode fifthExit, _, string fifth) = await TypeAsync("spec aaaaaa");
-        (ExitCode rightExit, _, string afterwards) = await TypeAsync($"spec {Code}");
-
-        Assert.Equal(ExitCode.HookBlock, fifthExit);
-        Assert.Contains("after 5 wrong codes that code was discarded and no longer works; type /lockflight:approve spec", fifth, StringComparison.Ordinal);
-        Assert.False(File.Exists(WaitingCodePath("spec")));
-        Assert.Equal(ExitCode.HookBlock, rightExit);
-        Assert.Contains("no approval code is waiting", afterwards, StringComparison.Ordinal);
-        Assert.False(File.Exists(RecordPath("spec")));
-    }
-
-    [Fact]
     public async Task AnEngineErrorBeforeTheApprovalStepBlocksInsteadOfPassingTheCommandOn()
     {
         await CreateProjectAsync();
@@ -710,68 +621,59 @@ public sealed class SessionApprovalTests : IDisposable
     }
 
     [Fact]
-    public async Task TheCommandAloneWhileACodeWaitsSaysWhichLineToType()
+    public async Task TheCommandAloneApprovesASpecNotYetApproved()
     {
         await CreateProjectAsync();
-        await TypeAsync("spec");
+        await EndTurnAsync();
 
         (ExitCode exitCode, string output, string error) = await TypeAsync(string.Empty);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Empty(output);
-        Assert.Contains($"nothing was approved yet: a code is waiting for the spec of {FeatureId}, valid until 09:10 UTC", error, StringComparison.Ordinal);
-        Assert.Contains("Step 2 of 2 — type: /lockflight:approve spec <the code shown with it>", error, StringComparison.Ordinal);
-        Assert.DoesNotContain(Code, error, StringComparison.Ordinal);
-        Assert.True(File.Exists(WaitingCodePath("spec")));
-        (ExitCode stillWorks, _, _) = await TypeAsync($"spec {Code}");
-        Assert.Equal(ExitCode.Pass, stillWorks);
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.StartsWith($"Approved: the spec of {FeatureId}.", SessionTyping.SystemMessage(output), StringComparison.Ordinal);
+        Assert.True(File.Exists(RecordPath("spec")));
     }
 
     [Fact]
-    public async Task TheCommandAloneStartsStepOneForASpecNotYetApproved()
-    {
-        await CreateProjectAsync();
-
-        (ExitCode exitCode, _, string error) = await TypeAsync(string.Empty);
-
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.StartsWith("Step 1 of 2 — not an error", error, StringComparison.Ordinal);
-        Assert.Contains($"Check the spec of {FeatureId} you are approving", error, StringComparison.Ordinal);
-        Assert.Contains($"Your code: {Code} — type within 10 minutes: /lockflight:approve spec {Code}", error, StringComparison.Ordinal);
-
-        (ExitCode recordExit, _, _) = await TypeAsync($"spec {Code}");
-
-        Assert.Equal(ExitCode.Pass, recordExit);
-    }
-
-    [Fact]
-    public async Task TheCommandAloneStartsStepOneForAStaleSpec()
+    public async Task TheCommandAloneApprovesAStaleSpecUnchangedSinceTheTurnEnded()
     {
         await CreateProjectAsync();
         await ApproveSpecInATerminalAsync();
         await File.AppendAllTextAsync(SpecPath, "- **FR-003**: Refunds\n", TestContext.Current.CancellationToken);
+        await EndTurnAsync();
 
-        (_, _, string error) = await TypeAsync(string.Empty);
+        (ExitCode exitCode, _, string error) = await TypeAsync(string.Empty);
 
-        Assert.Contains("Current approval: an earlier approval is stale (spec.md changed since)", error, StringComparison.Ordinal);
-        Assert.Contains($"/lockflight:approve spec {Code}", error, StringComparison.Ordinal);
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Equal(ArtifactHash.Of(SpecPath), (await ReadRecordAsync("spec", TestContext.Current.CancellationToken))["artifacts"]!["spec.md"]!.GetValue<string>());
     }
 
     [Fact]
-    public async Task TheCommandAloneStartsStepOneForTheTasksOnceTheSpecIsApproved()
+    public async Task TheCommandAloneApprovesTheTasksOnceTheSpecIsApproved()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await CreateProjectAsync();
         await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "plan.md"), "# Plan\n", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, cancellationToken);
         await ApproveSpecInATerminalAsync();
+        await EndTurnAsync();
 
-        (ExitCode exitCode, _, string error) = await TypeAsync(string.Empty);
+        (ExitCode exitCode, string output, string error) = await TypeAsync(string.Empty);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains($"Check the tasks of {FeatureId} you are approving", error, StringComparison.Ordinal);
-        Assert.Contains($"Your code: {Code} — type within 10 minutes: /lockflight:approve tasks {Code}", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(WaitingCodePath("spec")));
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.StartsWith($"Approved: the tasks of {FeatureId}.", SessionTyping.SystemMessage(output), StringComparison.Ordinal);
+        Assert.True(File.Exists(RecordPath("tasks")));
+    }
+
+    [Fact]
+    public async Task TheFeatureOptionAloneChoosesThePhaseOfThatFeature()
+    {
+        await CreateProjectAsync();
+        await EndTurnAsync();
+
+        (ExitCode exitCode, _, string error) = await TypeAsync($"--feature {FeatureId}");
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.True(File.Exists(RecordPath("spec")));
     }
 
     [Fact]
@@ -788,8 +690,6 @@ public sealed class SessionApprovalTests : IDisposable
             + "to approve one anyway, type /lockflight:approve spec or /lockflight:approve tasks",
             error,
             StringComparison.Ordinal);
-        Assert.False(File.Exists(WaitingCodePath("spec")));
-        Assert.False(File.Exists(WaitingCodePath("tasks")));
         Assert.Contains("\"session-command.answered\"", Ledger(), StringComparison.Ordinal);
         Assert.DoesNotContain("hook.blocked", Ledger(), StringComparison.Ordinal);
     }
@@ -804,7 +704,6 @@ public sealed class SessionApprovalTests : IDisposable
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.Contains("type /lockflight:approve spec or /lockflight:approve tasks with --feature <id>", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(WaitingCodePath("spec")));
     }
 
     [Fact]
@@ -814,27 +713,24 @@ public sealed class SessionApprovalTests : IDisposable
 
         await TypeAsync("spec", new Dictionary<string, string> { [EnvironmentVariables.ClaudeCode] = "1" });
 
-        string ledger = string.Concat(Directory.GetFiles(Path.Combine(root.FullName, ".lockflight", "ledger")).Select(File.ReadAllText));
-        Assert.Contains("session-approval:unattended", ledger, StringComparison.Ordinal);
-        Assert.Contains("hook.blocked", ledger, StringComparison.Ordinal);
+        Assert.Contains("session-approval:unattended", Ledger(), StringComparison.Ordinal);
+        Assert.Contains("hook.blocked", Ledger(), StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task ASpecThatFailsItsPhaseCheckIsRefusedBeforeACodeIsShown()
+    public async Task ASpecThatFailsItsPhaseCheckIsRefusedAndNothingIsRecorded()
     {
         await CreateProjectAsync();
         await File.WriteAllTextAsync(
             SpecPath, "# Orders\n\n### User Story 1 - Place an order\n\n- **FR-001**: Customers place orders\n", TestContext.Current.CancellationToken);
+        await EndTurnAsync();
 
         (ExitCode exitCode, _, string error) = await TypeAsync("spec");
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
         Assert.StartsWith($"lockflight: nothing was approved: the spec of {FeatureId} does not pass the phase check an approval needs (specify):", error, StringComparison.Ordinal);
         Assert.Contains("  FAIL spec.stories: no Given/When/Then scenario in: User Story 1\n", error, StringComparison.Ordinal);
-        Assert.Contains(".specify/templates/spec-template.md", error, StringComparison.Ordinal);
         Assert.Contains($"phase check specify --feature {FeatureId}` until it passes, and approve again.", error, StringComparison.Ordinal);
-        Assert.DoesNotContain(Code, error, StringComparison.OrdinalIgnoreCase);
-        Assert.False(File.Exists(WaitingCodePath("spec")));
         Assert.False(File.Exists(RecordPath("spec")));
         Assert.Contains("session-approval:phase-check", Ledger(), StringComparison.Ordinal);
         Assert.DoesNotContain("hook.blocked", Ledger(), StringComparison.Ordinal);
@@ -845,6 +741,7 @@ public sealed class SessionApprovalTests : IDisposable
     {
         await CreateProjectAsync();
         await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, TestContext.Current.CancellationToken);
+        await EndTurnAsync();
 
         (ExitCode exitCode, _, string error) = await TypeAsync("tasks");
 
@@ -852,26 +749,19 @@ public sealed class SessionApprovalTests : IDisposable
         Assert.Contains("does not pass the phase check an approval needs (tasks):", error, StringComparison.Ordinal);
         Assert.Contains("  FAIL spec.approved: spec is not approved", error, StringComparison.Ordinal);
         Assert.Contains($"phase check tasks --feature {FeatureId}`", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(WaitingCodePath("tasks")));
         Assert.False(File.Exists(RecordPath("tasks")));
     }
 
     [Fact]
-    public async Task TasksWhoseCheckFailsByTheSecondStepAreNotApproved()
+    public async Task TheApprovalStoresNoSessionCode()
     {
         await CreateProjectAsync();
-        await File.WriteAllTextAsync(Path.Combine(SpecDirectory, "tasks.md"), ApprovableArtifacts.Tasks, TestContext.Current.CancellationToken);
-        await ApproveSpecInATerminalAsync();
-        await TypeAsync("tasks");
-        File.Delete(RecordPath("spec"));
+        await EndTurnAsync();
 
-        (ExitCode exitCode, _, string error) = await TypeAsync($"tasks {Code}");
+        await TypeAsync("spec");
+        await TypeAsync(string.Empty);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
-        Assert.Contains("FAIL spec.approved", error, StringComparison.Ordinal);
-        Assert.Contains("The code you typed was discarded and no longer works; type /lockflight:approve tasks", error, StringComparison.Ordinal);
-        Assert.False(File.Exists(RecordPath("tasks")));
-        Assert.False(File.Exists(WaitingCodePath("tasks")));
+        Assert.False(Directory.Exists(Path.Combine(root.FullName, SessionCodes.RelativeDirectory)));
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(root);
@@ -904,10 +794,7 @@ public sealed class SessionApprovalTests : IDisposable
         await ProcessRunner.RunAsync("git", ["config", "user.email", ApproverEmail], root.FullName, cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n", cancellationToken);
         Directory.CreateDirectory(SpecDirectory);
-        await File.WriteAllTextAsync(
-            SpecPath,
-            ApprovableArtifacts.Spec,
-            cancellationToken);
+        await File.WriteAllTextAsync(SpecPath, ApprovableArtifacts.Spec, cancellationToken);
     }
 
     private async Task ApproveSpecInATerminalAsync()
@@ -916,16 +803,22 @@ public sealed class SessionApprovalTests : IDisposable
         Assert.True(exitCode == ExitCode.Pass, error);
     }
 
-    private string Ledger() => string.Concat(Directory.GetFiles(Path.Combine(root.FullName, ".lockflight", "ledger")).Select(File.ReadAllText));
+    /// <summary>The agent's turn ends: Claude Code runs the Stop hook.</summary>
+    private Task<string> EndTurnAsync() => SessionTyping.EndTurnAsync(root.FullName, time);
+
+    private string Ledger()
+    {
+        string directory = Path.Combine(root.FullName, ".lockflight", "ledger");
+        return Directory.Exists(directory) ? string.Concat(Directory.GetFiles(directory).Select(File.ReadAllText)) : string.Empty;
+    }
 
     private Task<(ExitCode ExitCode, string Output, string Error)> TypeAsync(string arguments) => TypeAsync(arguments, AttendedSession);
 
     private async Task<(ExitCode ExitCode, string Output, string Error)> TypeAsync(
-        string arguments, IReadOnlyDictionary<string, string> environment, string commandName = SessionApproval.CommandName, string? source = "plugin")
+        string arguments, IReadOnlyDictionary<string, string> environment, string commandName = SessionApproval.CommandName, string? source = "plugin", string? sessionId = "session-1")
     {
         Dictionary<string, string> fields = new()
         {
-            ["session_id"] = "session-1",
             ["cwd"] = root.FullName,
             ["hook_event_name"] = "UserPromptExpansion",
             ["expansion_type"] = "slash_command",
@@ -938,13 +831,17 @@ public sealed class SessionApprovalTests : IDisposable
             fields["command_source"] = source;
         }
 
+        if (sessionId is not null)
+        {
+            fields["session_id"] = sessionId;
+        }
+
         string payload = JsonSerializer.Serialize(fields);
         using StringWriter output = new();
         using StringWriter error = new();
         CliContext context = new(new StringReader(payload), output, error, root.FullName, time)
         {
             Environment = EnvironmentReader.Of(environment),
-            Random = codes,
         };
 
         ExitCode exitCode = await new HookCommand(context).RunAsync(HookEvent.UserPromptExpansion, TestContext.Current.CancellationToken);
