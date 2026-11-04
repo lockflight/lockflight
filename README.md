@@ -66,7 +66,7 @@ before it runs.
 ## Quick start
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) to install the engine. Your projects can target .NET 8, 9
-or 10.
+or 10. On Windows, follow [install on Windows](docs/guides/getting-started.md#install-on-windows) instead of step 1.
 
 ### With Claude Code (recommended)
 
