@@ -123,9 +123,15 @@ documentation says it runs for a user-typed command, but a live probe showed it 
 that a `CronCreate` task queued; the relay guard (see [guardrails and
 boundaries](guides/guardrails-and-boundaries.md#every-control-labelled)) exists for that case, and the probe is repeated before
 each Lockflight release. The engine ignores every command except the in-session human commands (`/lockflight:approve`,
-`/lockflight:baseline`, `/lockflight:reset`, `/lockflight:amend`), which it handles only in an interactive, attended session:
-it shows the person (on stderr with exit 2, which the agent does not see) what would be recorded with a one-time code, and
-records the decision when the person types that code while what they were shown is unchanged.
+`/lockflight:baseline`, `/lockflight:reset`, `/lockflight:amend`), which it handles only when they come from the Lockflight
+plugin in an interactive, attended session. `/lockflight:approve` takes one step: it runs the phase check and records the
+approval, bound to the files' hashes at that moment, when those hashes are the ones the Stop hook recorded at the end of the
+agent's last turn in the same attended session. Content changed since then, or with no such record (a turn interrupted with Esc), is shown to the person
+instead (on stderr with exit 2, which the agent does not see) and remembered as shown; typing the command again approves exactly
+that content. The other three discard or unlock evidence and keep two steps: the engine shows the person what would be recorded
+with a one-time code, and records the decision when the person types that code while what they were shown is unchanged. When a
+turn ends and the active feature's spec or tasks pass their phase check but are not approved, the Stop hook tells the person
+(not the agent) once per change of those files, and the status line repeats it while it holds.
 
 ## The guard
 

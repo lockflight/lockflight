@@ -27,21 +27,24 @@ permissions:
   contents: read
 
 jobs:
-  # Which platforms run and how the Windows unit tests are split, in one place for the jobs below. Pull requests run Linux and
-  # Windows; pushes to main and manual runs with the macOS input add macOS.
+  # Which platforms run, how the unit tests and the end-to-end suites are split, in one place for the jobs below. Pull requests
+  # run Linux and Windows; pushes to main and manual runs with the macOS input add macOS.
   plan:
     runs-on: ubuntu-latest
     outputs:
       platforms: ${{ steps.plan.outputs.platforms }}
       engine: ${{ steps.plan.outputs.engine }}
+      e2e: ${{ steps.plan.outputs.e2e }}
     steps:
       - id: plan
         env:
           EVENT: ${{ github.event_name }}
           MACOS: ${{ inputs.macos }}
-          # Windows runs the unit tests in shards: each group below (test classes, or namespaces; don't mix the two in one group,
-          # since different filter kinds narrow each other) is a shard, and one more shard runs every other test, so a new test is
-          # never left out. Balanced by the durations in the unit test reports (unit-tests-* artifacts).
+          # Linux and Windows run the unit tests in shards: each group below (test classes, or namespaces; don't mix the two in
+          # one group, since different filter kinds narrow each other) is a shard, and one more shard runs every other test, so
+          # a new test is never left out; that last shard also publishes the engine and runs the hook suite. Balanced by the
+          # durations in the unit test reports (unit-tests-* artifacts). macOS runs them in one job.
+          LINUX_SHARDS: "Ci.HostTamperingTests Ci.RedAtRedCommitsGreenCheckTests Ci.RedAtRedCommitsRedCheckTests Ci.TestsSinceRedHelperTests Ci.TestsSinceRedLaterCycleTests Ci.TestsSinceRedWeakeningTests Ci.TraceAndGatesTests Review.ReviewReproductionRepairTests"
           WINDOWS_SHARDS: "Ci.RedAtRedCommitsRedCheckTests Ci.TestFingerprinterDataAndFixtureTests Ci.TraceAndGatesTests Gates.WorkspaceGateRunnerTests Routing.ChangeClassifierAddedFileBehaviourAndCriticalTests Routing.ChangeClassifierRaiseTests|Ci.ExistingTestsChangedTests Ci.HostTamperingTests Ci.ShellJudgeTests Gates.Steps.FormatStepTests Review.ReviewCommandTests Routing.ChangeClassifierAddedFileFeatureAndFixTests|Ci.JudgeRoutingTests Ci.TestsSinceRedAmendTests Ci.TestsSinceRedHelperTests Ci.TestsSinceRedUnchangedTests Lifecycle.Approvals.SessionApprovalTests Review.ReviewReproductionFixAndEscalationTests Routing.ChangeClassifierFileOrderTests|Ci.RedAtRedCommitsGreenCheckTests Ci.TestFingerprinterMethodAndBaseTests Ci.TestsSinceRedLaterCycleTests Ci.TestsSinceRedWeakeningTests Gates.Steps.SecretsStepTests Review.ReviewReproductionRepairTests Routing.ChangeClassifierGoldenTests"
         run: |
           platforms='[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]'
@@ -57,23 +60,43 @@ jobs:
               esac
             done
           }
-          IFS='|' read -r -a groups <<<"$WINDOWS_SHARDS"
-          total=$(( ${#groups[@]} + 1 ))
-          windows='[]'
-          index=0
-          for group in "${groups[@]}"; do
-            index=$((index + 1))
-            windows=$(jq -c --arg filters "$(filters "$group" "")" --arg shard ", $index of $total" --arg key "win-x64-$index" \
-              '. + [{"os":"windows-latest","rid":"win-x64","shard":$shard,"key":$key,"filters":$filters,"publish":false}]' <<<"$windows")
-          done
-          rest=$(filters "$(tr '|' ' ' <<<"$WINDOWS_SHARDS")" not-)
-          windows=$(jq -c --arg filters "$rest" --arg shard ", $total of $total" --arg key "win-x64-$total" \
-            '. + [{"os":"windows-latest","rid":"win-x64","shard":$shard,"key":$key,"filters":$filters,"publish":true}]' <<<"$windows")
-          engine=$(jq -c --argjson windows "$windows" \
-            'map(if .os == "windows-latest" then empty else . + {"shard":"","key":.rid,"filters":"","publish":true} end) + $windows' <<<"$platforms")
-          echo "platforms=$platforms" >> "$GITHUB_OUTPUT"
-          echo "engine=$engine" >> "$GITHUB_OUTPUT"
+          # The engine jobs of one platform ($1 os, $2 rid) for its shard groups ($3, '|' between groups; empty for one job).
+          shards() {
+            local entry groups group index=0 total
+            entry=$(jq -nc --arg os "$1" --arg rid "$2" '{"os":$os,"rid":$rid}')
+            if [ -z "$3" ]; then
+              jq -c '[. + {"shard":"","key":.rid,"filters":"","publish":true}]' <<<"$entry"
+              return
+            fi
+            IFS='|' read -r -a groups <<<"$3"
+            total=$(( ${#groups[@]} + 1 ))
+            for group in "${groups[@]}"; do
+              index=$((index + 1))
+              jq -c --arg filters "$(filters "$group" "")" --arg shard ", $index of $total" --arg key "$2-$index" \
+                '[. + {"shard":$shard,"key":$key,"filters":$filters,"publish":false}]' <<<"$entry"
+            done
+            jq -c --arg filters "$(filters "$(tr '|' ' ' <<<"$3")" not-)" --arg shard ", $total of $total" --arg key "$2-$total" \
+              '[. + {"shard":$shard,"key":$key,"filters":$filters,"publish":true}]' <<<"$entry"
+          }
+          platform_shards() {
+            case "$2" in
+              linux-x64) shards "$1" "$2" "$LINUX_SHARDS" ;;
+              win-x64) shards "$1" "$2" "$WINDOWS_SHARDS" ;;
+              *) shards "$1" "$2" "" ;;
+            esac
+          }
+          engine=$(jq -r '.[] | "\(.os) \(.rid)"' <<<"$platforms" | while read -r os rid; do platform_shards "$os" "$rid"; done | jq -sc 'add')
+          # Windows runs the end-to-end suites in two parts of about equal time (part 1 and part 2 below), the others in one job.
+          e2e=$(jq -c 'map(if .rid == "win-x64"
+            then (. + {"part":"1","shard":", 1 of 2"}), (. + {"part":"2","shard":", 2 of 2"})
+            else . + {"part":"","shard":""} end)' <<<"$platforms")
+          {
+            echo "platforms=$platforms"
+            echo "engine=$engine"
+            echo "e2e=$e2e"
+          } >> "$GITHUB_OUTPUT"
           jq . <<<"$engine"
+          jq . <<<"$e2e"
 
   engine:
     needs: plan
@@ -144,13 +167,16 @@ jobs:
             out/lockflight.exe
           if-no-files-found: error
 
-  # The end-to-end suites with a freshly published engine, beside the unit tests rather than after them.
+  # The end-to-end suites with a freshly published engine, beside the unit tests rather than after them. Where the plan splits
+  # them in two parts, each suite step runs in one part: `matrix.part != '2'` marks part 1, `matrix.part != '1'` part 2, and a
+  # job with no part runs them all.
   e2e:
     needs: plan
+    name: e2e (${{ matrix.os }}, ${{ matrix.rid }}${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.plan.outputs.platforms) }}
+        include: ${{ fromJSON(needs.plan.outputs.e2e) }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -172,57 +198,63 @@ jobs:
       - name: Native AOT publish
         working-directory: engine
         run: dotnet publish src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o ../out -nologo
+      - name: Git identity for the suites' commits
+        run: git config --global user.email ci@example.com && git config --global user.name ci
       - name: Gate step order and run policies (stand-in SDK)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && matrix.part != '2'
         shell: bash
         run: ENGINE="$PWD/out/lockflight" bash tests/gates/step-order.sh
       - name: Lifecycle end to end (spec → approvals → red/green → trace)
+        if: matrix.part != '2'
         shell: bash
         run: |
-          git config --global user.email ci@example.com && git config --global user.name ci
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/lifecycle.sh "$RUNNER_TEMP/lifecycle"
       - name: Lifecycle end to end on xUnit v2 (VSTest)
+        if: matrix.part != '1'
         shell: bash
         run: |
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/lifecycle-xunit2.sh "$RUNNER_TEMP/lifecycle-xunit2"
       - name: Lifecycle end to end on NUnit (VSTest and Microsoft.Testing.Platform)
+        if: matrix.part != '1'
         shell: bash
         run: |
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/lifecycle-nunit.sh "$RUNNER_TEMP/lifecycle-nunit"
       - name: Lifecycle end to end on MSTest (Microsoft.Testing.Platform and VSTest)
+        if: matrix.part != '2'
         shell: bash
         run: |
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/lifecycle-mstest.sh "$RUNNER_TEMP/lifecycle-mstest"
       - name: The spec contract's example passes the phase checks, without Spec Kit
+        if: matrix.part != '2'
         shell: bash
         run: |
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/spec-contract.sh "$RUNNER_TEMP/spec-contract"
       - name: CI judge end to end (red at red commits, tests since red, green, trace, report)
+        if: matrix.part != '1'
         shell: bash
         run: |
-          git config --global user.email ci@example.com && git config --global user.name ci
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/ci-judge.sh "$RUNNER_TEMP/ci-judge"
       # Runs inside a required job but only on Linux, to keep the added time to about half a minute.
       - name: QUICKSTART on samples/dotnet-single (init --ci-only, red, green, PASS; then FAIL), time to first green
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.part != '1'
         shell: bash
         run: ENGINE="$PWD/out/lockflight" bash tests/e2e/quickstart.sh "$RUNNER_TEMP/quickstart"
       - name: Workspace gates end to end (units, VSTest and MTP, per-unit stop cache)
+        if: matrix.part != '2'
         shell: bash
         run: |
-          git config --global user.email ci@example.com && git config --global user.name ci
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" sh tests/workspace/gates.sh "$RUNNER_TEMP/workspace"
@@ -395,6 +427,13 @@ jobs:
         run: scripts/release-versions.sh
       - name: No citations of records outside the repository
         run: scripts/check-public-tree.sh
+      # A squash merge makes the pull request's title and body the commit on main. They come from the event payload into a file,
+      # never into the script's text. An edited body is checked again on the next push.
+      - name: No citations of records outside the repository in the pull request's title and body
+        if: github.event_name == 'pull_request'
+        run: |
+          jq -r '.pull_request.title, "", (.pull_request.body // "")' "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/pull-request.txt"
+          scripts/check-public-tree.sh --text-file "$RUNNER_TEMP/pull-request.txt"
       # Pinned so a Claude Code release cannot change validation results unannounced. To bump: run
       # `claude plugin validate --strict` on both plugins and the marketplace with the new version, then change it here and in
       # canary.yml together.

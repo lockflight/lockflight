@@ -40,6 +40,26 @@ internal static class SessionTyping
         return (exitCode, output.ToString().Trim(), error.ToString().Trim());
     }
 
+    /// <summary>The agent's turn ends: Claude Code runs the Stop hook. Returns its standard output.</summary>
+    public static Task<string> EndTurnAsync(string root, TimeProvider time) => EndTurnAsync(root, time, "session-1", AttendedSession);
+
+    /// <summary>A turn of session <paramref name="sessionId"/> ends, in a session described by <paramref name="environment"/>.</summary>
+    public static async Task<string> EndTurnAsync(string root, TimeProvider time, string sessionId, IReadOnlyDictionary<string, string> environment)
+    {
+        string payload = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["session_id"] = sessionId,
+            ["cwd"] = root,
+            ["hook_event_name"] = "Stop",
+        });
+        using StringWriter output = new();
+        using StringWriter error = new();
+        CliContext context = new(new StringReader(payload), output, error, root, time) { Environment = EnvironmentReader.Of(environment) };
+        ExitCode exitCode = await new HookCommand(context).RunAsync(HookEvent.Stop, TestContext.Current.CancellationToken);
+        Assert.True(exitCode == ExitCode.Pass, error.ToString());
+        return output.ToString().Trim();
+    }
+
     /// <summary>The message a recorded decision shows the person.</summary>
     public static string SystemMessage(string output) => JsonDocument.Parse(output).RootElement.GetProperty("systemMessage").GetString()!;
 }

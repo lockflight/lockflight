@@ -35,7 +35,6 @@ internal static class NativeTestRunner
         RunnerMode mode,
         IReadOnlyList<string>? methodFilters,
         TraitCondition? suiteFilter,
-        string workingDirectory,
         TimeSpan timeLimit,
         TimeProvider time,
         CancellationToken cancellationToken)
@@ -68,7 +67,7 @@ internal static class NativeTestRunner
                     arguments.AddRange(TraitArguments(mode, suiteFilter));
                 }
 
-                ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, workingDirectory, budget.Left, cancellationToken);
+                ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, app.OutputDirectory, budget.Left, app.Environment, cancellationToken);
                 if (!File.Exists(report))
                 {
                     return null;

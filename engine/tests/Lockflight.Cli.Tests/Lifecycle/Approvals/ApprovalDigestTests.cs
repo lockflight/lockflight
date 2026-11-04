@@ -19,7 +19,7 @@ public sealed class ApprovalDigestTests : IDisposable
         IReadOnlyList<ArtifactSnapshot> snapshot = store.Snapshot(ApprovalPhase.Spec);
         File.WriteAllText(Feature.SpecPath, "- **FR-009**: Swapped in [NEEDS CLARIFICATION: x]\n");
 
-        string digest = ApprovalDigest.Render(Feature, ApprovalPhase.Spec, snapshot, store.Check(ApprovalPhase.Spec), "k7m2qx");
+        string digest = ApprovalDigest.Render(ApprovalPhase.Spec, snapshot, store.Check(ApprovalPhase.Spec));
 
         Assert.Contains("Requirements (1): FR-001", digest, StringComparison.Ordinal);
         Assert.DoesNotContain("FR-009", digest, StringComparison.Ordinal);
@@ -34,7 +34,7 @@ public sealed class ApprovalDigestTests : IDisposable
         File.WriteAllText(Feature.SpecPath, "- **FR-001**: The API MUST return the streak\n- **FR-006** [outside .NET: web/streak-card.spec.ts]: The card MUST show the streak\n");
         ApprovalStore store = new(Feature);
 
-        string digest = ApprovalDigest.Render(Feature, ApprovalPhase.Spec, store.Snapshot(ApprovalPhase.Spec), store.Check(ApprovalPhase.Spec), "k7m2qx");
+        string digest = ApprovalDigest.Render(ApprovalPhase.Spec, store.Snapshot(ApprovalPhase.Spec), store.Check(ApprovalPhase.Spec));
 
         Assert.Contains("Verified outside .NET, not traced to .NET tests (1):", digest, StringComparison.Ordinal);
         Assert.Contains("FR-006 The card MUST show the streak — web/streak-card.spec.ts", digest, StringComparison.Ordinal);

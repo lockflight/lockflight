@@ -29,7 +29,6 @@ internal static class TrxTestRun
         TestRunnerKind platform,
         IEnumerable<IReadOnlyList<string>> batches,
         Func<string, string?> exceptionTypeOf,
-        string workingDirectory,
         TimeSpan timeLimit,
         TimeProvider time,
         CancellationToken cancellationToken)
@@ -51,7 +50,7 @@ internal static class TrxTestRun
                     ? [app.AssemblyPath, "--no-ansi", "--report-trx", "--report-trx-filename", ReportName, "--results-directory", directory.FullName]
                     : ["test", app.AssemblyPath, "--logger", $"trx;LogFileName={ReportName}", "--results-directory", directory.FullName, "--nologo"];
                 arguments.AddRange(batch);
-                ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, workingDirectory, budget.Left, cancellationToken);
+                ProcessResult run = await ProcessRunner.RunAsync("dotnet", arguments, app.OutputDirectory, budget.Left, app.Environment, cancellationToken);
                 string report = Path.Combine(directory.FullName, ReportName);
                 if (!File.Exists(report))
                 {
