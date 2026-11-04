@@ -31,7 +31,7 @@ checktask() {
   printf '%-44s expected=%s got=%s %s\n' "$1" "$2" "$got" "$r"
 }
 # A typed slash command (UserPromptExpansion); $1=dir $2=command name $3=arguments.
-expansion() { printf '{"cwd":"%s","hook_event_name":"UserPromptExpansion","expansion_type":"slash_command","command_name":"%s","command_args":"%s","command_source":"plugin"}' "$(winpath "$1")" "$2" "$3"; }
+expansion() { printf '{"cwd":"%s","session_id":"probe","hook_event_name":"UserPromptExpansion","expansion_type":"slash_command","command_name":"%s","command_args":"%s","command_source":"plugin"}' "$(winpath "$1")" "$2" "$3"; }
 checkexp() { # $1=name $2=expected exit $3=entrypoint $4=attended $5=json [$6=text stderr must contain]
   printf '%s' "$5" | CLAUDE_CODE_ENTRYPOINT="$3" CLAUDE_CODE_SESSION_ATTENDED="$4" "$SHIM" user-prompt-expansion >/dev/null 2>"$WORK/err"; got=$?
   if [ "$got" = "$2" ] && { [ -z "${6:-}" ] || grep -qF -- "$6" "$WORK/err"; }; then pass=$((pass+1)); r=ok; else fail=$((fail+1)); r="FAIL ($(head -c 400 "$WORK/err"))"; fi

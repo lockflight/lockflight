@@ -36,6 +36,14 @@ internal sealed class SessionApproval(CliContext context, Manifest manifest) : I
             return Refuse(notTyped, words);
         }
 
+        // The record of what the person could see is kept per session; without an id none can match, and every typing would only show the files again.
+        if (input.Session.Id is null)
+        {
+            return Refuse(
+                new SessionRefusal("no-session", "the hook call carries no session id, so Lockflight cannot tell whether the files are as the agent's last turn in this session left them"),
+                words);
+        }
+
         bool phaseTyped = words.Length > 0 && !words[0].StartsWith('-');
         ApprovalPhase phase = default;
         if (phaseTyped && !ApprovalPhaseNames.TryParse(words[0], out phase))

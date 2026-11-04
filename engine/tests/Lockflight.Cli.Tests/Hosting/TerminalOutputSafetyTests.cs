@@ -144,6 +144,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
         File.WriteAllText(spec, $"# Orders\n\n### User Story 1 - Pay{Hostile} (Priority: P1)\n\n1. **Given** a cart, **When** paying, **Then** it is paid\n\n- **FR-001**: Pay\n");
         string payload = JsonSerializer.Serialize(new Dictionary<string, string>
         {
+            ["session_id"] = "s1",
             ["cwd"] = root.FullName,
             ["hook_event_name"] = "UserPromptExpansion",
             ["command_name"] = "lockflight:approve",

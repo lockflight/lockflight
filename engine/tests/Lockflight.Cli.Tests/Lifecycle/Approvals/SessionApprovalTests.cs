@@ -269,6 +269,24 @@ public sealed class SessionApprovalTests : IDisposable
     }
 
     [Fact]
+    public async Task WithoutASessionIdTheApprovalSaysWhyInsteadOfShowingTheSpecOverAndOver()
+    {
+        await CreateProjectAsync();
+        await EndTurnAsync();
+
+        (ExitCode firstExit, _, string first) = await TypeAsync("spec", AttendedSession, sessionId: null);
+        (ExitCode againExit, _, string again) = await TypeAsync("spec", AttendedSession, sessionId: null);
+
+        Assert.Equal(ExitCode.HookBlock, firstExit);
+        Assert.Equal(ExitCode.HookBlock, againExit);
+        Assert.StartsWith("lockflight: nothing was approved: the hook call carries no session id", again, StringComparison.Ordinal);
+        Assert.Contains("approve spec`.", again, StringComparison.Ordinal);
+        Assert.DoesNotContain("not approved yet", first + again, StringComparison.Ordinal);
+        Assert.Contains("session-approval:no-session", Ledger(), StringComparison.Ordinal);
+        Assert.False(File.Exists(RecordPath("spec")));
+    }
+
+    [Fact]
     public async Task TheDigestSaysAnEarlierApprovalIsStale()
     {
         await CreateProjectAsync();
@@ -797,11 +815,10 @@ public sealed class SessionApprovalTests : IDisposable
     private Task<(ExitCode ExitCode, string Output, string Error)> TypeAsync(string arguments) => TypeAsync(arguments, AttendedSession);
 
     private async Task<(ExitCode ExitCode, string Output, string Error)> TypeAsync(
-        string arguments, IReadOnlyDictionary<string, string> environment, string commandName = SessionApproval.CommandName, string? source = "plugin")
+        string arguments, IReadOnlyDictionary<string, string> environment, string commandName = SessionApproval.CommandName, string? source = "plugin", string? sessionId = "session-1")
     {
         Dictionary<string, string> fields = new()
         {
-            ["session_id"] = "session-1",
             ["cwd"] = root.FullName,
             ["hook_event_name"] = "UserPromptExpansion",
             ["expansion_type"] = "slash_command",
@@ -812,6 +829,11 @@ public sealed class SessionApprovalTests : IDisposable
         if (source is not null)
         {
             fields["command_source"] = source;
+        }
+
+        if (sessionId is not null)
+        {
+            fields["session_id"] = sessionId;
         }
 
         string payload = JsonSerializer.Serialize(fields);
