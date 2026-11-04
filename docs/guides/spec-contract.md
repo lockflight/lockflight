@@ -81,6 +81,48 @@ its own requirements) or is a directory or a symbolic link never counts. What th
 Mark only a requirement that has no .NET side. A rule the API enforces stays a normal requirement with a .NET test, even when
 the UI also shows it.
 
+**Structural requirements.** A behaviour-preserving refactoring, or an architecture rule a change establishes, has
+requirements that no red/green cycle can prove: their tests pass before the change (characterisation and snapshot tests) or
+call no production code (architecture tests that read types or sources). Mark such a requirement `[structural]`:
+
+```markdown
+- **FR-007** [structural]: Order totals MUST stay as they are after the pricing code moves to the Pricing module
+- **FR-008** [structural]: The Domain project MUST NOT reference the Web project
+```
+
+- **Structural tests.** A test whose `Requirement` traits name only structural requirements is a structural test. It is
+  not part of a red/green cycle: `redgreen red` (and the CI judge at a red commit) leaves it out and says so, so it never
+  turns a cycle GREEN_BEFORE.
+- **Trace runs them.** A structural requirement is covered by a structural test that is new since the code before the
+  change and passes at head *and* on that code, with the files that declare the structural tests and every non-C# file of the
+  test projects (project files, snapshots, expected-value data) laid over it. Every row of a theory must pass there. Locally
+  that code is the commit `redgreen start` recorded. In CI it is the pull request's fork point (merge base). Such a test shows
+  as `Class.Method (structural)`. A test that existed before the change (another feature's among them) does not count.
+- **A structural test that fails on the code before the change does not count.** That covers a failure on an assertion
+  about what production code returns, a stub, another exception, or one failing row. Such a test shows *behaviour changed —
+  not structural*, and it keeps the requirement uncovered even when another structural test passes.
+  The one exception is a test that fails there on an assertion **without calling production code** (RED_NO_PRODUCTION) and
+  passes at head. That is how an architecture test that reads types or sources looks, and it shows as
+  `(structural: architecture rule the change establishes)`. A test that calls production code and fails on an assertion
+  there (RED_ASSERT) never counts as an architecture rule: that is what a behaviour change looks like. The production-call scan is static, though: a test that reaches
+  production code only through reflection, a type argument (`WebApplicationFactory<Program>`) or a process, or that only checks
+  that a file or type exists, looks the same. Review each architecture rule the trace lists.
+- **What it proves, and what it does not.** Passing on both sides shows only that the test's own assertions held there. A
+  test that asserts little, or that behaves differently in the temporary worktree, passes on both. Whether a structural test
+  pins the behaviour its requirement names is for the person approving the spec and for review.
+- **Keep structural tests in files of their own**, using only APIs the older code has. Their files are built against it,
+  and a file that also holds tests needing newer code does not build there, so its structural tests show as *could not be
+  checked* and cover nothing (trace FAIL, also when the cause is the build environment).
+- **Local and CI can differ.** The two compare against different commits, CI also requires each test's compiled code to be
+  the head's there, and a unit repository of a workspace shell does not get the structural check in CI, so its structural
+  tests are judged as ordinary new tests at a red commit there.
+- **It is visible.** The approval digest lists structural requirements with their text, the CI comment's headline counts
+  them, and a marker added to, changed on or removed from a requirement the base already had is called out, as for
+  `[outside .NET: …]`.
+
+Mark only what the change must keep or the rule it establishes. A behaviour change, even inside a refactoring, stays a
+normal requirement with a test that goes red, then green.
+
 **Placeholders.** The check rejects text left over from a template:
 
 - an ALL-CAPS word of three or more characters in brackets that is not a Markdown link: `[FEATURE NAME]`, `[DATE]`,

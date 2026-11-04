@@ -119,6 +119,11 @@ headline counts such requirements, each file's evidence says whether the pull re
 to, changed on or removed from a requirement the base already had is called out above the checks; a pull request that changes
 only the spec shows it in the spec diff alone. The headline count and the call-out come from the judge's evidence, so they are
 as strong as that evidence ([requirements verified outside .NET](spec-contract.md#specmd)).
+A requirement marked `[structural]` is covered by a test, new in the pull request, naming only structural requirements that
+passes at head and on the fork point's code with its own file and the test side's non-C# files laid over it (or, for an
+architecture test calling no production code, fails there on an assertion); such tests are not part of a red commit's cycle.
+This shows the test's assertions held on both sides, not that they pin the requirement; that is for review. Local trace checks them on the commit `redgreen start` recorded
+instead of the fork point, so the two can differ when the branch's history moved.
 
 - **Read from the target branch** (a boundary, with the judge a required check and a required code-owner review covering
   the workflow files): the policy and baselines the judge applies, the engine the report jobs install, and that the check

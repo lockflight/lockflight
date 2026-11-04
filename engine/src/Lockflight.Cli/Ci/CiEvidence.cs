@@ -90,6 +90,7 @@ internal static class CiEvidence
                 {
                     ["verdict"] = CheckVerdictNames.ToName(trace.Verdict),
                     ["excluded"] = trace.Rows.Count(row => row.Excluded),
+                    ["structural"] = trace.Rows.Count(row => row.Structural),
                     ["markerChanges"] = Strings(trace.MarkerChanges.Select(Cap)),
                     ["rows"] = new JsonArray([.. trace.Rows.Select(TraceRowNode)]),
                 }
@@ -256,7 +257,7 @@ internal static class CiEvidence
         ["tests"] = Strings(row.Tests.Select(Cap)),
         ["lost"] = Strings(row.Lost.Select(Cap)),
         ["status"] = row.Covered ? "covered" : row.Excluded ? "excluded" : "not-covered",
-        ["note"] = row.OutsideNote is string note ? Cap(note) : null,
+        ["note"] = row.Note is string note ? Cap(note) : null,
         ["outside"] = new JsonArray([.. row.Outside.Select(file => new JsonObject
         {
             ["path"] = Cap(file.Path),

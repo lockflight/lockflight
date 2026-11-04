@@ -12,13 +12,20 @@ namespace Lockflight.Cli.Ci;
 /// When the spec was on the base already, the pull request answers for the requirements it adds or changes and those its red
 /// tests name, so a feature can be delivered one story per pull request. A requirement marked <c>[outside .NET: …]</c> is excluded
 /// when every file it names exists at head and names it (<see cref="OutsideVerification"/>); when every requirement is, trace is
-/// N/A, never PASS. In a unit repository of a workspace shell the spec is the
+/// N/A, never PASS. A requirement marked <c>[structural]</c> is covered by a structural test that passes at head and on the base's
+/// code (<see cref="StructuralJudge"/>, the rule shared with local trace in <see cref="StructuralCheck"/>). In a unit repository of a workspace shell the spec is the
 /// shell's (<see cref="ShellSpecSource"/>) and the pull request answers for the requirements its red tests name.
 /// </summary>
 internal static class TraceJudge
 {
     public static async Task<TraceJudgement> DecideAsync(
-        JudgePlan plan, IReadOnlyList<TestCase>? headInventory, IReadOnlyList<CycleJudgement> cycles, IReadOnlyList<SinceRedTest>? sinceRed, GreenJudgement? green, CancellationToken cancellationToken)
+        JudgePlan plan,
+        IReadOnlyList<TestCase>? headInventory,
+        IReadOnlyList<CycleJudgement> cycles,
+        IReadOnlyList<SinceRedTest>? sinceRed,
+        GreenJudgement? green,
+        IReadOnlyList<StructuralTest> structural,
+        CancellationToken cancellationToken)
     {
         // Trace counts tests that pass at head: when green could not decide that, trace cannot either, and must not blame the tests.
         RedGreenTest[] accepted = [.. cycles.Where(cycle => cycle.Accepted).SelectMany(cycle => cycle.Tests)];
@@ -110,7 +117,7 @@ internal static class TraceJudge
         {
             Cycles = [new RedGreenCycle(1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, counted)],
         };
-        IReadOnlyList<TraceRow> rows = TraceMatrix.Build(requirements, record, headInventory ?? [], outside);
+        IReadOnlyList<TraceRow> rows = TraceMatrix.Build(requirements, record, headInventory ?? [], outside, structural);
         TraceTally tally = TraceTally.Of(rows);
         string excluded = tally.Excluded > 0 ? $"; {tally.Excluded} verified outside .NET" : string.Empty;
         TraceJudgement judgement = tally.Outcome switch
@@ -125,7 +132,7 @@ internal static class TraceJudge
         return judgement with { MarkerChanges = markerChanges };
     }
 
-    private static string Uncovered(TraceRow row) => row.OutsideNote is string problem ? $"{row.RequirementId} ({problem})" : row.RequirementId;
+    private static string Uncovered(TraceRow row) => row.Note is string problem ? $"{row.RequirementId} ({problem})" : row.RequirementId;
 
     /// <summary>
     /// The files of each requirement marked <c>[outside .NET: …]</c> as they are at head, each with whether the pull request added or

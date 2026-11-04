@@ -14,6 +14,9 @@ internal sealed partial record SpecDocument(
     /// <summary>The marker that says a requirement is verified by the named files outside .NET, which Lockflight does not run.</summary>
     public const string OutsideMarker = "outside .NET:";
 
+    /// <summary>The marker of a requirement a change must keep, or an architecture rule it establishes (<see cref="StructuralCheck"/>).</summary>
+    public const string StructuralMarker = "structural";
+
     public IReadOnlyList<string> DuplicateRequirementIds =>
         [.. Requirements.GroupBy(requirement => requirement.Id).Where(group => group.Count() > 1).Select(group => group.Key)];
 
@@ -84,6 +87,11 @@ internal sealed partial record SpecDocument(
     private static Requirement ReadRequirement(Match line, int lineNumber)
     {
         Requirement requirement = new(line.Groups["id"].Value, lineNumber, line.Groups["text"].Value.Trim());
+        if (line.Groups["structural"].Success)
+        {
+            return requirement with { Marker = StructuralMarker, Structural = true };
+        }
+
         if (!line.Groups["outside"].Success)
         {
             return requirement;
@@ -102,10 +110,11 @@ internal sealed partial record SpecDocument(
     }
 
     /// <summary>
-    /// A bullet, the bold ID, an optional marker in brackets before the colon (<c>[outside .NET: web/a.spec.ts, web/b.spec.ts]</c>),
+    /// A bullet, the bold ID, an optional marker in brackets before the colon (<c>[outside .NET: web/a.spec.ts, web/b.spec.ts]</c> or
+    /// <c>[structural]</c>),
     /// then the text.
     /// </summary>
-    [GeneratedRegex(@"^\s*[-*]\s+\*\*(?<id>FR-\d{3,})\*\*(\s*\[outside \.NET:\s*(?<outside>[^\]\s][^\]]*)\])?\s*:?\s*(?<text>.*)$")]
+    [GeneratedRegex(@"^\s*[-*]\s+\*\*(?<id>FR-\d{3,})\*\*(\s*\[(outside \.NET:\s*(?<outside>[^\]\s][^\]]*)|(?<structural>structural))\])?\s*:?\s*(?<text>.*)$")]
     private static partial Regex RequirementLine();
 
     [GeneratedRegex(@"^###\s+User Story\s+(?<number>\d+)\s*[-–—:]\s*(?<title>.+?)(\s*\(Priority:.*\))?\s*$")]

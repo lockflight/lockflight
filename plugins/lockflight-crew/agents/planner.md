@@ -40,6 +40,11 @@ Free-form; no check reads it, but the tasks approval covers it, and the test aut
   before the feature): the CI judge may rebuild an earlier story's red with such a file, and the later tests in it need code
   that red does not have.
 
+A requirement marked `[structural]` in spec.md (a behaviour-preserving refactoring or an architecture rule) needs no stub
+and no red: give it a test task that writes characterisation, snapshot or architecture tests in a test file of their own
+(`Write tests for <what stays the same> in tests/<Project>.Tests/<Name>StructureTests.cs`), using only APIs the code has
+before the change. Do not mark requirements yourself; if a behaviour changes, it is a normal requirement with a red.
+
 ## tasks.md, the contract
 
 `phase check tasks` passes when all of these hold:

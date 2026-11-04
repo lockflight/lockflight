@@ -294,6 +294,7 @@ public sealed class CiReportTests : IDisposable
         evidence["trace"] = new JsonObject
         {
             ["excluded"] = 2,
+            ["structural"] = 3,
             ["markerChanges"] = new JsonArray("FR-009: [outside .NET: web/old.spec.ts] added"),
             ["rows"] = new JsonArray(new JsonObject
             {
@@ -306,7 +307,7 @@ public sealed class CiReportTests : IDisposable
 
         string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
 
-        Assert.Contains("class **behaviour** (interim) · **2 requirements verified outside .NET**", comment, StringComparison.Ordinal);
+        Assert.Contains("class **behaviour** (interim) · **2 requirements verified outside .NET** · **3 structural requirements**", comment, StringComparison.Ordinal);
         Assert.Contains("FR-009: \\[outside .NET: web/old.spec.ts] added", comment, StringComparison.Ordinal);
         Assert.Contains("| FR-009 | — | excluded — verified outside .NET (web/old.spec.ts, unchanged in this pull request) |", comment, StringComparison.Ordinal);
     }

@@ -42,7 +42,8 @@ internal static class JudgeExecutor
             HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);
             TreeListing? baseListing = plan.MergeBase is string mergeBase ? await trees.ListAsync(mergeBase, "base", fresh: false, cancellationToken) : null;
             BaseSkipCheck baseSkips = await BaseSkipsAsync(trees, head, baseListing, cancellationToken);
-            IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, cancellationToken) : null;
+            IReadOnlySet<string> structuralIds = await StructuralJudge.IdsAsync(plan, cancellationToken);
+            IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, structuralIds, cancellationToken) : null;
             GreenJudgement greenAtHead = baseListing is { AsBaseline: null }
                 ? new GreenJudgement(CheckVerdict.NotEarned, $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
                 : GreenJudge.Decide(head, baseListing?.AsBaseline, baseSkips, cycles ?? []);
@@ -56,7 +57,7 @@ internal static class JudgeExecutor
                 ? await HostTamperingJudge.DecideAsync(plan, head.Listing, baseListing, cycles ?? [], cancellationToken)
                 : null;
             TraceJudgement? trace = plan.Levels[CheckId.Trace] != CheckLevel.Off
-                ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, cycles ?? [], sinceRed, greenAtHead, cancellationToken)
+                ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, cycles ?? [], sinceRed, greenAtHead, await new StructuralJudge(trees, time).JudgeAsync(plan, head, baseListing?.AsBaseline, structuralIds, cancellationToken), cancellationToken)
                 : null;
             (CheckVerdict Verdict, string Why, JsonNode? Result, string? TestStep) gates = !budget.TryStart("gates")
                 ? (CheckVerdict.NotEarned, budget.Why(trees.Builds.Count), null, null)

@@ -105,6 +105,13 @@ Never approve for them.
       | SKIPPED | skipped or not run | remove `Skip` / `Explicit` / `[Ignore]`, `Assert.Ignore`, `Assert.Inconclusive` |
       | FLAKY | repeated runs disagree | make the test deterministic |
 
+      **Structural requirements.** In a behaviour-preserving refactoring, or for an architecture rule, the spec may mark a
+      requirement `[structural]`. Tests that name only structural requirements (characterisation, snapshot, architecture
+      tests) are not part of a cycle: `redgreen red` leaves them out and says so. `trace` runs them here and on the start
+      commit's code, where they must pass too; one that fails there means behaviour changed, which needs a normal
+      requirement and a red. Never mark a requirement structural yourself, and never to get past GREEN_BEFORE: the marker is
+      the spec's, which the user approves.
+
       Under each test, `redgreen red` says why it got its class; `redgreen red --verbose` adds the exception, the deciding
       stack frame with its line, and the production member the test reaches.
 
