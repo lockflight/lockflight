@@ -120,7 +120,11 @@ requirements to be traced to those tests, and the `pr` gates to pass, all with t
 - **A strong guardrail, not a boundary:** the test results. The tests are the pull request's code and run in the judge job,
   so a determined pull request can forge their outcome. Doing so needs deliberate code in the test assemblies that tampers
   with the test host, which is visible in the test diff; the host-tampering check lists the plain forms of it and is
-  NOT-EARNED when one is new.
+  NOT-EARNED when one is new. Each new finding comes with its entry for `.lockflight/baselines/host-tampering.json`
+  (in `lockflight ci`'s output, the evidence's `baselineEntry` and the pull request comment): accepting legitimate code,
+  such as a snapshot store that writes its case files in record mode, is a person's decision, made in a pull request of
+  its own to the target branch, where the protected file shows as a protected change. Once it is merged, push to the
+  pull request or update it from the target branch: re-running the old check judges against the old base.
 - **A strong guardrail, not a boundary:** the evidence file itself. In 0.3.0 the judge writes its evidence in the same job
   as the pull request's code, so a process that code leaves running could rewrite it before the report jobs read it.
   Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0.

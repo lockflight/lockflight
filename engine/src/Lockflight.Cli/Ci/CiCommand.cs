@@ -123,6 +123,16 @@ internal sealed class CiCommand(CliContext context) : ICommand
             await context.Output.WriteLineAsync($"  {CheckVerdictNames.ToName(check.Verdict),-10} {CheckIdNames.ToName(check.Id),-22} {CheckLevelNames.ToName(check.Level),-8} {check.Why}");
         }
 
+        if (run.Findings.Tampering is { New.Count: > 0 } tampering)
+        {
+            await context.Output.WriteLineAsync($"  host-tampering: {HostTamperingJudge.AcceptAdvice} Each new finding and its entry:");
+            foreach (TamperingFinding finding in tampering.New)
+            {
+                await context.Output.WriteLineAsync($"    {Printable(HostTamperingJudge.Describe(finding))}");
+                await context.Output.WriteLineAsync($"      {HostTamperingJudge.BaselineEntry(finding)}");
+            }
+        }
+
         foreach (RedCommit red in plan.Reds.All.Where(red => !red.IsCycle))
         {
             string why = red.Malformed ?? "superseded by a later commit with the same label";
@@ -141,4 +151,7 @@ internal sealed class CiCommand(CliContext context) : ICommand
 
         await context.Output.WriteLineAsync($"Evidence: {path}");
     }
+
+    /// <summary>A name from the pull request's code on one line, without control characters that a terminal would act on.</summary>
+    private static string Printable(string text) => new([.. text.ReplaceLineEndings(" ").Where(character => !char.IsControl(character))]);
 }

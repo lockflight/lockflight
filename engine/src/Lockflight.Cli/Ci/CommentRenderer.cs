@@ -25,6 +25,8 @@ internal static class CommentRenderer
 
     /// <summary>The most loosenings the comment lists, so the section leaves room for the others.</summary>
     private const int MaxLoosenedShown = 30;
+    private const int MaxEntriesShown = 30;
+    private const string CutMark = "…";
 
     /// <summary>The order the Next line looks for the first required check that did not pass.</summary>
     private static readonly string[] NextOrder = ["policy", "red", "tests.sinceRed", "tests.existingChanged", "tests.hostTampering", "green", "gates", "trace", "review", "approvals"];
@@ -215,8 +217,43 @@ internal static class CommentRenderer
                 }
             }
 
+            findings.Append(BaselineEntries(tampering["new"]?.AsArray() ?? []));
+
             yield return findings.Append("\n</details>\n").ToString();
         }
+    }
+
+    /// <summary>
+    /// The new findings' baseline entries, ready to paste, after how a person accepts one (the engine's own text, so neither escaped
+    /// nor capped like the findings). An entry is shown only when it names exactly its finding; the rest, and those past
+    /// <see cref="MaxEntriesShown"/>, are counted and left to the job log.
+    /// </summary>
+    private static string BaselineEntries(JsonArray found)
+    {
+        if (found.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        string[] entries = [.. found.Select(ShownEntry).OfType<string>()];
+        StringBuilder text = new($"\n{HostTamperingJudge.AcceptAdvice} The new findings' entries:\n\n");
+        if (entries.Length > 0)
+        {
+            text.Append(CommentText.Fenced(string.Join(",\n", entries.Take(MaxEntriesShown)), "json"));
+        }
+
+        int missing = found.Count - Math.Min(entries.Length, MaxEntriesShown);
+        return missing > 0 ? text.Append($"\n{missing} more {(missing == 1 ? "entry is" : "entries are")} in the `lockflight ci` output of the job log.\n").ToString() : text.ToString();
+    }
+
+    /// <summary>A finding's baseline entry when it names that finding: the evidence's id, unless the id was cut to fit the evidence.</summary>
+    private static string? ShownEntry(JsonNode? finding)
+    {
+        string? id = finding?["id"] is JsonValue idValue && idValue.TryGetValue(out string? text) ? text : null;
+        return finding?["baselineEntry"] is JsonValue value && value.TryGetValue(out string? entry) && HostTamperingJudge.EntryId(entry) is string named
+            && (id is null || id.EndsWith(CutMark, StringComparison.Ordinal) || id == named)
+            ? entry
+            : null;
     }
 
     private static string Short(string commit) => Hex(commit) is { Length: > 7 } hex ? hex[..7] : Hex(commit);

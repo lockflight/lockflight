@@ -74,6 +74,48 @@ public sealed class HostTamperingScannerTests
         Assert.Contains($"Lockflight.Cli.Tests.Ci.TamperingSamples.LaunderingUser::{method}", Writes);
 
     [Fact]
+    public void ThePrintedBaselineEntryPastedIntoTheBaselineAcceptsThatFindingAndNoOther()
+    {
+        TamperingFinding finding = new("Shop.Tests", "file-write", "Shop.Tests.Snapshots+<SaveAsync>::MoveNext", "System.IO.File.WriteAllTextAsync");
+        string baseline = $$"""{ "schema": "lockflight.baseline.host-tampering/v1", "findings": [ {{HostTamperingJudge.BaselineEntry(finding)}} ] }""";
+
+        HashSet<string> accepted = HostTamperingJudge.ParseBaseline(baseline);
+
+        Assert.Equal("\"Shop.Tests|file-write|Shop.Tests.Snapshots+<SaveAsync>::MoveNext|System.IO.File.WriteAllTextAsync\"", HostTamperingJudge.BaselineEntry(finding));
+        Assert.True(HostTamperingJudge.Accepts(accepted, finding));
+        Assert.False(HostTamperingJudge.Accepts(accepted, finding with { Member = "System.IO.File.Delete" }));
+        Assert.False(HostTamperingJudge.Accepts(accepted, finding with { Location = "Shop.Tests.Snapshots+<LoadAsync>::MoveNext" }));
+        Assert.False(HostTamperingJudge.Accepts(accepted, finding with { Kind = "process-start" }));
+        Assert.False(HostTamperingJudge.Accepts(accepted, finding with { Assembly = "Shop.Api.Tests" }));
+    }
+
+    [Fact]
+    public void ABaselineEntryForANameWithQuotesOrBackslashesIsValidJsonThatReadsBackToTheFinding()
+    {
+        TamperingFinding finding = new("Shop.Tests", "process-start", "Shop.Tests.Tools::Run", "System.Diagnostics.Process.Start(\"C:\\tools\")");
+
+        Assert.True(HostTamperingJudge.Accepts(HostTamperingJudge.ParseBaseline($$"""{ "findings": [ {{HostTamperingJudge.BaselineEntry(finding)}} ] }"""), finding));
+    }
+
+    [Fact]
+    public void ABaselineEntryOfANonAsciiOrControlCharacterNameIsAsciiAndReadsBackToTheFinding()
+    {
+        TamperingFinding finding = new("Shop.Tests", "file-write", "Shop.Tests.Знімки::Зберегти\u001b[2J", "System.IO.File.WriteAllText");
+
+        string entry = HostTamperingJudge.BaselineEntry(finding);
+
+        Assert.All(entry, character => Assert.InRange(character, ' ', '~'));
+        Assert.Equal(finding.Id, HostTamperingJudge.EntryId(entry));
+        Assert.True(HostTamperingJudge.Accepts(HostTamperingJudge.ParseBaseline($$"""{ "findings": [ {{entry}} ] }"""), finding));
+    }
+
+    [Theory]
+    [InlineData("\"Shop.Tests|exit|Shop.Tests.Guard::Stop\"")]
+    [InlineData("[\"Shop.Tests|exit|Shop.Tests.Guard::Stop|System.Environment.Exit\"]")]
+    [InlineData("not json")]
+    public void AnEntryThatIsNotOneWholeFindingNamesNone(string entry) => Assert.Null(HostTamperingJudge.EntryId(entry));
+
+    [Fact]
     public void ABaselineEntryAcceptsTheFindingItNamesOrEveryFindingOfItsKindInOneMethod()
     {
         TamperingFinding finding = new("Shop.Tests", "file-write", "Shop.Tests.CliTests::Writes", "System.IO.File.WriteAllText");

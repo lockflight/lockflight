@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -15,7 +16,17 @@ internal static class HostTamperingJudge
 {
     public const string BaselinePath = ".lockflight/baselines/host-tampering.json";
 
+    /// <summary>How a person accepts a legitimate finding, printed with the findings' baseline entries.</summary>
+    public const string AcceptAdvice =
+        "Accepting a legitimate finding is a person's decision: add its entry to the \"findings\" array of " + BaselinePath
+        + " (create it as { \"schema\": \"lockflight.baseline.host-tampering/v1\", \"findings\": [ … ] }) in a pull request of its own to the target branch,"
+        + " where the protected file shows as a protected change. The judge reads the baseline from the target branch, never from the pull request it judges:"
+        + " once the baseline is merged, push to this pull request or update it from the target branch so the judge runs again."
+        + " An entry accepts that method's use of that member and nothing else.";
+
     private const int MaxListed = 5;
+    private const int MinimumIdSeparators = 3;
+    private const char Separator = '|';
 
     public static async Task<TamperingJudgement> DecideAsync(JudgePlan plan, TreeListing head, TreeListing? baseListing, IReadOnlyList<CycleJudgement> cycles, CancellationToken cancellationToken)
     {
@@ -37,7 +48,7 @@ internal static class HostTamperingJudge
         return added.Length > 0
             ? new TamperingJudgement(CheckVerdict.NotEarned,
                 $"new code in the test assemblies that could tamper with the test host: {string.Join("; ", added.Take(MaxListed).Select(Describe))}"
-                + $"{(added.Length > MaxListed ? $" and {added.Length - MaxListed} more" : string.Empty)}; a person accepts a legitimate one in {BaselinePath} on the target branch",
+                + $"{(added.Length > MaxListed ? $" and {added.Length - MaxListed} more" : string.Empty)}; a person accepts a legitimate one with the baseline entry listed for it ({BaselinePath} on the target branch)",
                 added, existing)
             : new TamperingJudgement(CheckVerdict.Pass,
                 existing.Length == 0 ? "no code in the test assemblies that could tamper with the test host" : $"nothing new; {existing.Length} findings the base already had or accepted",
@@ -52,12 +63,49 @@ internal static class HostTamperingJudge
         accepted.Contains(finding.Id)
         || accepted.Any(entry => entry.Count(character => character == '|') == 2 && finding.Id.StartsWith(entry + "|", StringComparison.Ordinal));
 
-    public static string Describe(TamperingFinding finding) => $"{finding.Kind} in {finding.Location} ({finding.Member})";
-
-    /// <summary>The finding ids the policy commit's baseline accepts, read with git from the policy commit, never the tree.</summary>
-    private static async Task<HashSet<string>> AcceptedAsync(JudgePlan plan, CancellationToken cancellationToken)
+    /// <summary>
+    /// The finding's entry for the baseline's <c>findings</c> array, as a JSON string ready to paste: it accepts that method's use of
+    /// that member and nothing else. Only ASCII is written (anything else and control characters as <c>\uXXXX</c>), so a terminal
+    /// with another code page cannot change it in the copy; a generated name such as <c>&lt;Run&gt;</c> reads as it does in the finding.
+    /// </summary>
+    public static string BaselineEntry(TamperingFinding finding)
     {
-        string? text = await JudgeGit.ShowFileAsync(plan.Inputs.Root, plan.Policy.Commit, BaselinePath, cancellationToken);
+        StringBuilder entry = new("\"");
+        foreach (char character in finding.Id)
+        {
+            entry.Append(character switch
+            {
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                < ' ' or > '~' => $"\\u{(int)character:x4}",
+                _ => character.ToString(),
+            });
+        }
+
+        return entry.Append('"').ToString();
+    }
+
+    /// <summary>
+    /// The finding id a printed baseline entry names, when it is one JSON string naming a whole finding (assembly, kind, method and
+    /// member); null otherwise, so an evidence file that was tampered with cannot show a wider entry as a finding's own.
+    /// </summary>
+    public static string? EntryId(string entry)
+    {
+        try
+        {
+            return JsonNode.Parse(entry) is JsonValue value && value.TryGetValue(out string? id) && id.Count(character => character == Separator) >= MinimumIdSeparators
+                ? id
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The finding ids a baseline file's text accepts; none when it is missing or not the baseline's JSON.</summary>
+    public static HashSet<string> ParseBaseline(string? text)
+    {
         try
         {
             return text is not null && JsonNode.Parse(text)?["findings"] is JsonArray findings
@@ -69,4 +117,10 @@ internal static class HostTamperingJudge
             return [];
         }
     }
+
+    public static string Describe(TamperingFinding finding) => $"{finding.Kind} in {finding.Location} ({finding.Member})";
+
+    /// <summary>The finding ids the policy commit's baseline accepts, read with git from the policy commit, never the tree.</summary>
+    private static async Task<HashSet<string>> AcceptedAsync(JudgePlan plan, CancellationToken cancellationToken) =>
+        ParseBaseline(await JudgeGit.ShowFileAsync(plan.Inputs.Root, plan.Policy.Commit, BaselinePath, cancellationToken));
 }
