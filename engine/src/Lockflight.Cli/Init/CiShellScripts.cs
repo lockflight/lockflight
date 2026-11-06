@@ -85,6 +85,23 @@ internal static class CiShellScripts
         """;
 
     /// <summary>
+    /// Hashes the gitleaks binary <see cref="InstallGitleaks"/> extracted, before any of the pull request's code runs, into
+    /// <c>$gitleaks_sum</c> (<c>sha256sum</c>'s line: the hash, then the file). A command substitution of its own, so <c>set -e</c>
+    /// stops the job when hashing fails rather than leaving the hash empty, which would turn the check off.
+    /// </summary>
+    public const string HashGitleaks = """gitleaks_sum=$(sha256sum < "$LOCKFLIGHT_TEMP/gitleaks")""";
+
+    public const string ExportGitleaksPath = "export LOCKFLIGHT_GITLEAKS=\"$LOCKFLIGHT_TEMP/gitleaks\"";
+
+    public const string ExportGitleaksSha256 = "export LOCKFLIGHT_GITLEAKS_SHA256=\"${gitleaks_sum%% *}\"";
+
+    /// <summary>
+    /// Exports the gitleaks binary and its hash (<see cref="HashGitleaks"/>) for the gates: the secrets step refuses a binary whose
+    /// SHA-256 differs from <c>LOCKFLIGHT_GITLEAKS_SHA256</c>, since a build in the same job could replace the file.
+    /// </summary>
+    public const string ExportGitleaks = $"{ExportGitleaksPath}\n{HashGitleaks}\n{ExportGitleaksSha256}";
+
+    /// <summary>
     /// Installs the engine the base commit pins into <c>$LOCKFLIGHT_TEMP/lockflight</c>, outside the repository's
     /// <c>global.json</c>. With <c>.lockflight/engine.lock</c>: the vendored install script, after checking it against the hash the
     /// lock names (both restored from the base commit), which downloads the platform's package and checks the executable
@@ -186,7 +203,7 @@ internal static class CiShellScripts
             "fi",
             "# Install gitleaks (pinned, checksum-verified).",
             InstallGitleaks,
-            "export LOCKFLIGHT_GITLEAKS=\"$LOCKFLIGHT_TEMP/gitleaks\"",
+            ExportGitleaks,
             .. extraChannels.Length == 0 ? Array.Empty<string>() : ["# Install the .NET channels the test projects target.", extraChannels],
             "# Install the pinned engine (outside the repository's global.json).",
             InstallEngine,
@@ -256,7 +273,7 @@ internal static class CiShellScripts
             "if [ -n \"$PULL_REQUEST\" ]; then",
             Indent(RestorePolicy, 2),
             "fi",
-            .. gitleaks ? ["# Install gitleaks (pinned, checksum-verified).", InstallGitleaks, "export LOCKFLIGHT_GITLEAKS=\"$LOCKFLIGHT_TEMP/gitleaks\""] : Array.Empty<string>(),
+            .. gitleaks ? ["# Install gitleaks (pinned, checksum-verified).", InstallGitleaks, ExportGitleaks] : Array.Empty<string>(),
             .. extraChannels.Length == 0 ? Array.Empty<string>() : ["# Install the .NET channels the test projects target.", extraChannels],
             "# Install the pinned engine (outside the repository's global.json).",
             InstallEngine,

@@ -362,8 +362,8 @@ run of the workflow (it skips a fork, whose pull requests run in the upstream re
 `gate run --profile pr` works locally too. Without `--base` it scans uncommitted changes and untracked, non-ignored files only
 and says so; without gitleaks on
 `PATH` (or `LOCKFLIGHT_GITLEAKS`) the secrets step is NOT-EARNED, not PASS. When `LOCKFLIGHT_GITLEAKS_SHA256` is set, the
-binary must have that SHA-256 or the secrets step is ERROR: a CI script on another platform that installs gitleaks before it
-runs any of the pull request's code can set it the way the action does. Outside the CI judge the scan runs last, after the
+binary must have that SHA-256 or the secrets step is ERROR: the Azure Pipelines, Bitbucket and GitLab templates set it right
+after their gitleaks install, before any of the pull request's code runs, the way the action does. Outside the CI judge the scan runs last, after the
 build, as the step order above shows.
 
 ## Workspace shells: unit repositories

@@ -8,6 +8,17 @@ internal static class AzurePipelinesTemplate
 {
     public const string Path = ".azure-pipelines/lockflight-gates.yml";
 
+    public const string SetGitleaksPath = "echo \"##vso[task.setvariable variable=LOCKFLIGHT_GITLEAKS]$LOCKFLIGHT_TEMP/gitleaks\"";
+
+    /// <summary>Read-only, so a later step (the gates run the pull request's build) cannot set another hash.</summary>
+    public const string SetGitleaksSha256 = "echo \"##vso[task.setvariable variable=LOCKFLIGHT_GITLEAKS_SHA256;isreadonly=true]${gitleaks_sum%% *}\"";
+
+    /// <summary>
+    /// The gitleaks binary and its hash (<see cref="CiShellScripts.HashGitleaks"/>) as pipeline variables for the later steps: the
+    /// secrets step refuses a binary whose SHA-256 differs from <c>LOCKFLIGHT_GITLEAKS_SHA256</c>.
+    /// </summary>
+    private const string SetGitleaks = $"{SetGitleaksPath}\n{CiShellScripts.HashGitleaks}\n{SetGitleaksSha256}";
+
     private const int ScriptIndent = 6;
 
     private const string PullRequestTrigger = """
@@ -77,7 +88,7 @@ internal static class AzurePipelinesTemplate
               set -e
               LOCKFLIGHT_TEMP="$AGENT_TEMPDIRECTORY"
         {InstallGitleaks}
-              echo "##vso[task.setvariable variable=LOCKFLIGHT_GITLEAKS]$LOCKFLIGHT_TEMP/gitleaks"
+        {SetGitleaks}
             displayName: Install gitleaks (pinned, checksum-verified)
         {UseDotnet}
           - bash: |
@@ -108,6 +119,7 @@ internal static class AzurePipelinesTemplate
             .Replace("{GitleaksSha256}", CiShellScripts.GitleaksSha256, StringComparison.Ordinal)
             .Replace("{RestorePolicy}", CiShellScripts.Indent(CiShellScripts.RestorePolicy, ScriptIndent), StringComparison.Ordinal)
             .Replace("{InstallGitleaks}", CiShellScripts.Indent(CiShellScripts.InstallGitleaks, ScriptIndent), StringComparison.Ordinal)
+            .Replace("{SetGitleaks}", CiShellScripts.Indent(SetGitleaks, ScriptIndent), StringComparison.Ordinal)
             .Replace("{UseDotnet}", string.Join('\n', dotnetChannels.Select(UseDotnet)), StringComparison.Ordinal)
             .Replace("{InstallEngine}", CiShellScripts.Indent(CiShellScripts.InstallEngine, ScriptIndent), StringComparison.Ordinal)
             .Replace("{Gates}", CiShellScripts.Indent(CiShellScripts.Gates, ScriptIndent), StringComparison.Ordinal)

@@ -1,4 +1,5 @@
 using Lockflight.Cli.Init;
+using Lockflight.Cli.Tests.Goldens;
 using YamlDotNet.RepresentationModel;
 
 namespace Lockflight.Cli.Tests.Init;
@@ -84,6 +85,28 @@ public sealed class CiPipelineTests
         Assert.DoesNotContain("CI_MERGE_REQUEST_DIFF_BASE_SHA", pipeline, StringComparison.Ordinal);
         Assert.DoesNotContain("git merge-base", pipeline, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData("azure", AzurePipelinesTemplate.SetGitleaksSha256)]
+    [InlineData("bitbucket", CiShellScripts.ExportGitleaksSha256)]
+    [InlineData("gitlab", CiShellScripts.ExportGitleaksSha256)]
+    public void EveryPipelineHandsTheGatesTheGitleaksHashRightAfterItsVerifiedInstall(string platform, string handOff)
+    {
+        string scripts = string.Join('\n', Scripts(Parse(JobFile(platform, ["8.0.x", "10.0.x"], CiTrigger.PullRequest))));
+
+        int verified = scripts.IndexOf("sha256sum -c -", StringComparison.Ordinal);
+        int extracted = scripts.IndexOf("-C \"$LOCKFLIGHT_TEMP\" gitleaks", StringComparison.Ordinal);
+        int hashed = scripts.IndexOf(CiShellScripts.HashGitleaks, StringComparison.Ordinal);
+        int handedOn = scripts.IndexOf(handOff, StringComparison.Ordinal);
+        int dotnet = scripts.IndexOf("dotnet", hashed, StringComparison.Ordinal);
+        Assert.True(verified >= 0 && verified < extracted && extracted < hashed && hashed < handedOn && handedOn < dotnet, scripts);
+    }
+
+    [Theory]
+    [InlineData("azure")]
+    [InlineData("gitlab")]
+    public void ThePipelineMatchesItsGoldenFile(string platform) =>
+        GoldenFiles.Verify($"ci-{platform}", JobFile(platform, ["8.0.x", "10.0.x"], CiTrigger.PullRequest));
 
     [Theory]
     [MemberData(nameof(OtherPlatforms))]

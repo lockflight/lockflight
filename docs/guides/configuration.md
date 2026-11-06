@@ -604,6 +604,7 @@ Evidence lives in `.lockflight/features/<feature>/` (approvals, `redgreen.json`,
 | Variable | Effect |
 |---|---|
 | `LOCKFLIGHT_GITLEAKS` | path to the gitleaks binary (else PATH) |
+| `LOCKFLIGHT_GITLEAKS_SHA256` | the SHA-256 the gitleaks binary must have; a binary that differs makes the secrets step ERROR (the CI templates and the action set it) |
 | `LOCKFLIGHT_DEBUG` | hooks print path-matching diagnostics to stderr |
 | `LOCKFLIGHT_HOOK_LOG` | append every raw hook payload to this file |
 | `LOCKFLIGHT_HOOK_ADAPTER` | which client's payload `lockflight hook` reads: unset or `claude-code` (the plugin), `neutral` (a `lockflight.hook-request/v1` document, experimental). Another value blocks a tool call |
