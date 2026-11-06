@@ -1,0 +1,8 @@
+FAIL lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: unknown-reason.json
+  Contexts: gates PASS · lockflight/judge FAIL
+
+FAIL routing (Change class), required
+  Detail: a rule this engine does not know
+  Reason: SOMETHING_NEWER (this engine has no entry for it: a newer engine wrote it; update the engine or read the guide)
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md

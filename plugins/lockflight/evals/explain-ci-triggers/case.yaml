@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: explain-ci-triggers
+description: "A question about why the Lockflight judge failed on a pull request loads the explain-ci skill."
+tags: [trigger]

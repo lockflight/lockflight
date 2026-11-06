@@ -1,0 +1,9 @@
+FAIL lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: amend-weakened.json
+  Contexts: gates PASS · lockflight/judge FAIL
+
+FAIL tests.sinceRed (Tests since red), required
+  Detail: Shop.Tests.PriceCalculatorTests.ShippingCost: 3 rows at red, 2 at head
+  Reason: AMEND_WEAKENED
+  Next: Restore the rows and assertions the test had at its red; an amend may change what a test checks, not drop part of it.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#amend_weakened

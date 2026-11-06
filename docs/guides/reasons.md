@@ -2,7 +2,8 @@
 
 Every check or gate step that does not pass names a **reason code**: a stable name such as `GREEN_BEFORE` or `TRACE_UNCOVERED`,
 with a detail line about this run and a **Next** line saying what to do. The PR comment, the job summary, `lockflight ci`,
-`ci report` and `gate run` print the Next line and link here; the evidence (`lockflight.ci-evidence/v1`) and the gate result
+`ci report` and `gate run` print the Next line and link here, and `ci explain` lists them for a run, a downloaded artifact or the
+local judge's last run ([commands](commands.md#ci)); the evidence (`lockflight.ci-evidence/v1`) and the gate result
 (`lockflight.result/v1`) carry the code as `reason`. The codes are stable: new ones may be added, none is renamed. This page
 explains each one: what it means, why it blocks, and what to do next.
 

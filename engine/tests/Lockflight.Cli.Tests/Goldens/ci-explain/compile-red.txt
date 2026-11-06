@@ -1,0 +1,9 @@
+FAIL lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: compile-red.json
+  Contexts: gates PASS · lockflight/judge FAIL
+
+FAIL red (Red at red commits), required
+  Detail: cycle 1 (ddddddd): COMPILE_RED: Shop.Tests/PriceCalculatorTests.cs(12,40): error CS1061: 'PriceCalculator' does not contain a definition for 'ShippingCost'
+  Reason: COMPILE_RED
+  Next: Make the red commit compile: declare every member its tests use as a stub that throws `NotImplementedException`, in the same commit as the tests.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#compile_red

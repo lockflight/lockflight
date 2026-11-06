@@ -1,0 +1,28 @@
+{
+  "schema": "lockflight.ci-evidence/v1",
+  "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "judge": "missing",
+  "checks": [
+    {
+      "id": "green",
+      "context": "gates",
+      "verdict": "NOT-EARNED",
+      "requirement": "required",
+      "why": "the judge did not finish: its evidence artifact is missing or not lockflight.ci-evidence/v1 (cancelled, killed at the platform's time limit, or failed to upload)",
+      "reason": "JUDGE_DID_NOT_FINISH"
+    },
+    {
+      "id": "red",
+      "context": "lockflight/judge",
+      "verdict": "NOT-EARNED",
+      "requirement": "required",
+      "why": "the judge did not finish: its evidence artifact is missing or not lockflight.ci-evidence/v1 (cancelled, killed at the platform's time limit, or failed to upload)",
+      "reason": "JUDGE_DID_NOT_FINISH"
+    }
+  ],
+  "contexts": {
+    "gates": "NOT-EARNED",
+    "lockflight/judge": "NOT-EARNED"
+  },
+  "verdict": "NOT-EARNED"
+}

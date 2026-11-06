@@ -1,0 +1,14 @@
+ERROR lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: scanner-replaced.json
+  Contexts: gates ERROR · lockflight/judge PASS
+
+ERROR gates (Gates (pr)), required
+  Detail: format PASS · build PASS · test PASS · security.secrets ERROR
+  Reason: SCANNER_REPLACED
+  Next: Do not re-run: something in the build replaced the secrets scanner after it was installed. A person reviews the pull request's build files (projects, props and targets, scripts) for what replaced it.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#scanner_replaced
+  Step ERROR security.secrets (Secrets), mode fail
+    Detail: gitleaks was not run: its SHA-256 is not the one installed (LOCKFLIGHT_GITLEAKS_SHA256)
+    Reason: SCANNER_REPLACED
+    Next: Do not re-run: something in the build replaced the secrets scanner after it was installed. A person reviews the pull request's build files (projects, props and targets, scripts) for what replaced it.
+    See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#scanner_replaced

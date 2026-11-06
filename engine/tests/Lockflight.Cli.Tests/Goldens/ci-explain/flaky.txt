@@ -1,0 +1,9 @@
+FAIL lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: flaky.json
+  Contexts: gates FAIL · lockflight/judge PASS
+
+FAIL green (Green at head), required
+  Detail: Shop.Tests.ClockTests.TodayIsMonday passed only when run again
+  Reason: FLAKY
+  Next: Make the test deterministic (time, order, randomness, shared state), then push again; a cycle test must pass on its first run.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#flaky

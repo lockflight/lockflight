@@ -1,0 +1,14 @@
+FAIL gate run for head aaaaaaa: a gate result
+  Source: gate-result.json
+
+FAIL build (Build), mode fail
+  Detail: src/Shop.Api/PriceCalculator.cs(4,1): error CS1002: ; expected
+  Reason: BUILD_FAILED
+  Next: Fix the build error the detail names (`dotnet build` shows it in full).
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#build_failed
+
+NOT-EARNED test (Tests), mode fail
+  Detail: 0 tests ran
+  Reason: NO_TESTS_RAN
+  Next: Make tests run: check that the test projects are found and that `test.stopFilter` in `lockflight.yaml` matches tests that are not skipped.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#no_tests_ran

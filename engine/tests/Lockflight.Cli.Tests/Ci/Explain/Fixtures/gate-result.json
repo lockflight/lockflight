@@ -1,0 +1,55 @@
+{
+  "schema": "lockflight.result/v1",
+  "engineVersion": "0.3.0",
+  "at": "2026-11-06T12:00:00Z",
+  "target": ".",
+  "profile": "pr",
+  "base": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "verdict": "FAIL",
+  "testsTotal": 2,
+  "steps": [
+    {
+      "id": "format",
+      "name": "Format",
+      "unit": null,
+      "mode": "fail",
+      "toolExitCode": 0,
+      "verdict": "PASS",
+      "durationMs": 100,
+      "detail": ""
+    },
+    {
+      "id": "build",
+      "name": "Build",
+      "unit": null,
+      "mode": "fail",
+      "toolExitCode": 1,
+      "verdict": "FAIL",
+      "durationMs": 100,
+      "detail": "src/Shop.Api/PriceCalculator.cs(4,1): error CS1002: ; expected",
+      "reason": "BUILD_FAILED"
+    },
+    {
+      "id": "test",
+      "name": "Tests",
+      "unit": null,
+      "mode": "fail",
+      "toolExitCode": 1,
+      "verdict": "NOT-EARNED",
+      "durationMs": 100,
+      "detail": "0 tests ran",
+      "reason": "NO_TESTS_RAN"
+    },
+    {
+      "id": "coverage.patch",
+      "name": "Patch coverage",
+      "unit": null,
+      "mode": "fail",
+      "toolExitCode": 1,
+      "verdict": "N/A",
+      "durationMs": 100,
+      "detail": "not configured"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+NOT-EARNED lockflight ci for head aaaaaaa: the CI report's verdict of record
+  Source: waiting-on-review.json
+  Contexts: gates PASS · lockflight/judge NOT-EARNED
+
+Waiting on a person: the change's class requires a review, and no review ran
+  - maintainer: Give the CI review job its API key (a spend-limited key scoped to CI) and run the check again; this change's class requires a review
+  Next (access-needed): A maintainer grants the access the need names (for the CI review: the review job's API key), then the check runs again. See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#access-needed
+
+SKIPPED review (Review), required
+  Detail: no review ran (no API key configured, a fork, or the review job was skipped)
+  Reason: REVIEW_NOT_RUN
+  Next: Give the CI review job its API key (a spend-limited key scoped to CI) and run the check again; a pull request from a fork is reviewed another way.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#review_not_run

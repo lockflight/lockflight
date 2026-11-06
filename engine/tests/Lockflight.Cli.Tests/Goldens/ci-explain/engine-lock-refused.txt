@@ -1,0 +1,15 @@
+FAIL lockflight ci for head aaaaaaa: the CI action refused the engine pin, so the judge did not run
+  Source: engine-lock-refused.json
+  Contexts: gates FAIL · lockflight/judge FAIL
+
+FAIL green (Green at head), required
+  Detail: engine lock: FAIL hash-mismatch: the pinned engine's SHA-256 is not the release's
+  Reason: ENGINE_LOCK_REFUSED
+  Next: Fix what the engine lock check names (the failed check is in the detail): a lock must match the release's attested hashes. A first lock is checked with the workflow's token: keep the judge's `github-token` input at its default with `contents: read` in the job's permissions, then re-run.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#engine_lock_refused
+
+FAIL red (Red at red commits), required
+  Detail: engine lock: FAIL hash-mismatch: the pinned engine's SHA-256 is not the release's
+  Reason: ENGINE_LOCK_REFUSED
+  Next: Fix what the engine lock check names (the failed check is in the detail): a lock must match the release's attested hashes. A first lock is checked with the workflow's token: keep the judge's `github-token` input at its default with `contents: read` in the job's permissions, then re-run.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#engine_lock_refused
