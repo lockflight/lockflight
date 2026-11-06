@@ -69,7 +69,11 @@ public sealed class RoundingStructureTests
 }
 EOF
 }
-round_away() { perl -0pi -e 's/MidpointRounding\.ToEven\);\n    \}\n\n    \/\/\/ <summary>Applies/MidpointRounding.AwayFromZero);\n    }\n\n    \/\/\/ <summary>Applies/' "$calc"; }
+# One line, so it matches with the CRLF line endings a Windows checkout gives too.
+round_away() { perl -pi -e 's/return Math\.Round\(unitPrice \* quantity, 2, MidpointRounding\.ToEven\);/return Math.Round(unitPrice * quantity, 2, MidpointRounding.AwayFromZero);/' "$calc"; }
+changed() { # changed <file> <what>: the edit applied
+  if git diff --quiet -- "$1"; then echo "FAIL $2 did not change $1"; failures=$((failures + 1)); fi
+}
 judge() { rm -rf "$W/evidence"; "$E" ci --platform github --head "$1" --base "${3:-$main}" --branch "$2" --evidence "$W/evidence"; }
 
 # 1. A refactor with a characterisation test, its spec changed under CODEOWNERS: PASS without a red commit.
@@ -99,7 +103,7 @@ contains "$W/evidence/evidence.json" "no CODEOWNERS file" "RED_MISSING names the
 
 # 3. A behaviour change whose characterisation test pins the old output: trace FAILs.
 git checkout -q -b c3/012-rounding "$main"
-spec; round_away; characterise "LineTotal(0.0625m, 2)" "0.12m"
+spec; round_away; changed "$calc" "the rounding change"; characterise "LineTotal(0.0625m, 2)" "0.12m"
 git add -A; git commit -qm "refactor(012-rounding): rounding"
 expect_exit 1 "a behaviour change its characterisation test pins fails" -- judge "$(git rev-parse HEAD)" c3/012-rounding
 check "$W/evidence/evidence.json" trace FAIL
@@ -116,14 +120,14 @@ check_reason "$W/evidence/evidence.json" trace STRUCTURAL_CHANGE_NEW_TEST
 
 # 5. A behaviour change an unchanged existing test catches: green FAILs.
 git checkout -q -b c5/012-rounding "$main"
-spec; round_away; characterise "LineTotal(8.50m, 3)" "25.50m"
+spec; round_away; changed "$calc" "the rounding change"; characterise "LineTotal(8.50m, 3)" "25.50m"
 git add -A; git commit -qm "refactor(012-rounding): rounding"
 expect_exit 1 "a behaviour change an existing test catches fails" -- judge "$(git rev-parse HEAD)" c5/012-rounding
 check "$W/evidence/evidence.json" green FAIL
 
 # 6. The same behaviour change with that existing test weakened to accept it: its old version FAILs on the new code.
 git checkout -q -b c6/012-rounding "$main"
-spec; round_away; characterise "LineTotal(8.50m, 3)" "25.50m"
+spec; round_away; changed "$calc" "the rounding change"; characterise "LineTotal(8.50m, 3)" "25.50m"
 perl -0pi -e 's/Assert\.Equal\(0\.12m, calculator\.LineTotal\(0\.0625m, 2\)\)/Assert.True(calculator.LineTotal(0.0625m, 2) > 0m)/' "$tests"
 git add -A; git commit -qm "refactor(012-rounding): rounding"
 expect_exit 1 "an existing test weakened to accept a behaviour change fails" -- judge "$(git rev-parse HEAD)" c6/012-rounding
