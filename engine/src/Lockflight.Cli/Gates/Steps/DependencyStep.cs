@@ -30,12 +30,12 @@ internal sealed class DependencyStep : IGateStep
     /// </summary>
     public static async Task<DependencyScan> ScanAsync(GateRunContext run, CancellationToken cancellationToken)
     {
-        string command = "dotnet package list";
         ProcessResult listing = await run.Processes("dotnet", NounFirstArguments(run), run.Target, run.TimeLeft(), cancellationToken);
+        string noReport = $"dotnet package list exited {listing.ExitCode} without a report";
         if (!listing.TimedOut && !HasReport(listing))
         {
             ProcessResult olderSdkListing = await run.Processes("dotnet", VerbFirstArguments(run), run.Target, run.TimeLeft(), cancellationToken);
-            command = "dotnet list package";
+            noReport = $"dotnet package list exited {listing.ExitCode} and dotnet list package exited {olderSdkListing.ExitCode}, both without a report";
             listing = olderSdkListing with { DurationMs = listing.DurationMs + olderSdkListing.DurationMs };
         }
 
@@ -46,7 +46,7 @@ internal sealed class DependencyStep : IGateStep
 
         if (!HasReport(listing))
         {
-            return new DependencyScan(new GateStep(StepName, listing.ExitCode, Verdict.Error, ReasonCode.ToolError, listing.DurationMs, $"{command} exited {listing.ExitCode} without a report"), []);
+            return new DependencyScan(new GateStep(StepName, listing.ExitCode, Verdict.Error, ReasonCode.ToolError, listing.DurationMs, noReport), []);
         }
 
         int jsonStart = listing.Output.IndexOf('{', StringComparison.Ordinal);

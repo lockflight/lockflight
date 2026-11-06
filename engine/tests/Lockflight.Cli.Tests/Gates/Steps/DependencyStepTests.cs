@@ -67,13 +67,13 @@ public sealed class DependencyStepTests : IDisposable
     }
 
     [Fact]
-    public async Task NoReportFromEitherCommandIsAToolErrorNamingTheListCommand()
+    public async Task NoReportFromEitherCommandIsAToolErrorNamingBoth()
     {
         GateStep step = await RunAsync(nounFirst: Answer(1, Sdk8Refusal), verbFirst: Answer(1, "Unrecognized command or argument '--format'"));
 
         Assert.Equal(Verdict.Error, step.Verdict);
         Assert.Equal(ReasonCode.ToolError, step.Reason);
-        Assert.Equal("dotnet list package exited 1 without a report", step.Detail);
+        Assert.Equal("dotnet package list exited 1 and dotnet list package exited 1, both without a report", step.Detail);
     }
 
     [Fact]

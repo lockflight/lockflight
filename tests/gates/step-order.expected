@@ -126,7 +126,7 @@ test: PASS (N ms)
 coverage.patch: N/A (N ms)
   not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
 security.deps: ERROR (N ms)
-  dotnet package list exited 1 without a report
+  dotnet package list exited 1 and dotnet list package exited 1, both without a report
   Next (TOOL_ERROR): A tool broke, not the code: re-run the check; if it repeats, read the job log for the tool's own error (the code was not judged). See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tool_error
 Scope: 1 tests
 Result: ERROR
@@ -382,7 +382,7 @@ services/orders: test: PASS (N ms)
 services/orders: coverage.patch: N/A (N ms)
   not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
 services/orders: security.deps: ERROR (N ms)
-  dotnet package list exited 1 without a report
+  dotnet package list exited 1 and dotnet list package exited 1, both without a report
   Next (TOOL_ERROR): A tool broke, not the code: re-run the check; if it repeats, read the job log for the tool's own error (the code was not judged). See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tool_error
 services/billing: build: PASS (N ms)
 services/billing: ef.pendingModelChanges: N/A (N ms)
