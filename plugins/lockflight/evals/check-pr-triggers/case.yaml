@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: check-pr-triggers
+description: "A request to check whether the branch is ready for a pull request loads the check-pr skill."
+tags: [trigger]
