@@ -198,11 +198,13 @@ The pull request that adds `.lockflight/engine.lock` to a branch pinned the Lock
 action against the GitHub Release its version names: it downloads the release's `engine-hashes.json` and verifies the
 release workflow's attestation with `gh`, which needs a token. Without one the judge job fails with
 `engine lock: FAIL unattested: the first engine lock cannot be checked against its GitHub Release without a token`, rather
-than accepting a lock nobody checked. Leave the judge step's `github-token` input out (its default is the workflow's token,
-and `contents: read` is enough), or pass `${{ github.token }}` to it. The other failures name the check that failed, as
+than accepting a lock nobody checked. Running `engine verify-lock` yourself does not turn the job green: it fails on every run
+until it has a token. Leave the judge step's `github-token` input out (its default is the workflow's token), give the job
+`contents: read`, or pass `${{ github.token }}` to it, then re-run the job. The pull request comment shows FAIL with the reason
+[`ENGINE_LOCK_REFUSED`](reasons.md#engine_lock_refused) and the failed check. The other failures name the check that failed, as
 [`engine verify-lock`](commands.md) does: `no-release` (no `engine-hashes.json` for that version), `hash-mismatch`,
 `script-hash-mismatch`, `vendored-script-mismatch` or `vendored-script-missing` (`.lockflight/ci/install.sh` is not the script
-the lock pins, or is missing), `unreadable-lock`. See [what the generated workflow does](ci-hardening.md#what-the-generated-workflow-does).
+the lock pins, or is missing), `unreadable-lock`; and `lock-removed` for a pull request that deletes the lock. See [what the generated workflow does](ci-hardening.md#what-the-generated-workflow-does).
 
 ## "lockflight: internal error" or "the engine failed (exit N)"
 

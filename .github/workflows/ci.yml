@@ -560,13 +560,42 @@ jobs:
           engine: ${{ runner.temp }}/lockflight/lockflight${{ runner.os == 'Windows' && '.exe' || '' }}
           github-token: ""
           artifact-suffix: -${{ matrix.rid }}-first-lock
-      - name: The tokenless first lock failed before the judge ran
+      - name: The tokenless first lock failed before the judge ran, and left a refusal
         env:
           OUTCOME: ${{ steps.first-lock.outcome }}
           VERDICT: ${{ steps.first-lock.outputs.verdict }}
         run: |
           echo "first lock without a token: $OUTCOME, verdict '${VERDICT}'"
-          [ "$OUTCOME" = failure ] && [ -z "$VERDICT" ] && [ ! -e "$RUNNER_TEMP/lockflight-evidence" ]
+          [ "$OUTCOME" = failure ] && [ -z "$VERDICT" ] && [ ! -e "$RUNNER_TEMP/lockflight-evidence/evidence.json" ]
+          cat "$RUNNER_TEMP/lockflight-evidence/refused.json"
+          rm -rf "$RUNNER_TEMP/lockflight-evidence" "$RUNNER_TEMP/lockflight-verdict"
+      # The report reads the refusal from the uploaded artifact: FAIL with the reason and the failed check, not "the judge did
+      # not finish".
+      - name: The report of the refused first lock
+        id: first-lock-report
+        continue-on-error: true
+        uses: ./lockflight/action
+        with:
+          mode: report
+          head: ${{ steps.fixture.outputs.base }}
+          context: gates
+          engine: ${{ runner.temp }}/lockflight/lockflight${{ runner.os == 'Windows' && '.exe' || '' }}
+          github-token: ""
+          artifact-suffix: -${{ matrix.rid }}-first-lock
+      - name: The report says the engine lock was refused, and why
+        env:
+          VERDICT: ${{ steps.first-lock-report.outputs.verdict }}
+        run: |
+          echo "report of the refused first lock: $VERDICT"
+          cat "$RUNNER_TEMP/lockflight-verdict/comment.md"
+          python=$(command -v python3 || command -v python)
+          "$python" -I -c 'import json, sys
+          verdict = json.load(open(sys.argv[1]))
+          assert verdict["judge"] == "refused" and verdict["verdict"] == "FAIL", verdict
+          assert all(c["reason"] == "ENGINE_LOCK_REFUSED" and "unattested" in c["why"] for c in verdict["checks"]), verdict["checks"]' \
+            "$RUNNER_TEMP/lockflight-verdict/verdict.json"
+          [ "$VERDICT" = FAIL ]
+          grep -q 'ENGINE_LOCK_REFUSED' "$RUNNER_TEMP/lockflight-verdict/comment.md"
 
   # The engine's canary suite (engine/tests/Lockflight.Cli.Tests/Canaries, trait Category=Canary): a violation planted in front
   # of every guard rule, relay guard case, human-only command, in-session command check, gate step, the test gate's judgement and
