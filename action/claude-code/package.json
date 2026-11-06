@@ -1,0 +1,8 @@
+{
+  "name": "lockflight-review-claude-code",
+  "private": true,
+  "description": "The Claude Code the CI judge action's review mode installs with npm ci: the lockfile pins every package by version and integrity hash.",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.309"
+  }
+}

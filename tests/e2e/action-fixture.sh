@@ -4,10 +4,12 @@
 # vendored .lockflight/ci/install.sh (this checkout's scripts/install.sh, by hash). The engine under test is served from a
 # file:// feed as its platform's package, so the action installs it through install.sh and checks its hash, as it would a
 # release. Branch 001-shipping (a red commit, then the implementation) must PASS; branch 002-cheat (the test and the code in
-# one red commit) must FAIL.
+# one red commit) must FAIL; branch 003-planted commits artifacts/lockflight/ (a result of its own, and a symlink to it), which
+# the action must not upload as the gates' result. main itself is the pull request that adds the first engine lock to the
+# commit before it (prelock).
 # Usage: ENGINE=<lockflight binary> action-fixture.sh <repository dir> <feed dir>
 # The repository directory may hold other files (the Lockflight checkout); they are excluded, never committed. Prints
-# base=<sha>, pass=<sha>, fail=<sha> and feed=<url> lines (for GITHUB_OUTPUT).
+# base=<sha>, prelock=<sha>, pass=<sha>, fail=<sha>, planted=<sha> and feed=<url> lines (for GITHUB_OUTPUT).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 E="${ENGINE:?path to the lockflight binary}"
@@ -66,6 +68,11 @@ zeros=$(printf '0%.0s' $(seq 64))
   done
   printf '\n  }\n}\n'
 } > .lockflight/engine.lock
+# The commit before the lock, pinned the 0.2 way: main is the pull request that adds the first lock.
+git add -A
+git reset -q -- .lockflight
+git commit -qm "before the engine lock"
+prelock=$(git rev-parse HEAD)
 git add -A
 git commit -qm base
 main=$(git rev-parse HEAD)
@@ -88,6 +95,16 @@ perl -0pi -e 's/\}\s*\z/\n    [Fact]\n    public void TheFirstKilogramCostsFive(
 git add -A
 git commit -qm "test: red" -m "Lockflight-Red: 1"
 fail=$(git rev-parse HEAD)
+
+# A pull request that commits the old artifact's path: a result of its own, and a symlink to it under the old name.
+git checkout -q -b 003-planted "$pass"
+mkdir -p artifacts/lockflight
+printf '{ "planted": true }\n' > artifacts/lockflight/planted.json
+ln -s planted.json artifacts/lockflight/result.json
+cp artifacts/lockflight/planted.json artifacts/lockflight/gates-result.json
+git add -f artifacts/lockflight
+git commit -qm "chore: a result of its own"
+planted=$(git rev-parse HEAD)
 git checkout -q main
 
-printf 'base=%s\npass=%s\nfail=%s\nfeed=%s\n' "$main" "$pass" "$fail" "$url"
+printf 'base=%s\nprelock=%s\npass=%s\nfail=%s\nplanted=%s\nfeed=%s\n' "$main" "$prelock" "$pass" "$fail" "$planted" "$url"

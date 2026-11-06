@@ -199,18 +199,22 @@ runs:
         fi
         # The first lock (the pull request that moves a 0.2 tool pin to the lock): the base's engine predates verify-lock, so the
         # GitHub Release's attested engine-hashes.json is downloaded and compared here.
-        if [ -z "$GH_TOKEN" ]; then echo "::warning::the first engine lock was not release-checked (no token); run lockflight engine verify-lock .lockflight/engine.lock before you accept it"; exit 0; fi
+        # Without a token nothing can be downloaded or verified, so the lock is refused, never accepted unchecked.
+        if [ -z "$GH_TOKEN" ]; then
+          echo "::error::engine lock: FAIL unattested: the first engine lock cannot be checked against its GitHub Release without a token; leave the judge step's github-token input at its default, the workflow's token (it needs contents: read), or run lockflight engine verify-lock .lockflight/engine.lock --attestation yourself before you accept it"
+          exit 1
+        fi
         work="$RUNNER_TEMP/lockflight-first-lock"
         rm -rf "$work" && mkdir -p "$work"
         git show "$LF_HEAD:.lockflight/engine.lock" > "$work/engine.lock"
-        if ! git show "$LF_HEAD:.lockflight/ci/install.sh" > "$work/install.sh" 2>/dev/null; then echo "::error::the first engine lock comes without .lockflight/ci/install.sh"; exit 1; fi
+        if ! git show "$LF_HEAD:.lockflight/ci/install.sh" > "$work/install.sh" 2>/dev/null; then echo "::error::engine lock: FAIL vendored-script-missing: the first engine lock comes without .lockflight/ci/install.sh"; exit 1; fi
         version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9A-Za-z.-]*\)".*/\1/p' "$work/engine.lock" | head -n 1)
-        if [ -z "$version" ]; then echo "::error::the first engine lock names no version"; exit 1; fi
+        if [ -z "$version" ]; then echo "::error::engine lock: FAIL unreadable-lock: the first engine lock names no version"; exit 1; fi
         gh release download "v$version" --repo lockflight/lockflight --pattern engine-hashes.json --dir "$work/release" \
-          || { echo "::error::the first engine lock pins $version, and the GitHub Release v$version has no engine-hashes.json"; exit 1; }
+          || { echo "::error::engine lock: FAIL no-release: the first engine lock pins $version, and the GitHub Release v$version has no engine-hashes.json"; exit 1; }
         gh attestation verify "$work/release/engine-hashes.json" --repo lockflight/lockflight --source-ref "refs/tags/v$version" \
           --signer-workflow lockflight/lockflight/.github/workflows/release-packages.yml > /dev/null \
-          || { echo "::error::the release workflow's attestation of engine-hashes.json for v$version did not verify"; exit 1; }
+          || { echo "::error::engine lock: FAIL unattested: the release workflow's attestation of engine-hashes.json for v$version did not verify"; exit 1; }
         # Windows runners have python, not python3.
         python=$(command -v python3 || command -v python) || { echo "::error::no python3 or python to check the first engine lock"; exit 1; }
         "$python" -I "$GITHUB_ACTION_PATH/first-lock-check.py" "$work/engine.lock" "$work/release/engine-hashes.json" "$work/install.sh"
@@ -244,8 +248,12 @@ runs:
         "$LF_LOCKFLIGHT" "${args[@]}"
         code=$?
         set -e
-        mkdir -p artifacts/lockflight
-        if [ -f "$RUNNER_TEMP/lockflight-evidence/gates-result.json" ]; then cp "$RUNNER_TEMP/lockflight-evidence/gates-result.json" artifacts/lockflight/result.json; fi
+        # The old artifact is staged outside the checkout, from the file the engine wrote: an artifacts/lockflight/ the pull
+        # request commits (a file or a symlink) is never uploaded as the gates' result.
+        result="$RUNNER_TEMP/lockflight-result"
+        rm -rf "$result" && mkdir -p "$result"
+        gates="$RUNNER_TEMP/lockflight-evidence/gates-result.json"
+        if [ -f "$gates" ] && [ ! -L "$gates" ]; then cp "$gates" "$result/result.json"; fi
         case "$code" in 0) verdict=PASS ;; 1) verdict=FAIL ;; 5) verdict=NOT-EARNED ;; *) verdict=ERROR ;; esac
         echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
         echo "code=$code" >> "$GITHUB_OUTPUT"
@@ -263,8 +271,26 @@ runs:
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: lockflight-result${{ inputs.artifact-suffix }}
-        path: artifacts/lockflight/
+        path: ${{ runner.temp }}/lockflight-result/
         if-no-files-found: ignore
+
+    - name: Install Claude Code (every package pinned by version and hash in claude-code/package-lock.json)
+      if: inputs.mode == 'review'
+      shell: bash
+      run: |
+        command -v npm >/dev/null 2>&1 || { echo "::error::the review installs Claude Code with npm: run actions/setup-node (Node.js 22 or later) before this step"; exit 4; }
+        # npm ci installs exactly the lockfile's packages and refuses one whose integrity hash differs, outside the pull
+        # request's checkout (its .npmrc is not read). A platform package that fails its check is optional to npm, so it is
+        # skipped rather than fatal: the install script runs only after npm finishes, and claude then fails without it.
+        dir="$RUNNER_TEMP/lockflight-claude-code"
+        rm -rf "$dir" && mkdir -p "$dir"
+        cp "$GITHUB_ACTION_PATH/claude-code/package.json" "$GITHUB_ACTION_PATH/claude-code/package-lock.json" "$dir/"
+        cd "$dir"
+        npm ci --ignore-scripts --no-audit --no-fund
+        (cd node_modules/@anthropic-ai/claude-code && node install.cjs)
+        "$dir/node_modules/.bin/claude" --version \
+          || { echo "::error::Claude Code did not install from the action's lockfile (a package whose hash differs is skipped)"; exit 4; }
+        echo "$dir/node_modules/.bin" >> "$GITHUB_PATH"
 
     - name: Review the pull request
       if: inputs.mode == 'review'

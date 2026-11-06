@@ -128,6 +128,20 @@ public sealed class TemplatesTests
     }
 
     [Fact]
+    public void TheReviewJobLeavesTheClaudeCodeInstallToTheActionsLockfile()
+    {
+        string workflow = Templates.Workflow(["10.0.x"]);
+        string review = workflow[workflow.IndexOf("  review:\n", StringComparison.Ordinal)..workflow.IndexOf("  gates:\n", StringComparison.Ordinal)];
+
+        Assert.DoesNotContain("npm install", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("@anthropic-ai/claude-code", workflow, StringComparison.Ordinal);
+        Assert.True(
+            review.IndexOf("actions/setup-node@", StringComparison.Ordinal) is int node and >= 0
+            && node < review.IndexOf("mode: review", StringComparison.Ordinal),
+            "the review job sets up Node.js before the action installs Claude Code with npm ci");
+    }
+
+    [Fact]
     public void AManualWorkflowForADevelopmentPinSaysWhyItRunsOnlyByHand()
     {
         string workflow = Templates.Workflow(["10.0.x"], CiTrigger.Manual, developmentPin: true);

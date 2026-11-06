@@ -157,7 +157,7 @@ internal static class Templates
               - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
                 with:
                   node-version: 22
-              - run: npm install -g @anthropic-ai/claude-code@2.1.309
+              # The action installs Claude Code with npm ci from its own lockfile: every package pinned by version and hash.
               - uses: {ActionReference}
                 env:
                   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
