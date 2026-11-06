@@ -227,7 +227,8 @@ directories the same way.
 The **stop** profile's budget is `min(gates.timeoutSeconds, 540)`: the plugin's Stop hook is killed after 600 s
 (`plugins/lockflight/hooks/hooks.json`), and the gate must end — and report — before that. A step that runs out of the capped
 budget is ERROR and says so; a build and test run that needs longer belongs in CI (`gate run --profile pr`). Only the stop
-profile is capped; `baseline tests` and the `pr` profile use the full `gates.timeoutSeconds`.
+profile is capped; `baseline tests` and the `pr` profile use the full `gates.timeoutSeconds`. Measured Stop gate and hook times:
+[performance](performance.md).
 
 ### Manifest version 2
 

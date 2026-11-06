@@ -7,6 +7,7 @@
 # during its build, and adds a secret, still FAILs the gates: the judge scans for secrets before it builds anything, and a later
 # run of the replaced binary is refused by its hash. No build server (compiler, Razor, MSBuild) the judge started outlives it.
 # Usage: ENGINE=<lockflight binary> ci-judge.sh <workdir>
+# JUDGE_TIMES=<file> appends one line per judge run: the sample, the branch checked out, the exit code and the wall time in ms.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 E="${ENGINE:?path to the lockflight binary}"
@@ -43,7 +44,16 @@ perl -pi -e 's/=> throw new NotImplementedException\(\);/=> 5m;/' "$calc"
 git commit -qam "feat(001-shipping): US1"; head=$(git rev-parse HEAD)
 
 # Each run starts from an empty evidence folder, so a run that writes none is never judged on an earlier run's evidence.
-judge() { rm -rf "$W/evidence"; "$E" ci --platform github --head "$1" --base "$main" --branch "${2:-001-shipping}" --evidence "$W/evidence"; }
+sample=dotnet-single
+now_ms() { "$PY" -c 'import time; print(int(time.time() * 1000))'; }
+judge() {
+  rm -rf "$W/evidence"
+  local started status
+  [ -z "${JUDGE_TIMES:-}" ] || started=$(now_ms)
+  "$E" ci --platform github --head "$1" --base "$main" --branch "${2:-001-shipping}" --evidence "$W/evidence"; status=$?
+  [ -z "${JUDGE_TIMES:-}" ] || echo "$sample $(git rev-parse --abbrev-ref HEAD) $status $(( $(now_ms) - started ))" >> "$JUDGE_TIMES"
+  return "$status"
+}
 # The process ids of .NET build servers: the compiler server, the Razor build server, and MSBuild nodes kept for reuse or the
 # MSBuild server (worker nodes started without reuse exit on their own).
 build_servers() {
@@ -115,6 +125,7 @@ fi
 # MSTest: the judge drives red/green on MSTest as on xUnit.
 mkdir -p "$W/mstest"; cp -R "$ROOT/samples/dotnet-mstest/." "$W/mstest/"; rm -rf "$W"/mstest/*/*/bin "$W"/mstest/*/*/obj
 cd "$W/mstest" || exit 1
+sample=dotnet-mstest
 git init -q -b main; git config commit.gpgsign false
 printf 'version: 1\n' > lockflight.yaml
 printf 'bin/\nobj/\n.lockflight/ledger/\n.lockflight/local/\n' > .gitignore

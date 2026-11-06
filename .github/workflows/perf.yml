@@ -1,0 +1,111 @@
+# Performance measurements on Linux, Windows (Git Bash) and macOS: the PreToolUse hook's latency (cold and warm, the engine
+# alone and through the plugin's hook shim), the Stop gate incremental against --full on a ten-project solution, and the CI
+# judge's wall time on the samples of tests/e2e/ci-judge.sh. Each job writes a Markdown table to its summary and a JSON
+# artifact; the last job puts the three machines side by side. The numbers are recorded, not checked: nothing here fails on a
+# slow result, only on a measurement that could not run. docs/guides/performance.md explains them.
+name: perf
+
+on:
+  schedule:
+    - cron: "17 4 * * 1" # Mondays, 04:17 UTC
+  workflow_dispatch:
+  # A change to the measurements themselves is measured before it merges.
+  pull_request:
+    paths:
+      - .github/workflows/perf.yml
+      - tests/benchmark/hook-latency.sh
+      - tests/benchmark/perf-summary.py
+      - tests/gates/incremental-timing.sh
+      - tests/gates/make-graph.sh
+
+concurrency:
+  group: perf-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    name: measure (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, rid: linux-x64 }
+          - { os: windows-latest, rid: win-x64 }
+          - { os: macos-latest, rid: osx-arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+      - name: Install gitleaks (pinned, checksum-verified)
+        uses: ./.github/actions/install-gitleaks
+      # Unlike ci.yml, real-time scanning stays as the runner image has it: a user's machine has it too. Its state is recorded.
+      - name: Windows Defender real-time scanning (recorded, not changed)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try { $state = if ((Get-MpComputerStatus -ErrorAction Stop).RealTimeProtectionEnabled) { "on" } else { "off" } } catch { $state = "unknown" }
+          "Defender real-time scanning: $state"
+          "DEFENDER=$state" >> $env:GITHUB_ENV
+      - name: Native AOT publish
+        working-directory: engine
+        run: dotnet publish src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o ../out -nologo
+      - name: Git identity for the suites' commits
+        run: git config --global user.email ci@example.com && git config --global user.name ci
+      - name: Engine path and version
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          echo "ENGINE=$engine" >> "$GITHUB_ENV"
+          # A build from source is versioned 0.0.0-local; the commit says which source.
+          echo "ENGINE_VERSION=$("$engine" version | tr -d '\r') (${GITHUB_SHA::8})" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/perf"
+      - name: PreToolUse hook latency (cold and warm, engine and hook shim)
+        run: RUNS=500 WARMUP=50 COLD=20 JSON_OUT="$RUNNER_TEMP/perf/hook-latency.json" bash tests/benchmark/hook-latency.sh "$ENGINE"
+      - name: Stop gate, incremental against --full (ten-project solution, xUnit v3 on MTP)
+        run: JSON_OUT="$RUNNER_TEMP/perf/stop-gate.json" bash tests/gates/incremental-timing.sh 3 mtp
+      - name: CI judge wall time on the samples
+        run: JUDGE_TIMES="$RUNNER_TEMP/perf/ci-judge.txt" bash tests/e2e/ci-judge.sh "$RUNNER_TEMP/ci-judge"
+      - name: Summary and JSON
+        if: always()
+        env:
+          LABEL: ${{ matrix.os }}
+        run: |
+          py="$(command -v python3 || command -v python)"
+          image="${ImageOS:-$RUNNER_OS} ${ImageVersion:-}"
+          [ -z "${DEFENDER:-}" ] || image="$image, Defender real-time scanning $DEFENDER"
+          "$py" -I tests/benchmark/perf-summary.py collect --out "$RUNNER_TEMP/perf/perf-$LABEL.json" --label "$LABEL" \
+            --engine-version "${ENGINE_VERSION:-unknown}" --image "$image" \
+            --hooks "$RUNNER_TEMP/perf/hook-latency.json" --stop "$RUNNER_TEMP/perf/stop-gate.json" --judge "$RUNNER_TEMP/perf/ci-judge.txt"
+          "$py" -I tests/benchmark/perf-summary.py table "$RUNNER_TEMP/perf/perf-$LABEL.json" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: perf-${{ matrix.os }}
+          path: ${{ runner.temp }}/perf/
+          if-no-files-found: warn
+
+  summary:
+    needs: measure
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: perf-*
+          path: ${{ runner.temp }}/perf
+      - name: The three machines side by side
+        run: |
+          shopt -s nullglob
+          files=("$RUNNER_TEMP"/perf/perf-*/perf-*.json)
+          if [ "${#files[@]}" -eq 0 ]; then echo "no measurements" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          python3 -I tests/benchmark/perf-summary.py table "${files[@]}" >> "$GITHUB_STEP_SUMMARY"
