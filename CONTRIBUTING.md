@@ -71,6 +71,7 @@ claude plugin validate --strict plugins/lockflight                              
 claude plugin validate --strict plugins/lockflight-crew                        # optional crew plugin
 claude plugin validate --strict . && claude plugin validate --strict plugins    # both marketplaces
 scripts/marketplace-ref.sh                                                      # the marketplace serves a published release
+python3 -I scripts/check-doc-links.py                                           # relative links and anchors in the docs
 shellcheck -S warning plugins/lockflight/bin/lockflight-hook tests/*/*.sh       # shell scripts (CI runs this too)
 ```
 

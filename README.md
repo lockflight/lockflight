@@ -124,7 +124,9 @@ flowchart LR
    change `lockflight.yaml`, the baselines or the engine it is judged with; build files and the workflow need CODEOWNERS
    ([CI hardening](docs/guides/ci-hardening.md)). It checks out each red commit, confirms the tests fail in production code,
    then confirms the same tests pass at the head.
-3. **On the pull request**, you get two checks, `gates` and `lockflight/judge`, and a comment with the verdict.
+3. **On the pull request**, you get two checks, `gates` and `lockflight/judge`, and a comment with the verdict. Make `gates`
+   required from the start. Keep `lockflight/judge` advisory at first (its comment says what would block), and make it
+   required once your team has run it on its own pull requests and seen its verdicts hold.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ci-judge-dark.svg">
@@ -217,9 +219,19 @@ Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-
 - **.NET:** SDK-style projects on .NET 8, 9 and 10
 - **Tests:** xUnit (v2 and v3), NUnit, MSTest
 - **Your machine:** macOS, Linux and Windows; the engine is a Native AOT binary for each
-- **CI judge:** GitHub Actions on GitHub-hosted Linux x64 runners (Windows runners planned); Bitbucket Pipelines (template,
-  not yet verified live); GitLab and Azure Pipelines (gates only, experimental)
 - **Agents:** Claude Code with the plugin; any agent, or a person, with CI only
+
+**The CI judge**, by CI service and runner:
+
+| CI service | Runner | State |
+|---|---|---|
+| GitHub Actions | GitHub-hosted Linux x64 | supported |
+| GitHub Actions | Windows | not yet: being added |
+| GitHub Actions | macOS, Linux arm64 | not supported: gitleaks is downloaded for Linux x64 only |
+| Bitbucket Pipelines | .NET SDK image (Linux x64) | the judge, from a template never run on a live workspace: unverified |
+| GitLab CI/CD, Azure Pipelines | Linux x64 | the gates only, experimental: unverified on the live services (Azure not run at all) |
+
+The full matrix is in [CI on other platforms](docs/guides/ci-other-platforms.md#platforms-and-runners).
 
 ## FAQ
 

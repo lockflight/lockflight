@@ -1,17 +1,16 @@
 # Lockflight.Cli
 
-**Test-first guardrails for AI coding agents on .NET.** Lockflight makes Claude Code prove its work: every change goes
-red → green, the build and tests run before an agent can say "done", and a CI judge re-checks that evidence on every pull
-request. *LLMs propose. Checks decide.*
+**Test-first guardrails for AI coding agents on .NET:** new behaviour goes red → green, the build and tests can run before an
+agent says "done", and a CI judge re-checks that evidence on every pull request. *LLMs propose. Checks decide.*
 
 This package is the engine of [Lockflight](https://github.com/lockflight/lockflight). One pinned engine gives the same
 verdict in the Claude Code session, in your terminal and in CI:
 
 - **Red → green, proven.** New tests must fail on a stub before the implementation exists, then pass unchanged after it. The
   CI judge re-runs both commits itself.
-- **"Done" means green.** The Stop gate builds and tests before an agent's turn can end.
-- **Rules the agent can't edit.** Claude Code hooks block the agent's edits to the policy, CI and build configuration, and to
-  tests while they are red.
+- **"Done" means green.** The opt-in Stop gate (`stop.gate: true`) builds and tests before an agent's turn can end.
+- **Rules the agent shouldn't edit.** Claude Code hooks block the agent's common edits to the policy, CI and build
+  configuration, and to tests while they are red: a guardrail on your machine, while CI judges with the target branch's policy.
 - **Quality gates:** format, build with no new warnings, tests, patch coverage, vulnerable packages and secrets.
 - **Spec-driven lifecycle:** your approvals, a requirement trace and an evidence-bound review of record.
 

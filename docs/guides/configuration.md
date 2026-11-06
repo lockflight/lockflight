@@ -522,7 +522,7 @@ broken references new. `docs check` itself stays advisory and also reads `docs/`
 
 `gates.docs.references` takes `fail`, `report` (the default: findings listed on a `PASS`) or `off`, as
 `gates.quality.suppressions` does; an `ERROR` (an unknown base, a shallow checkout) stays an `ERROR`. Locally the step is a guardrail. In CI, with `fail`, a
-required check and the manifest from the base branch, it is a strong guardrail in 0.3.0: its result reaches the report in the
+required check and the manifest from the base branch, it is a strong guardrail for now: its result reaches the report in the
 judge's evidence, which is written in the job that runs the pull request's code. What it checks is what `docs check`
 checks: a path the repository never had is not reported, and a code-span path counts only with evidence from history.
 

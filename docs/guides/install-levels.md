@@ -33,8 +33,8 @@ hand (`lockflight gate run`) and make a red commit with `git commit --trailer "L
 
 What CI reads from the base branch is a boundary: the policy, the engine lock and CODEOWNERS. The check itself is a boundary
 where the platform enforces it: a required check whose workflow files are under CODEOWNERS with required code-owner review
-([CI hardening](ci-hardening.md)). The judge's red/green, tests-since-red and trace results are a strong guardrail in
-0.3.0, not a boundary: the pull request's own code runs in the judge's job
+([CI hardening](ci-hardening.md)). The judge's red/green, tests-since-red and trace results are a strong guardrail for
+now, not a boundary: the pull request's own code runs in the judge's job
 ([guardrails and boundaries](guardrails-and-boundaries.md)).
 
 ## CI + native settings
@@ -96,4 +96,4 @@ Commit the change as one commit; `git revert` undoes it.
 The local controls are guardrails at every level, as described in [guardrails and boundaries](guardrails-and-boundaries.md):
 the guard catches accidents, and an agent with a shell can get around a check that runs on its own machine. What CI adds
 is the same at all three levels. The base branch's policy, engine lock and CODEOWNERS are a boundary. The check is one where
-it is required and its workflow is under code-owner review. The judge's test results are a strong guardrail in 0.3.0.
+it is required and its workflow is under code-owner review. The judge's test results are a strong guardrail for now.

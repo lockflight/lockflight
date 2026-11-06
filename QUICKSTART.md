@@ -143,8 +143,8 @@ hand as above (`--trailer "Lockflight-Red: 1"`); with the full lifecycle, `lockf
    gates and green at head) and `lockflight/judge` (routing, red, tests since red, host tampering, trace, review, approvals,
    existing tests changed). A comment on the pull
    request shows the verdict and the table above.
-2. Make `gates` a required check. Keep `lockflight/judge` advisory at first (its comment says what would block); require it
-   once the team makes red commits and its verdicts match your reviews.
+2. Make `gates` a required check. Keep `lockflight/judge` advisory at first (its comment says what would block), and make it
+   required once your team has run it on its own pull requests and seen its verdicts hold.
 3. Route the policy and the workflow to a code owner. Without that, a pull request can change the workflow GitHub runs for
    it: [CI hardening](docs/guides/ci-hardening.md).
 4. For a review of record in CI, set the repository variable `LOCKFLIGHT_REVIEW` to `true` and the secret

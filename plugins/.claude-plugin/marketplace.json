@@ -1,6 +1,6 @@
 {
   "name": "lockflight",
-  "description": "Lockflight: gated, spec-driven delivery for Claude Code agents on .NET.",
+  "description": "Lockflight: test-first guardrails for AI coding agents on .NET.",
   "owner": {
     "name": "Bohdan Ivaniichuk",
     "url": "https://github.com/bohdan-ivaniichuk"
@@ -9,12 +9,12 @@
     {
       "name": "lockflight",
       "source": "./lockflight",
-      "description": "Gated, spec-driven delivery for Claude Code agents on .NET: deterministic gates, protected-path guards, a spec lifecycle with approvals, red/green evidence and trace, and evidence-bound review."
+      "description": "Test-first guardrails for AI coding agents on .NET: new behaviour goes red → green, the build and tests can run before an agent says \"done\", and a CI judge re-checks that evidence on every pull request."
     },
     {
       "name": "lockflight-crew",
       "source": "./lockflight-crew",
-      "description": "Optional agents for the Lockflight lifecycle: a spec writer and a planner that write the spec and tasks until `phase check` passes, and a test author that writes a story's failing tests until `redgreen red` accepts them. An aid; the gates still judge."
+      "description": "Experimental advice for Lockflight: a spec writer and a planner that write the spec and tasks until `phase check` passes, a test author that writes a story's failing tests until `redgreen red` accepts them, and two advice skills. An aid; the gates and the CI judge still decide."
     }
   ]
 }

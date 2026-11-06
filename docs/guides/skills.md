@@ -27,7 +27,8 @@ The plugin also installs five hooks: `SessionStart` (a short banner), `PreToolUs
 
 ## The crew (optional)
 
-`lockflight-crew` is a separate plugin in the same marketplace with agents briefed for the lifecycle. A role is in the crew
+`lockflight-crew` is a separate, optional plugin in the same marketplace with agents briefed for the lifecycle. It is
+**experimental advice**: what its agents and skills produce is checked by the engine like anyone's work. A role is in the crew
 only when an engine check judges its work: each agent runs that check as its verdict, and the feature skill runs it again
 when the agent returns. Install it next to the core plugin:
 
@@ -47,8 +48,9 @@ when the agent returns. Install it next to the core plugin:
   spec and the code, writes `plan.md` (approach, files, declared signatures) and `tasks.md` (per story: the stub task, the
   test tasks, then the implementation), and never edits `spec.md`: when the spec is wrong or contradicts itself, it stops
   and quotes the lines for you. Neither approves anything; the approvals stay yours.
-- **Test author.** The agent reads the story's scenarios and the declared stubs, writes the failing xUnit tests in the test
-  projects, each tagged `[Trait("Requirement", "FR-…")]`, and runs `redgreen red` until the engine accepts the red, fixing
+- **Test author.** The agent reads the story's scenarios and the declared stubs, writes the failing tests in the test
+  projects, in their framework (xUnit, NUnit or MSTest), each tagged with its requirement (`[Trait("Requirement", "FR-…")]`
+  in xUnit), and runs `redgreen red` until the engine accepts the red, fixing
   the tests (never the production code) when it is rejected. It stops and reports when it is blocked, for example by a
   missing stub or a stale approval.
 - **Blocked, in a form a tool can read.** The spec writer and the planner stop after two failed checks, or at once when the

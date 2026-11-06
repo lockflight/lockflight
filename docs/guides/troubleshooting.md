@@ -31,9 +31,21 @@ With an install from source the pin is a development build that no package feed 
 Run `~/.lockflight/bin/lockflight link` yourself from the project root, or `~/.lockflight/bin/lockflight update` (which also
 re-pins) in a separate terminal window: not with `!` in Claude Code, where `update` is refused.
 
+**A repository whose `global.json` pins an SDK older than 10** cannot run these commands: `dotnet tool restore` and
+`dotnet lockflight` need the .NET 10 SDK ([why](getting-started.md#install-from-a-package)). Use the user install instead.
+With a released engine the project has an engine lock (`.lockflight/engine.lock`), and
+`~/.lockflight/bin/lockflight link --installed`, from the project root, links the locked engine when that version is already
+installed in `~/.lockflight/tools/<version>`. The agent may run it too, with your home folder written out
+(`/home/you/.lockflight/bin/lockflight link --installed`): it installs nothing. When it says the version is not installed, run
+`~/.lockflight/bin/lockflight engine install` in the project, in a separate terminal window: it installs exactly the locked
+engine and links it.
+
 ## Every tool call is blocked: the engine "was not run"
 
 The shim found an engine at `.lockflight/bin/` but refused to run it, and is in recovery mode as above:
+
+In a repository whose `global.json` pins an SDK older than 10, replace `dotnet tool restore && dotnet lockflight link` below
+with the [user-install commands](#every-tool-call-is-blocked-engine-not-installed-in-this-project).
 
 - **"because it is committed to the repository":** a binary in git is whatever the last committer put there, so it is never
   run. Remove it from the repository and ignore the folder, then link again:
@@ -68,7 +80,8 @@ The shim found an engine at `.lockflight/bin/` but refused to run it, and is in 
 
 Outside Windows, the hooks make `.lockflight/bin/lockflight` read-only once they have checked it, so a copy into it fails with
 "Permission denied". That is on purpose: a file written into the engine in place could keep its old modification time and go
-unnoticed. Replace the engine with `dotnet lockflight link`, which puts a new file in its place.
+unnoticed. Replace the engine with `dotnet lockflight link` (under an older SDK, `~/.lockflight/bin/lockflight link --installed`,
+[above](#every-tool-call-is-blocked-engine-not-installed-in-this-project)), which puts a new file in its place.
 
 ## A fresh clone does not offer the Lockflight plugin
 
@@ -125,7 +138,8 @@ show you the change but cannot make it.
 The linked binary is older or newer than the version pinned in `dotnet-tools.json` — typically after a version bump was pulled.
 A stale engine must not judge the project with old rules, so it behaves like recovery mode: the read-only tools and exactly the
 restore commands above are allowed (the agent may run `dotnet tool restore && dotnet lockflight link` itself); every other tool
-call is blocked with that command. For a development pin, use the commands for an install from source above.
+call is blocked with that command. For a development pin, use the commands for an install from source above; under an SDK
+older than 10, the [user-install commands](#every-tool-call-is-blocked-engine-not-installed-in-this-project).
 
 If the message says **"the engine pin cannot be read"**, `dotnet-tools.json` is malformed. It is protected, so fix it yourself,
 then run the restore command.
@@ -399,7 +413,8 @@ The re-check builds the cycle's red-time snapshot with the amended file laid ove
 red-time code: the production stubs as they were when the red was accepted. An amend that uses an API added later (a renamed
 member, a new parameter) cannot be re-checked that way, and neither can a build that needs a file git ignores, because ignored
 files are not in the snapshot. Rewrite the amended test against the red-time API, or, as a person, discard the cycle with
-`.lockflight/bin/lockflight redgreen reset` in a separate terminal window and run the red again. On Windows, a deep project can pass the 260-character path limit inside the temporary worktree (`.git/lockflight/red-…`); `git config core.longpaths true` helps git, and the .NET build needs long paths enabled in Windows. A red that says the snapshot "is
+`.lockflight/bin/lockflight redgreen reset` in a separate terminal window and run the red again. On Windows, a deep project can pass the 260-character path limit inside the temporary worktree: see
+[long paths](getting-started.md#install-on-windows). A red that says the snapshot "is
 not in the repository" means its ref under `refs/lockflight/red/` was deleted; only a reset helps then.
 
 ## Windows

@@ -36,7 +36,7 @@ internal static class CommandRegistry
         new(["init"], CommandAudience.Anyone, ["--profile", "--preset", "--ci", "--ci-platform", "--unit-of", "--unit-path", "--speckit-preset"], ["--quality", "--architecture-tests", "--dry-run", "--native", "--ci-only", "--no-link", "--no-sandbox"], CommandOperands.Options, OptionParsing.Own, context => new InitCommand(context)),
         new(["doctor"], CommandAudience.Anyone, [], [DoctorCommand.SelfTestFlag, DoctorCommand.CanariesFlag, DoctorCommand.FullCanariesFlag], CommandOperands.Options, OptionParsing.Shared, context => new DoctorCommand(context)),
         new(["statusline"], CommandAudience.Anyone, [], [], CommandOperands.None, OptionParsing.Own, context => new StatusLineCommand(context)),
-        new(["update"], CommandAudience.Human, ["--source"], ["--project", "--dry-run"], CommandOperands.Options, OptionParsing.Own, context => new UpdateCommand(context)),
+        new(["update"], CommandAudience.Human, ["--source"], ["--project", "--dry-run", "--judge-workflow"], CommandOperands.Options, OptionParsing.Own, context => new UpdateCommand(context)),
         new(["docs", "check"], CommandAudience.Anyone, [], [], CommandOperands.Options, OptionParsing.Shared, context => new DocsCheckCommand(context)),
         new(["facts"], CommandAudience.Anyone, [], [FactsCommand.JsonFlag], CommandOperands.Options, OptionParsing.Shared, context => new FactsCommand(context)),
         new(["hook"], CommandAudience.Anyone, [], [], CommandOperands.ExactlyOne, OptionParsing.Own, context => new HookCommand(context)),

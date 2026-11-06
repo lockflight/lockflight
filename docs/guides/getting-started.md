@@ -16,8 +16,8 @@ red/green evidence). Three settings choose how much you get:
 
 The sections below use the plugin level.
 
-**On this page:** [Requirements](#requirements) · [Install from source](#install-from-source) ·
-[Install on Windows](#install-on-windows) · [Install from a package](#install-from-a-package) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
+**On this page:** [Requirements](#requirements) · [Install from a package](#install-from-a-package) ·
+[Install on Windows](#install-on-windows) · [Install from source](#install-from-source) · [Lite profile](#lite-profile-target-first-green-in-under-15-minutes) ·
 [An existing setup](#a-repository-with-an-existing-claude-code-or-spec-kit-setup) · [Monorepos](#monorepos) ·
 [Workspace shells](#workspace-shells) · [Standard profile](#standard-profile) · [CI with a development build](#ci-with-a-development-build) ·
 [Levi and the status line](#levi-and-the-status-line)
@@ -27,107 +27,17 @@ The sections below use the plugin level.
 | For | You need |
 |---|---|
 | Your machine | macOS (Apple silicon or Intel), Linux (x64 or arm64), or Windows (x64) with [Git for Windows](https://git-scm.com/download/win): Claude Code and the plugin's hooks run under Git Bash. See [Install on Windows](#install-on-windows). |
-| The engine | From source or as a `dotnet tool`: the .NET 10 SDK. The install script ([without the .NET SDK](#install-from-a-package)) needs none. To build and test your project: the SDK it needs (the engine runs whatever SDK the project's `global.json` pins), and git. |
+| The engine | As a `dotnet tool` from nuget.org, or from source: the .NET 10 SDK. The install script ([without the .NET SDK](#install-from-a-package)) needs none. To build and test your project: the SDK it needs (the engine runs whatever SDK the project's `global.json` pins), and git. |
 | Claude Code | 2.1.295 or newer: from that version a guard hook that times out blocks the tool call. `doctor` checks it. |
 | Your project | SDK-style .NET 8, 9 or 10. .NET Framework projects are not supported. |
 | Tests | xUnit v3 (Microsoft.Testing.Platform): everything. xUnit v2 (VSTest), NUnit and MSTest (VSTest, or Microsoft.Testing.Platform with its TRX report): red/green and trace included, locally and in the CI judge; tag tests with `[Trait("Requirement", "FR-001")]` (xUnit), `[Property("Requirement", "FR-001")]` (NUnit) or `[TestProperty("Requirement", "FR-001")]` (MSTest). Review reproductions are written as xUnit tests. |
 | The `pr` profile's secrets step | [gitleaks](https://github.com/gitleaks/gitleaks) on `PATH` (or `LOCKFLIGHT_GITLEAKS`); without it the step is NOT-EARNED. The generated CI workflow downloads its own. |
 | Spec Kit, if you use it (optional in the standard profile) | `uv` and Python 3 with PyYAML. |
 
-## Install from source
-
-To work on Lockflight or try `main`, build the engine from a checkout of this repository and install it for your user; it
-needs no package feed and no token. Otherwise, [install from a package](#install-from-a-package). On Windows, see
-[Install on Windows](#install-on-windows).
-
-```sh
-git clone https://github.com/lockflight/lockflight && cd lockflight
-scripts/dev-install.sh            # packs the engine into ~/.lockflight/feed, installs ~/.lockflight/bin/lockflight,
-                                  # and installs the plugin at user scope
-```
-
-Then set up your project: the [lite profile](#lite-profile-target-first-green-in-under-15-minutes) below.
-
-- **Plugin from the checkout:** the script adds the checkout's development marketplace (`plugins/`, which lists the plugins
-  in the checkout) as the `lockflight` marketplace (an existing one, such as the GitHub marketplace, is pointed there), so
-  the plugin and the engine come from the same commit. Claude Code reads the plugin from the checkout's folder: a `git pull`
-  reaches it at the next session start or `/reload-plugins`, and `lockflight update` pulls it together with the engine. The
-  GitHub marketplace serves the last release instead (see [install from a package](#install-from-a-package)). To go back to
-  it, remove the development marketplace (Claude Code does not point a folder marketplace back at GitHub, and removing it
-  uninstalls its plugins), then add the GitHub one and install again:
-  `claude plugin marketplace remove lockflight && claude plugin marketplace add lockflight/lockflight && claude plugin install lockflight@lockflight --scope user`.
-
-- **`lockflight` by name:** the script puts `~/.lockflight/bin` on your `PATH` for new terminals, with one line marked
-  `# added by Lockflight: its engine on PATH` in your shell's startup file: `~/.zshrc` for zsh, `~/.bashrc` for bash (and
-  `~/.bash_profile` on macOS), `~/.config/fish/conf.d/lockflight.fish` for fish, else `~/.profile`. It prints the file it
-  changed; a reinstall or `update` finds the line and adds nothing. Open a new terminal (or `source` that file) to use it.
-  `--no-modify-path` leaves your startup files alone; delete the line to undo it.
-- **Why user scope:** Claude Code loads project settings only from the directory where a session starts. With the plugin at
-  user scope, the guard also runs when you start Claude inside a child repository of a workspace shell. Your own project hooks
-  in the shell's `.claude/settings.json` still load only from the shell root.
-- **Why `.lockflight/bin/lockflight` instead of `dotnet lockflight`:** `init` links the engine into the project
-  (`.lockflight/bin/`, git-ignored). It is the binary the hooks run, a native one, so it runs in projects whose `global.json`
-  pins an older SDK. In such a project `dotnet lockflight` cannot run, because only SDK 10 understands the package format.
-  Before a project is set up, run the user install, `~/.lockflight/bin/lockflight`.
-- **Development versions** are numbered after the last release, so they sort above it and below the next one:
-  `0.2.0-alpha.4.dev.<commit time>` after `0.2.0-alpha.4`, `0.2.1-0.dev.<commit time>` after `0.2.0`. Moving a project from a
-  development build to the next release is an upgrade; `doctor` reports **development pin** once a release at or above the
-  build's base is installed, and `update` moves the project to it.
-- **Tool pin:** `init` pins the dev version, which exists only in your local feed. A teammate runs the same script to get it.
-  `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
-  root, as the skills do; `doctor` reports a pin that cannot be restored on this machine. No package feed has it either, so
-  CI cannot install it until the project pins a release (`update`).
-- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `update`) are yours: run them in a separate
-  terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
-  approval you can also give in the session by typing `/lockflight:approve` (it picks the spec or the tasks, whichever waits),
-  and a baseline, a reset or an amend by typing `/lockflight:baseline`, `/lockflight:reset` or `/lockflight:amend`. An
-  approval takes one step: it records the files as they were when the agent's turn ended, and if they changed since, it shows
-  them to you instead and the same command typed again approves them. A baseline, a reset or an amend takes two steps: the
-  engine shows you what would be recorded under "UserPromptExpansion operation blocked by hook", starting with
-  `Step 1 of 2 — not an error`, and ends with the `Your code:` line, which holds the code and the line to type.
-- **Updating:** in a separate terminal window (not with `!` in Claude Code), run `~/.lockflight/bin/lockflight update` in a project. An install from source
-  (the checkout recorded in `~/.lockflight/source`) pulls your checkout, reinstalls the engine and the plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
-  commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at
-  session start.
-- **No token on disk:** the install from source needs no package-feed token. Do not add a package feed with a stored token
-  to your NuGet config: any tool or agent that reads the file can print it, and a second package source without a source
-  mapping makes `dotnet restore` warn NU1507 in every project with central package management (an error under
-  `TreatWarningsAsErrors`).
-
-## Install on Windows
-
-Windows (x64) installs from source with a PowerShell script, into the same layout under your user folder. It needs, besides
-the [requirements](#requirements): **Git for Windows** (Git Bash runs the plugin's hooks, as it runs Claude Code's shell
-commands) and **Visual Studio Build Tools** with the *Desktop development with C++* workload (the engine is a Native AOT
-build). Run it from PowerShell:
-
-```powershell
-git clone https://github.com/lockflight/lockflight; cd lockflight
-powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1    # add -NoPlugin for the engine only
-```
-
-From Git Bash, `scripts/dev-install.sh` runs the same script. Paths with spaces are fine for the checkout, your user folder
-and your projects.
-
-- **What it installs:** the engine at `%USERPROFILE%\.lockflight\bin\lockflight.exe` (with `HOME` set, under `HOME` instead,
-  as the engine reads it), the plugin at user scope, and the same feed, `tools\<version>` and `source` as on macOS and Linux.
-- **`lockflight` by name:** the script adds `%USERPROFILE%\.lockflight\bin` to your user `PATH` (the per-user environment
-  variable, never the system one), once, and says so; open a new terminal to use it. `-NoModifyPath` skips it. To undo it,
-  remove the folder from the user variable `Path` in *Environment Variables*.
-- **A copy, not a link:** on Windows `bin\lockflight.exe` is a copy of the native engine, and `bin\lockflight.version` records
-  its version. Creating a symbolic link needs developer mode or an elevated session, and the launcher that `dotnet tool
-  install` puts in a tool path starts the engine from its store, so it is not one file that `link` can copy into a project.
-- **Running it:** from PowerShell, `& "$env:USERPROFILE\.lockflight\bin\lockflight.exe" init` in your project, then
-  `.lockflight\bin\lockflight.exe doctor`. From Git Bash, `~/.lockflight/bin/lockflight` and `.lockflight/bin/lockflight` work
-  as written everywhere in these guides. `doctor` checks that Git Bash is found.
-- **Updating:** `lockflight update` works as on macOS and Linux: it pulls the checkout and runs `scripts\dev-install.ps1` again
-  (or installs the newest package). Windows does not let a running program be overwritten, so the old engine is renamed
-  aside (`lockflight.exe.old-…`) and removed by a later update once nothing runs it.
-
 ## Install from a package
 
-`Lockflight.Cli` is published on nuget.org. Install the engine for your user, then the
-plugin:
+The released engine, `Lockflight.Cli`, is published on [nuget.org](https://www.nuget.org/packages/Lockflight.Cli). Install it
+for your user, then the plugin:
 
 ```sh
 cd ~                                   # outside any project: a global.json there could pick an SDK older than 10
@@ -184,6 +94,99 @@ or add `~/.lockflight/bin` to `PATH` yourself.
 - **Plugin and engine versions:** the plugin names the oldest engine it works with (`min-engine-version` in the plugin). When
   the plugin has updated past the engine a project pins, Claude Code tells you at session start and `doctor` reports
   **plugin engine** as FAIL; `update` fixes both.
+
+## Install on Windows
+
+Windows (x64) installs from source with a PowerShell script, into the same layout under your user folder. It needs, besides
+the [requirements](#requirements): **Git for Windows** (Git Bash runs the plugin's hooks, as it runs Claude Code's shell
+commands) and **Visual Studio Build Tools** with the *Desktop development with C++* workload (the engine is a Native AOT
+build). Run it from PowerShell:
+
+```powershell
+git clone https://github.com/lockflight/lockflight; cd lockflight
+powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1    # add -NoPlugin for the engine only
+```
+
+From Git Bash, `scripts/dev-install.sh` runs the same script. Paths with spaces are fine for the checkout, your user folder
+and your projects.
+
+- **What it installs:** the engine at `%USERPROFILE%\.lockflight\bin\lockflight.exe` (with `HOME` set, under `HOME` instead,
+  as the engine reads it), the plugin at user scope, and the same feed, `tools\<version>` and `source` as on macOS and Linux.
+- **`lockflight` by name:** the script adds `%USERPROFILE%\.lockflight\bin` to your user `PATH` (the per-user environment
+  variable, never the system one), once, and says so; open a new terminal to use it. `-NoModifyPath` skips it. To undo it,
+  remove the folder from the user variable `Path` in *Environment Variables*.
+- **A copy, not a link:** on Windows `bin\lockflight.exe` is a copy of the native engine, and `bin\lockflight.version` records
+  its version. Creating a symbolic link needs developer mode or an elevated session, and the launcher that `dotnet tool
+  install` puts in a tool path starts the engine from its store, so it is not one file that `link` can copy into a project.
+- **Running it:** from PowerShell, `& "$env:USERPROFILE\.lockflight\bin\lockflight.exe" init` in your project, then
+  `.lockflight\bin\lockflight.exe doctor`. From Git Bash, `~/.lockflight/bin/lockflight` and `.lockflight/bin/lockflight` work
+  as written everywhere in these guides. `doctor` checks that Git Bash is found.
+- **Long paths:** a deep project can pass Windows' 260-character path limit, for example inside the temporary worktree a red
+  re-check builds in (`.git/lockflight/red-…`). `git config --global core.longpaths true` covers git, and the .NET build
+  needs long paths enabled in Windows (the `LongPathsEnabled` policy).
+- **Updating:** `lockflight update` works as on macOS and Linux: it pulls the checkout and runs `scripts\dev-install.ps1` again
+  (or installs the newest package). Windows does not let a running program be overwritten, so the old engine is renamed
+  aside (`lockflight.exe.old-…`) and removed by a later update once nothing runs it.
+
+## Install from source
+
+For contributors, and to try changes merged to `main` before a release: build the engine from a checkout of this repository
+and install it for your user; it needs no package feed and no token. Everyone else [installs from a package](#install-from-a-package).
+On Windows, see [Install on Windows](#install-on-windows).
+
+```sh
+git clone https://github.com/lockflight/lockflight && cd lockflight
+scripts/dev-install.sh            # packs the engine into ~/.lockflight/feed, installs ~/.lockflight/bin/lockflight,
+                                  # and installs the plugin at user scope
+```
+
+Then set up your project: the [lite profile](#lite-profile-target-first-green-in-under-15-minutes) below.
+
+- **Plugin from the checkout:** the script adds the checkout's development marketplace (`plugins/`, which lists the plugins
+  in the checkout) as the `lockflight` marketplace (an existing one, such as the GitHub marketplace, is pointed there), so
+  the plugin and the engine come from the same commit. Claude Code reads the plugin from the checkout's folder: a `git pull`
+  reaches it at the next session start or `/reload-plugins`, and `lockflight update` pulls it together with the engine. The
+  GitHub marketplace serves the last release instead (see [install from a package](#install-from-a-package)). To go back to
+  it, remove the development marketplace (Claude Code does not point a folder marketplace back at GitHub, and removing it
+  uninstalls its plugins), then add the GitHub one and install again:
+  `claude plugin marketplace remove lockflight && claude plugin marketplace add lockflight/lockflight && claude plugin install lockflight@lockflight --scope user`.
+
+- **`lockflight` by name:** the script puts `~/.lockflight/bin` on your `PATH` for new terminals, with one line marked
+  `# added by Lockflight: its engine on PATH` in your shell's startup file: `~/.zshrc` for zsh, `~/.bashrc` for bash (and
+  `~/.bash_profile` on macOS), `~/.config/fish/conf.d/lockflight.fish` for fish, else `~/.profile`. It prints the file it
+  changed; a reinstall or `update` finds the line and adds nothing. Open a new terminal (or `source` that file) to use it.
+  `--no-modify-path` leaves your startup files alone; delete the line to undo it.
+- **Why user scope:** Claude Code loads project settings only from the directory where a session starts. With the plugin at
+  user scope, the guard also runs when you start Claude inside a child repository of a workspace shell. Your own project hooks
+  in the shell's `.claude/settings.json` still load only from the shell root.
+- **Why `.lockflight/bin/lockflight` instead of `dotnet lockflight`:** `init` links the engine into the project
+  (`.lockflight/bin/`, git-ignored). It is the binary the hooks run, a native one, so it runs in projects whose `global.json`
+  pins an older SDK. In such a project `dotnet lockflight` cannot run, because only SDK 10 understands the package format.
+  Before a project is set up, run the user install, `~/.lockflight/bin/lockflight`.
+- **Development versions** are numbered after the last release, so they sort above it and below the next one:
+  `0.2.0-alpha.4.dev.<commit time>` after `0.2.0-alpha.4`, `0.2.1-0.dev.<commit time>` after `0.2.0`. Moving a project from a
+  development build to the next release is an upgrade; `doctor` reports **development pin** once a release at or above the
+  build's base is installed, and `update` moves the project to it.
+- **Tool pin:** `init` pins the dev version, which exists only in your local feed. A teammate runs the same script to get it.
+  `dotnet lockflight` cannot restore it, so in a linked project run the engine as `.lockflight/bin/lockflight` from the project
+  root, as the skills do; `doctor` reports a pin that cannot be restored on this machine. No package feed has it either, so
+  CI cannot install it until the project pins a release (`update`).
+- **Human decisions** (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `update`) are yours: run them in a separate
+  terminal window, not with `!` in Claude Code (that runs inside the session, where they are refused). A spec or tasks
+  approval you can also give in the session by typing `/lockflight:approve` (it picks the spec or the tasks, whichever waits),
+  and a baseline, a reset or an amend by typing `/lockflight:baseline`, `/lockflight:reset` or `/lockflight:amend`. An
+  approval takes one step: it records the files as they were when the agent's turn ended, and if they changed since, it shows
+  them to you instead and the same command typed again approves them. A baseline, a reset or an amend takes two steps: the
+  engine shows you what would be recorded under "UserPromptExpansion operation blocked by hook", starting with
+  `Step 1 of 2 — not an error`, and ends with the `Your code:` line, which holds the code and the line to type.
+- **Updating:** in a separate terminal window (not with `!` in Claude Code), run `~/.lockflight/bin/lockflight update` in a project. An install from source
+  (the checkout recorded in `~/.lockflight/source`) pulls your checkout, reinstalls the engine and the plugin, re-pins and links the project and refreshes its `CLAUDE.md` block; commit what it lists. The version follows the
+  commit, so nothing changes until the code does. When another project already got the newer engine, Claude Code tells you at
+  session start.
+- **No token on disk:** the install from source needs no package-feed token. Do not add a package feed with a stored token
+  to your NuGet config: any tool or agent that reads the file can print it, and a second package source without a source
+  mapping makes `dotnet restore` warn NU1507 in every project with central package management (an error under
+  `TreatWarningsAsErrors`).
 
 ## Lite profile (target: first green in under 15 minutes)
 
@@ -369,7 +372,7 @@ skips the PyYAML check; neither counts against readiness.
 
 The workflow `init` writes installs the engine version the project pins, from nuget.org or the package sources in the
 repository's `nuget.config`. A project set up from a package pins a release that nuget.org has, so its workflow runs on every
-pull request. An engine built from source is a development build (`0.3.1-0.dev.<commit time>` after the 0.3.0 release) that exists only in
+pull request. An engine built from source is a development build (`0.3.2-0.dev.<commit time>` after the 0.3.1 release) that exists only in
 your local feed (`~/.lockflight/feed`), so a workflow that ran on every pull request would fail at the engine install every
 time. So:
 
