@@ -391,6 +391,9 @@ jobs:
           $env:HOME = $env:LOCKFLIGHT_PACKAGE_HOME
           $engine = Join-Path $env:HOME ".lockflight\bin\lockflight.exe"
           $project = Join-Path $env:RUNNER_TEMP "package project"
+          # doctor runs `bash` from PATH, which on the runner is WSL's launcher before Git Bash; a developer's PATH has Git's.
+          "bash on PATH: $((Get-Command bash).Source)"
+          $env:PATH = "$env:ProgramFiles\Git\bin;$env:PATH"
           New-Item -ItemType Directory -Force $project | Out-Null
           Set-Location $project
           git init --quiet
