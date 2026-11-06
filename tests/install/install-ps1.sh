@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # A smoke test of scripts/install.ps1, the Windows install a person runs once (a Release asset; no CI template uses it), with
 # PowerShell 7 against a local file:// feed: a lock installs the win-x64 executable, a first install by version takes the hash
-# from engine-hashes.json, a hash mismatch installs nothing. Skipped where pwsh is missing. Windows PowerShell 5.1 is not run here.
+# from engine-hashes.json and completes the user install (~/.lockflight/bin/lockflight.exe and its version), a second run
+# changes nothing, a lock leaves a user engine of another version alone, an install by version replaces it and the launcher
+# of a `dotnet tool install` into bin, and a hash mismatch installs nothing. Skipped where pwsh is missing. Windows PowerShell
+# 5.1, the real engine and the user PATH are run by CI's windows-install job.
 set -euo pipefail
 
 command -v pwsh >/dev/null || { echo "skipped: no pwsh"; exit 0; }
@@ -34,8 +37,17 @@ pack() { # pack <nupkg> <entry> <file>
 }
 pack "$feed/lockflight.cli.$rid/$version/lockflight.cli.$rid.$version.nupkg" "tools/any/$rid/lockflight.exe" "$work/lockflight.exe"
 pack "$feed/lockflight.cli/$version/lockflight.cli.$version.nupkg" engine-hashes.json "$work/engine-hashes.json"
+# A second release, for a lock that names another version than the user engine, and for an upgrade by version.
+version2=0.0.0-ci.8
+mkdir -p "$work/second"
+printf 'MZ stand-in engine 2\n' > "$work/second/lockflight.exe"
+hash2=$(sha256 "$work/second/lockflight.exe")
+sed -e "s/$version/$version2/" -e "s/$hash/$hash2/" "$work/engine-hashes.json" > "$work/second/engine-hashes.json"
+pack "$feed/lockflight.cli.$rid/$version2/lockflight.cli.$rid.$version2.nupkg" "tools/any/$rid/lockflight.exe" "$work/second/lockflight.exe"
+pack "$feed/lockflight.cli/$version2/lockflight.cli.$version2.nupkg" engine-hashes.json "$work/second/engine-hashes.json"
+sed -e "s/$version/$version2/" "$work/engine.lock" | sed -e "s/$hash/$hash2/" > "$work/second.lock"
 
-install() { LOCKFLIGHT_NUGET_FEED="file://$feed/" HOME="$work/home" pwsh -NoProfile -File "$root/scripts/install.ps1" "$@"; }
+install() { LOCKFLIGHT_NUGET_FEED="file://$feed/" HOME="$work/profile" pwsh -NoProfile -File "$root/scripts/install.ps1" "$@"; }
 
 if out=$(install -Lock "$work/engine.lock" -Dir "$work/out" 2> "$work/err") && [ "$(printf '%s\n' "$out" | tail -n 1)" = "$work/out/lockflight.exe" ] \
   && [ "$(sha256 "$work/out/lockflight.exe")" = "$hash" ]; then
@@ -43,10 +55,40 @@ if out=$(install -Lock "$work/engine.lock" -Dir "$work/out" 2> "$work/err") && [
 else
   bad "lock install: $out $(cat "$work/err")"
 fi
-if out=$(install -Version "$version" 2> "$work/err") && [ "$(sha256 "$(printf '%s\n' "$out" | tail -n 1)")" = "$hash" ]; then
-  ok "a first install by version takes the hash from engine-hashes.json"
+[ ! -e "$work/profile/.lockflight/bin" ] && ok "an install into -Dir leaves the user install alone" || bad "-Dir wrote $work/profile/.lockflight/bin"
+bin="$work/profile/.lockflight/bin"
+if out=$(install -Version "$version" 2> "$work/err") && [ "$(printf '%s\n' "$out" | tail -n 1)" = "$work/profile/.lockflight/tools/$version/lockflight.exe" ] \
+  && [ "$(sha256 "$(printf '%s\n' "$out" | tail -n 1)")" = "$hash" ]; then
+  ok "a first install by version takes the hash from engine-hashes.json, into ~/.lockflight/tools/<version>"
 else
   bad "version install: $out $(cat "$work/err")"
+fi
+if [ "$(sha256 "$bin/lockflight.exe")" = "$hash" ] && [ "$(cat "$bin/lockflight.version")" = "$version" ] \
+  && grep -q "claude plugin install lockflight@lockflight --scope user" "$work/err"; then
+  ok "it completes the user install: bin/lockflight.exe, its version, and the plugin step"
+else
+  bad "user install: $(ls -A "$bin" 2>&1) $(cat "$work/err")"
+fi
+touch "$work/marker"
+if out=$(install -Version "$version" 2> "$work/err") && grep -q "already installed" "$work/err" && grep -q "is Lockflight $version already" "$work/err" \
+  && [ -z "$(find "$work/profile/.lockflight" -newer "$work/marker")" ]; then
+  ok "a second install of the same version changes nothing"
+else
+  bad "second run: $(find "$work/profile/.lockflight" -newer "$work/marker") $(cat "$work/err")"
+fi
+if out=$(install -Lock "$work/second.lock" 2> "$work/err") && [ "$(sha256 "$work/profile/.lockflight/tools/$version2/lockflight.exe")" = "$hash2" ] \
+  && [ "$(cat "$bin/lockflight.version")" = "$version" ] && grep -q "link --installed" "$work/err"; then
+  ok "a lock of another version installs into tools and leaves the user engine, naming link --installed"
+else
+  bad "lock beside a user engine: $(cat "$bin/lockflight.version") $(cat "$work/err")"
+fi
+mkdir -p "$bin/.store/lockflight.cli" && printf '@echo off\n' > "$bin/lockflight.cmd" && printf '/a/checkout\n' > "$work/profile/.lockflight/source"
+if out=$(install -Version "$version2" 2> "$work/err") && [ "$(sha256 "$bin/lockflight.exe")" = "$hash2" ] \
+  && [ "$(cat "$bin/lockflight.version")" = "$version2" ] && [ ! -e "$bin/lockflight.cmd" ] && [ ! -e "$bin/.store" ] \
+  && [ ! -e "$work/profile/.lockflight/source" ]; then
+  ok "an install by version moves the user engine to it, removing a dotnet tool launcher and a recorded source checkout"
+else
+  bad "upgrade: $(ls -A "$bin") $(cat "$work/err")"
 fi
 status=0; install -Lock "$work/wrong.lock" -Dir "$work/wrong" > /dev/null 2> "$work/err" || status=$?
 if [ "$status" = 1 ] && [ ! -e "$work/wrong/lockflight.exe" ] && grep -q "not the locked one" "$work/err"; then

@@ -75,6 +75,15 @@ internal static class EnvironmentVariables
     /// <summary>The user's home directory on Windows, used when <see cref="Home"/> is unset.</summary>
     public const string UserProfile = "USERPROFILE";
 
+    /// <summary>The Git Bash executable Claude Code runs shell commands and the plugin's hooks with on Windows, when set.</summary>
+    public const string GitBashPath = "CLAUDE_CODE_GIT_BASH_PATH";
+
+    /// <summary>The Program Files folder on Windows, where Git for Windows installs by default.</summary>
+    public const string ProgramFiles = "ProgramFiles";
+
+    /// <summary>The 32-bit Program Files folder on 64-bit Windows.</summary>
+    public const string ProgramFilesX86 = "ProgramFiles(x86)";
+
     /// <summary>The NuGet global packages folder, where <c>dotnet tool restore</c> caches tools; <c>~/.nuget/packages</c> when unset.</summary>
     public const string NuGetPackages = "NUGET_PACKAGES";
 }

@@ -263,6 +263,7 @@ jobs:
 
   # The Windows user install: scripts/dev-install.ps1 from a checkout in a folder with spaces, then the installed engine runs
   # init, link and the hook suite, and `lockflight update` replaces the engine it runs from, from source and from a package.
+  # Then a developer's install from the package, with no build: scripts/install.ps1 in a home of its own, twice, to doctor.
   windows-install:
     runs-on: windows-latest
     defaults:
@@ -337,6 +338,75 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           if ((& $env:LOCKFLIGHT_ENGINE version) -ne $version) { throw "the installed engine is not $version" }
           if ((& .lockflight\bin\lockflight.exe version) -ne $version) { throw "the project's engine is not $version" }
+      # The package as a release publishes it, on a file:// feed laid out as nuget.org serves one: the win-x64 package packed
+      # above, and the pointer package with engine-hashes.json (the other platforms' hashes are stand-ins).
+      - name: A release-shaped feed of the package
+        run: |
+          $version = "99.0.0-ci.1"
+          $hashes = Join-Path $env:RUNNER_TEMP "release-hashes"
+          $feed = Join-Path $env:RUNNER_TEMP "release-feed"
+          $rid = Join-Path $env:RUNNER_TEMP "package feed\Lockflight.Cli.win-x64.$version.nupkg"
+          python -I scripts/engine-hashes.py rid --package $rid --rid win-x64 --version $version --out $hashes
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          foreach ($other in "linux-arm64", "linux-x64", "osx-arm64", "osx-x64") {
+            $entry = @{ rid = $other; sha256 = "0" * 64; path = "tools/net10.0/$other/lockflight" } | ConvertTo-Json
+            [IO.File]::WriteAllText((Join-Path $hashes "hash-$other.json"), $entry)
+          }
+          python -I scripts/engine-hashes.py merge --dir $hashes --version $version --commit (git rev-parse HEAD) --install-script scripts/install.sh --out "$hashes\engine-hashes.json"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          dotnet pack engine/src/Lockflight.Cli -c Release -o "$hashes\pointer" "-p:Version=$version" "-p:EngineHashesFile=$hashes\engine-hashes.json" -nologo -v q
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          New-Item -ItemType Directory -Force "$feed\lockflight.cli.win-x64\$version", "$feed\lockflight.cli\$version" | Out-Null
+          Copy-Item $rid "$feed\lockflight.cli.win-x64\$version\lockflight.cli.win-x64.$version.nupkg"
+          Copy-Item "$hashes\pointer\Lockflight.Cli.$version.nupkg" "$feed\lockflight.cli\$version\lockflight.cli.$version.nupkg"
+          "LOCKFLIGHT_NUGET_FEED=$(([Uri]$feed).AbsoluteUri)/" >> $env:GITHUB_ENV
+          "LOCKFLIGHT_PACKAGE_HOME=$(Join-Path $env:RUNNER_TEMP 'package-home')" >> $env:GITHUB_ENV
+      - name: Install the package with install.ps1 (Windows PowerShell), twice
+        run: |
+          $version = "99.0.0-ci.1"
+          $env:HOME = $env:LOCKFLIGHT_PACKAGE_HOME
+          $bin = Join-Path $env:HOME ".lockflight\bin"
+          $engine = Join-Path $bin "lockflight.exe"
+          function Install([string]$log) {
+            $run = Start-Process powershell -NoNewWindow -Wait -PassThru -RedirectStandardError $log -RedirectStandardOutput "$log.out" `
+              -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts\install.ps1", "-Version", $version
+            Get-Content $log
+            if ($run.ExitCode -ne 0) { throw "install.ps1 exited $($run.ExitCode)" }
+          }
+          Install (Join-Path $env:RUNNER_TEMP "install-1.txt")
+          $installed = & $engine version
+          if ($installed -ne $version -or $installed -match '\.dev\.') { throw "the user engine reports $installed, expected the release $version" }
+          if ((Get-Content -Raw (Join-Path $bin "lockflight.version")).Trim() -ne $version) { throw "bin\lockflight.version does not name $version" }
+          $written = (Get-Item $engine).LastWriteTimeUtc
+          Install (Join-Path $env:RUNNER_TEMP "install-2.txt")
+          $second = Get-Content -Raw (Join-Path $env:RUNNER_TEMP "install-2.txt")
+          if ($second -notmatch "already installed" -or $second -notmatch "is Lockflight $version already" -or $second -notmatch "already on your user PATH") { throw "the second run was not a no-op" }
+          if ((Get-Item $engine).LastWriteTimeUtc -ne $written) { throw "the second run rewrote $engine" }
+          $path = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey("Environment").GetValue("Path", "", "DoNotExpandEnvironmentNames")
+          $count = @($path -split ";" | Where-Object { $_.TrimEnd([char]92) -ieq $bin }).Count
+          if ($count -ne 1) { throw "the user PATH holds $bin $count times: $path" }
+      - name: Init and doctor with the package engine, and link --installed
+        run: |
+          $version = "99.0.0-ci.1"
+          $env:HOME = $env:LOCKFLIGHT_PACKAGE_HOME
+          $engine = Join-Path $env:HOME ".lockflight\bin\lockflight.exe"
+          $project = Join-Path $env:RUNNER_TEMP "package project"
+          New-Item -ItemType Directory -Force $project | Out-Null
+          Set-Location $project
+          git init --quiet
+          & $engine init
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & .lockflight\bin\lockflight.exe doctor
+          if ($LASTEXITCODE -ne 0) { throw "doctor reported a FAIL" }
+          $lock = Get-Content -Raw .lockflight\engine.lock | ConvertFrom-Json
+          if ($lock.channel -ne "release" -or $lock.version -ne $version) { throw "the engine lock is $($lock.channel) $($lock.version), expected release $version" }
+          if (Test-Path .lockflight\local\engine.lock) { throw "init wrote a development lock" }
+          if (-not (Select-String -Path .github\workflows\lockflight*.yml -Pattern '^\s+pull_request:' -Quiet)) { throw "the generated workflow does not run on pull requests" }
+          # A teammate's clone: the locked engine, already installed by install.ps1, links without a build.
+          Remove-Item -Recurse -Force .lockflight\bin
+          & $engine link --installed
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if ((& .lockflight\bin\lockflight.exe version) -ne $version) { throw "link --installed did not link $version" }
 
   # The CI judge's action (action/) on each runner OS a generated workflow can use, as a project's workflow calls it: on a
   # fixture repository whose main pins the engine by .lockflight/engine.lock and the vendored install script, the action

@@ -24,7 +24,6 @@ internal static class ReadinessChecks
     private const string CoverageCheck = "coverage collector";
     private const string EfToolCheck = "dotnet-ef pin";
     private const int MaxListed = 5;
-    private const string Bash = "bash";
     private const string Python = "python3";
     private const string SpecKitDirectory = ".specify";
     private const string PinRestoreCheck = "pin restorable";
@@ -94,7 +93,7 @@ internal static class ReadinessChecks
         checks.Add(CheckGitleaks(gitleaks));
         if (OperatingSystem.IsWindows())
         {
-            checks.Add(await CheckGitBashAsync(root, Bash, cancellationToken));
+            checks.Add(await CheckGitBashAsync(root, GitBash.Find(environment), cancellationToken));
         }
 
         bool standardProfile = IsStandardProfile(root);
@@ -374,19 +373,24 @@ internal static class ReadinessChecks
         return new(Name, CheckStatus.Pass, "native level: the project's hooks run the engine without the plugin", null);
     }
 
-    /// <summary>Whether <paramref name="bash"/> runs; a missing executable is a FAIL with the fix, never a crash.</summary>
-    public static async Task<DoctorCheck> CheckGitBashAsync(string root, string bash, CancellationToken cancellationToken)
+    /// <summary>Whether <paramref name="bash"/> (<see cref="GitBash.Find"/>) runs; a missing executable is a FAIL with the fix, never a crash.</summary>
+    public static async Task<DoctorCheck> CheckGitBashAsync(string root, string? bash, CancellationToken cancellationToken)
     {
+        if (bash is null)
+        {
+            return new("git bash", CheckStatus.Fail, $"Git Bash was not found (Git for Windows, or {EnvironmentVariables.GitBashPath})", "install Git for Windows (Git Bash is required)");
+        }
+
         try
         {
             ProcessResult bashRun = await ProcessRunner.RunAsync(bash, ["--version"], root, cancellationToken);
             return bashRun.ExitCode == 0
-                ? new("git bash", CheckStatus.Pass, "bash found for the plugin's hook shim", null)
-                : new("git bash", CheckStatus.Fail, "bash did not run", "install Git for Windows (Git Bash is required)");
+                ? new("git bash", CheckStatus.Pass, $"Git Bash runs ({bash})", null)
+                : new("git bash", CheckStatus.Fail, $"{bash} did not run", $"install Git for Windows (Git Bash is required), or set {EnvironmentVariables.GitBashPath} to its bash.exe");
         }
         catch (Exception exception) when (exception is InvalidOperationException or ExecutableNotFoundException)
         {
-            return new("git bash", CheckStatus.Fail, "bash is not on PATH", "install Git for Windows (Git Bash is required)");
+            return new("git bash", CheckStatus.Fail, $"{bash} could not be started", "install Git for Windows (Git Bash is required)");
         }
     }
 
