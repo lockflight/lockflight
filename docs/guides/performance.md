@@ -1,0 +1,3 @@
+# Performance
+
+Measured numbers follow.
