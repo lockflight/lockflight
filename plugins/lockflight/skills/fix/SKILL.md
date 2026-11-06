@@ -32,7 +32,8 @@ the project has no `lockflight.yaml`, say so and offer `/lockflight:init`.
 5. **Route.** Run `.lockflight/bin/lockflight route show --head HEAD`. If the class is at or above the one that needs a spec
    (the "needs" line lists a spec), stop: the change is a feature and needs a spec, an approval and `/lockflight:feature`.
    Do not push.
-6. **Local judge.** Run `.lockflight/bin/lockflight ci --platform local` on the committed branch and report its verdict.
+6. **Local judge.** Run `.lockflight/bin/lockflight ci --platform local` on the committed branch and report its verdict;
+   when it is not PASS, `.lockflight/bin/lockflight ci explain` gives each check's reason and what to do next.
    - `red` FAIL on a cycle that is not pushed yet: `git reset --soft HEAD~1` undoes the red commit only if it is the last
      one; otherwise tell the user. On a pushed cycle, fix the test and run `.lockflight/bin/lockflight red --redo <n>`.
    - `tests.sinceRed` FAIL: the test changed after its red. Restore it, or redo the red.

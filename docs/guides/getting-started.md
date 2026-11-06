@@ -393,6 +393,16 @@ A bug fix needs a red commit, in the lite profile as in the standard one, but no
 reproduces the bug, committed with `lockflight red` before the fix. With the plugin, describe the bug and the `fix` skill
 does it; in an IDE or a terminal, run `dotnet lockflight red` after writing the test. See [fix a bug](fix-a-bug.md).
 
+## Before the pull request
+
+Before you open or push a pull request, run the CI judge locally on the committed branch: `lockflight ci --platform local`
+(`dotnet lockflight ci --platform local` with the tool package). It judges `HEAD` against the target branch with that branch's
+policy and the same checks as CI, so it gives the verdict and reason codes the pull request will get, unless the target branch
+moves in between or the machine differs. When it does not pass, `lockflight ci explain` lists each check with its reason code,
+what to do next and its entry in [reasons](reasons.md); after the push, `lockflight ci explain <run URL>` does the same for
+CI's run. With the plugin, ask whether the branch is ready for a pull request (the `check-pr` skill), or why the check failed on
+the pull request (the `explain-ci` skill).
+
 ## CI with a development build
 
 The workflow `init` writes installs the engine version the project pins, from nuget.org or the package sources in the

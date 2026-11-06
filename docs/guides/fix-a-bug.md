@@ -113,7 +113,10 @@ A test deleted, newly skipped or made `Explicit` since the fork point refuses th
 - **A pre-commit hook that runs the tests** refuses a red commit by nature. The red stays accepted, and the output gives the
   `git commit --no-verify` line to make the commit yourself. A hook that changes files (a formatter) makes the commit differ
   from what was judged: the commit is undone, and you run `lockflight red` again on the formatted files.
-- **Check the whole branch** with `lockflight ci --platform local` once the fix is committed.
+- **Check the whole branch** with `lockflight ci --platform local` once the fix is committed, before you push: it runs the CI
+  judge's checks with the target branch's policy and gives the verdict and reason codes CI gives for the same commits. When it
+  does not pass, `lockflight ci explain` lists each check with its reason, what to do next and its entry in
+  [reasons](reasons.md). With the plugin, the `check-pr` skill does both.
 
 ## What it does not prove
 
