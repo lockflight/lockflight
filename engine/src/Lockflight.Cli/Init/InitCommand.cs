@@ -351,6 +351,13 @@ internal sealed class InitCommand(CliContext context) : ICommand
             }
         }
 
+        // init never overwrites a workflow, so one Lockflight 0.2 wrote keeps running the gates alone until a person moves it.
+        if (init.Platform == CiPlatform.GitHub && JudgeWorkflowMigration.IsGatesOnlyAt(root))
+        {
+            await context.Output.WriteLineAsync(
+                $"CI: {Templates.WorkflowPath} runs the gates only and was left as it is; to move it to the CI judge's workflow, {JudgeWorkflowMigration.MoveAdvice}.");
+        }
+
         // Suggested, not run: the dotnet-ef version is the team's choice, and the tool manifest is theirs to commit. Only for a project
         // whose CI runs the pr profile, where the step's N/A is otherwise seen only in the CI log.
         if ((ciSteps.Count > 0 || PatchCoverageAdvice.PrGatesFile(root) is not null) && EfToolAdvice.Inspect(planned, root) is { Unpinned.Count: > 0 } efTool)
