@@ -260,7 +260,7 @@ The files the engine writes for other tools to read have published schemas too, 
 CI judge's evidence (`lockflight.ci-evidence/v1`), the CI review's result (`lockflight.ci-review/v1`) and a blocked report
 (`lockflight.blocked/v1`). From 0.3.0 to 1.0 they change
 by addition only: read them tolerantly, ignore properties you do not know, and key on ids (a gate step's `id`, a check's
-`id`), never on display text.
+`id`, the `reason` code of a step or check that did not pass), never on display text.
 
 ```yaml
 version: 2                      # required in this shape

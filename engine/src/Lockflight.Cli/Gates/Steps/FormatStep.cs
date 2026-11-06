@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Lockflight.Cli.Gates.Formatting;
 using Lockflight.Cli.Paths;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates.Steps;
 
@@ -45,7 +46,7 @@ internal sealed partial class FormatStep : IGateStep
         IReadOnlyDictionary<string, IReadOnlySet<int>>? changedLines = await ChangedLines.FindAsync(run.ProjectRoot, run.BaseRef, cancellationToken);
         if (changedLines is null && await Git.HeadAsync(run.ProjectRoot, cancellationToken) is not null)
         {
-            return new GateStep(StepName, 0, Verdict.NotEarned, 0, "git could not list the changed lines, so formatting cannot be judged; with --base, is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
+            return new GateStep(StepName, 0, Verdict.NotEarned, ReasonCode.GitHistoryMissing, 0, "git could not list the changed lines, so formatting cannot be judged; with --base, is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
         }
 
         string[]? files = changedLines is null
@@ -53,7 +54,7 @@ internal sealed partial class FormatStep : IGateStep
             : [.. changedLines.Where(entry => entry.Value.Count > 0 && File.Exists(Path.Combine(run.ProjectRoot, entry.Key))).Select(entry => entry.Key).Order(StringComparer.Ordinal)];
         if (files is { Length: 0 })
         {
-            return new GateStep(StepName, 0, Verdict.NotApplicable, 0, "no changed C# lines");
+            return new GateStep(StepName, 0, Verdict.NotApplicable, ReasonCode.None, 0, "no changed C# lines");
         }
 
         DirectoryInfo reportDirectory = Directory.CreateTempSubdirectory("lockflight-format-");
@@ -70,10 +71,10 @@ internal sealed partial class FormatStep : IGateStep
             string checkedFiles = $"{files?.Length.ToString(CultureInfo.InvariantCulture) ?? "all"} files checked";
             GateStep judged = formatRun.ExitCode switch
             {
-                0 => new GateStep(StepName, 0, Verdict.Pass, formatRun.DurationMs, checkedFiles),
-                ChangesNeeded when changedLines is null => new GateStep(StepName, formatRun.ExitCode, Verdict.Fail, formatRun.DurationMs, DescribeWholeFiles(formatRun.Combined, run.ProjectRoot, "no git history to compare with")),
+                0 => new GateStep(StepName, 0, Verdict.Pass, ReasonCode.None, formatRun.DurationMs, checkedFiles),
+                ChangesNeeded when changedLines is null => new GateStep(StepName, formatRun.ExitCode, Verdict.Fail, ReasonCode.FormatNeeded, formatRun.DurationMs, DescribeWholeFiles(formatRun.Combined, run.ProjectRoot, "no git history to compare with")),
                 ChangesNeeded => await JudgeAsync(run, formatRun, changedLines, Path.Combine(reportDirectory.FullName, FormatReport.FileName), checkedFiles, cancellationToken),
-                _ => new GateStep(StepName, formatRun.ExitCode, Verdict.Error, formatRun.DurationMs, $"dotnet format exited {formatRun.ExitCode}"),
+                _ => new GateStep(StepName, formatRun.ExitCode, Verdict.Error, ReasonCode.ToolError, formatRun.DurationMs, $"dotnet format exited {formatRun.ExitCode}"),
             };
             return judged with { Scope = files is null ? "all C# files (format)" : $"{files.Length} changed C# files (format)" };
         }
@@ -110,12 +111,12 @@ internal sealed partial class FormatStep : IGateStep
         IReadOnlyList<FormatDiagnostic>? diagnostics = File.Exists(reportPath) ? FormatReport.Parse(File.ReadAllText(reportPath), run.ProjectRoot) : null;
         if (diagnostics is null)
         {
-            return new GateStep(StepName, formatRun.ExitCode, Verdict.Fail, formatRun.DurationMs, DescribeWholeFiles(formatRun.Combined, run.ProjectRoot, "dotnet format wrote no readable report"));
+            return new GateStep(StepName, formatRun.ExitCode, Verdict.Fail, ReasonCode.FormatNeeded, formatRun.DurationMs, DescribeWholeFiles(formatRun.Combined, run.ProjectRoot, "dotnet format wrote no readable report"));
         }
 
         if (diagnostics.Count == 0)
         {
-            return new GateStep(StepName, formatRun.ExitCode, Verdict.NotEarned, formatRun.DurationMs, "dotnet format reported changes but its report lists none, so the change cannot be judged; run: dotnet format whitespace --folder --verify-no-changes -v diag");
+            return new GateStep(StepName, formatRun.ExitCode, Verdict.NotEarned, ReasonCode.ToolError, formatRun.DurationMs, "dotnet format reported changes but its report lists none, so the change cannot be judged; run: dotnet format whitespace --folder --verify-no-changes -v diag");
         }
 
         IReadOnlySet<string> encodingChanged = await EncodingChangedAsync(run, diagnostics, changedLines, cancellationToken);
@@ -124,7 +125,7 @@ internal sealed partial class FormatStep : IGateStep
 
         if (judgement.Attributed.Count == 0)
         {
-            return new GateStep(StepName, formatRun.ExitCode, Verdict.Pass, formatRun.DurationMs, string.Join("; ", [checkedFiles, .. notes]));
+            return new GateStep(StepName, formatRun.ExitCode, Verdict.Pass, ReasonCode.None, formatRun.DurationMs, string.Join("; ", [checkedFiles, .. notes]));
         }
 
         string listed = string.Join(", ", judgement.Attributed
@@ -137,7 +138,7 @@ internal sealed partial class FormatStep : IGateStep
         }
 
         string detail = $"formatting changes needed on changed lines: {listed}; fix those lines (dotnet format whitespace --folder --include <file> rewrites whole files)";
-        return new GateStep(StepName, formatRun.ExitCode, Verdict.Fail, formatRun.DurationMs, string.Join("; ", [detail, .. notes]));
+        return new GateStep(StepName, formatRun.ExitCode, Verdict.Fail, ReasonCode.FormatNeeded, formatRun.DurationMs, string.Join("; ", [detail, .. notes]));
     }
 
     /// <summary>What the step saw but did not hold against the change.</summary>

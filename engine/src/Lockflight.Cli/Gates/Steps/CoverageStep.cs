@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Parsers;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates.Steps;
 
@@ -88,7 +89,7 @@ internal sealed class CoverageStep : IGateStep
         CoverageSettings settings = run.Settings.Coverage;
         if (settings.Collector == CoverageCollector.None)
         {
-            return new GateStep(StepName, 0, Verdict.NotApplicable, 0, "not configured, so not judged (set gates.coverage.collector in lockflight.yaml)");
+            return new GateStep(StepName, 0, Verdict.NotApplicable, ReasonCode.None, 0, "not configured, so not judged (set gates.coverage.collector in lockflight.yaml)");
         }
 
         IEnumerable<string> searched = resultsDirectory is not null && Directory.Exists(resultsDirectory)
@@ -97,7 +98,7 @@ internal sealed class CoverageStep : IGateStep
         string[] reports = [.. searched.Where(path => File.GetLastWriteTimeUtc(path) >= testsStarted.UtcDateTime.AddSeconds(-1))];
         if (reports.Length == 0)
         {
-            return new GateStep(StepName, 0, Verdict.NotEarned, 0, "the test run wrote no Cobertura report; does every test project reference the collector package?");
+            return new GateStep(StepName, 0, Verdict.NotEarned, ReasonCode.CoverageReportMissing, 0, "the test run wrote no Cobertura report; does every test project reference the collector package?");
         }
 
         LineCoverage coverage = new();
@@ -109,7 +110,7 @@ internal sealed class CoverageStep : IGateStep
 
         if (await ChangedLines.FindAsync(run.ProjectRoot, run.BaseRef, cancellationToken) is not IReadOnlyDictionary<string, IReadOnlySet<int>> allChanged)
         {
-            return new GateStep(StepName, 0, Verdict.Error, 0, "git could not list the changed lines; with --base, is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
+            return new GateStep(StepName, 0, Verdict.Error, ReasonCode.GitHistoryMissing, 0, "git could not list the changed lines; with --base, is the checkout deep enough (fetch-depth: 0), and does every unit repository have that ref?");
         }
 
         // A unit's run judges its own files: another unit's changes are that unit's run's to judge.
@@ -130,7 +131,7 @@ internal sealed class CoverageStep : IGateStep
 
         if (coverable.Count < settings.MinChangedLines)
         {
-            return new GateStep(StepName, 0, Verdict.NotApplicable, 0, $"{coverable.Count} coverable changed lines, below the {settings.MinChangedLines}-line minimum; not judged");
+            return new GateStep(StepName, 0, Verdict.NotApplicable, ReasonCode.None, 0, $"{coverable.Count} coverable changed lines, below the {settings.MinChangedLines}-line minimum; not judged");
         }
 
         int covered = coverable.Count(entry => entry.Hits > 0);
@@ -138,7 +139,7 @@ internal sealed class CoverageStep : IGateStep
         string summary = $"{percent}% of {coverable.Count} changed lines covered (threshold {settings.PatchThreshold}%)";
         if (percent >= settings.PatchThreshold)
         {
-            return new GateStep(StepName, 0, Verdict.Pass, 0, summary);
+            return new GateStep(StepName, 0, Verdict.Pass, ReasonCode.None, 0, summary);
         }
 
         string uncovered = string.Join(", ", coverable
@@ -146,6 +147,6 @@ internal sealed class CoverageStep : IGateStep
             .GroupBy(entry => entry.File)
             .Take(MaxUncoveredListed)
             .Select(group => $"{group.Key}:{string.Join(',', group.Select(entry => entry.Line.ToString(CultureInfo.InvariantCulture)).Take(MaxLinesListed))}"));
-        return new GateStep(StepName, 0, Verdict.Fail, 0, $"{summary}; uncovered: {uncovered}");
+        return new GateStep(StepName, 0, Verdict.Fail, ReasonCode.PatchCoverageLow, 0, $"{summary}; uncovered: {uncovered}");
     }
 }

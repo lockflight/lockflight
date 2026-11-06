@@ -519,6 +519,11 @@
           },
           "why": {
             "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "description": "The stable reason code of a check that did not pass (GREEN_BEFORE, TRACE_UNCOVERED, …); absent when it passed or did not apply. More codes may be added; a reader shows an unknown code as it is."
           }
         }
       }

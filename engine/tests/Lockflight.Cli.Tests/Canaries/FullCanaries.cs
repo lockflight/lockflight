@@ -2,6 +2,7 @@ using System.Text.Json;
 using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Tests.Canaries;
 
@@ -280,6 +281,7 @@ internal static class FullCanaries
             step.GetProperty("name").GetString() ?? string.Empty,
             step.GetProperty("toolExitCode").GetInt32(),
             Enum.GetValues<Verdict>().FirstOrDefault(value => VerdictNames.ToContractName(value) == verdict, Verdict.Error),
+            ReasonCodeNames.Parse(step.TryGetProperty("reason", out JsonElement reason) ? reason.GetString() : null) is ReasonCode named and not ReasonCode.Unknown ? named : ReasonCode.None,
             step.GetProperty("durationMs").GetInt64(),
             step.GetProperty("detail").GetString() ?? string.Empty);
     }

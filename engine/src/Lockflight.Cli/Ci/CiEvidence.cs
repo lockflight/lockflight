@@ -7,6 +7,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Routing;
 
 namespace Lockflight.Cli.Ci;
@@ -311,14 +312,24 @@ internal static class CiEvidence
         ["subject"] = Cap(red.Subject),
     };
 
-    private static JsonObject CheckNode(CheckResult check) => new()
+    /// <summary>A check as evidence: <c>reason</c> is there only when the check names one (it did not pass).</summary>
+    public static JsonObject CheckNode(CheckResult check)
     {
-        ["id"] = CheckIdNames.ToName(check.Id),
-        ["context"] = StatusContextNames.ToName(check.Context),
-        ["verdict"] = CheckVerdictNames.ToName(check.Verdict),
-        ["requirement"] = CheckLevelNames.ToName(check.Level),
-        ["why"] = Cap(check.Why),
-    };
+        JsonObject node = new()
+        {
+            ["id"] = CheckIdNames.ToName(check.Id),
+            ["context"] = StatusContextNames.ToName(check.Context),
+            ["verdict"] = CheckVerdictNames.ToName(check.Verdict),
+            ["requirement"] = CheckLevelNames.ToName(check.Level),
+            ["why"] = Cap(check.Why),
+        };
+        if (ReasonCodeNames.ToName(check.Reason) is string reason)
+        {
+            node["reason"] = reason;
+        }
+
+        return node;
+    }
 
     /// <summary>The loosenings, each capped (a path comes from the pull request's manifest), and at most <see cref="MaxLoosened"/>.</summary>
     private static IEnumerable<string> Loosened(IReadOnlyList<string> loosened) =>

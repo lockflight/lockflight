@@ -94,63 +94,72 @@
       "context": "lockflight/judge",
       "verdict": "NOT-EARNED",
       "requirement": "required",
-      "why": "not judged by this engine version yet"
+      "why": "not judged by this engine version yet",
+      "reason": "NOT_JUDGED_YET"
     },
     {
       "id": "tests.sinceRed",
       "context": "lockflight/judge",
       "verdict": "NOT-EARNED",
       "requirement": "required",
-      "why": "not judged by this engine version yet"
+      "why": "not judged by this engine version yet",
+      "reason": "NOT_JUDGED_YET"
     },
     {
       "id": "tests.existingChanged",
       "context": "lockflight/judge",
       "verdict": "NOT-EARNED",
       "requirement": "advisory",
-      "why": "not judged by this engine version yet"
+      "why": "not judged by this engine version yet",
+      "reason": "NOT_JUDGED_YET"
     },
     {
       "id": "tests.hostTampering",
       "context": "lockflight/judge",
       "verdict": "NOT-EARNED",
       "requirement": "required",
-      "why": "not judged by this engine version yet"
+      "why": "not judged by this engine version yet",
+      "reason": "NOT_JUDGED_YET"
     },
     {
       "id": "green",
       "context": "gates",
       "verdict": "NOT-EARNED",
       "requirement": "required",
-      "why": "not judged by this engine version yet"
+      "why": "not judged by this engine version yet",
+      "reason": "NOT_JUDGED_YET"
     },
     {
       "id": "trace",
       "context": "lockflight/judge",
       "verdict": "NOT-EARNED",
       "requirement": "advisory",
-      "why": "not judged by this engine version yet"
+      "why": "not judged by this engine version yet",
+      "reason": "NOT_JUDGED_YET"
     },
     {
       "id": "gates",
       "context": "gates",
       "verdict": "NOT-EARNED",
       "requirement": "required",
-      "why": "not judged by this engine version yet"
+      "why": "not judged by this engine version yet",
+      "reason": "NOT_JUDGED_YET"
     },
     {
       "id": "review",
       "context": "lockflight/judge",
       "verdict": "SKIPPED",
       "requirement": "advisory",
-      "why": "the report joins the review job's result"
+      "why": "the report joins the review job's result",
+      "reason": "REVIEW_NOT_RUN"
     },
     {
       "id": "approvals",
       "context": "lockflight/judge",
       "verdict": "NOT-EARNED",
       "requirement": "advisory",
-      "why": "not judged by this engine version yet"
+      "why": "not judged by this engine version yet",
+      "reason": "NOT_JUDGED_YET"
     },
     {
       "id": "routing",

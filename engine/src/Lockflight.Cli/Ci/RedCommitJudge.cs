@@ -1,4 +1,5 @@
 using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Ci;
@@ -46,7 +47,7 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
         TreeListing tree = await trees.ListAsync(red.Commit, $"red {red.Label}", fresh: true, cancellationToken);
         if (tree.Outcome == TreeOutcome.CompileFailed)
         {
-            return Judged(red, tree.Outcome, [], CheckVerdict.Fail, $"COMPILE_RED: the tests do not compile at the red commit; declare the members they use as stubs. {tree.Detail}");
+            return Judged(red, tree.Outcome, [], CheckVerdict.Fail, ReasonCode.CompileRed, $"COMPILE_RED: the tests do not compile at the red commit; declare the members they use as stubs. {tree.Detail}");
         }
 
         if (tree.Inventory is not IReadOnlyList<TestCase> inventory)
@@ -66,20 +67,20 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
         };
         if (SuiteProblem(record, inventory) is string problem)
         {
-            return Judged(red, tree.Outcome, [], CheckVerdict.Fail, problem);
+            return Judged(red, tree.Outcome, [], CheckVerdict.Fail, ReasonCode.RedWeakensSuite, problem);
         }
 
         TestCase[] fresh = [.. inventory.Where(test => !record.BaselineTests.Contains(test.Key) && !earlierNew.Contains(test.Key)
             && !Lifecycle.StructuralCheck.IsStructural(test.Requirements, structuralIds))];
         if (fresh.Length == 0)
         {
-            return Judged(red, tree.Outcome, [], CheckVerdict.Fail, "the red commit adds no tests; add the story's tests to it, or drop its trailer");
+            return Judged(red, tree.Outcome, [], CheckVerdict.Fail, ReasonCode.RedAddsNoTests, "the red commit adds no tests; add the story's tests to it, or drop its trailer");
         }
 
         DateTimeOffset deadline = time.GetUtcNow().Add(trees.ProcessLimit);
         if (await tree.Workspace.RunAsync(fresh, cancellationToken) is not IReadOnlyList<ExecutedTest> results)
         {
-            return Judged(red, tree.Outcome, [], CheckVerdict.Error, $"the test runner produced no report for {tree.Workspace.FailedApp}");
+            return Judged(red, tree.Outcome, [], CheckVerdict.Error, ReasonCode.ToolError, $"the test runner produced no report for {tree.Workspace.FailedApp}");
         }
 
         RedEvaluationResult evaluation = await RedEvaluation.ClassifyAsync(tree.Workspace, trees.Root, inventory, fresh, results, deadline, time, cancellationToken);
@@ -88,7 +89,8 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
             ? $"{evaluation.Classified.Count} new tests, each RED_STUB or RED_ASSERT"
             : $"{rejected.Length} of {evaluation.Classified.Count} new tests do not fail for the right reason: "
               + string.Join("; ", rejected.Select(test => test.RedClass).Distinct().Select(redClass => $"{RedClassNames.ToName(redClass)} ({RedClassFixes.For(redClass)})"));
-        return new CycleJudgement(red, tree.Outcome, evaluation.Classified, evaluation.Verdicts, rejected.Length == 0 ? CheckVerdict.Pass : CheckVerdict.Fail, why)
+        return new CycleJudgement(red, tree.Outcome, evaluation.Classified, evaluation.Verdicts, rejected.Length == 0 ? CheckVerdict.Pass : CheckVerdict.Fail,
+            rejected.Length == 0 ? ReasonCode.None : CheckReasons.Of(rejected[0].RedClass), why)
         {
             Tampering = tree.Tampering,
             FingerprintsAtRed = fresh.Where(test => tree.Fingerprints.ContainsKey(test.Key)).ToDictionary(test => test.Key, test => tree.Fingerprints[test.Key], StringComparer.Ordinal),
@@ -110,8 +112,8 @@ internal sealed class RedCommitJudge(TreeBuilder trees, TimeProvider time)
     }
 
     private static CycleJudgement NotJudged(RedCommit red, TreeListing tree, string why) =>
-        Judged(red, tree.Outcome, [], tree.Outcome == TreeOutcome.Broken ? CheckVerdict.Error : CheckVerdict.NotEarned, why);
+        Judged(red, tree.Outcome, [], tree.Outcome == TreeOutcome.Broken ? CheckVerdict.Error : CheckVerdict.NotEarned, CheckReasons.NotListed(tree.Outcome), why);
 
-    private static CycleJudgement Judged(RedCommit red, TreeOutcome build, IReadOnlyList<RedGreenTest> tests, CheckVerdict verdict, string why) =>
-        new(red, build, tests, new Dictionary<string, RedVerdict>(StringComparer.Ordinal), verdict, why);
+    private static CycleJudgement Judged(RedCommit red, TreeOutcome build, IReadOnlyList<RedGreenTest> tests, CheckVerdict verdict, ReasonCode reason, string why) =>
+        new(red, build, tests, new Dictionary<string, RedVerdict>(StringComparer.Ordinal), verdict, reason, why);
 }

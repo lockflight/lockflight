@@ -3,12 +3,13 @@ using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Evidence;
 using Lockflight.Cli.Gates.Steps;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates;
 
 /// <summary>
 /// Writes the <c>lockflight.result/v1</c> JSON envelope: the verdict, the engine and the commits it judged, and per step its stable
-/// <c>id</c>, display <c>name</c>, the unit of a workspace row, and the <c>mode</c> the manifest gives it (<c>fail</c> for a step
+/// <c>id</c>, display <c>name</c>, the unit of a workspace row, the <c>reason</c> code of a step that names one, and the <c>mode</c> the manifest gives it (<c>fail</c> for a step
 /// no key switches).
 /// </summary>
 internal static class GateResultWriter
@@ -48,6 +49,11 @@ internal static class GateResultWriter
             writer.WriteString("mode", GateModeNames.ToName(ModeOf(step.Id, gates)));
             writer.WriteNumber("toolExitCode", step.ToolExitCode);
             writer.WriteString("verdict", VerdictNames.ToContractName(step.Verdict));
+            if (ReasonCodeNames.ToName(step.Reason) is string reason)
+            {
+                writer.WriteString("reason", reason);
+            }
+
             writer.WriteNumber("durationMs", step.DurationMs);
             writer.WriteString("detail", step.Detail);
             writer.WriteEndObject();

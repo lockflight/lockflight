@@ -104,6 +104,11 @@
               "string",
               "null"
             ]
+          },
+          "reason": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "description": "The stable reason code of a step that did not pass (BUILD_FAILED, TESTS_FAILED, …); absent when it passed or did not apply, and kept on a step that report mode turned into a pass. More codes may be added; a reader shows an unknown code as it is."
           }
         }
       }

@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Tests.Ci;
 
@@ -164,7 +165,7 @@ public sealed class EvidenceCrossCheckTests : IAsyncLifetime
             ["checks"] = new JsonArray([.. plan.Levels.Select(level => (JsonNode)new JsonObject
             {
                 ["id"] = CheckIdNames.ToName(level.Key),
-                ["context"] = StatusContextNames.ToName(new CheckResult(level.Key, level.Value, CheckVerdict.Pass, "ok").Context),
+                ["context"] = StatusContextNames.ToName(new CheckResult(level.Key, level.Value, CheckVerdict.Pass, ReasonCode.None, "ok").Context),
                 ["verdict"] = level.Value == CheckLevel.Off ? "N/A" : CheckVerdictNames.ToName(EvidenceCrossCheck.PlannedVerdict(plan, level.Key) ?? CheckVerdict.Pass),
                 ["requirement"] = CheckLevelNames.ToName(level.Value),
                 ["why"] = "ok",
