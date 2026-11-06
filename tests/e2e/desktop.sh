@@ -4,7 +4,8 @@
 # On Windows, the CI judge: an honest ViewModel feature PASSes (the gates too, under the SDK 8 pin); a feature whose stub is in
 # code-behind, with [StaFact] tests that open the window directly and through the Dispatcher, PASSes; a test written after the
 # code FAILs red with GREEN_BEFORE; a server-only feature PASSes; a [structural] refactor without a red commit is NOT-EARNED
-# (RED_MISSING) today. The Stop gate runs every test project, the UI tests left to CI by test.stopFilter.
+# (RED_MISSING) today. The Stop gate runs every test project, the UI tests left to CI by test.stopFilter. On both, a
+# visual-only XAML change is routed as class fix.
 # Off Windows, the local gates: the Stop gate builds the client with EnableWindowsTargeting, leaves its test projects out with a
 # note and runs the server's tests; doctor explains why.
 # Usage: ENGINE=<lockflight binary> desktop.sh <workdir>
@@ -52,6 +53,13 @@ git init -q -b main; git config commit.gpgsign false; git config core.autocrlf f
 printf 'version: 1\ngates:\n  test:\n    stopFilter: "Category!=UI"\n' > lockflight.yaml
 printf 'bin/\nobj/\n.lockflight/ledger/\n.lockflight/local/\n' > .gitignore
 git add -A; git commit -qm base; main=$(git rev-parse HEAD)
+
+# A visual-only XAML change is routed by its size, as class fix: XAML is neither code nor configuration.
+git checkout -q -b 006-xaml "$main"
+FROM='<StackPanel Margin="12">' TO='<StackPanel Margin="16">' "$PY" -c 'import os,sys; p=sys.argv[1]; s=open(p).read(); open(p,"w").write(s.replace(os.environ["FROM"], os.environ["TO"]))' src/Desk.Client/MainWindow.xaml
+git add -A; git commit -qm "style: a roomier window"
+expect 0 "a visual-only XAML change is class fix" "**Class: fix**" -- "$E" route show --base "$main" --head 006-xaml
+git checkout -q main
 
 if [ "$windows" = 0 ]; then
   # Off Windows: the client cannot be tested here, the server can.

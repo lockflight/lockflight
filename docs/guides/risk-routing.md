@@ -72,7 +72,7 @@ Each changed path gets one role, first match wins. Every name test ignores case 
 - **XAML is neither code nor configuration.** A `.xaml` file has no code lines, so a change to it alone needs no red, and it
   does not fire `config.changed`, so a margin or a colour stays in the class its size gives it. XAML can still wire behaviour
   (event handlers, triggers, bindings), so green runs the existing tests, and a test that opens the window catches a view that
-  no longer loads. Logic belongs in the code-behind or, better, the ViewModel, where a change needs its red.
+  no longer loads. Logic belongs in the code-behind or, better, the ViewModel, where a change needs its red ([desktop applications](desktop.md)).
 - **The role of a file that exists on the base branch is read on the base branch.** Adding a test package to a production
   project in the pull request does not turn its existing files into tests (the project edit has its own signal).
 
