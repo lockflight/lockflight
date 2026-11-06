@@ -222,4 +222,10 @@ internal enum ReasonCode
     /// release's attested hashes, or it could not be checked (<c>ENGINE_LOCK_REFUSED</c>).
     /// </summary>
     EngineLockRefused = 69,
+
+    /// <summary>
+    /// A test project needs Windows (a <c>net*-windows</c> framework, WPF or Windows Forms) and the judge runs on another OS, so
+    /// nothing was built (<c>NEEDS_WINDOWS_RUNNER</c>).
+    /// </summary>
+    NeedsWindowsRunner = 70,
 }

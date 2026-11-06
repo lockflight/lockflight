@@ -1,3 +1,5 @@
+using Lockflight.Cli.Projects;
+
 namespace Lockflight.Cli.Init;
 
 /// <summary>
@@ -29,7 +31,7 @@ internal static class CiPipeline
             new(GitLabCiTemplate.Path, GitLabCiTemplate.Job(dotnetChannels, trigger, developmentPin)),
             new(GitLabCiTemplate.RootPath, GitLabCiTemplate.Root()),
         ],
-        _ => [new(Templates.WorkflowPath, Templates.Workflow(dotnetChannels, trigger, developmentPin))],
+        _ => [new(Templates.WorkflowPath, JudgeRunner.Apply(Templates.Workflow(dotnetChannels, trigger, developmentPin), windows: ProjectFiles.WindowsTestProjects(root).Count > 0))],
     };
 
     /// <summary>
@@ -41,7 +43,27 @@ internal static class CiPipeline
     {
         bool written = steps.Any(step => step.Outcome != FileOutcome.Unchanged);
         bool gitLabWithoutInclude = platform == CiPlatform.GitLab && !GitLabCiTemplate.IsIncludedBy(ReadOrEmpty(root, GitLabCiTemplate.RootPath));
-        return written || gitLabWithoutInclude ? Instructions(platform, steps, gitLabWithoutInclude, trigger) : [];
+        return written || gitLabWithoutInclude
+            ? [.. Instructions(platform, steps, gitLabWithoutInclude, trigger), .. written ? RunnerLines(platform, ProjectFiles.WindowsTestProjects(root), root) : []]
+            : [];
+    }
+
+    /// <summary>
+    /// Why the judge runs where it does when a test project needs Windows: on GitHub the building jobs moved to Windows and what
+    /// that costs; elsewhere the template's Linux image cannot run those tests, so the job needs a Windows agent.
+    /// </summary>
+    public static IReadOnlyList<string> RunnerLines(CiPlatform platform, IReadOnlyList<string> windowsTestProjects, string root)
+    {
+        if (windowsTestProjects.Count == 0)
+        {
+            return [];
+        }
+
+        string projects = string.Join(", ", windowsTestProjects.Select(project => Path.GetRelativePath(root, project).Replace('\\', '/')));
+        string needs = $"{projects} {(windowsTestProjects.Count == 1 ? "targets" : "target")} Windows (net*-windows, WPF or Windows Forms), whose tests run only on Windows";
+        return platform == CiPlatform.GitHub
+            ? [$"CI: {needs}, so the judge and review jobs of {Templates.WorkflowPath} run on {JudgeRunner.WindowsLabel} (the report jobs stay on Linux). The judge builds the fork point, each red commit and head there; a Windows run takes about twice as long as a Linux one and GitHub bills Windows minutes at twice the Linux rate on private repositories, so expect about four times the billed minutes: {GitHubGuideUrl}#desktop-solutions-and-windows-runners"]
+            : [$"CI: {needs}; the {PlatformName(platform)} template runs on a Linux image, where the judge stops with NEEDS_WINDOWS_RUNNER. Run the Lockflight job on a Windows agent: {GuideUrl}#platforms-and-runners"];
     }
 
     private static IReadOnlyList<string> Instructions(CiPlatform platform, IReadOnlyList<InitStep> steps, bool gitLabWithoutInclude, CiTrigger trigger) => platform switch
@@ -67,6 +89,14 @@ internal static class CiPipeline
         ],
         CiPlatform.GitLab => [$"CI: turn on \"Pipelines must succeed\" for merge requests; route {GitLabCiTemplate.Path} and {GitLabCiTemplate.RootPath} to a code owner: {GuideUrl}#gitlab-cicd"],
         _ => [],
+    };
+
+    private static string PlatformName(CiPlatform platform) => platform switch
+    {
+        CiPlatform.Azure => "Azure Pipelines",
+        CiPlatform.Bitbucket => "Bitbucket Pipelines",
+        CiPlatform.GitLab => "GitLab CI/CD",
+        _ => "GitHub",
     };
 
     /// <summary>

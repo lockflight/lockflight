@@ -25,14 +25,18 @@ not at the same stage:
 ## Platforms and runners
 
 Every job `init` writes runs on Linux x64: the GitHub workflow and the Azure pipeline on `ubuntu-latest`, the Bitbucket and
-GitLab jobs in the `mcr.microsoft.com/dotnet/sdk:10.0` image. The action and the templates download gitleaks for Linux x64
-only, so other runners fail at that step.
+GitLab jobs in the `mcr.microsoft.com/dotnet/sdk:10.0` image. The one exception is a solution with a test project that needs
+Windows (a `net*-windows` framework, WPF or Windows Forms): there the GitHub workflow's judge and review jobs run on
+`windows-latest` ([desktop solutions and Windows runners](ci-hardening.md#desktop-solutions-and-windows-runners)). The Azure,
+Bitbucket and GitLab templates download gitleaks for Linux x64 only and keep their Linux image; for a desktop solution, run the
+Lockflight job on a Windows agent of your own, or the judge stops with
+[NEEDS_WINDOWS_RUNNER](reasons.md#needs_windows_runner). `init` and `doctor` say so.
 
 | CI service | Runner | What runs | State |
 |---|---|---|---|
 | GitHub Actions | GitHub-hosted Linux x64 (`ubuntu-latest`) | the CI judge, through the action | supported |
 | GitHub Actions | self-hosted Linux x64 | the CI judge, through the action | unverified: not run |
-| GitHub Actions | Windows | — | not yet: Windows runner support is being added |
+| GitHub Actions | GitHub-hosted Windows x64 (`windows-latest`) | the CI judge, through the action; `init` and `update --project` choose it for a desktop solution | supported |
 | GitHub Actions | macOS, or Linux arm64 | — | not supported: gitleaks is downloaded for Linux x64 only |
 | Bitbucket Pipelines | the .NET SDK image, Linux x64 | the CI judge | unverified: the template has never run on a live workspace |
 | GitLab CI/CD | the .NET SDK image, Linux x64 | the `pr` gates only | experimental and unverified: its shell steps ran in the SDK container, never on a live GitLab |

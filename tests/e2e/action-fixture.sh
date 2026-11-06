@@ -5,11 +5,12 @@
 # file:// feed as its platform's package, so the action installs it through install.sh and checks its hash, as it would a
 # release. Branch 001-shipping (a red commit, then the implementation) must PASS; branch 002-cheat (the test and the code in
 # one red commit) must FAIL; branch 003-planted commits artifacts/lockflight/ (a result of its own, and a symlink to it), which
-# the action must not upload as the gates' result. main itself is the pull request that adds the first engine lock to the
+# the action must not upload as the gates' result; branch 004-desktop adds a WPF test project (net10.0-windows), which the judge
+# must not build off Windows (NEEDS_WINDOWS_RUNNER). main itself is the pull request that adds the first engine lock to the
 # commit before it (prelock).
 # Usage: ENGINE=<lockflight binary> action-fixture.sh <repository dir> <feed dir>
 # The repository directory may hold other files (the Lockflight checkout); they are excluded, never committed. Prints
-# base=<sha>, prelock=<sha>, pass=<sha>, fail=<sha>, planted=<sha> and feed=<url> lines (for GITHUB_OUTPUT).
+# base=<sha>, prelock=<sha>, pass=<sha>, fail=<sha>, planted=<sha>, desktop=<sha> and feed=<url> lines (for GITHUB_OUTPUT).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 E="${ENGINE:?path to the lockflight binary}"
@@ -105,6 +106,27 @@ cp artifacts/lockflight/planted.json artifacts/lockflight/gates-result.json
 git add -f artifacts/lockflight
 git commit -qm "chore: a result of its own"
 planted=$(git rev-parse HEAD)
+
+# A pull request that adds a desktop client's tests: their test host starts only on Windows.
+git checkout -q -b 004-desktop "$pass"
+mkdir -p tests/Client.Tests
+cat > tests/Client.Tests/Client.Tests.csproj <<'PROJECT'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.mtp-v2" Version="4.0.2" />
+  </ItemGroup>
+</Project>
+PROJECT
+printf 'public class WindowTests\n{\n    [Xunit.Fact]\n    public void TheWindowOpens() => Xunit.Assert.True(true);\n}\n' > tests/Client.Tests/WindowTests.cs
+perl -pi -e 's|(    <Project Path="tests/Shop.Tests/Shop.Tests.csproj" />)|$1\n    <Project Path="tests/Client.Tests/Client.Tests.csproj" />|' Shop.slnx
+git add -A
+git commit -qm "test: the desktop client"
+desktop=$(git rev-parse HEAD)
 git checkout -q main
 
-printf 'base=%s\nprelock=%s\npass=%s\nfail=%s\nplanted=%s\nfeed=%s\n' "$main" "$prelock" "$pass" "$fail" "$planted" "$url"
+printf 'base=%s\nprelock=%s\npass=%s\nfail=%s\nplanted=%s\ndesktop=%s\nfeed=%s\n' "$main" "$prelock" "$pass" "$fail" "$planted" "$desktop" "$url"

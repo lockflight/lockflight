@@ -432,6 +432,18 @@ run; the detail names the failed check.
 
 **Next:** A tool broke, not the code: re-run the check; if it repeats, read the job log for the tool's own error (the code was not judged).
 
+### NEEDS_WINDOWS_RUNNER
+
+**Means:** A test project needs Windows (a `net*-windows` target framework, WPF or Windows Forms), and the judge ran on Linux or
+macOS, so it built nothing: every check that builds (red, tests since red, existing tests changed, host tampering, trace, gates,
+green) is ERROR with this code.
+
+**Why:** Off Windows such a solution does not build (`NETSDK1100`), and with `EnableWindowsTargeting` it builds but the Windows test
+hosts cannot start, so a red would look skipped and a fix would fail for reasons that have nothing to do with the code.
+
+**Next:** Run the judge on windows-latest: a person runs `lockflight update --project`, which moves the GitHub workflow's judge and review jobs there; on another CI platform, run the Lockflight job on a Windows agent.
+See [desktop solutions and Windows runners](ci-hardening.md#desktop-solutions-and-windows-runners).
+
 ## Gates
 
 The steps of `lockflight gate run`, in the Stop hook and in CI's `gates` check.

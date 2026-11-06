@@ -9,6 +9,8 @@ namespace Lockflight.Cli.Projects;
 /// </summary>
 internal static partial class ProjectFiles
 {
+    private const string WindowsFrameworkSuffix = "-windows";
+
     private static readonly HashSet<string> SkippedDirectories = new(StringComparer.OrdinalIgnoreCase) { "bin", "obj", ".git", "node_modules", ".lockflight" };
     private static readonly string[] InheritedFiles = ["Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props"];
     private static readonly string[] TestMarkers = ["<IsTestProject>true", "xunit", "MSTest", "NUnit", "TUnit", "Microsoft.NET.Test.Sdk"];
@@ -45,6 +47,19 @@ internal static partial class ProjectFiles
 
         return [];
     }
+
+    /// <summary>
+    /// The test projects under the root whose tests need Windows to run, sorted: they target a <c>net*-windows</c> framework, or
+    /// they, or a Directory.Build file above them, set <c>UseWPF</c> or <c>UseWindowsForms</c> to true. Their test hosts cannot
+    /// start on Linux or macOS, and the solution does not build there without <c>EnableWindowsTargeting</c>.
+    /// </summary>
+    public static IReadOnlyList<string> WindowsTestProjects(string root) =>
+        [.. TestProjects(root).Where(project => NeedsWindows(root, project))];
+
+    /// <summary>Whether the project targets Windows: a <c>-windows</c> framework, or WPF or Windows Forms turned on.</summary>
+    public static bool NeedsWindows(string root, string projectPath) =>
+        TargetFrameworks(root, projectPath).Any(framework => framework.Contains(WindowsFrameworkSuffix, StringComparison.OrdinalIgnoreCase))
+        || WithInheritedFiles(root, projectPath).Any(file => WindowsDesktopProperties().IsMatch(File.ReadAllText(file)));
 
     private static IEnumerable<string> Enumerate(string root)
     {
@@ -98,6 +113,9 @@ internal static partial class ProjectFiles
 
     [GeneratedRegex(@"<(?:Global)?PackageReference\b[^>]*?\bInclude\s*=\s*""(?<package>[^""]+)""", RegexOptions.IgnoreCase)]
     private static partial Regex PackageReferences();
+
+    [GeneratedRegex(@"<(?<property>UseWPF|UseWindowsForms)>\s*true\s*</\k<property>>", RegexOptions.IgnoreCase)]
+    private static partial Regex WindowsDesktopProperties();
 
     [GeneratedRegex(@"<TargetFrameworks?>(?<value>[^<]+)</TargetFrameworks?>", RegexOptions.IgnoreCase)]
     private static partial Regex TargetFrameworkElements();

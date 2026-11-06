@@ -212,10 +212,33 @@ instead of the fork point, so the two can differ when the branch's history moved
 
 The action runs on Linux (x64, Arm64), Windows (x64) and macOS runners: its scripts run in bash (Git Bash on Windows), it
 installs the gitleaks build for the runner, and the vendored install script installs `lockflight.exe` on Windows. The
-generated workflow runs its jobs on `ubuntu-latest`. To judge on Windows, change `runs-on:` of the `judge` job to
-`windows-latest` by hand; the report jobs read data only and can stay on Linux. The engine lock pins the install script by
-hash, so this needs a lock from an engine release whose `install.sh` knows Windows (released Lockflight 0.3 scripts refuse
-it); moving the lock to such a release (`lockflight update`, by a person) vendors that script with it.
+generated workflow runs its jobs on `ubuntu-latest`, and the jobs that build on `windows-latest` when the solution needs
+Windows (next section). The engine lock pins the install script by hash, so a Windows runner needs a lock from an engine
+release whose `install.sh` knows Windows (released Lockflight 0.3 scripts refuse it); moving the lock to such a release
+(`lockflight update`, by a person) vendors that script with it.
+
+### Desktop solutions and Windows runners
+
+A test project **needs Windows** when it targets a `net*-windows` framework (`net8.0-windows`, `net10.0-windows10.0.19041.0`),
+or when it, or a `Directory.Build.props`/`.targets` above it, sets `UseWPF` or `UseWindowsForms` to `true`. Its tests run only
+on Windows: on Linux the solution does not build (`NETSDK1100`), and with `EnableWindowsTargeting` it builds but the Windows
+test hosts cannot start, so a red would look skipped and a server-only fix would fail.
+
+- **`init`** writes the `judge` and `review` jobs (the two that build the pull request's code) with `runs-on: windows-latest`
+  and bash as their shell when a test project needs Windows, and says why. The `gates` and `lockflight/judge` report jobs read
+  data only and stay on `ubuntu-latest`.
+- **`lockflight update --project`** (a person's command) moves the two jobs to `windows-latest` when a test project needs
+  Windows, and back to `ubuntu-latest` when none does any more; it prints the diff first, and `--dry-run` shows it without
+  writing. It moves only the two labels it writes: a `runs-on` with any other value (a self-hosted label, `windows-2025`, an
+  expression) is yours, and is left as it is. To keep Windows for a solution that does not need it, name such a label.
+- **`lockflight doctor`** warns when a test project needs Windows and the judge job runs on a runner that is not Windows, and
+  when the judge runs on `windows-latest` for a solution that does not need it.
+- **The judge off Windows** builds nothing for a head with a test project that needs Windows: every check that builds is ERROR
+  with [NEEDS_WINDOWS_RUNNER](reasons.md#needs_windows_runner), never a red or green judged on tests that could not run.
+
+**Cost.** The judge builds the fork point, each red commit and head, and a Windows runner is slower: a judge run on
+`windows-latest` takes about twice as long as on Linux. GitHub bills Windows minutes at twice the Linux rate on private
+repositories (public repositories run free), so expect about four times the billed minutes of a Linux judge.
 
 ### Which check is required
 

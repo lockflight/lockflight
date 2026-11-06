@@ -5,6 +5,7 @@ using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
 using Lockflight.Cli.Linking;
+using Lockflight.Cli.Tests.Projects;
 using Lockflight.Cli.Updating;
 
 namespace Lockflight.Cli.Tests.Updating;
@@ -346,6 +347,68 @@ public sealed class UpdateCommandTests : IDisposable
         Assert.Null(UserInstall.InstalledVersion(root.FullName));
     }
 
+    [Fact]
+    public async Task AProjectUpdateMovesTheJudgeToWindowsForADesktopTestProjectWithTheDiffFirstAndOnlyOnce()
+    {
+        string workflow = JudgeProject();
+        DesktopProjects.WriteWpfTests(root.FullName);
+
+        (ExitCode exitCode, string output, string error) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Equal(JudgeRunner.Apply(Templates.Workflow(["10.0.x"]), windows: true), File.ReadAllText(workflow));
+        Assert.Contains($"{DesktopProjects.WpfTests} targets Windows", output, StringComparison.Ordinal);
+        Assert.Contains("+    runs-on: windows-latest", output, StringComparison.Ordinal);
+
+        (_, string again, _) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.DoesNotContain("CI runner:", again, StringComparison.Ordinal);
+        Assert.Equal(JudgeRunner.Apply(Templates.Workflow(["10.0.x"]), windows: true), File.ReadAllText(workflow));
+    }
+
+    [Fact]
+    public async Task AProjectUpdateMovesTheJudgeBackToLinuxOnceNoTestProjectNeedsWindows()
+    {
+        string workflow = JudgeProject(JudgeRunner.Apply(Templates.Workflow(["10.0.x"]), windows: true));
+        DesktopProjects.WriteServerTests(root.FullName);
+
+        (ExitCode exitCode, string output, string error) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Equal(Templates.Workflow(["10.0.x"]), File.ReadAllText(workflow));
+        Assert.Contains("move back to ubuntu-latest", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADryRunShowsTheRunnerMoveAndWritesNothing()
+    {
+        string workflow = JudgeProject();
+        DesktopProjects.WriteWpfTests(root.FullName);
+        string before = File.ReadAllText(workflow);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["update", "--project", "--dry-run"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains($"--- {Templates.WorkflowPath}", output, StringComparison.Ordinal);
+        Assert.Contains("+    runs-on: windows-latest", output, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(workflow));
+    }
+
+    [Fact]
+    public async Task AJudgeOnARunnerChosenByHandIsNotedAndLeftAlone()
+    {
+        string chosen = Templates.Workflow(["10.0.x"]).Replace("  judge:\n    runs-on: ubuntu-latest", "  judge:\n    runs-on: [self-hosted, linux]", StringComparison.Ordinal)
+            .Replace("    runs-on: ubuntu-latest\n    environment: lockflight-review", "    runs-on: [self-hosted, linux]\n    environment: lockflight-review", StringComparison.Ordinal);
+        string workflow = JudgeProject(chosen);
+        DesktopProjects.WriteWpfTests(root.FullName);
+
+        (ExitCode exitCode, string output, string error) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Equal(chosen, File.ReadAllText(workflow));
+        Assert.Contains("a runner chosen by hand", output, StringComparison.Ordinal);
+    }
+
     private async Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string[] args, FakeToolFeed feed)
     {
         using StringWriter output = new();
@@ -391,6 +454,24 @@ public sealed class UpdateCommandTests : IDisposable
         }
 
         return workflow;
+    }
+
+    /// <summary>A version 2 manifest, the running engine pinned, and the CI judge's workflow (<paramref name="workflowText"/>, or the template's); the workflow's path.</summary>
+    private string JudgeProject(string? workflowText = null)
+    {
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), Templates.Manifest(InitProfile.Lite, RoutingPreset.Default));
+        File.WriteAllText(Path.Combine(root.FullName, "dotnet-tools.json"), ToolManifestWriter.Pin(null).Json);
+        string workflow = Path.Combine(root.FullName, Templates.WorkflowPath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(workflow)!);
+        File.WriteAllText(workflow, workflowText ?? Templates.Workflow(["10.0.x"]));
+        return workflow;
+    }
+
+    private RunningEngine NativeEngine()
+    {
+        string engine = Path.Combine(home.FullName, "lockflight-native");
+        File.WriteAllText(engine, "native engine");
+        return new RunningEngine(engine, IsSingleFile: true);
     }
 
     private Dictionary<string, string> Home() => new() { [EnvironmentVariables.Home] = home.FullName };

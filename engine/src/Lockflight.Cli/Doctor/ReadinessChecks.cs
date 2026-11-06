@@ -80,6 +80,8 @@ internal static class ReadinessChecks
             checks.Add(workflowJudge);
         }
 
+        checks.AddRange(WorkflowRunnerCheck.Check(root));
+
         if (await GitHubActionsCheck.CheckAsync(root, processes, cancellationToken) is DoctorCheck gitHubActions)
         {
             checks.Add(gitHubActions);

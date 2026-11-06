@@ -10,6 +10,7 @@ using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Mascot;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Projects;
 
 namespace Lockflight.Cli.Updating;
 
@@ -244,6 +245,8 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             await PlanCiFilesAsync(root, writes, dryRun, skipWorkflow: workflowUpdate == JudgeWorkflowUpdate.Planned, cancellationToken);
         }
 
+        await PlanJudgeRunnerAsync(root, writes, dryRun, cancellationToken);
+
         string claudeMd = Path.Combine(root, "CLAUDE.md");
         if (File.Exists(claudeMd) && await File.ReadAllTextAsync(claudeMd, cancellationToken) is string text
             && ClaudeMdBlock.IsPresent(text) && !ClaudeMdBlock.IsCurrent(text))
@@ -444,6 +447,54 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
                 }
 
                 return JudgeWorkflowUpdate.Unchanged;
+        }
+    }
+
+    /// <summary>
+    /// The GitHub judge workflow's building jobs moved to the runner the test projects need (<see cref="JudgeRunner"/>): Windows
+    /// when one needs Windows, Linux otherwise, on top of any change already planned for the file, and shown as a diff before
+    /// anything is written. A job on a label Lockflight does not write is the person's choice and is only noted.
+    /// </summary>
+    private async Task PlanJudgeRunnerAsync(string root, List<PlannedWrite> writes, bool dryRun, CancellationToken cancellationToken)
+    {
+        string path = Path.Combine(root, Templates.WorkflowPath.Replace('/', Path.DirectorySeparatorChar));
+        int planned = writes.FindIndex(write => write.RelativePath == Templates.WorkflowPath);
+        string? current = planned >= 0 ? writes[planned].NewText : File.Exists(path) ? await File.ReadAllTextAsync(path, cancellationToken) : null;
+        if (current is null || !current.Contains("mode: judge", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        IReadOnlyList<string> windowsTests = ProjectFiles.WindowsTestProjects(root);
+        string moved = JudgeRunner.Apply(current, windows: windowsTests.Count > 0);
+        if (moved == current)
+        {
+            if (windowsTests.Count > 0 && JudgeRunner.RunsOn(current, "judge") is string label && !JudgeRunner.IsWindows(label))
+            {
+                await context.Output.WriteLineAsync(
+                    $"note: a test project needs Windows, and the judge job of {Templates.WorkflowPath} runs on '{label}', a runner chosen by hand, so update leaves it; on a runner that is not Windows the judge reports NEEDS_WINDOWS_RUNNER");
+            }
+
+            return;
+        }
+
+        PlannedWrite runnerWrite = planned >= 0 ? writes[planned] with { NewText = moved } : new PlannedWrite(Templates.WorkflowPath, path, current, moved);
+        if (planned >= 0)
+        {
+            writes[planned] = runnerWrite;
+        }
+        else
+        {
+            writes.Add(runnerWrite);
+        }
+
+        string why = windowsTests.Count > 0
+            ? $"{string.Join(", ", windowsTests.Select(project => Path.GetRelativePath(root, project).Replace('\\', '/')))} {(windowsTests.Count == 1 ? "targets" : "target")} Windows, so the judge and review jobs move to {JudgeRunner.WindowsLabel} (the report jobs stay on Linux; on private repositories Windows minutes cost twice Linux minutes)"
+            : $"no test project needs Windows any more, so the judge and review jobs move back to {JudgeRunner.LinuxLabel}";
+        await context.Output.WriteLineAsync($"CI runner: {why}. A runs-on other than {JudgeRunner.LinuxLabel} or {JudgeRunner.WindowsLabel} is left as it is.");
+        if (!dryRun)
+        {
+            await context.Output.WriteLineAsync(await new PlannedWrite(Templates.WorkflowPath, path, current, moved).DiffAsync(cancellationToken));
         }
     }
 
