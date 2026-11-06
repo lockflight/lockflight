@@ -1,7 +1,7 @@
 # Lockflight CI: engine tests, Native AOT build, the published engine's self-test and the LLM-free hook compatibility suite, and
 # beside them the end-to-end suites with their own published engine, on Linux and Windows (Git Bash) for pull requests and also
 # on macOS for pushes to main and manual runs; the engine's canary suite on each, the Windows install and update from a
-# checkout, plus plugin and marketplace validation and the public-tree check.
+# checkout, the CI judge's action on Linux and Windows runners, plus plugin and marketplace validation and the public-tree check.
 name: ci
 
 on:
@@ -337,6 +337,89 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           if ((& $env:LOCKFLIGHT_ENGINE version) -ne $version) { throw "the installed engine is not $version" }
           if ((& .lockflight\bin\lockflight.exe version) -ne $version) { throw "the project's engine is not $version" }
+
+  # The CI judge's action (action/) on each runner OS a generated workflow can use, as a project's workflow calls it: on a
+  # fixture repository whose main pins the engine by .lockflight/engine.lock and the vendored install script, the action
+  # installs the engine built here from a file:// feed through that script, checks its hash, and judges two pull requests: one
+  # that must PASS and one whose red commit holds the implementation, which must FAIL. The Lockflight checkout sits in a
+  # subfolder, since the action runs in the workspace, which is the fixture.
+  action:
+    name: action (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, rid: linux-x64 }
+          - { os: windows-latest, rid: win-x64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: lockflight
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: lockflight/engine/global.json
+      - name: Turn off Defender real-time scanning (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try { Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop; "real-time scanning off" } catch { "left as it is: $($_.Exception.Message)" }
+      - name: Native AOT publish
+        working-directory: lockflight/engine
+        run: dotnet publish src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o "$RUNNER_TEMP/engine" -nologo
+      - name: The fixture repository, with the engine on a file:// feed
+        id: fixture
+        run: |
+          engine="$RUNNER_TEMP/engine/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash lockflight/tests/e2e/action-fixture.sh "$GITHUB_WORKSPACE" "$RUNNER_TEMP/feed" > "$RUNNER_TEMP/fixture.txt"
+          cat "$RUNNER_TEMP/fixture.txt" | tee -a "$GITHUB_OUTPUT"
+          echo "LOCKFLIGHT_NUGET_FEED=$(sed -n 's/^feed=//p' "$RUNNER_TEMP/fixture.txt")" >> "$GITHUB_ENV"
+      - name: The action judges a pull request that must pass
+        id: pass
+        continue-on-error: true
+        uses: ./lockflight/action
+        with:
+          mode: judge
+          head: ${{ steps.fixture.outputs.pass }}
+          base: ${{ steps.fixture.outputs.base }}
+          branch: 001-shipping
+          review-expected: "false"
+          artifact-suffix: -${{ matrix.rid }}-pass
+      - name: The engine came through the install script, as the lock pins it
+        run: |
+          engine="$RUNNER_TEMP/lockflight/lockflight"
+          if [ "$RUNNER_OS" = Windows ]; then engine="$engine.exe"; fi
+          [ -f "$engine" ] || { echo "::error::no engine at $engine"; exit 1; }
+          "$engine" version
+          rm -rf "$RUNNER_TEMP/lockflight-evidence" artifacts
+      - name: The action judges a pull request that must fail
+        id: fail
+        continue-on-error: true
+        uses: ./lockflight/action
+        with:
+          mode: judge
+          head: ${{ steps.fixture.outputs.fail }}
+          base: ${{ steps.fixture.outputs.base }}
+          branch: 002-cheat
+          review-expected: "false"
+          artifact-suffix: -${{ matrix.rid }}-fail
+      - name: PASS for the honest pull request, FAIL at red for the other
+        env:
+          PASS_VERDICT: ${{ steps.pass.outputs.verdict }}
+          FAIL_VERDICT: ${{ steps.fail.outputs.verdict }}
+        run: |
+          echo "honest pull request: $PASS_VERDICT; red commit with the implementation: $FAIL_VERDICT"
+          python=$(command -v python3 || command -v python)
+          red=$("$python" -I -c 'import json, sys; print(next((c["verdict"] for c in json.load(open(sys.argv[1]))["checks"] if c["id"] == "red"), "none"))' \
+            "$RUNNER_TEMP/lockflight-evidence/evidence.json")
+          echo "red check of the failing pull request: $red"
+          [ "$PASS_VERDICT" = PASS ] && [ "$FAIL_VERDICT" = FAIL ] && [ "$red" = FAIL ]
 
   # The engine's canary suite (engine/tests/Lockflight.Cli.Tests/Canaries, trait Category=Canary): a violation planted in front
   # of every guard rule, relay guard case, human-only command, in-session command check, gate step, the test gate's judgement and

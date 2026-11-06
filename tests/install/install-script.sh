@@ -2,7 +2,8 @@
 # scripts/install.sh against a local file:// feed of hand-made packages, under every POSIX shell available (dash, bash,
 # BusyBox sh; SHELLS="dash bash" picks): the happy path from a lock, a first install by version, a v3 service index, a hash
 # mismatch (the file is deleted), a zip-slip entry, an unknown platform, a development lock, musl, no unzip tool, credentials
-# kept out of the command line and of set -x, and --via-dotnet with a stand-in dotnet. The script must never run the engine.
+# kept out of the command line and of set -x, --via-dotnet with a stand-in dotnet, and Windows (Git Bash, MSYS2, Cygwin) through
+# a stand-in uname: the win-x64 package's lockflight.exe, installed as lockflight.exe. The script must never run the engine.
 # INSTALL_SCRIPT=<path> tests another copy.
 set -euo pipefail
 
@@ -57,9 +58,9 @@ feed="$work/feed"
 mkdir -p "$feed"
 printf '#!/bin/sh\ntouch "%s/engine-ran"\n' "$work" > "$work/engine"
 engine_hash=$(sha256 "$work/engine")
-lock_json() { # lock_json <channel> <hash>
-  printf '{\n  "schema": "lockflight.engine-lock/v1",\n  "package": "Lockflight.Cli",\n  "version": "%s",\n  "channel": "%s",\n  "installScript": { "sha256": "%s" },\n  "binaries": {\n    "%s": { "sha256": "%s" }\n  }\n}\n' \
-    "$version" "$1" "$(printf '0%.0s' $(seq 64))" "$rid" "$2"
+lock_json() { # lock_json <channel> <hash>: the hash for this platform and for win-x64
+  printf '{\n  "schema": "lockflight.engine-lock/v1",\n  "package": "Lockflight.Cli",\n  "version": "%s",\n  "channel": "%s",\n  "installScript": { "sha256": "%s" },\n  "binaries": {\n    "%s": { "sha256": "%s" },\n    "win-x64": { "sha256": "%s" }\n  }\n}\n' \
+    "$version" "$1" "$(printf '0%.0s' $(seq 64))" "$rid" "$2" "$2"
 }
 lock_json release "$engine_hash" > "$work/engine.lock"
 lock_json development "$engine_hash" > "$work/dev.lock"
@@ -68,6 +69,9 @@ lock_json release "$(printf 'a%.0s' $(seq 64))" > "$work/wrong.lock"
 sed 's/^{/{\n  "\\binaries": {},/' "$work/engine.lock" > "$work/escaped.lock"
 mkdir -p "$feed/lockflight.cli.$rid/$version" "$feed/lockflight.cli/$version"
 make_package "$feed/lockflight.cli.$rid/$version/lockflight.cli.$rid.$version.nupkg" "tools/any/$rid/lockflight" "@$work/engine" "tools/any/$rid/DotnetToolSettings.xml" "<x/>"
+# The win-x64 package holds lockflight.exe, beside a lockflight without the extension that must not be taken for it.
+mkdir -p "$feed/lockflight.cli.win-x64/$version"
+make_package "$feed/lockflight.cli.win-x64/$version/lockflight.cli.win-x64.$version.nupkg" "tools/any/win-x64/lockflight.exe" "@$work/engine" "tools/any/win-x64/lockflight" "not the engine" "tools/any/win-x64/DotnetToolSettings.xml" "<x/>"
 printf '{\n  "schema": "lockflight.engine-hashes/v1",\n  "package": "Lockflight.Cli",\n  "version": "%s",\n  "commit": "%s",\n  "binaries": {\n    "%s": {\n      "sha256": "%s",\n      "path": "tools/any/%s/lockflight"\n    }\n  }\n}\n' \
   "$version" "$(printf '1%.0s' $(seq 40))" "$rid" "$engine_hash" "$rid" > "$work/engine-hashes.json"
 make_package "$feed/lockflight.cli/$version/lockflight.cli.$version.nupkg" engine-hashes.json "@$work/engine-hashes.json"
@@ -77,8 +81,17 @@ slip="$work/slip-feed"
 mkdir -p "$slip/lockflight.cli.$rid/$version"
 make_package "$slip/lockflight.cli.$rid/$version/lockflight.cli.$rid.$version.nupkg" "tools/../$rid/lockflight" "@$work/engine"
 
-# Stand-ins: a curl that records its arguments and stdin, an ldd that reports musl, a dotnet that lays out a tool store.
+# Stand-ins: a curl that records its arguments and stdin, an ldd that reports musl, a dotnet that lays out a tool store, and a
+# uname per Windows shell (Git Bash, MSYS2, Cygwin) and for Windows on Arm, which has no engine.
 mkdir -p "$work/spy" "$work/musl" "$work/dotnet"
+for system in MINGW64_NT-10.0-20348/x86_64 MSYS_NT-10.0-20348/x86_64 CYGWIN_NT-10.0-20348/x86_64 MINGW64_NT-10.0-26100/aarch64; do
+  mkdir -p "$work/uname-${system%%_*}-${system#*/}"
+  printf '#!/bin/sh
+case "$1" in -s) echo %s ;; -m) echo %s ;; *) echo %s ;; esac
+' "${system%/*}" "${system#*/}" "${system%/*}" \
+    > "$work/uname-${system%%_*}-${system#*/}/uname"
+  chmod +x "$work/uname-${system%%_*}-${system#*/}/uname"
+done
 real_curl=$(command -v curl)
 printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/curl-args"\ncat >> "%s/curl-stdin" 2>/dev/null || true\nexec "%s" "$@" </dev/null\n' "$work" "$work" "$real_curl" > "$work/spy/curl"
 printf '#!/bin/sh\necho "musl libc (x86_64)"\n' > "$work/musl/ldd"
@@ -216,6 +229,29 @@ for shell_name in $shells; do
   fi
 
   run "usage" 4 -- --lock && ok "a missing value is a usage error (exit 4)"
+
+  # BusyBox sh may run its own uname applet whatever PATH says, so it cannot be shown another system.
+  if [ "$shell_name" = busybox-sh ] && ${shell% sh} --list 2>/dev/null | grep -qx uname; then
+    ok "Windows: not checked, BusyBox sh has its own uname"
+  else
+    for windows in MINGW64 MSYS CYGWIN; do
+      if run "$windows" 0 PATH="$work/uname-$windows-x86_64:$PATH" -- --lock "$work/engine.lock" --dir "$work/case/out"; then
+        installed=$(tail -n 1 "$work/stdout")
+        if [ "$installed" = "$work/case/out/lockflight.exe" ] && [ "$(sha256 "$installed")" = "$engine_hash" ] \
+          && [ ! -e "$work/case/out/lockflight" ] && grep -q "(win-x64," "$work/stderr"; then
+          ok "$windows on x86_64 installs the win-x64 package's lockflight.exe as lockflight.exe"
+        else
+          bad "$windows install printed '$installed': $(tr '\n' ' ' < "$work/stderr")"
+        fi
+      fi
+    done
+    run "Windows on Arm" 1 PATH="$work/uname-MINGW64-aarch64:$PATH" -- --lock "$work/engine.lock" --dir "$work/case/out" \
+      && says "no Lockflight engine for MINGW64_NT-10.0-26100 aarch64" "Windows on Arm is refused with the supported list"
+  fi
+  if run "--rid win-x64" 0 -- --lock "$work/engine.lock" --rid win-x64 --dir "$work/case/out"; then
+    [ "$(tail -n 1 "$work/stdout")" = "$work/case/out/lockflight.exe" ] && ok "--rid win-x64 installs lockflight.exe on any system" \
+      || bad "--rid win-x64 printed $(tail -n 1 "$work/stdout")"
+  fi
 done
 
 [ -n "$shells" ] || { echo "no POSIX shell to test with"; exit 1; }

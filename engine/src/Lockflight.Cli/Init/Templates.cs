@@ -75,7 +75,7 @@ internal static class Templates
     /// A commit whose <c>action/</c> is this tree's; the release needs it on main. <c>scripts/action-pin.sh</c> fails CI while
     /// <c>action/</c> differs from this commit's, and the release while it is not in the release commit's history.
     /// </summary>
-    public const string ActionCommit = "6960ea75096a0754fed65038d5557d690526172d";
+    public const string ActionCommit = "9badf8a7388487b4895a88efef3f2342c441cae6";
 
     /// <summary>The pin's label: this engine's version (the release sets it with <c>-p:Version</c>), so a release writes <c># vX.Y.Z</c>.</summary>
     public static string ActionVersion => "v" + ToolPin.RunningVersion;

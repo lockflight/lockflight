@@ -9,7 +9,8 @@
 #              .lockflight/engine.lock when it exists). Only a release lock is accepted.
 #   --version  without a lock, for a person's first install: the hash comes from that version's engine-hashes.json in the
 #              pointer package on the same feed. With neither, the script refuses.
-#   --rid      linux-x64 | linux-arm64 | osx-x64 | osx-arm64 (default: detected; glibc Linux only)
+#   --rid      linux-x64 | linux-arm64 | osx-x64 | osx-arm64 | win-x64 (default: detected; glibc Linux only; win-x64 under
+#              Git Bash, MSYS2 or Cygwin, where the executable is lockflight.exe)
 #   --dir      where the executable goes (default: $LOCKFLIGHT_TEMP/lockflight when LOCKFLIGHT_TEMP is set, else
 #              ~/.lockflight/tools/<version>)
 #   --via-dotnet  fetch the package with `dotnet tool install` (for feeds that need a NuGet credential provider, or that only a
@@ -24,7 +25,7 @@ set -eu
 
 default_feed="https://api.nuget.org/v3-flatcontainer/"
 release_base="https://github.com/lockflight/lockflight/releases/download"
-supported="linux-x64, linux-arm64, osx-x64, osx-arm64"
+supported="linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64"
 
 say() { printf 'lockflight install: %s\n' "$*" >&2; }
 fail() { say "$*"; exit 1; }
@@ -92,12 +93,14 @@ if [ -z "$rid" ]; then
     Darwin/x86_64) rid=osx-x64 ;;
     Linux/x86_64) rid=linux-x64 ;;
     Linux/aarch64|Linux/arm64) rid=linux-arm64 ;;
-    *) fail "no Lockflight engine for $system $machine (supported: $supported; on Windows use install.ps1)" ;;
+    MINGW*/x86_64|MSYS*/x86_64|CYGWIN*/x86_64) rid=win-x64 ;;
+    *) fail "no Lockflight engine for $system $machine (supported: $supported)" ;;
   esac
 fi
 case "$rid" in
-  linux-x64|linux-arm64|osx-x64|osx-arm64) ;;
-  *) fail "no Lockflight engine for '$rid' (supported: $supported; on Windows use install.ps1)" ;;
+  linux-x64|linux-arm64|osx-x64|osx-arm64) exe="" exe_pattern="" ;;
+  win-x64) exe=.exe exe_pattern='\.exe' ;;
+  *) fail "no Lockflight engine for '$rid' (supported: $supported)" ;;
 esac
 case "$rid" in
   linux-*)
@@ -180,7 +183,7 @@ feed_base() {
   printf '%s' "$base"
 }
 
-# entry_of <nupkg>: the one tools/<tfm>/<rid>/lockflight entry; never one with '..' or an absolute path.
+# entry_of <nupkg>: the one tools/<tfm>/<rid>/lockflight[.exe] entry; never one with '..' or an absolute path.
 # A zip reader that can list and extract: Info-ZIP unzip (-Z1), bsdtar, python3, perl, or BusyBox's unzip (no -Z: its -l
 # table is read instead).
 zip_tool() {
@@ -214,17 +217,18 @@ extract() {
 }
 entry_of() {
   entries "$1" > "$work/entries" || fail "$1 is not a package"
-  matches=$(grep -E "^tools/[^/]+/$rid/lockflight\$" "$work/entries" || true)
+  matches=$(grep -E "^tools/[^/]+/$rid/lockflight$exe_pattern\$" "$work/entries" || true)
   count=$(printf '%s' "$matches" | grep -c . || true)
-  [ "$count" = 1 ] || fail "$1 holds $count tools/<tfm>/$rid/lockflight entries, expected one"
+  [ "$count" = 1 ] || fail "$1 holds $count tools/<tfm>/$rid/lockflight$exe entries, expected one"
   case "$matches" in
     /*|*../*|*/..*) fail "$1: refusing the entry $matches" ;;
   esac
   printf '%s' "$matches"
 }
+# From stdin: GNU sha256sum starts its line with a backslash when the file name holds one (a Windows path).
 sha256_of() {
-  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d ' ' -f 1
-  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d ' ' -f 1
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1" | cut -d ' ' -f 1
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 < "$1" | cut -d ' ' -f 1
   else fail "no sha256sum or shasum to check the engine; install one of them"
   fi
 }
@@ -248,15 +252,15 @@ esac
 
 candidate="$work/lockflight"
 if [ "${LOCKFLIGHT_RELEASE_FALLBACK:-}" = 1 ]; then
-  fetch "$release_base/v$version/lockflight-$version-$rid" "$candidate" plain \
-    || fail "could not download lockflight-$version-$rid from the GitHub Release v$version"
+  fetch "$release_base/v$version/lockflight-$version-$rid$exe" "$candidate" plain \
+    || fail "could not download lockflight-$version-$rid$exe from the GitHub Release v$version"
 elif [ "$via_dotnet" = 1 ]; then
   command -v dotnet >/dev/null 2>&1 || fail "--via-dotnet needs dotnet on PATH"
   set -- tool install Lockflight.Cli --version "$version" --tool-path "$work/dotnet-tool"
   [ -z "$nuget_config" ] || set -- "$@" --configfile "$nuget_config"
   (cd "$work" && dotnet "$@" >&2) || fail "dotnet tool install Lockflight.Cli $version failed"
-  found=$(find "$work/dotnet-tool/.store" -type f -path "*/tools/*/$rid/lockflight" | head -n 2)
-  [ "$(printf '%s\n' "$found" | grep -c .)" = 1 ] || fail "dotnet installed no single tools/<tfm>/$rid/lockflight"
+  found=$(find "$work/dotnet-tool/.store" -type f -path "*/tools/*/$rid/lockflight$exe" | head -n 2)
+  [ "$(printf '%s\n' "$found" | grep -c .)" = 1 ] || fail "dotnet installed no single tools/<tfm>/$rid/lockflight$exe"
   cp "$found" "$candidate"
 else
   base=$(feed_base)
@@ -274,8 +278,8 @@ if [ "$actual" != "$expected" ]; then
   fail "the downloaded engine is not the locked one: expected $expected, got $actual (deleted)"
 fi
 chmod 755 "$candidate"
-target="$dir/lockflight"
-staged="$dir/.lockflight.$$"
+target="$dir/lockflight$exe"
+staged="$dir/.lockflight.$$$exe"
 cp "$candidate" "$staged" && chmod 755 "$staged" && mv -f "$staged" "$target" || { rm -f "$staged"; fail "could not write $target"; }
 say "installed Lockflight $version ($rid, sha256 $actual)"
 printf '%s\n' "$target"
