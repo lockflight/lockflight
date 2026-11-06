@@ -1,7 +1,8 @@
 # Lockflight CI: engine tests, Native AOT build, the published engine's self-test and the LLM-free hook compatibility suite, and
 # beside them the end-to-end suites with their own published engine, on Linux and Windows (Git Bash) for pull requests and also
-# on macOS for pushes to main and manual runs; the engine's canary suite on each, the Windows install and update from a
-# checkout, the CI judge's action on Linux and Windows runners, plus plugin and marketplace validation and the public-tree check.
+# on macOS for pushes to main and manual runs; the engine's canary suite on each (on macOS inside the engine job), the Windows
+# install and update from a checkout, the CI judge's action on Linux and Windows runners, plus plugin and marketplace validation
+# and the public-tree check.
 name: ci
 
 on:
@@ -33,6 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       platforms: ${{ steps.plan.outputs.platforms }}
+      canaries: ${{ steps.plan.outputs.canaries }}
       engine: ${{ steps.plan.outputs.engine }}
       e2e: ${{ steps.plan.outputs.e2e }}
     steps:
@@ -48,6 +50,9 @@ jobs:
           WINDOWS_SHARDS: "Ci.RedAtRedCommitsRedCheckTests Ci.TestFingerprinterDataAndFixtureTests Ci.TraceAndGatesTests Gates.WorkspaceGateRunnerTests Routing.ChangeClassifierAddedFileBehaviourAndCriticalTests Routing.ChangeClassifierRaiseTests|Ci.ExistingTestsChangedTests Ci.HostTamperingTests Ci.ShellJudgeTests Gates.Steps.FormatStepTests Review.ReviewCommandTests Routing.ChangeClassifierAddedFileFeatureAndFixTests|Ci.JudgeRoutingTests Ci.TestsSinceRedAmendTests Ci.TestsSinceRedHelperTests Ci.TestsSinceRedUnchangedTests Lifecycle.Approvals.SessionApprovalTests Review.ReviewReproductionFixAndEscalationTests Routing.ChangeClassifierFileOrderTests|Ci.RedAtRedCommitsGreenCheckTests Ci.TestFingerprinterMethodAndBaseTests Ci.TestsSinceRedLaterCycleTests Ci.TestsSinceRedWeakeningTests Gates.Steps.SecretsStepTests Review.ReviewReproductionRepairTests Routing.ChangeClassifierGoldenTests"
         run: |
           platforms='[{"os":"ubuntu-latest","rid":"linux-x64"},{"os":"windows-latest","rid":"win-x64"}]'
+          # The canary suite has its own jobs on Linux and Windows only. On macOS it runs inside the engine job: hosted macOS
+          # runners are scarce, and a job that is never given one is cancelled and turns the run on main red.
+          canaries=$platforms
           if [ "$EVENT" = push ] || { [ "$EVENT" = workflow_dispatch ] && [ "$MACOS" = true ]; }; then
             platforms=$(jq -c '. + [{"os":"macos-latest","rid":"osx-arm64"}]' <<<"$platforms")
           fi
@@ -92,6 +97,7 @@ jobs:
             else . + {"part":"","shard":""} end)' <<<"$platforms")
           {
             echo "platforms=$platforms"
+            echo "canaries=$canaries"
             echo "engine=$engine"
             echo "e2e=$e2e"
           } >> "$GITHUB_OUTPUT"
@@ -125,7 +131,7 @@ jobs:
         shell: pwsh
         run: |
           try { Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop; "real-time scanning off" } catch { "left as it is: $($_.Exception.Message)" }
-      # The canary suite (trait Category=Canary) runs in the canaries jobs.
+      # The canary suite (trait Category=Canary) runs in the canaries jobs, and on macOS in a step of this job below.
       - name: Unit tests
         working-directory: engine
         env:
@@ -142,6 +148,12 @@ jobs:
           name: unit-tests-${{ matrix.key }}
           path: ${{ runner.temp }}/unit-results
           if-no-files-found: warn
+      - name: Canary suite (macOS; dotnet test --filter-trait Category=Canary)
+        if: runner.os == 'macOS'
+        working-directory: engine
+        run: |
+          git config --global user.email ci@example.com && git config --global user.name ci
+          dotnet test --filter-trait "Category=Canary"
       - name: Native AOT publish
         if: matrix.publish
         working-directory: engine
@@ -565,8 +577,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.plan.outputs.platforms) }}
+        include: ${{ fromJSON(needs.plan.outputs.canaries) }}
     runs-on: ${{ matrix.os }}
+    # The suite takes about five minutes; a hung test fails the job well before the six-hour default.
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
