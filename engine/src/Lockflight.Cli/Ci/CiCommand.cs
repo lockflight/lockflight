@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Workspace;
 
 namespace Lockflight.Cli.Ci;
@@ -121,6 +122,10 @@ internal sealed class CiCommand(CliContext context) : ICommand
         foreach (CheckResult check in run.Checks)
         {
             await context.Output.WriteLineAsync($"  {CheckVerdictNames.ToName(check.Verdict),-10} {CheckIdNames.ToName(check.Id),-22} {CheckLevelNames.ToName(check.Level),-8} {check.Why}");
+            if (check.Level != CheckLevel.Off && check.Verdict is not (CheckVerdict.Pass or CheckVerdict.NotApplicable) && ReasonCatalogue.ConsoleLine(check.Reason) is string next)
+            {
+                await context.Output.WriteLineAsync($"             {next}");
+            }
         }
 
         if (run.Findings.Tampering is { New.Count: > 0 } tampering)

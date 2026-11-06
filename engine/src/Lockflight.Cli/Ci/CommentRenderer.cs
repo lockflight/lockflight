@@ -1,14 +1,17 @@
 using System.Text;
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Mascot;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// The PR comment and job summary from a verdict file: a marker line the report finds its own comment by, the verdict line, the
-/// single most actionable "Next" line, the spec diff (or, for a unit of a workspace shell, the shell's spec), the checks table, and
+/// single most actionable "Next" line with what to do about its reason, what a person must do when the run waits for one, the spec
+/// diff (or, for a unit of a workspace shell, the shell's spec), the checks table with a Next line per reason under it, and
 /// collapsed sections for the cycles, amends, trace and host-tampering findings. Within GitHub's comment limit the sections are
-/// dropped from the end, never the table or the Next line.
+/// dropped from the end, never the table or the Next lines.
 /// </summary>
 internal static class CommentRenderer
 {
@@ -58,8 +61,13 @@ internal static class CommentRenderer
         top.Append(Contexts(verdict));
         if (Next(verdict) is string next)
         {
-            top.Append($"> **Next:** {CommentText.Plain(next)}\n\n");
+            top.Append($"> **Next:** {CommentText.Plain(next)}\n");
+            top.Append(NextCheck(verdict) is JsonNode first && ReasonOf(first) is ReasonCode reason && ReasonCatalogue.Link(reason) is string link
+                ? $"> {ReasonCatalogue.Next(reason)} ([`{ReasonCodeNames.ToName(reason)}`]({link}))\n\n"
+                : "\n");
         }
+
+        top.Append(Blocked(verdict));
 
         top.Append(MarkerChanges(verdict));
         top.Append(SpecFromShell(verdict));
@@ -75,6 +83,7 @@ internal static class CommentRenderer
         }
 
         top.Append('\n');
+        top.Append(WhatToDo(verdict));
         string footer = $"\n<sub>Evidence: the `lockflight-verdict` artifact · engine {CommentText.Code(verdict["engine"]?["version"]?.GetValue<string>())} · policy from `{Short(verdict["policy"]?["from"]?.GetValue<string>() ?? string.Empty)}` · {Disclaimer}</sub>\n";
         StringBuilder body = new(top.ToString());
         foreach (string section in Sections(verdict))
@@ -100,19 +109,76 @@ internal static class CommentRenderer
     }
 
     /// <summary>The first required check that did not pass, in <see cref="NextOrder"/>, as its why; null when every one passed.</summary>
-    public static string? Next(JsonNode verdict)
+    public static string? Next(JsonNode verdict) =>
+        NextCheck(verdict) is JsonNode check && check["id"]?.GetValue<string>() is string id
+            ? $"{(CheckIdNames.Parse(id) is CheckId known ? CheckIdNames.Title(known) : id)}: {check["why"]?.GetValue<string>()}"
+            : null;
+
+    /// <summary>The first required check that did not pass, in <see cref="NextOrder"/>; null when every one passed.</summary>
+    public static JsonNode? NextCheck(JsonNode verdict)
     {
         JsonNode?[] checks = [.. verdict["checks"]?.AsArray() ?? []];
-        foreach (string id in NextOrder)
+        return NextOrder
+            .Select(id => checks.FirstOrDefault(check => check?["id"]?.GetValue<string>() == id))
+            .FirstOrDefault(check => check?["requirement"]?.GetValue<string>() == "required" && check["verdict"]?.GetValue<string>() != "PASS");
+    }
+
+    /// <summary>The reason a check names, when this engine knows it; null otherwise (a passing check, or a code it does not know).</summary>
+    public static ReasonCode? ReasonOf(JsonNode check) =>
+        check["reason"] is JsonValue value && value.TryGetValue(out string? name) && ReasonCodeNames.Parse(name) is ReasonCode reason and not ReasonCode.Unknown
+            ? reason
+            : null;
+
+    /// <summary>
+    /// Under the table, what to do about each check that did not pass and is not off: its reason, the Next line and the link to
+    /// the reason's entry. A check that did not run where it is not required (an advisory review without a key) blocks nothing and
+    /// is left out. Empty when no check is left or none names a reason this engine knows.
+    /// </summary>
+    private static string WhatToDo(JsonNode verdict)
+    {
+        StringBuilder list = new();
+        foreach (JsonNode? check in verdict["checks"]?.AsArray() ?? [])
         {
-            if (checks.FirstOrDefault(check => check?["id"]?.GetValue<string>() == id) is JsonNode check
-                && check["requirement"]?.GetValue<string>() == "required" && check["verdict"]?.GetValue<string>() != "PASS")
+            string? requirement = check?["requirement"]?.GetValue<string>();
+            string? shown = check?["verdict"]?.GetValue<string>();
+            if (check is null || requirement == "off" || shown is "PASS" or "N/A" || (shown == "SKIPPED" && requirement != "required")
+                || ReasonOf(check) is not ReasonCode reason || ReasonCatalogue.Link(reason) is not string link)
             {
-                return $"{(CheckIdNames.Parse(id) is CheckId known ? CheckIdNames.Title(known) : id)}: {check["why"]?.GetValue<string>()}";
+                continue;
             }
+
+            string checkId = check["id"]?.GetValue<string>() ?? "?";
+            string title = CheckIdNames.Parse(checkId) is CheckId known ? CheckIdNames.Title(known) : CommentText.Plain(checkId);
+            list.Append($"- **{title}** ([`{ReasonCodeNames.ToName(reason)}`]({link})): {ReasonCatalogue.Next(reason)}\n");
         }
 
-        return null;
+        return list.Length == 0 ? string.Empty : $"**What to do**\n\n{list}\n";
+    }
+
+    /// <summary>
+    /// When the run waits for a person (the evidence's <c>blocked</c> report): its summary, each need, and the Next line derived
+    /// from its reason code, since the report itself names no command. Empty otherwise.
+    /// </summary>
+    private static string Blocked(JsonNode verdict)
+    {
+        if (verdict["blocked"] is not JsonObject blocked)
+        {
+            return string.Empty;
+        }
+
+        string? codeName = blocked["reason"]?["code"] is JsonValue value && value.TryGetValue(out string? name) ? name : null;
+        StringBuilder text = new($"> **Waiting on a person:** {CommentText.Plain(blocked["reason"]?["summary"] is JsonValue summary && summary.TryGetValue(out string? line) ? line : null)}\n");
+        foreach (JsonNode? need in blocked["needs"]?.AsArray() ?? [])
+        {
+            string? who = need?["who"] is JsonValue whoValue && whoValue.TryGetValue(out string? whoName) ? whoName : null;
+            string? detail = need?["detail"] is JsonValue detailValue && detailValue.TryGetValue(out string? detailText) ? detailText : null;
+            text.Append($"> - {CommentText.Plain(who ?? "person")}: {CommentText.Plain(detail)}\n");
+        }
+
+        BlockedReasonCode code = BlockedNames.CodeOf(codeName);
+        return BlockedNextSteps.Link(code) is string link
+            ? text.Append($"> {BlockedNextSteps.Next(code)} ([`{codeName}`]({link}))\n\n").ToString()
+            : text.Append('\n').ToString();
     }
 
     /// <summary>

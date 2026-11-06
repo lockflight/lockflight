@@ -131,6 +131,10 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         if (CommentRenderer.Next(verdict) is string next)
         {
             await context.Output.WriteLineAsync($"Next: {TerminalText.Clean(next.ReplaceLineEndings(" "))}");
+            if (CommentRenderer.NextCheck(verdict) is JsonNode check && CommentRenderer.ReasonOf(check) is ReasonCode reason && ReasonCatalogue.ConsoleLine(reason) is string line)
+            {
+                await context.Output.WriteLineAsync(line);
+            }
         }
 
         return CheckVerdictNames.ToExitCode(CheckVerdictNames.Parse(shown) ?? CheckVerdict.Error);

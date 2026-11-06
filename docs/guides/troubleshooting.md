@@ -278,7 +278,8 @@ project, runs in the engine's own tests (`dotnet test --filter-trait Category=Ca
 
 <img src="../assets/levi-not-earned.svg" alt="Levi with a question mark" width="88" align="right">
 
-The gate could not judge, and NOT-EARNED is never a pass. The line under the step says why. Common causes:
+The gate could not judge, and NOT-EARNED is never a pass. The line under the step says why, and the `Next` line under it names the
+reason code and what to do ([every reason](reasons.md)). Common causes:
 
 - the test run executed no test: none found, all skipped, or a `test.stopFilter` that matches nothing (the detail names the
   filter; fix it in `lockflight.yaml`);

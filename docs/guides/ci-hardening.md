@@ -109,6 +109,9 @@ it should install.
 
 ## What the CI judge shows, and what it does not
 
+Every check that does not pass names a reason code (`GREEN_BEFORE`, `TRACE_UNCOVERED`, …); the PR comment lists each one
+under the checks table with what to do next and a link to its entry in [reasons](reasons.md).
+
 `lockflight ci` re-runs the red/green evidence instead of trusting it. For each commit with a `Lockflight-Red: <cycle>`
 trailer it builds that commit and requires its new tests to fail inside production code; it then requires every cycle test to
 be the same test at head (or to fail again on the red commit's code when it changed) and to pass there, the spec's

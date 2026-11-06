@@ -218,11 +218,7 @@ internal static class WorkspaceGateRunner
         public async Task<bool> AddAsync(List<GateStep> steps, GateStep step)
         {
             steps.Add(step);
-            await writer.WriteLineAsync($"{step.Name}: {VerdictNames.ToContractName(step.Verdict)} ({step.DurationMs} ms)");
-            if (step.Detail.Length > 0)
-            {
-                await writer.WriteLineAsync($"  {step.Detail}");
-            }
+            await GateStepText.WriteAsync(writer, step);
 
             return VerdictNames.AllowsNextStep(step.Verdict);
         }
