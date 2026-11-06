@@ -15,5 +15,8 @@ internal sealed record CycleJudgement(RedCommit Red, TreeOutcome Build, IReadOnl
     /// <summary>The host-tampering findings in the red commit's test assemblies.</summary>
     public IReadOnlyList<TamperingFinding> Tampering { get; init; } = [];
 
+    /// <summary>Whether the FLAKY re-runs stopped at the time budget, so a GREEN_BEFORE test may also be flaky.</summary>
+    public bool FlakyBudgetExhausted { get; init; }
+
     public bool Accepted => Verdict == CheckVerdict.Pass;
 }
