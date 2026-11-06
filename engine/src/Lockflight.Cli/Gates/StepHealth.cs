@@ -1,5 +1,6 @@
 using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates;
 
@@ -12,12 +13,12 @@ internal static class StepHealth
     {
         if (toolRun.TimedOut)
         {
-            return new GateStep(stepName, toolRun.ExitCode, Verdict.Error, toolRun.DurationMs,
+            return new GateStep(stepName, toolRun.ExitCode, Verdict.Error, ReasonCode.StepTimedOut, toolRun.DurationMs,
                 $"timed out after {toolRun.DurationMs / MillisecondsPerSecond} s ({run.BudgetSource})");
         }
 
         return toolRun.ExitCode != 0 && EnvironmentProblems.Recognize(toolRun.Combined) is EnvironmentProblem problem
-            ? new GateStep(stepName, toolRun.ExitCode, Verdict.Error, toolRun.DurationMs, $"{problem.Code}: {problem.Explanation}")
+            ? new GateStep(stepName, toolRun.ExitCode, Verdict.Error, ReasonCode.EnvironmentProblem, toolRun.DurationMs, $"{problem.Code}: {problem.Explanation}")
             : null;
     }
 }

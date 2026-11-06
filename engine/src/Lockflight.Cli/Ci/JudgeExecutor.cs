@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Ci;
@@ -32,8 +33,8 @@ internal static class JudgeExecutor
         if (await JudgeWorktree.OpenAsync(root, parent, plan.Inputs.Head, gitLimit, cancellationToken) is not JudgeWorktree worktree)
         {
             string why = $"git could not add a worktree under {parent}";
-            GreenJudgement green = new(CheckVerdict.Error, why, 0, 0, [why], [], new Dictionary<string, string>(), []);
-            return new JudgeFindings(green, judgesReds ? [.. plan.Reds.Cycles.Select(red => new CycleJudgement(red, TreeOutcome.Broken, [], new Dictionary<string, RedVerdict>(), CheckVerdict.Error, why))] : null, []);
+            GreenJudgement green = new(CheckVerdict.Error, ReasonCode.ToolError, why, 0, 0, [why], [], new Dictionary<string, string>(), []);
+            return new JudgeFindings(green, judgesReds ? [.. plan.Reds.Cycles.Select(red => new CycleJudgement(red, TreeOutcome.Broken, [], new Dictionary<string, RedVerdict>(), CheckVerdict.Error, ReasonCode.ToolError, why))] : null, []);
         }
 
         try
@@ -45,7 +46,7 @@ internal static class JudgeExecutor
             IReadOnlySet<string> structuralIds = await StructuralJudge.IdsAsync(plan, cancellationToken);
             IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, structuralIds, cancellationToken) : null;
             GreenJudgement greenAtHead = baseListing is { AsBaseline: null }
-                ? new GreenJudgement(CheckVerdict.NotEarned, $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
+                ? new GreenJudgement(CheckVerdict.NotEarned, CheckReasons.BaseNotListed(baseListing.Outcome), $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
                 : GreenJudge.Decide(head, baseListing?.AsBaseline, baseSkips, cycles ?? []);
             IReadOnlyList<SinceRedTest>? sinceRed = cycles is not null && plan.Levels[CheckId.TestsSinceRed] != CheckLevel.Off
                 ? await new SinceRedJudge(trees, time).JudgeAsync(plan, head.Listing, head.Results, cycles, cancellationToken)
@@ -59,10 +60,10 @@ internal static class JudgeExecutor
             TraceJudgement? trace = plan.Levels[CheckId.Trace] != CheckLevel.Off
                 ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, cycles ?? [], sinceRed, greenAtHead, await new StructuralJudge(trees, time).JudgeAsync(plan, head, baseListing?.AsBaseline, structuralIds, cancellationToken), cancellationToken)
                 : null;
-            (CheckVerdict Verdict, string Why, JsonNode? Result, string? TestStep) gates = !budget.TryStart("gates")
-                ? (CheckVerdict.NotEarned, budget.Why(trees.Builds.Count), null, null)
+            (CheckVerdict Verdict, ReasonCode Reason, string Why, JsonNode? Result, string? TestStep) gates = !budget.TryStart("gates")
+                ? (CheckVerdict.NotEarned, ReasonCode.CiBudgetExhausted, budget.Why(trees.Builds.Count), null, null)
                 : await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: false, cancellationToken) is string notMoved
-                ? (CheckVerdict.Error, notMoved, null, null)
+                ? (CheckVerdict.Error, ReasonCode.ToolError, notMoved, null, null)
                 : await GatesJudge.RunAsync(worktree, plan, context, plan.Inputs.EvidenceDirectory, budget, cancellationToken);
             // Only when the base had none either: a pull request that turns the test projects into ones red/green cannot run must
             // not lose the check that nothing was deleted.
@@ -73,6 +74,7 @@ internal static class JudgeExecutor
                 greenAtHead = greenAtHead with
                 {
                     Verdict = testStep switch { "PASS" => CheckVerdict.Pass, "FAIL" => CheckVerdict.Fail, "ERROR" => CheckVerdict.Error, _ => CheckVerdict.NotEarned },
+                    Reason = testStep switch { "PASS" => ReasonCode.None, "FAIL" => ReasonCode.TestsFailed, "ERROR" => ReasonCode.TestRunBroken, _ => ReasonCode.NoTestsRan },
                     Why = $"no test project red/green can run (xUnit, NUnit or MSTest); the gates' test step judged the suite: {testStep}",
                 };
             }
@@ -80,7 +82,7 @@ internal static class JudgeExecutor
             return new JudgeFindings(greenAtHead, cycles, trees.Builds)
             {
                 Trace = trace,
-                Gates = (gates.Verdict, gates.Why, gates.Result),
+                Gates = (gates.Verdict, gates.Reason, gates.Why, gates.Result),
                 Tampering = tampering,
                 HeadFingerprints = head.Listing.Fingerprints,
                 SinceRed = sinceRed,

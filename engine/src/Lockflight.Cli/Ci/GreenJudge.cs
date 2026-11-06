@@ -1,4 +1,5 @@
 using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Ci;
@@ -24,17 +25,17 @@ internal static class GreenJudge
         TreeListing listing = head.Listing;
         if (listing.Outcome == TreeOutcome.CompileFailed)
         {
-            return Verdict(CheckVerdict.Fail, $"the head does not build: {listing.Detail}");
+            return Verdict(CheckVerdict.Fail, ReasonCode.HeadDoesNotBuild, $"the head does not build: {listing.Detail}");
         }
 
         if (listing.Inventory is not IReadOnlyList<TestCase> inventory)
         {
-            return Verdict(listing.Outcome == TreeOutcome.Broken ? CheckVerdict.Error : CheckVerdict.NotEarned, listing.Detail ?? "the head could not be listed");
+            return Verdict(listing.Outcome == TreeOutcome.Broken ? CheckVerdict.Error : CheckVerdict.NotEarned, CheckReasons.NotListed(listing.Outcome), listing.Detail ?? "the head could not be listed");
         }
 
         if (head.Results is not IReadOnlyList<ExecutedTest> results)
         {
-            return Verdict(CheckVerdict.Error, $"the test runner produced no report for {listing.Workspace.FailedApp}");
+            return Verdict(CheckVerdict.Error, ReasonCode.ToolError, $"the test runner produced no report for {listing.Workspace.FailedApp}");
         }
 
         HashSet<string> listed = [.. inventory.Select(test => test.Key)];
@@ -69,15 +70,15 @@ internal static class GreenJudge
         int failed = results.Count(result => result.Outcome == TestOutcome.Fail);
 
         string notCompared = baseSkips.Unchecked.Count > 0 ? $" (run-time skips not compared on the base: {string.Join(", ", baseSkips.Unchecked.Take(MaxListed))})" : string.Empty;
-        (CheckVerdict verdict, string why) = problems.Count > 0 ? (CheckVerdict.Fail, string.Join("; ", problems) + notCompared)
-            : missingCycle.Length > 0 ? (CheckVerdict.NotEarned, $"cycle tests missing at head: {string.Join(", ", missingCycle.Take(MaxListed))}; {SinceRedJudge.MissingWhy}")
+        (CheckVerdict verdict, ReasonCode reason, string why) = problems.Count > 0 ? (CheckVerdict.Fail, ReasonCode.HeadNotGreen, string.Join("; ", problems) + notCompared)
+            : missingCycle.Length > 0 ? (CheckVerdict.NotEarned, ReasonCode.CycleTestMissing, $"cycle tests missing at head: {string.Join(", ", missingCycle.Take(MaxListed))}; {SinceRedJudge.MissingWhy}")
             : baseSkips.Failure is string failure && baseSkips.Unchecked.Count > 0
-                ? (CheckVerdict.NotEarned, $"tests skipped at run time at head could not be run on the base to compare ({failure}): {string.Join(", ", baseSkips.Unchecked.Take(MaxListed))}")
-            : flakyCycle.Length > 0 ? (CheckVerdict.NotEarned, $"cycle tests passed only when run again (FLAKY): {string.Join(", ", flakyCycle.Take(MaxListed))}")
-            : results.Count == 0 ? (CheckVerdict.NotEarned, "no test ran at head")
-            : (CheckVerdict.Pass, $"{inventory.Count} tests, {results.Count} test cases run, {failed} failed"
+                ? (CheckVerdict.NotEarned, ReasonCode.BaseNotCompared, $"tests skipped at run time at head could not be run on the base to compare ({failure}): {string.Join(", ", baseSkips.Unchecked.Take(MaxListed))}")
+            : flakyCycle.Length > 0 ? (CheckVerdict.NotEarned, ReasonCode.Flaky, $"cycle tests passed only when run again (FLAKY): {string.Join(", ", flakyCycle.Take(MaxListed))}")
+            : results.Count == 0 ? (CheckVerdict.NotEarned, ReasonCode.NoTestsRan, "no test ran at head")
+            : (CheckVerdict.Pass, ReasonCode.None, $"{inventory.Count} tests, {results.Count} test cases run, {failed} failed"
                 + (flakyOther.Length > 0 ? $"; passed only when run again: {string.Join(", ", flakyOther.Take(MaxListed))}" : string.Empty));
-        return new GreenJudgement(verdict, why, results.Count, failed, problems, [.. head.PassedOnRetry.Order(StringComparer.Ordinal)], atHead, withoutRed);
+        return new GreenJudgement(verdict, reason, why, results.Count, failed, problems, [.. head.PassedOnRetry.Order(StringComparer.Ordinal)], atHead, withoutRed);
     }
 
     /// <summary>
@@ -173,6 +174,6 @@ internal static class GreenJudge
             : "fail";
     }
 
-    private static GreenJudgement Verdict(CheckVerdict verdict, string why) =>
-        new(verdict, why, 0, 0, [why], [], new Dictionary<string, string>(StringComparer.Ordinal), []);
+    private static GreenJudgement Verdict(CheckVerdict verdict, ReasonCode reason, string why) =>
+        new(verdict, reason, why, 0, 0, [why], [], new Dictionary<string, string>(StringComparer.Ordinal), []);
 }

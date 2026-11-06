@@ -1,6 +1,7 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Testing;
 using Lockflight.Cli.Workspace;
 
@@ -31,12 +32,12 @@ internal static class TraceJudge
         RedGreenTest[] accepted = [.. cycles.Where(cycle => cycle.Accepted).SelectMany(cycle => cycle.Tests)];
         if (accepted.Length > 0 && (green is null || accepted.Any(test => !green.AtHead.ContainsKey(test.Key))))
         {
-            return new TraceJudgement(SpecResolution.None(null), CheckVerdict.NotEarned, "green at head was not decided, so the tests that count for trace are not known", Applies: true, []);
+            return new TraceJudgement(SpecResolution.None(null), CheckVerdict.NotEarned, ReasonCode.GreenUndecided, "green at head was not decided, so the tests that count for trace are not known", Applies: true, []);
         }
 
         if (accepted.Any(test => green!.AtHead.GetValueOrDefault(test.Key) == "flaky"))
         {
-            return new TraceJudgement(SpecResolution.None(null), CheckVerdict.NotEarned, "a cycle test passed only when run again (FLAKY); trace waits for a stable green", Applies: true, []);
+            return new TraceJudgement(SpecResolution.None(null), CheckVerdict.NotEarned, ReasonCode.Flaky, "a cycle test passed only when run again (FLAKY); trace waits for a stable green", Applies: true, []);
         }
 
         RedGreenTest[] counted = [.. cycles.Where(cycle => cycle.Accepted).SelectMany(cycle => cycle.Tests).Where(test => Counts(test, sinceRed, green))];
@@ -47,25 +48,25 @@ internal static class TraceJudge
         if (spec.FeatureId is null)
         {
             return spec.Problem is string problem
-                ? new TraceJudgement(spec, CheckVerdict.NotEarned, problem, Applies: true, [])
-                : new TraceJudgement(spec, CheckVerdict.NotApplicable, "no spec found for this pull request", Applies: false, []);
+                ? new TraceJudgement(spec, CheckVerdict.NotEarned, ReasonCode.SpecUnresolved, problem, Applies: true, [])
+                : new TraceJudgement(spec, CheckVerdict.NotApplicable, ReasonCode.None, "no spec found for this pull request", Applies: false, []);
         }
 
         if (spec.Problem is not null || spec.SpecText is not string text)
         {
-            return new TraceJudgement(spec, CheckVerdict.NotEarned, spec.Problem ?? "the spec could not be read", Applies: true, []);
+            return new TraceJudgement(spec, CheckVerdict.NotEarned, ReasonCode.SpecUnresolved, spec.Problem ?? "the spec could not be read", Applies: true, []);
         }
 
         SpecDocument document = SpecDocument.Parse(text);
         IReadOnlyList<Requirement> requirements = document.Requirements;
         if (document.DuplicateMarkedIds.Count > 0)
         {
-            return new TraceJudgement(spec, CheckVerdict.NotEarned, $"{spec.SpecPath} defines {string.Join(", ", document.DuplicateMarkedIds)} more than once, with a marker on one line; give each requirement one line", Applies: true, []);
+            return new TraceJudgement(spec, CheckVerdict.NotEarned, ReasonCode.SpecDuplicateRequirement, $"{spec.SpecPath} defines {string.Join(", ", document.DuplicateMarkedIds)} more than once, with a marker on one line; give each requirement one line", Applies: true, []);
         }
 
         if (requirements.Count == 0)
         {
-            return new TraceJudgement(spec, CheckVerdict.NotEarned, $"{spec.SpecPath} defines no requirements (FR-001 …); there is nothing to trace", Applies: true, []);
+            return new TraceJudgement(spec, CheckVerdict.NotEarned, ReasonCode.SpecNoRequirements, $"{spec.SpecPath} defines no requirements (FR-001 …); there is nothing to trace", Applies: true, []);
         }
 
         // A unit of a workspace shell delivers its part of a feature whose spec spans units: it answers for the requirements its
@@ -76,15 +77,15 @@ internal static class TraceJudge
             requirements = [.. requirements.Where(requirement => named.Contains(requirement.Id))];
             if (requirements.Count == 0 && named.Length > 0)
             {
-                return new TraceJudgement(spec, CheckVerdict.NotEarned,
+                return new TraceJudgement(spec, CheckVerdict.NotEarned, ReasonCode.SpecRequirementUnknown,
                     $"the tests name {string.Join(", ", named)}, which the workspace shell's spec of {spec.FeatureId} does not define (it has {string.Join(", ", all.Select(requirement => requirement.Id))})", Applies: true, []);
             }
 
             if (requirements.Count == 0)
             {
                 return plan.Class.Classification.Class >= ChangeClass.Feature
-                    ? new TraceJudgement(spec, CheckVerdict.NotEarned, $"no test that went red, then green names a requirement of {spec.FeatureId} in the workspace shell's spec; its class needs one", Applies: true, [])
-                    : new TraceJudgement(spec, CheckVerdict.NotApplicable, $"no test that went red, then green names a requirement of {spec.FeatureId} in the workspace shell's spec", Applies: false, []);
+                    ? new TraceJudgement(spec, CheckVerdict.NotEarned, ReasonCode.TraceUncovered, $"no test that went red, then green names a requirement of {spec.FeatureId} in the workspace shell's spec; its class needs one", Applies: true, [])
+                    : new TraceJudgement(spec, CheckVerdict.NotApplicable, ReasonCode.None, $"no test that went red, then green names a requirement of {spec.FeatureId} in the workspace shell's spec", Applies: false, []);
             }
         }
 
@@ -101,7 +102,7 @@ internal static class TraceJudge
                 || old.Text != requirement.Text || old.Marker != requirement.Marker || named.Contains(requirement.Id))];
             if (requirements.Count == 0)
             {
-                return new TraceJudgement(spec, CheckVerdict.NotApplicable, $"no requirement of {spec.FeatureId} was added or changed in this pull request, and no red test names one", Applies: false, []);
+                return new TraceJudgement(spec, CheckVerdict.NotApplicable, ReasonCode.None, $"no requirement of {spec.FeatureId} was added or changed in this pull request, and no red test names one", Applies: false, []);
             }
         }
 
@@ -110,7 +111,7 @@ internal static class TraceJudge
             && files.All(file => file.State == OutsideFileState.Names));
         if (headInventory is null && !(everyOutside && counted.Length == 0))
         {
-            return new TraceJudgement(spec, CheckVerdict.NotEarned, "the head's tests could not be listed to trace them", Applies: true, []) { MarkerChanges = markerChanges };
+            return new TraceJudgement(spec, CheckVerdict.NotEarned, ReasonCode.TestsNotListed, "the head's tests could not be listed to trace them", Applies: true, []) { MarkerChanges = markerChanges };
         }
 
         RedGreenRecord record = GreenJudge.Synthesized([], []) with
@@ -122,11 +123,11 @@ internal static class TraceJudge
         string excluded = tally.Excluded > 0 ? $"; {tally.Excluded} verified outside .NET" : string.Empty;
         TraceJudgement judgement = tally.Outcome switch
         {
-            TraceOutcome.Pass => new TraceJudgement(spec, CheckVerdict.Pass, $"{tally.Covered}/{rows.Count} requirements of {spec.FeatureId}{excluded}", Applies: true, rows),
+            TraceOutcome.Pass => new TraceJudgement(spec, CheckVerdict.Pass, ReasonCode.None, $"{tally.Covered}/{rows.Count} requirements of {spec.FeatureId}{excluded}", Applies: true, rows),
             // Applies, so a class that would need trace gets N/A as a required check (NOT-EARNED), never a pass by omission.
-            TraceOutcome.NotApplicable => new TraceJudgement(spec, CheckVerdict.NotApplicable,
+            TraceOutcome.NotApplicable => new TraceJudgement(spec, CheckVerdict.NotApplicable, ReasonCode.None,
                 $"every requirement of {spec.FeatureId} this pull request answers for ({rows.Count}) is verified outside .NET by the files its marker names; Lockflight runs none of those tests", Applies: true, rows),
-            _ => new TraceJudgement(spec, CheckVerdict.Fail,
+            _ => new TraceJudgement(spec, CheckVerdict.Fail, ReasonCode.TraceUncovered,
                 $"{tally.Covered}/{rows.Count} requirements of {spec.FeatureId} covered{excluded}; not covered by a test that went red, then green: {string.Join(", ", rows.Where(row => tally.Uncovered.Contains(row.RequirementId)).Select(Uncovered))}", Applies: true, rows),
         };
         return judgement with { MarkerChanges = markerChanges };

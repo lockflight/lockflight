@@ -2,6 +2,7 @@ using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates.Steps;
 
@@ -36,7 +37,7 @@ internal sealed class BuildStep : IGateStep
 
         if (buildRun.ExitCode != 0)
         {
-            return new GateStep(StepName, buildRun.ExitCode, Verdict.Fail, buildRun.DurationMs, FirstErrorLine(buildRun.Combined));
+            return new GateStep(StepName, buildRun.ExitCode, Verdict.Fail, ReasonCode.BuildFailed, buildRun.DurationMs, FirstErrorLine(buildRun.Combined));
         }
 
         IReadOnlyList<BuildDiagnostic> diagnostics = BuildDiagnostics.Parse(buildRun.Output, run.ProjectRoot);
@@ -44,13 +45,13 @@ internal sealed class BuildStep : IGateStep
         if (!baseline.Exists)
         {
             string note = diagnostics.Count == 0 ? string.Empty : $"{diagnostics.Count} warnings, no baseline yet ({BaselineHandOff(run.ProjectRoot)})";
-            return new GateStep(StepName, buildRun.ExitCode, Verdict.Pass, buildRun.DurationMs, note);
+            return new GateStep(StepName, buildRun.ExitCode, Verdict.Pass, ReasonCode.None, buildRun.DurationMs, note);
         }
 
         IReadOnlyList<BuildDiagnostic> fresh = baseline.NewIn(diagnostics);
         return fresh.Count == 0
-            ? new GateStep(StepName, buildRun.ExitCode, Verdict.Pass, buildRun.DurationMs, string.Empty)
-            : new GateStep(StepName, buildRun.ExitCode, Verdict.Fail, buildRun.DurationMs, DescribeNew(fresh));
+            ? new GateStep(StepName, buildRun.ExitCode, Verdict.Pass, ReasonCode.None, buildRun.DurationMs, string.Empty)
+            : new GateStep(StepName, buildRun.ExitCode, Verdict.Fail, ReasonCode.NewBuildWarnings, buildRun.DurationMs, DescribeNew(fresh));
     }
 
     /// <summary>How a person accepts today's warnings: the plugin's command where the project has it, else the terminal.</summary>

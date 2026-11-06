@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Ci;
 
@@ -32,12 +33,12 @@ internal static class HostTamperingJudge
     {
         if (head.Outcome == TreeOutcome.NoTestApps)
         {
-            return new TamperingJudgement(CheckVerdict.Pass, "no test assembly red/green runs (xUnit, NUnit or MSTest) to scan", [], []);
+            return new TamperingJudgement(CheckVerdict.Pass, ReasonCode.None, "no test assembly red/green runs (xUnit, NUnit or MSTest) to scan", [], []);
         }
 
         if (head.Inventory is null)
         {
-            return new TamperingJudgement(CheckVerdict.NotEarned, "the head's test assemblies could not be built to scan", [], []);
+            return new TamperingJudgement(CheckVerdict.NotEarned, CheckReasons.NotListed(head.Outcome), "the head's test assemblies could not be built to scan", [], []);
         }
 
         HashSet<string> atBase = [.. (baseListing?.Tampering ?? []).Select(finding => finding.Id)];
@@ -46,11 +47,11 @@ internal static class HostTamperingJudge
         TamperingFinding[] added = [.. all.Where(finding => !atBase.Contains(finding.Id) && !Accepts(accepted, finding))];
         TamperingFinding[] existing = [.. all.Where(finding => atBase.Contains(finding.Id) || Accepts(accepted, finding))];
         return added.Length > 0
-            ? new TamperingJudgement(CheckVerdict.NotEarned,
+            ? new TamperingJudgement(CheckVerdict.NotEarned, ReasonCode.HostTampering,
                 $"new code in the test assemblies that could tamper with the test host: {string.Join("; ", added.Take(MaxListed).Select(Describe))}"
                 + $"{(added.Length > MaxListed ? $" and {added.Length - MaxListed} more" : string.Empty)}; a person accepts a legitimate one with the baseline entry listed for it ({BaselinePath} on the target branch)",
                 added, existing)
-            : new TamperingJudgement(CheckVerdict.Pass,
+            : new TamperingJudgement(CheckVerdict.Pass, ReasonCode.None,
                 existing.Length == 0 ? "no code in the test assemblies that could tamper with the test host" : $"nothing new; {existing.Length} findings the base already had or accepted",
                 added, existing);
     }

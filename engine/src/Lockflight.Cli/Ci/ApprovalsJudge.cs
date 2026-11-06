@@ -1,6 +1,7 @@
 using Lockflight.Cli.ApprovalsOfRecord;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Evidence.Blocked;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Workspace;
 
 namespace Lockflight.Cli.Ci;
@@ -37,11 +38,11 @@ internal static class ApprovalsJudge
         string why = string.Join("; ", facts.Problems);
         return facts switch
         {
-            { Codeowners.GitError: not null } => new ApprovalsJudgement(facts, CheckVerdict.Error, why, Blocked: null),
-            { Satisfied: true } => new ApprovalsJudgement(facts, CheckVerdict.Pass, Passed(facts, plan.Shell is not null), Blocked: null),
-            { SpecFirst: { Applies: true, SpecOnBase: true, ChangedSpecs.Count: > 0 } } => new ApprovalsJudgement(facts, CheckVerdict.Fail, why, Blocked: null),
-            { SpecFirst.Satisfied: false } => new ApprovalsJudgement(facts, CheckVerdict.NotEarned, why, BlockedReasonCode.SpecNotOnBase),
-            _ => new ApprovalsJudgement(facts, CheckVerdict.NotEarned, why, BlockedReasonCode.CodeownersMissing),
+            { Codeowners.GitError: not null } => new ApprovalsJudgement(facts, CheckVerdict.Error, ReasonCode.ToolError, why, Blocked: null),
+            { Satisfied: true } => new ApprovalsJudgement(facts, CheckVerdict.Pass, ReasonCode.None, Passed(facts, plan.Shell is not null), Blocked: null),
+            { SpecFirst: { Applies: true, SpecOnBase: true, ChangedSpecs.Count: > 0 } } => new ApprovalsJudgement(facts, CheckVerdict.Fail, ReasonCode.SpecChangedInPullRequest, why, Blocked: null),
+            { SpecFirst.Satisfied: false } => new ApprovalsJudgement(facts, CheckVerdict.NotEarned, ReasonCode.SpecNotOnBase, why, BlockedReasonCode.SpecNotOnBase),
+            _ => new ApprovalsJudgement(facts, CheckVerdict.NotEarned, ReasonCode.CodeownersMissing, why, BlockedReasonCode.CodeownersMissing),
         };
     }
 

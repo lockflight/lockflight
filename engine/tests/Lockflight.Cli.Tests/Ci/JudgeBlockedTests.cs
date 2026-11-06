@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Evidence.Blocked;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Tests.Ci;
 
@@ -17,7 +18,7 @@ public sealed class JudgeBlockedTests
         JudgeBudget budget = new(TimeSpan.Zero, TimeProvider.System);
         budget.TryStart("gates");
 
-        BlockedReport report = JudgeBlocked.For(Run(new CheckResult(CheckId.Gates, CheckLevel.Required, CheckVerdict.NotEarned, budget.Why(2)), budget))!;
+        BlockedReport report = JudgeBlocked.For(Run(new CheckResult(CheckId.Gates, CheckLevel.Required, CheckVerdict.NotEarned, ReasonCode.CiBudgetExhausted, budget.Why(2)), budget))!;
 
         Assert.Equal(BlockedReasonCode.TimeExhausted, report.Code);
         Assert.Contains("not run: gates", report.Summary, StringComparison.Ordinal);
@@ -30,18 +31,18 @@ public sealed class JudgeBlockedTests
     {
         JudgeBudget budget = new(TimeSpan.Zero, TimeProvider.System);
         budget.TryStart("gates");
-        JudgeRun run = Run(new CheckResult(CheckId.Gates, CheckLevel.Required, CheckVerdict.NotEarned, budget.Why(2)), budget);
+        JudgeRun run = Run(new CheckResult(CheckId.Gates, CheckLevel.Required, CheckVerdict.NotEarned, ReasonCode.CiBudgetExhausted, budget.Why(2)), budget);
 
-        Assert.Null(JudgeBlocked.For(run with { Checks = [.. run.Checks, new CheckResult(CheckId.Red, CheckLevel.Required, CheckVerdict.NotEarned, "no red commit")] }));
+        Assert.Null(JudgeBlocked.For(run with { Checks = [.. run.Checks, new CheckResult(CheckId.Red, CheckLevel.Required, CheckVerdict.NotEarned, ReasonCode.RedMissing, "no red commit")] }));
     }
 
     [Fact]
     public void ANotEarnedTheAgentCanFixWaitsForNoPerson() =>
-        Assert.Null(JudgeBlocked.For(Run(new CheckResult(CheckId.Red, CheckLevel.Required, CheckVerdict.NotEarned, "no red commit"), budget: null)));
+        Assert.Null(JudgeBlocked.For(Run(new CheckResult(CheckId.Red, CheckLevel.Required, CheckVerdict.NotEarned, ReasonCode.RedMissing, "no red commit"), budget: null)));
 
     [Fact]
     public void APassingRunWaitsForNoPerson() =>
-        Assert.Null(JudgeBlocked.For(Run(new CheckResult(CheckId.Green, CheckLevel.Required, CheckVerdict.Pass, "green"), budget: null)));
+        Assert.Null(JudgeBlocked.For(Run(new CheckResult(CheckId.Green, CheckLevel.Required, CheckVerdict.Pass, ReasonCode.None, "green"), budget: null)));
 
     [Fact]
     public void ARequiredReviewThatNoKeyRanWaitsForAMaintainer()

@@ -1,5 +1,6 @@
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Tests.Ci;
@@ -186,6 +187,7 @@ public sealed class GreenJudgeTests
             [new RedGreenTest(CycleTest.Key, CycleTest.MethodFilter, RedClass.RedStub, [])],
             new Dictionary<string, RedVerdict>(),
             CheckVerdict.Pass,
+            ReasonCode.None,
             "accepted");
         return GreenJudge.Decide(head, [BaseTest], baseSkips ?? BaseSkipCheck.None, [cycle]);
     }

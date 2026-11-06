@@ -1,6 +1,7 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Affected;
 using Lockflight.Cli.Gates.Steps;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates;
 
@@ -34,20 +35,20 @@ internal static class WorkspaceGateRunner
             if (!Directory.Exists(Path.Combine(manifest.Root, unit.Path.Replace('/', Path.DirectorySeparatorChar))))
             {
                 // A unit that is not cloned here (another repository, or a CI checkout of the shell alone) has nothing to build.
-                await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "not present in this checkout: not built"));
+                await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, ReasonCode.None, 0, "not present in this checkout: not built"));
             }
             else if (judgesChangesOnly && !state.Dirty && (state.Fingerprint is null || !BuildsWithDotnet(manifest, unit)))
             {
-                await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "no changes, not run"));
+                await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, ReasonCode.None, 0, "no changes, not run"));
             }
             else if (!BuildsWithDotnet(manifest, unit))
             {
-                await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "not a .NET unit: guarded, not built"));
+                await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, ReasonCode.None, 0, "not a .NET unit: guarded, not built"));
             }
             else if (judgesChangesOnly && (useCache || !state.Dirty) && state.Fingerprint is string fingerprint
                 && await new StopGateCache(manifest.Root, unit.Path).PassedWithAsync(fingerprint, cancellationToken))
             {
-                await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, 0, "unchanged since its last PASS"));
+                await report.AddAsync(steps, new GateStep(unit.Path, 0, Verdict.NotApplicable, ReasonCode.None, 0, "unchanged since its last PASS"));
             }
             else if (definition.PerUnit.Count > 0)
             {
@@ -157,7 +158,7 @@ internal static class WorkspaceGateRunner
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 // One unit's failure to run is that unit's ERROR, never a pass for the workspace.
-                return new UnitOutcome(entry.Unit, entry.State with { Fingerprint = null }, [new GateStep($"{entry.Unit.Path}: run", 0, Verdict.Error, 0, $"the unit's gates could not run: {exception.Message}")], TestsTotal: null);
+                return new UnitOutcome(entry.Unit, entry.State with { Fingerprint = null }, [new GateStep($"{entry.Unit.Path}: run", 0, Verdict.Error, ReasonCode.ToolError, 0, $"the unit's gates could not run: {exception.Message}")], TestsTotal: null);
             }
             finally
             {

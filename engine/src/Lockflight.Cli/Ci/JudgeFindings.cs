@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Ci;
 
@@ -27,7 +28,7 @@ internal sealed record JudgeFindings(GreenJudgement? Green, IReadOnlyList<CycleJ
     public TraceJudgement? Trace { get; init; }
 
     /// <summary>The gates at head: verdict, line and their result file; null when they did not run.</summary>
-    public (CheckVerdict Verdict, string Why, JsonNode? Result)? Gates { get; init; }
+    public (CheckVerdict Verdict, ReasonCode Reason, string Why, JsonNode? Result)? Gates { get; init; }
 
     /// <summary>The time budget the steps ran under; null when nothing was built.</summary>
     public JudgeBudget? Budget { get; init; }

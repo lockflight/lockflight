@@ -1,5 +1,6 @@
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Tests.Gates;
 
@@ -20,9 +21,9 @@ public sealed class StopTimingsTests : IDisposable
         {
             GateResult result = new(root.FullName, GateProfile.Stop, Verdict.Pass, TestsTotal: 2,
             [
-                new GateStep("services/orders: build", 0, Verdict.Pass, seconds * 500, string.Empty),
-                new GateStep("services/orders: test", 0, Verdict.Pass, seconds * 500, string.Empty),
-                new GateStep("services/billing: build", 0, Verdict.Pass, 5_000, string.Empty),
+                new GateStep("services/orders: build", 0, Verdict.Pass, ReasonCode.None, seconds * 500, string.Empty),
+                new GateStep("services/orders: test", 0, Verdict.Pass, ReasonCode.None, seconds * 500, string.Empty),
+                new GateStep("services/billing: build", 0, Verdict.Pass, ReasonCode.None, 5_000, string.Empty),
             ]);
             await StopTimings.RecordAsync(manifest, result, time, cancellationToken);
         }

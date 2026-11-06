@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Ef;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates.Steps;
 
@@ -56,7 +57,7 @@ internal sealed class EfPendingModelChangesStep : IGateStep
 
         if (await ChangedPathsAsync(run, cancellationToken) is not IReadOnlySet<string> changed)
         {
-            return new GateStep(StepName, 0, Verdict.Error, stopwatch.ElapsedMilliseconds,
+            return new GateStep(StepName, 0, Verdict.Error, ReasonCode.GitHistoryMissing, stopwatch.ElapsedMilliseconds,
                 $"git could not list the changed files{(run.BaseRef is null ? string.Empty : $" since '{run.BaseRef}'; is the checkout deep enough (fetch-depth: 0)?")}");
         }
 
@@ -94,15 +95,15 @@ internal sealed class EfPendingModelChangesStep : IGateStep
             }
             else if (check.ExitCode != 0)
             {
-                return new GateStep(StepName, check.ExitCode, Verdict.Error, stopwatch.ElapsedMilliseconds,
+                return new GateStep(StepName, check.ExitCode, Verdict.Error, ReasonCode.EfCheckFailed, stopwatch.ElapsedMilliseconds,
                     $"dotnet ef could not check {context.Describe()}: {LastLine(check.Combined)}{restoreOutput} (the check needs EF Core 8 or later and a startup project referencing Microsoft.EntityFrameworkCore.Design)");
             }
         }
 
         string checkedContexts = $"{touched.Length} DbContexts checked: {string.Join(", ", touched.Select(context => context.Describe()))}";
         return pending.Count == 0
-            ? new GateStep(StepName, 0, Verdict.Pass, stopwatch.ElapsedMilliseconds, checkedContexts)
-            : new GateStep(StepName, 1, Verdict.Fail, stopwatch.ElapsedMilliseconds,
+            ? new GateStep(StepName, 0, Verdict.Pass, ReasonCode.None, stopwatch.ElapsedMilliseconds, checkedContexts)
+            : new GateStep(StepName, 1, Verdict.Fail, ReasonCode.EfMigrationMissing, stopwatch.ElapsedMilliseconds,
                 $"{pending.Count} models changed without a migration: {string.Join(", ", pending)}; add one (dotnet ef migrations add <name>) and commit it with the change");
     }
 
@@ -159,7 +160,7 @@ internal sealed class EfPendingModelChangesStep : IGateStep
         directory is "." or "" || path.StartsWith(directory + "/", StringComparison.Ordinal);
 
     private static GateStep NotApplicable(Stopwatch stopwatch, string detail) =>
-        new(StepName, 0, Verdict.NotApplicable, stopwatch.ElapsedMilliseconds, detail);
+        new(StepName, 0, Verdict.NotApplicable, ReasonCode.None, stopwatch.ElapsedMilliseconds, detail);
 
     private static string LastLine(string output)
     {

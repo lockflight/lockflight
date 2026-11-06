@@ -1,4 +1,5 @@
 using Lockflight.Cli.Ci;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Tests.Ci;
 
@@ -37,5 +38,5 @@ public sealed class JudgeVerdictsTests
         Assert.Equal(CheckVerdict.Fail, JudgeVerdicts.Of(StatusContext.Judge, checks));
     }
 
-    private static CheckResult Check(CheckId id, CheckVerdict verdict, CheckLevel level = CheckLevel.Required) => new(id, level, verdict, "why");
+    private static CheckResult Check(CheckId id, CheckVerdict verdict, CheckLevel level = CheckLevel.Required) => new(id, level, verdict, verdict is CheckVerdict.Pass or CheckVerdict.NotApplicable ? ReasonCode.None : ReasonCode.NotJudgedYet, "why");
 }

@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Workspace;
 
 namespace Lockflight.Cli.Tests.Ci;
@@ -153,7 +154,7 @@ public sealed class ApprovalsAndShellTests : IAsyncLifetime
 
         SpecResolution spec = await ShellSpecSource.ResolveAsync(plan, plan.Shell!, "feature/012-checkout", [], cancellationToken);
         ApprovalsJudgement approvals = await DecideAsync(plan);
-        JsonObject blocked = Blocked(plan, null, new TraceJudgement(spec, CheckVerdict.NotEarned, spec.Problem!, Applies: true, []), CheckId.Trace)!;
+        JsonObject blocked = Blocked(plan, null, new TraceJudgement(spec, CheckVerdict.NotEarned, ReasonCode.SpecUnresolved, spec.Problem!, Applies: true, []), CheckId.Trace)!;
 
         Assert.Equal("012-checkout", spec.FeatureId);
         Assert.Null(spec.SpecText);
@@ -239,7 +240,7 @@ public sealed class ApprovalsAndShellTests : IAsyncLifetime
         plan = plan with { Shell = (await JudgeShell.ReadAsync(plan, cancellationToken)).Policy };
         SpecResolution disagreeing = new("012-checkout", "branch", null, null, null, SpecOrigin.Shell, "the branch and the tests disagree on the feature");
 
-        Assert.Null(Blocked(plan, null, new TraceJudgement(disagreeing, CheckVerdict.NotEarned, "disagree", Applies: true, []), CheckId.Trace));
+        Assert.Null(Blocked(plan, null, new TraceJudgement(disagreeing, CheckVerdict.NotEarned, ReasonCode.SpecUnresolved, "disagree", Applies: true, []), CheckId.Trace));
     }
 
     /// <summary>A pull request on 001-shipping that adds code and, unless it is on the base already, the feature's spec.</summary>
@@ -310,7 +311,7 @@ public sealed class ApprovalsAndShellTests : IAsyncLifetime
     private static JsonObject? Blocked(JudgePlan plan, ApprovalsJudgement? approvals, TraceJudgement? trace = null, CheckId check = CheckId.Approvals)
     {
         CheckVerdict verdict = check == CheckId.Approvals ? approvals!.Verdict : trace!.Verdict;
-        JudgeRun run = new(plan, JudgeFindings.None with { Approvals = approvals, Trace = trace }, [new CheckResult(check, CheckLevel.Required, verdict, "why")], DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);
+        JudgeRun run = new(plan, JudgeFindings.None with { Approvals = approvals, Trace = trace }, [new CheckResult(check, CheckLevel.Required, verdict, check == CheckId.Approvals ? approvals!.Reason : trace!.Reason, "why")], DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);
         return JudgeBlocked.For(run) is BlockedReport report ? BlockedReportJson.Render(report) : null;
     }
 }

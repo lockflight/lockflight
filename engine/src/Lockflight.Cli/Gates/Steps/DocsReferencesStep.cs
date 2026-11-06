@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Docs;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates.Steps;
 
@@ -43,13 +44,13 @@ internal sealed class DocsReferencesStep : IGateStep
         Stopwatch stopwatch = Stopwatch.StartNew();
         if (await RepositoryFiles.LoadAsync(run.ProjectRoot, cancellationToken) is not RepositoryFiles head)
         {
-            return new GateStep(StepName, 0, Verdict.Error, stopwatch.ElapsedMilliseconds, "not a git repository; the references check reads the tracked files");
+            return new GateStep(StepName, 0, Verdict.Error, ReasonCode.GitUnavailable, stopwatch.ElapsedMilliseconds, "not a git repository; the references check reads the tracked files");
         }
 
         string[] documents = [.. head.Present.Where(InstructionFiles.IsInstruction).Order(StringComparer.Ordinal)];
         if (documents.Length == 0)
         {
-            return new GateStep(StepName, 0, Verdict.NotApplicable, stopwatch.ElapsedMilliseconds, "no instruction files (CLAUDE.md, AGENTS.md, .claude/)");
+            return new GateStep(StepName, 0, Verdict.NotApplicable, ReasonCode.None, stopwatch.ElapsedMilliseconds, "no instruction files (CLAUDE.md, AGENTS.md, .claude/)");
         }
 
         string? comparison = run.BaseRef is null
@@ -58,13 +59,13 @@ internal sealed class DocsReferencesStep : IGateStep
         if (comparison is null)
         {
             return run.BaseRef is null
-                ? new GateStep(StepName, 0, Verdict.NotApplicable, stopwatch.ElapsedMilliseconds, "no commit to compare with yet")
-                : new GateStep(StepName, 0, Verdict.Error, stopwatch.ElapsedMilliseconds, $"no merge base with '{run.BaseRef}'; is the checkout deep enough (fetch-depth: 0)?");
+                ? new GateStep(StepName, 0, Verdict.NotApplicable, ReasonCode.None, stopwatch.ElapsedMilliseconds, "no commit to compare with yet")
+                : new GateStep(StepName, 0, Verdict.Error, ReasonCode.GitHistoryMissing, stopwatch.ElapsedMilliseconds, $"no merge base with '{run.BaseRef}'; is the checkout deep enough (fetch-depth: 0)?");
         }
 
         if (await RepositoryFiles.AtCommitAsync(run.ProjectRoot, comparison, run.TimeLeft(), cancellationToken) is not RepositoryFiles before)
         {
-            return new GateStep(StepName, 0, Verdict.Error, stopwatch.ElapsedMilliseconds, $"git could not read the files of {comparison[..Math.Min(12, comparison.Length)]}");
+            return new GateStep(StepName, 0, Verdict.Error, ReasonCode.GitUnavailable, stopwatch.ElapsedMilliseconds, $"git could not read the files of {comparison[..Math.Min(12, comparison.Length)]}");
         }
 
         IReadOnlyList<DriftFinding> now = await DocsDrift.ReferencesAsync(head, documents, cancellationToken);
@@ -79,11 +80,11 @@ internal sealed class DocsReferencesStep : IGateStep
         if (broken.Length == 0)
         {
             string[] parts = [$"{documents.Length} instruction files checked", olderNote];
-            return new GateStep(StepName, 0, Verdict.Pass, stopwatch.ElapsedMilliseconds, string.Join("; ", parts.Where(part => part.Length > 0)));
+            return new GateStep(StepName, 0, Verdict.Pass, ReasonCode.None, stopwatch.ElapsedMilliseconds, string.Join("; ", parts.Where(part => part.Length > 0)));
         }
 
         string[] failure = [$"{broken.Length} references this change broke: {List(broken, MaxListed)}; fix the reference, or what it names", olderNote];
-        return new GateStep(StepName, 0, Verdict.Fail, stopwatch.ElapsedMilliseconds, string.Join("; ", failure.Where(part => part.Length > 0)));
+        return new GateStep(StepName, 0, Verdict.Fail, ReasonCode.DocsReferencesBroken, stopwatch.ElapsedMilliseconds, string.Join("; ", failure.Where(part => part.Length > 0)));
     }
 
     private static (string, string, DriftKind) Key(DriftFinding finding) => (finding.File, finding.Reference, finding.Kind);

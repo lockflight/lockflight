@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Ci;
 
@@ -13,7 +14,7 @@ namespace Lockflight.Cli.Ci;
 /// </summary>
 internal static class GatesJudge
 {
-    public static async Task<(CheckVerdict Verdict, string Why, JsonNode? Result, string? TestStep)> RunAsync(
+    public static async Task<(CheckVerdict Verdict, ReasonCode Reason, string Why, JsonNode? Result, string? TestStep)> RunAsync(
         JudgeWorktree worktree, JudgePlan plan, CliContext context, string resultDirectory, JudgeBudget budget, CancellationToken cancellationToken)
     {
         string resultPath = Path.Combine(resultDirectory, "gates-result.json");
@@ -47,14 +48,14 @@ internal static class GatesJudge
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return (CheckVerdict.NotEarned, "the gates did not finish within the CI budget (ci.timeoutMinutes on the target branch); raise it or split the pull request", null, null);
+            return (CheckVerdict.NotEarned, ReasonCode.CiBudgetExhausted, "the gates did not finish within the CI budget (ci.timeoutMinutes on the target branch); raise it or split the pull request", null, null);
         }
 
         JsonNode? result = File.Exists(resultPath) ? JsonNode.Parse(await File.ReadAllTextAsync(resultPath, cancellationToken)) : null;
         if (result?["schema"]?.GetValue<string>() != GateResultWriter.Schema || result["steps"] is not JsonArray steps)
         {
             string tail = string.Join(' ', error.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries).Take(3));
-            return (CheckVerdict.Error, $"the gates did not produce a result (exit {(int)exitCode}): {tail}", null, null);
+            return (CheckVerdict.Error, ReasonCode.ToolError, $"the gates did not produce a result (exit {(int)exitCode}): {tail}", null, null);
         }
 
         string summary = string.Join(" · ", steps.Select(step => $"{step?["name"]?.GetValue<string>()} {step?["verdict"]?.GetValue<string>()}"));
@@ -66,6 +67,13 @@ internal static class GatesJudge
             "NOT-EARNED" => CheckVerdict.NotEarned,
             _ => CheckVerdict.Error,
         };
-        return (verdict, summary.Length == 0 ? "no gate step ran" : summary, result, testStep);
+        return (verdict, verdict == CheckVerdict.Pass ? ReasonCode.None : ReasonOf(steps), summary.Length == 0 ? "no gate step ran" : summary, result, testStep);
     }
+
+    /// <summary>The reason of the first step that did not pass, as its result names it; <see cref="ReasonCode.GatesFailed"/> when none does.</summary>
+    private static ReasonCode ReasonOf(JsonArray steps) =>
+        steps.FirstOrDefault(step => step?["verdict"]?.GetValue<string>() is not ("PASS" or "N/A")) is JsonNode refused
+        && refused["reason"] is JsonValue value && value.TryGetValue(out string? name) && ReasonCodeNames.Parse(name) is ReasonCode reason and not ReasonCode.Unknown
+            ? reason
+            : ReasonCode.GatesFailed;
 }

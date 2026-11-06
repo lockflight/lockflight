@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates;
 
@@ -11,7 +12,7 @@ internal static class StepModes
 {
     /// <summary>The row of a step the manifest turned off; <paramref name="setting"/> is its key (<c>gates.quality.suppressions</c>).</summary>
     public static GateStep Off(string stepName, string setting) =>
-        new(stepName, 0, Verdict.NotApplicable, 0, $"off by manifest ({setting}: off)");
+        new(stepName, 0, Verdict.NotApplicable, ReasonCode.None, 0, $"off by manifest ({setting}: off)");
 
     public static GateStep Apply(GateStep step, GateMode mode, string setting) =>
         mode == GateMode.Report && step.Verdict == Verdict.Fail

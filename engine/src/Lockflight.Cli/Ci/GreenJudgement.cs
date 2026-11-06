@@ -1,3 +1,5 @@
+using Lockflight.Cli.Reasons;
+
 namespace Lockflight.Cli.Ci;
 
 /// <summary>
@@ -7,6 +9,7 @@ namespace Lockflight.Cli.Ci;
 /// </summary>
 internal sealed record GreenJudgement(
     CheckVerdict Verdict,
+    ReasonCode Reason,
     string Why,
     int Total,
     int Failed,

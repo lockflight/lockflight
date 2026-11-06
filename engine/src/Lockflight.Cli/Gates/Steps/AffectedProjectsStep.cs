@@ -1,4 +1,5 @@
 using Lockflight.Cli.Gates.Affected;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates.Steps;
 
@@ -22,6 +23,6 @@ internal sealed class AffectedProjectsStep : IGateStep
         long started = run.Time.GetTimestamp();
         ProjectSelection selection = await ProjectSelector.SelectAsync(run, cancellationToken);
         long durationMs = (long)run.Time.GetElapsedTime(started).TotalMilliseconds;
-        return new(new GateStep(StepName, 0, Verdict.NotApplicable, durationMs, selection.Describe(), selection.Scope), facts with { Selection = selection });
+        return new(new GateStep(StepName, 0, Verdict.NotApplicable, ReasonCode.None, durationMs, selection.Describe(), selection.Scope), facts with { Selection = selection });
     }
 }

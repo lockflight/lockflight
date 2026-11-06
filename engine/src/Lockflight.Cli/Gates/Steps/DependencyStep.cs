@@ -1,6 +1,7 @@
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Gates.Steps;
 
@@ -33,7 +34,7 @@ internal sealed class DependencyStep : IGateStep
         int jsonStart = listing.Output.IndexOf('{', StringComparison.Ordinal);
         if (listing.ExitCode != 0 || jsonStart < 0)
         {
-            return new DependencyScan(new GateStep(StepName, listing.ExitCode, Verdict.Error, listing.DurationMs, $"dotnet package list exited {listing.ExitCode} without a report"), []);
+            return new DependencyScan(new GateStep(StepName, listing.ExitCode, Verdict.Error, ReasonCode.ToolError, listing.DurationMs, $"dotnet package list exited {listing.ExitCode} without a report"), []);
         }
 
         IReadOnlyList<VulnerablePackage> found = VulnerablePackages.Parse(listing.Output[jsonStart..]);
@@ -42,8 +43,8 @@ internal sealed class DependencyStep : IGateStep
         int reportedOnly = found.Count(package => !package.IsBlocking && !accepted.Contains(package.Fingerprint));
 
         GateStep step = blocking.Count > 0
-            ? new GateStep(StepName, listing.ExitCode, Verdict.Fail, listing.DurationMs, $"{blocking.Count} new High/Critical advisories: {string.Join("; ", blocking.Take(MaxListed).Select(package => package.Describe()))}")
-            : new GateStep(StepName, listing.ExitCode, Verdict.Pass, listing.DurationMs, reportedOnly > 0 ? $"{reportedOnly} Moderate/Low advisories reported" : string.Empty);
+            ? new GateStep(StepName, listing.ExitCode, Verdict.Fail, ReasonCode.VulnerablePackage, listing.DurationMs, $"{blocking.Count} new High/Critical advisories: {string.Join("; ", blocking.Take(MaxListed).Select(package => package.Describe()))}")
+            : new GateStep(StepName, listing.ExitCode, Verdict.Pass, ReasonCode.None, listing.DurationMs, reportedOnly > 0 ? $"{reportedOnly} Moderate/Low advisories reported" : string.Empty);
         return new DependencyScan(step, found);
     }
 }

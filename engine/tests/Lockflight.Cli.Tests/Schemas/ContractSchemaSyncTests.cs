@@ -8,6 +8,7 @@ using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.Approvals;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Tests.Ci;
 
 namespace Lockflight.Cli.Tests.Schemas;
@@ -70,8 +71,8 @@ public sealed class ContractSchemaSyncTests : IDisposable
         string path = Path.Combine(temp.FullName, "result.json");
         GateResult result = new("/repo", GateProfile.PullRequest, Verdict.Fail, 3,
         [
-            new GateStep("build", 0, Verdict.Pass, 1200, string.Empty),
-            new GateStep("services/orders: test", 1, Verdict.Fail, 3400, "1 failed") { Id = "test", Unit = "services/orders" },
+            new GateStep("build", 0, Verdict.Pass, ReasonCode.None, 1200, string.Empty),
+            new GateStep("services/orders: test", 1, Verdict.Fail, ReasonCode.TestsFailed, 3400, "1 failed") { Id = "test", Unit = "services/orders" },
         ]);
 
         await GateResultWriter.WriteAsync(path, result, GateSettings.Default, "0.3.0", new string('b', 40), null, DateTimeOffset.UnixEpoch, TestContext.Current.CancellationToken);

@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Tests.Gates;
 
@@ -13,9 +14,9 @@ public sealed class GateResultWriterTests : IDisposable
     {
         GateResult result = new("/repo", GateProfile.PullRequest, Verdict.Pass, 12,
         [
-            new GateStep("build", 0, Verdict.Pass, 1200, string.Empty),
-            new GateStep("services/orders: test", 0, Verdict.Pass, 3400, "12 passed") { Id = "test", Unit = "services/orders" },
-            new GateStep("quality.suppressions", 0, Verdict.Pass, 5, "report only"),
+            new GateStep("build", 0, Verdict.Pass, ReasonCode.None, 1200, string.Empty),
+            new GateStep("services/orders: test", 0, Verdict.Pass, ReasonCode.None, 3400, "12 passed") { Id = "test", Unit = "services/orders" },
+            new GateStep("quality.suppressions", 0, Verdict.Pass, ReasonCode.None, 5, "report only"),
         ]);
         GateSettings gates = GateSettings.Default with { Suppressions = GateMode.Report };
         string path = Path.Combine(root.FullName, "out", "result.json");
@@ -32,6 +33,23 @@ public sealed class GateResultWriterTests : IDisposable
         Assert.Equal(["fail", "fail", "report"], steps.Select(step => (string?)step!["mode"]));
         Assert.Equal(["services/orders: test", "services/orders"], new[] { (string?)steps[1]!["name"], (string?)steps[1]!["unit"] });
         Assert.Null(steps[0]!["unit"]);
+    }
+
+    [Fact]
+    public async Task AStepThatDidNotPassNamesItsReasonAndAPassingStepNamesNone()
+    {
+        GateResult result = new("/repo", GateProfile.PullRequest, Verdict.Fail, null,
+        [
+            new GateStep("build", 0, Verdict.Pass, ReasonCode.None, 1200, string.Empty),
+            new GateStep("test", 1, Verdict.Fail, ReasonCode.TestsFailed, 3400, "1 failed"),
+        ]);
+        string path = Path.Combine(root.FullName, "reason", "result.json");
+
+        await GateResultWriter.WriteAsync(path, result, GateSettings.Default, "0.3.0", null, null, DateTimeOffset.UnixEpoch, TestContext.Current.CancellationToken);
+
+        JsonArray steps = JsonNode.Parse(File.ReadAllText(path))!["steps"]!.AsArray();
+        Assert.False(steps[0]!.AsObject().ContainsKey("reason"));
+        Assert.Equal("TESTS_FAILED", (string?)steps[1]!["reason"]);
     }
 
     [Fact]

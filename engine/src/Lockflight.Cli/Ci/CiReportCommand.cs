@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Evidence;
 using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Ci;
 
@@ -182,14 +183,7 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         }
 
         evidence["review"] = ReviewNode(review, head);
-        evidence["checks"] = new JsonArray([.. checks.Select(check => (JsonNode)new JsonObject
-        {
-            ["id"] = CheckIdNames.ToName(check.Id),
-            ["context"] = StatusContextNames.ToName(check.Context),
-            ["verdict"] = CheckVerdictNames.ToName(check.Verdict),
-            ["requirement"] = CheckLevelNames.ToName(check.Level),
-            ["why"] = CiEvidence.Cap(check.Why),
-        })]);
+        evidence["checks"] = new JsonArray([.. checks.Select(check => (JsonNode)CiEvidence.CheckNode(check))]);
         evidence["contexts"] = new JsonObject
         {
             [StatusContextNames.ToName(StatusContext.Gates)] = CheckVerdictNames.ToName(JudgeVerdicts.Of(StatusContext.Gates, checks)),
@@ -253,40 +247,50 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     {
         if (review is null)
         {
-            return check with { Verdict = CheckVerdict.Skipped, Why = "no review ran (no API key configured, a fork, or the review job was skipped)" };
+            return check with { Verdict = CheckVerdict.Skipped, Reason = ReasonCode.ReviewNotRun, Why = "no review ran (no API key configured, a fork, or the review job was skipped)" };
         }
 
         if (CiReviewResult.Problem(review) is string problem)
         {
-            return check with { Verdict = CheckVerdict.Error, Why = $"the review's result is not {CiReviewResult.Schema}: {problem}" };
+            return check with { Verdict = CheckVerdict.Error, Reason = ReasonCode.EvidenceInvalid, Why = $"the review's result is not {CiReviewResult.Schema}: {problem}" };
         }
 
         if (review["head"]?.GetValue<string>() != head)
         {
-            return check with { Verdict = CheckVerdict.Skipped, Why = "SKIPPED (stale): the review is about another head" };
+            return check with { Verdict = CheckVerdict.Skipped, Reason = ReasonCode.ReviewStale, Why = "SKIPPED (stale): the review is about another head" };
         }
 
         CheckVerdict verdict = CheckVerdictNames.Parse(review["verdict"]?.GetValue<string>() ?? string.Empty) ?? CheckVerdict.Error;
-        return check with { Verdict = verdict, Why = review["why"]?.GetValue<string>() ?? CheckVerdictNames.ToName(verdict) };
+        return check with { Verdict = verdict, Reason = verdict is CheckVerdict.Pass or CheckVerdict.NotApplicable ? ReasonCode.None : ReasonCode.ReviewFindings, Why = review["why"]?.GetValue<string>() ?? CheckVerdictNames.ToName(verdict) };
     }
 
     private static CheckResult? Parse(JsonNode? node) =>
         CheckIdNames.Parse(node?["id"]?.GetValue<string>() ?? string.Empty) is CheckId id
         && CheckLevelNames.Parse(node?["requirement"]?.GetValue<string>() ?? string.Empty) is CheckLevel level
         && CheckVerdictNames.Parse(node?["verdict"]?.GetValue<string>() ?? string.Empty) is CheckVerdict verdict
-            ? new CheckResult(id, level, verdict, node?["why"]?.GetValue<string>() ?? string.Empty)
+            ? new CheckResult(id, level, verdict, ReasonOf(node, verdict), node?["why"]?.GetValue<string>() ?? string.Empty)
             : null;
+
+    /// <summary>
+    /// The check's reason as the judge named it. A check that did not pass without one this engine knows reads as
+    /// <see cref="ReasonCode.Unknown"/>: shown without a Next line, deciding nothing.
+    /// </summary>
+    private static ReasonCode ReasonOf(JsonNode? node, CheckVerdict verdict) =>
+        verdict is CheckVerdict.Pass or CheckVerdict.NotApplicable
+            ? ReasonCode.None
+            : ReasonCodeNames.Parse(node?["reason"] is JsonValue value && value.TryGetValue(out string? name) ? name : null);
 
     private static JsonObject Missing(string head, string why, CheckVerdict verdict = CheckVerdict.NotEarned)
     {
         string name = CheckVerdictNames.ToName(verdict);
+        string reason = ReasonCodeNames.ToName(verdict == CheckVerdict.NotEarned ? ReasonCode.JudgeDidNotFinish : ReasonCode.EvidenceInvalid)!;
         return new JsonObject
         {
             ["schema"] = CiEvidence.Schema,
             ["head"] = head,
             ["judge"] = "missing",
-            ["checks"] = new JsonArray(new JsonObject { ["id"] = "green", ["context"] = "gates", ["verdict"] = name, ["requirement"] = "required", ["why"] = why },
-                new JsonObject { ["id"] = "red", ["context"] = "lockflight/judge", ["verdict"] = name, ["requirement"] = "required", ["why"] = why }),
+            ["checks"] = new JsonArray(new JsonObject { ["id"] = "green", ["context"] = "gates", ["verdict"] = name, ["requirement"] = "required", ["why"] = why, ["reason"] = reason },
+                new JsonObject { ["id"] = "red", ["context"] = "lockflight/judge", ["verdict"] = name, ["requirement"] = "required", ["why"] = why, ["reason"] = reason }),
             ["contexts"] = new JsonObject { [StatusContextNames.ToName(StatusContext.Gates)] = name, [StatusContextNames.ToName(StatusContext.Judge)] = name },
             ["verdict"] = name,
         };
