@@ -432,6 +432,33 @@ files are not in the snapshot. Rewrite the amended test against the red-time API
 [long paths](getting-started.md#install-on-windows). A red that says the snapshot "is
 not in the repository" means its ref under `refs/lockflight/red/` was deleted; only a reset helps then.
 
+## `lockflight red` says one thing and the CI judge another
+
+The judge re-runs the red commit from scratch, and its verdict wins. They can differ when:
+
+- **The target branch moved,** or your `origin/<target>` was stale: the red commit's fork point is its merge base with the
+  target, so tests merged there since are not new in CI. `lockflight red` names the ref it compared with; fetch, and run it
+  again.
+- **The machine differs:** the OS, culture, time zone or installed SDKs of the CI runner. A test whose failure depends on them
+  can differ, and nothing local can remove that; make the test independent of them.
+- **The test changed after its red:** the judge checks it again on the red commit's code (`tests.sinceRed`). Restore it, or
+  redo the red: `git reset --soft HEAD~1` before the push, `lockflight red --redo <n>` after it.
+
+## `lockflight red` and pre-commit hooks
+
+A pre-commit hook that runs the tests refuses a red commit by nature, because its tests fail on purpose. The red stays
+accepted (exit 0), nothing is committed, and the output gives the `git commit --no-verify` line that commits the tree it
+judged; run it yourself. An agent asks you first. A hook that changes files, such as a formatter, makes the commit differ from
+the tree that was judged: `lockflight red` undoes the commit (the hook's changes stay staged) and exits 1. Run it again; the
+formatted tree is judged then.
+
+## `lockflight red` fails with "Filename too long" on Windows
+
+The red is built in a worktree inside the repository's git directory (`.git\lf-red`), and a deep project can pass the
+260-character path limit there. Run `git config --global core.longpaths true`, turn on Windows long paths
+(`LongPathsEnabled` in the registry, or the group policy), or set `LOCKFLIGHT_TEMP` to a short folder such as `C:\lf`, which
+moves the worktree there.
+
 ## Windows
 
 Install the package with `scripts\install.ps1` ([Install on Windows](getting-started.md#install-on-windows)); contributors

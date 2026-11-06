@@ -183,8 +183,9 @@ flowchart LR
 ## What it asks of you
 
 - **A red commit in every pull request that adds behaviour,** humans and hotfixes included: the new tests with a stub,
-  committed with a `Lockflight-Red: <n>` trailer before the implementation. With the plugin, `redgreen red` makes it; without
-  it, `git commit --trailer "Lockflight-Red: 1"`. Without one, `lockflight/judge` is `NOT-EARNED`.
+  committed with a `Lockflight-Red: <n>` trailer before the implementation. With the plugin, `redgreen red` makes it; for a
+  bug fix, `lockflight red` makes it from any terminal or IDE, with no spec ([fix a bug](docs/guides/fix-a-bug.md)); by hand,
+  `git commit --trailer "Lockflight-Red: 1"`. Without one, `lockflight/judge` is `NOT-EARNED`.
 - **A spec for a feature-class change** (a new API, a database change): `specs/<id>/spec.md`, by hand, with Spec Kit or with
   the crew ([the spec contract](docs/guides/spec-contract.md)).
 - **CI time:** the judge builds and tests the fork point, every red commit and the head.
@@ -240,7 +241,8 @@ The full matrix is in [CI on other platforms](docs/guides/ci-other-platforms.md#
 
 No. `init --ci-only` sets up only the CI judge. It judges pull requests from any agent (Copilot, Cursor, Codex…) or from
 people. The plugin adds the local loop for Claude Code: the guard, the Stop gate and the lifecycle. The judge needs a red commit
-from whoever writes the code: `git commit --trailer "Lockflight-Red: 1"` works from any terminal or IDE.
+from whoever writes the code: `lockflight red` checks and commits it from any terminal or IDE, and
+`git commit --trailer "Lockflight-Red: 1"` works too.
 </details>
 
 <details>
