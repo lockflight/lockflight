@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Tests.Goldens;
 
 namespace Lockflight.Cli.Tests.Ci;
@@ -144,6 +145,61 @@ public sealed class CiReportTests : IDisposable
     [Fact]
     public void TheCommentIsPinnedAndEscapesTextFromThePullRequest() =>
         GoldenFiles.Verify("ci-comment", CommentRenderer.Render(CiReportCommand.Join(Evidence(testName: "Shop.Tests:@org/team <img src=x> `tick` | pipe"), Head, null), CommentRenderer.MaxCommentLength));
+
+    [Fact]
+    public void ARefusedRunsCommentIsPinnedWithItsNextLines()
+    {
+        GoldenFiles.Verify("ci-comment-refused", CommentRenderer.Render(CiReportCommand.Join(Evidence(reviewLevel: "required", redVerdict: "FAIL"), Head, null), CommentRenderer.MaxCommentLength));
+    }
+
+    [Fact]
+    public void AWaitingRunsCommentIsPinnedWithWhoMustAct()
+    {
+        JsonObject evidence = Evidence(reviewLevel: "required");
+        evidence["blocked"] = WaitingForReview();
+
+        GoldenFiles.Verify("ci-comment-waiting", CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength));
+    }
+
+    [Fact]
+    public void AnAdvisoryReviewThatDidNotRunAsksNothing() =>
+        Assert.DoesNotContain("**What to do**", CommentRenderer.Render(CiReportCommand.Join(Evidence(), Head, null), CommentRenderer.MaxCommentLength), StringComparison.Ordinal);
+
+    [Fact]
+    public void EachRefusedCheckSaysWhatToDoAndLinksItsReason()
+    {
+        string comment = CommentRenderer.Render(CiReportCommand.Join(Evidence(reviewLevel: "required", redVerdict: "FAIL"), Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains($"> {ReasonCatalogue.Next(ReasonCode.GreenBefore)} ([`GREEN_BEFORE`]({ReasonCatalogue.GuideUrl}#green_before))", comment, StringComparison.Ordinal);
+        Assert.Contains($"- **Red at red commits** ([`GREEN_BEFORE`]({ReasonCatalogue.GuideUrl}#green_before)): {ReasonCatalogue.Next(ReasonCode.GreenBefore)}", comment, StringComparison.Ordinal);
+        Assert.Contains($"- **Review** ([`REVIEW_NOT_RUN`]({ReasonCatalogue.GuideUrl}#review_not_run)): ", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("**Green at head** ([", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACheckWithoutAKnownReasonGetsNoNextLine()
+    {
+        JsonObject evidence = Evidence(redVerdict: "FAIL");
+        evidence["checks"]![0]!["reason"] = "SOMETHING_NEWER";
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("> **Next:** Red at red commits: cycle 1 (ddddddd): GREEN\\_BEFORE\n\n", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("#green_before", comment, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AWaitingRunSaysWhoMustActAndWhatToDo()
+    {
+        JsonObject evidence = Evidence(reviewLevel: "required");
+        evidence["blocked"] = WaitingForReview();
+
+        string comment = CommentRenderer.Render(CiReportCommand.Join(evidence, Head, null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("> **Waiting on a person:** the change's class requires a review, and no review ran\n", comment, StringComparison.Ordinal);
+        Assert.Contains("> - maintainer: Give the CI review job its API key", comment, StringComparison.Ordinal);
+        Assert.Contains($"> {BlockedNextSteps.Next(BlockedReasonCode.AccessNeeded)} ([`access-needed`]({ReasonCatalogue.GuideUrl}#access-needed))", comment, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void ALongCommentDropsSectionsButKeepsTheTableAndTheNextLine()
@@ -467,10 +523,10 @@ public sealed class CiReportTests : IDisposable
         }),
         ["trace"] = new JsonObject { ["rows"] = new JsonArray(new JsonObject { ["requirement"] = "FR-001", ["tests"] = new JsonArray("PriceTests.Shipping"), ["status"] = "covered" }) },
         ["checks"] = new JsonArray(
-            Check("red", "lockflight/judge", redVerdict, "required", redVerdict == "PASS" ? "1 cycles, 1 tests, each red in production code" : "cycle 1 (ddddddd): GREEN_BEFORE"),
+            Check("red", "lockflight/judge", redVerdict, "required", redVerdict == "PASS" ? "1 cycles, 1 tests, each red in production code" : "cycle 1 (ddddddd): GREEN_BEFORE", redVerdict == "PASS" ? null : "GREEN_BEFORE"),
             Check("green", "gates", "PASS", "required", "2 tests, 2 test cases run, 0 failed"),
             Check("gates", "gates", "PASS", "required", "format PASS · build PASS · test PASS"),
-            Check("review", "lockflight/judge", "SKIPPED", reviewLevel, "the report joins the review job's result"),
+            Check("review", "lockflight/judge", "SKIPPED", reviewLevel, "the report joins the review job's result", "REVIEW_NOT_RUN"),
             Check("approvals", "lockflight/judge", "N/A", "off", "off for this change class"),
             Check("tests.sinceRed", "lockflight/judge", "PASS", "required", "1 unchanged, 0 amends accepted"),
             Check("tests.existingChanged", "lockflight/judge", "PASS", "advisory", "no existing test changed"),
@@ -480,8 +536,16 @@ public sealed class CiReportTests : IDisposable
             Check("policy", "lockflight/judge", "PASS", "required", "lockflight.yaml is no looser than the base's")),
     };
 
-    private static JsonObject Check(string id, string context, string verdict, string level, string why) =>
-        new() { ["id"] = id, ["context"] = context, ["verdict"] = verdict, ["requirement"] = level, ["why"] = why };
+    private static JsonObject Check(string id, string context, string verdict, string level, string why, string? reason = null)
+    {
+        JsonObject check = new() { ["id"] = id, ["context"] = context, ["verdict"] = verdict, ["requirement"] = level, ["why"] = why };
+        if (reason is not null)
+        {
+            check["reason"] = reason;
+        }
+
+        return check;
+    }
 
     private static JsonObject Finding(string id, string? entry) => new()
     {

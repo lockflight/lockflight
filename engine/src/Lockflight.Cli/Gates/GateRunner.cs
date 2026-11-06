@@ -35,11 +35,7 @@ internal static class GateRunner
     private static async Task<bool> PassesAsync(GateStep step, List<GateStep> steps, TextWriter progress)
     {
         steps.Add(step);
-        await progress.WriteLineAsync($"{step.Name}: {VerdictNames.ToContractName(step.Verdict)} ({step.DurationMs} ms)");
-        if (step.Detail.Length > 0)
-        {
-            await progress.WriteLineAsync($"  {step.Detail}");
-        }
+        await GateStepText.WriteAsync(progress, step);
 
         return VerdictNames.AllowsNextStep(step.Verdict);
     }

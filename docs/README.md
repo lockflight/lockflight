@@ -26,6 +26,7 @@ CI judge), then <a href="guides/getting-started.md">getting started</a>, and rea
 | [Plugin skills](guides/skills.md) | You want to know what each `/lockflight:*` skill does, and what the optional crew adds. |
 | [The spec contract](guides/spec-contract.md) | You write a feature's `spec.md`, `plan.md` and `tasks.md`, by hand or with a tool, and need exactly what the phase checks accept. |
 | [Troubleshooting](guides/troubleshooting.md) | Something is blocked or a gate says `NOT-EARNED`: recovery mode, lockdown, Windows, uninstall. |
+| [Reasons](guides/reasons.md) | A check or a gate step names a reason code (`GREEN_BEFORE`, `TESTS_FAILED`, …): what it means and what to do next. |
 
 ## Configure
 

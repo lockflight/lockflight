@@ -1,0 +1,48 @@
+<!-- lockflight:ci:v1 head=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->
+![NOT-EARNED](https://raw.githubusercontent.com/lockflight/lockflight/v0.3.0/docs/assets/badges/verdict-blocked.png) **Lockflight: NOT-EARNED** · `001-shipping` · class **behaviour** (interim) · head `aaaaaaa` · base `bbbbbbb`
+
+Status: `gates` PASS · `lockflight/judge` NOT-EARNED (advisory — would block if required)
+
+> `lockflight/judge` blocks a merge only where the platform requires that check (a ruleset or branch protection, a merge check, a pipeline policy); Lockflight cannot see which, and `gates` passed. Fix what the judge found (`lockflight ci` gives the same verdict locally), or, where the check is not required, merge knowing it blocks nothing.
+
+> **Next:** Review: no review ran (no API key configured, a fork, or the review job was skipped)
+> Give the CI review job its API key (a spend-limited key scoped to CI) and run the check again; a pull request from a fork is reviewed another way. ([`REVIEW_NOT_RUN`](https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#review_not_run))
+
+> **Waiting on a person:** the change's class requires a review, and no review ran
+> - maintainer: Give the CI review job its API key (a spend-limited key scoped to CI) and run the check again; this change's class requires a review
+> A maintainer grants the access the need names (for the CI review: the review job's API key), then the check runs again. ([`access-needed`](https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#access-needed))
+
+| Check | Verdict | | Detail |
+|---|---|---|---|
+| Red at red commits | PASS | required | 1 cycles, 1 tests, each red in production code |
+| Green at head | PASS | required | 2 tests, 2 test cases run, 0 failed |
+| Gates (pr) | PASS | required | format PASS · build PASS · test PASS |
+| Review | SKIPPED | required | no review ran (no API key configured, a fork, or the review job was skipped) |
+| Approvals | — | off | off for this change class |
+| Tests since red | PASS | required | 1 unchanged, 0 amends accepted |
+| Existing tests changed | PASS | advisory | no existing test changed |
+| Test host tampering | PASS | required | no code in the test assemblies that could tamper with the test host |
+| Trace | PASS | required | 1/1 requirements of 001-shipping |
+| Change class | PASS | required | class behaviour (routing) |
+| Policy vs base | PASS | required | lockflight.yaml is no looser than the base's |
+
+**What to do**
+
+- **Review** ([`REVIEW_NOT_RUN`](https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#review_not_run)): Give the CI review job its API key (a spend-limited key scoped to CI) and run the check again; a pull request from a fork is reviewed another way.
+
+<details><summary>Red/green cycles</summary>
+
+| Cycle | Red commit | Test | Red | Since red | At head |
+|---|---|---|---|---|---|
+| 1 | `ddddddd` | `Shop.Tests:Shop.Tests.PriceTests.Shipping` | RED\_STUB | unchanged | pass |
+
+</details>
+<details><summary>Trace</summary>
+
+| Requirement | Tests (red → green) | Status |
+|---|---|---|
+| FR-001 | `PriceTests.Shipping` | covered |
+
+</details>
+
+<sub>Evidence: the `lockflight-verdict` artifact · engine `0.3.0` · policy from `bbbbbbb` · this comment says what the CI re-ran; it does not show the tests were written first.</sub>

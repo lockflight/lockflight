@@ -36,6 +36,7 @@ exit: 0
 $ lockflight gate run --profile stop
 format: ERROR (N ms)
   dotnet format exited 3
+  Next (TOOL_ERROR): A tool broke, not the code: re-run the check; if it repeats, read the job log for the tool's own error (the code was not judged). See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tool_error
 Scope: 1 changed C# files (format)
 Result: ERROR
 exit: 3
@@ -48,6 +49,7 @@ projects.affected: N/A (N ms)
   every project: the target has no single solution file
 build: FAIL (N ms)
   Program.cs(1,1): error CS1002: ; expected
+  Next (BUILD_FAILED): Fix the build error the detail names (`dotnet build` shows it in full). See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#build_failed
 Scope: nothing judged
 Result: FAIL
 exit: 1
@@ -61,6 +63,7 @@ projects.affected: N/A (N ms)
 build: PASS (N ms)
 test: FAIL (N ms)
   1 failed: Shop.Tests.OrderTotal
+  Next (TESTS_FAILED): Fix the failing tests the detail names; a failure that predates the change is accepted by a person with `baseline tests`, merged first. See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tests_failed
 Scope: 1 tests
 Result: FAIL
 exit: 1
@@ -101,6 +104,7 @@ ef.pendingModelChanges: N/A (N ms)
   no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 test: FAIL (N ms)
   1 failed: Shop.Tests.OrderTotal
+  Next (TESTS_FAILED): Fix the failing tests the detail names; a failure that predates the change is accepted by a person with `baseline tests`, merged first. See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tests_failed
 Scope: 1 tests
 Result: FAIL
 exit: 1
@@ -123,6 +127,7 @@ coverage.patch: N/A (N ms)
   not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
 security.deps: ERROR (N ms)
   dotnet package list exited 1 without a report
+  Next (TOOL_ERROR): A tool broke, not the code: re-run the check; if it repeats, read the job log for the tool's own error (the code was not judged). See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tool_error
 Scope: 1 tests
 Result: ERROR
 exit: 3
@@ -146,6 +151,7 @@ coverage.patch: N/A (N ms)
 security.deps: PASS (N ms)
 security.secrets: NOT-EARNED (N ms)
   gitleaks not found; install it on PATH or set LOCKFLIGHT_GITLEAKS
+  Next (GITLEAKS_MISSING): Install gitleaks on `PATH`, or set `LOCKFLIGHT_GITLEAKS` to its path. See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#gitleaks_missing
 Scope: 1 tests
 Result: NOT-EARNED
 exit: 5
@@ -196,6 +202,7 @@ projects.affected: N/A (N ms)
 build: PASS (N ms)
 test: FAIL (N ms)
   1 failed: Shop.Tests.OrderTotal
+  Next (TESTS_FAILED): Fix the failing tests the detail names; a failure that predates the change is accepted by a person with `baseline tests`, merged first. See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tests_failed
 Scope: 1 tests
 Result: FAIL
 exit: 1
@@ -279,6 +286,7 @@ services/orders: projects.affected: N/A (N ms)
   every project: the target builds a single project
 services/orders: build: FAIL (N ms)
   Program.cs(1,1): error CS1002: ; expected
+  Next (BUILD_FAILED): Fix the build error the detail names (`dotnet build` shows it in full). See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#build_failed
 services/billing: projects.affected: N/A (N ms)
   every project: the target builds a single project
 services/billing: build: PASS (N ms)
@@ -348,6 +356,7 @@ services/billing: ef.pendingModelChanges: N/A (N ms)
   no EF Core migrations (Migrations/*ModelSnapshot.cs) here
 services/billing: test: FAIL (N ms)
   1 failed: Shop.Tests.OrderTotal
+  Next (TESTS_FAILED): Fix the failing tests the detail names; a failure that predates the change is accepted by a person with `baseline tests`, merged first. See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tests_failed
 Scope: 2 tests
 Result: FAIL
 exit: 1
@@ -374,6 +383,7 @@ services/orders: coverage.patch: N/A (N ms)
   not configured, so not judged (set gates.coverage.collector in lockflight.yaml)
 services/orders: security.deps: ERROR (N ms)
   dotnet package list exited 1 without a report
+  Next (TOOL_ERROR): A tool broke, not the code: re-run the check; if it repeats, read the job log for the tool's own error (the code was not judged). See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tool_error
 services/billing: build: PASS (N ms)
 services/billing: ef.pendingModelChanges: N/A (N ms)
   no EF Core migrations (Migrations/*ModelSnapshot.cs) here
@@ -394,6 +404,7 @@ web: N/A (N ms)
   no changes, not run
 format: ERROR (N ms)
   dotnet format exited 3
+  Next (TOOL_ERROR): A tool broke, not the code: re-run the check; if it repeats, read the job log for the tool's own error (the code was not judged). See https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#tool_error
 Scope: 1 changed C# files (format)
 Result: ERROR
 exit: 3
