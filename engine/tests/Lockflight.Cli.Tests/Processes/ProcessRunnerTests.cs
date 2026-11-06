@@ -102,13 +102,14 @@ public sealed class ProcessRunnerTests : IDisposable
     public async Task AProcessThatLeavesADaemonHoldingItsOutputReturnsWhenItExits()
     {
         // The daemon inherits the output pipe and keeps it open for a minute: waiting for the pipe to end would stall the run that long.
+        // It runs in the system's temporary folder, not the test's, which Windows could not delete while it runs.
         ProcessResult result = OperatingSystem.IsWindows()
             ? await ProcessRunner.RunAsync(
                 "powershell.exe",
                 ["-NoProfile", "-NonInteractive", "-Command", "Write-Output before; $daemon = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep 60' -NoNewWindow -PassThru; Write-Output $daemon.Id"],
-                directory.FullName,
+                Path.GetTempPath(),
                 TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)
-            : await ProcessRunner.RunAsync("sh", ["-c", "echo before; sleep 60 & echo $!"], directory.FullName, TestContext.Current.CancellationToken)
+            : await ProcessRunner.RunAsync("sh", ["-c", "echo before; sleep 60 & echo $!"], Path.GetTempPath(), TestContext.Current.CancellationToken)
                 .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         string[] lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         try
@@ -142,7 +143,7 @@ public sealed class ProcessRunnerTests : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Uses the POSIX sh command.");
 
         BinaryProcessResult result = await ProcessRunner.RunForBytesAsync(
-                "sh", ["-c", "cat; sleep 60 & echo $!"], directory.FullName, "before\n"u8.ToArray(), TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken)
+                "sh", ["-c", "cat; sleep 60 & echo $!"], Path.GetTempPath(), "before\n"u8.ToArray(), TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken)
             .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         string[] lines = Encoding.UTF8.GetString(result.Output).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         try
@@ -178,6 +179,7 @@ public sealed class ProcessRunnerTests : IDisposable
         {
             using Process daemon = Process.GetProcessById(pid);
             daemon.Kill();
+            daemon.WaitForExit(TimeSpan.FromSeconds(10));
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
