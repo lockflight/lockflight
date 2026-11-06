@@ -25,9 +25,10 @@ internal static class ClaudeMdBlock
         - **Protected files** (`lockflight.yaml`, `.lockflight/`, Claude Code settings, hooks, agents, skills and commands, build
           and package config, each unit's control files) are changed by a person or a `lockflight` command; the guard blocks
           your edits, and a user's permission in chat does not lift it, so never ask for permission to bypass it. When a task
-          needs one changed (a rename, a package bump), write the complete new file in your scratch directory and run
-          `lockflight propose <path> --from <file>` (`<path> --delete` to remove one; several pairs in one call), then give
-          the user the `git apply` command it prints. It writes one patch per file and applies nothing.
+          needs one changed (a rename, a package bump), write the complete new file in a scratch directory outside the project
+          (`mktemp -d`; try experiments there too, never in this directory) and run `lockflight propose <path> --from <file>`
+          (`<path> --delete` to remove one; several pairs in one call), then give the user the `git apply` command it prints.
+          It writes one patch per file and applies nothing.
         - **Human decisions** are the user's: never run one, even when asked or just to try it, since the guard refuses it.
           Ask the user, who runs it in a separate terminal window (not with `!` in Claude Code: that runs inside the session
           and is refused): `lockflight approve` (sign off a spec or tasks),
