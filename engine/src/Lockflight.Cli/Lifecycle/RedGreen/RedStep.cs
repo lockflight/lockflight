@@ -1,5 +1,6 @@
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
+using Lockflight.Cli.Lifecycle.Approvals;
 using Lockflight.Cli.Lifecycle.RedGreen.Snapshots;
 using Lockflight.Cli.Testing;
 
@@ -26,6 +27,12 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
     {
         if (record is null)
         {
+            // Start refuses until the tasks are approved, so name that first rather than send the agent to a start that fails.
+            if (new ApprovalStore(session.Feature).Check(ApprovalPhase.Tasks).State != ApprovalState.Valid)
+            {
+                return await session.RefuseUnapprovedAsync("redgreen-red", session.NotApproved(), cancellationToken);
+            }
+
             return await session.FailAsync($"no baseline; run '{EngineCommand.Linked} redgreen start' before writing the feature's tests", cancellationToken);
         }
 
