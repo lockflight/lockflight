@@ -65,7 +65,8 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           echo "ENGINE=$engine" >> "$GITHUB_ENV"
-          echo "ENGINE_VERSION=$("$engine" version | tr -d '\r')" >> "$GITHUB_ENV"
+          # A build from source is versioned 0.0.0-local; the commit says which source.
+          echo "ENGINE_VERSION=$("$engine" version | tr -d '\r') (${GITHUB_SHA::8})" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/perf"
       - name: PreToolUse hook latency (cold and warm, engine and hook shim)
         run: RUNS=500 WARMUP=50 COLD=20 JSON_OUT="$RUNNER_TEMP/perf/hook-latency.json" bash tests/benchmark/hook-latency.sh "$ENGINE"
