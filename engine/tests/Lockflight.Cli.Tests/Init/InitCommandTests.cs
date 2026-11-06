@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Ef;
@@ -282,6 +283,31 @@ public sealed class InitCommandTests : IDisposable
         (_, string output, _) = await TestConsole.RunAsync(["init", "--no-link", "--ci", "pr"], "", projectRoot.FullName);
 
         Assert.DoesNotContain("dotnet-ef", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AGatesOnlyWorkflowFromLockflight02IsKeptAndInitNamesTheCommandThatMovesIt()
+    {
+        string workflow = Path.Combine(projectRoot.FullName, Templates.WorkflowPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(workflow)!);
+        string legacy = Lockflight02Workflow();
+        File.WriteAllText(workflow, legacy);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Equal(legacy, File.ReadAllText(workflow));
+        Assert.Contains($"CI: {Templates.WorkflowPath} runs the gates only and was left as it is", output, StringComparison.Ordinal);
+        Assert.Contains("lockflight update --project --judge-workflow", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AWorkflowInitWritesGetsNoAdviceToMoveIt()
+    {
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link"], "", projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.DoesNotContain("--judge-workflow", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -643,6 +669,10 @@ public sealed class InitCommandTests : IDisposable
     }
 
     public void Dispose() => projectRoot.Delete(recursive: true);
+
+    /// <summary>The GitHub workflow Lockflight 0.2.0-alpha.9's <c>init</c> wrote.</summary>
+    private static string Lockflight02Workflow([CallerFilePath] string path = "") =>
+        File.ReadAllText(Path.Combine(Path.GetDirectoryName(path)!, "CiMigrationCases", "github.yml"));
 
     private async Task GitAsync(params string[] arguments)
     {

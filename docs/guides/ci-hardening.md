@@ -223,8 +223,8 @@ workflow in place.
 
 `init` never replaces a workflow that exists, so a project set up with 0.2 keeps a workflow that runs the gates alone, and its
 CI says nothing about red/green while a local `lockflight ci` does. `lockflight doctor` warns about it (**workflow: CI
-judge**). A person moves it in two pull requests, because the CI judge's workflow runs the engine the target branch pins, and
-an engine from 0.2 has no CI judge:
+judge**), and `init` run again names the command that moves it. A person moves it in two pull requests, because the CI judge's
+workflow runs the engine the target branch pins, and an engine from 0.2 has no CI judge:
 
 ```sh
 lockflight update --project                                     # first pull request: the new engine pin (and lock); merge it
