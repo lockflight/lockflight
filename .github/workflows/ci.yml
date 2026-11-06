@@ -425,6 +425,8 @@ jobs:
           # The tags of the repository, not of a fork (a fork may have none).
           LOCKFLIGHT_RELEASE_REMOTE: https://github.com/lockflight/lockflight.git
         run: scripts/release-versions.sh
+      - name: Relative links and anchors in the Markdown resolve
+        run: python3 -I scripts/check-doc-links.py
       - name: No citations of records outside the repository
         run: scripts/check-public-tree.sh
       # A squash merge makes the pull request's title and body the commit on main. They come from the event payload into a file,

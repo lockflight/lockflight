@@ -11,7 +11,7 @@ not at the same stage:
 | GitLab CI/CD | the `pr` gates only, no red/green judge | experimental; code-owner approval needs GitLab Premium |
 | Azure Pipelines | the `pr` gates only, no red/green judge | experimental; not run at all |
 
-**On this page:** [What every template does](#what-every-template-does) · [Azure Pipelines](#azure-pipelines) ·
+**On this page:** [Platforms and runners](#platforms-and-runners) · [What every template does](#what-every-template-does) · [Azure Pipelines](#azure-pipelines) ·
 [Bitbucket Pipelines](#bitbucket-pipelines) · [GitLab CI/CD](#gitlab-cicd) ·
 [Paths to route to a reviewer](#paths-to-route-to-a-reviewer) · [Guardrail or boundary](#guardrail-or-boundary)
 
@@ -21,6 +21,22 @@ not at the same stage:
 > (dash) and under `bash -eo pipefail`. What has not been run is each service's own part: its triggers, its pull request
 > variables, its checkout, its artifacts and its merge checks; the Azure steps have not been run at all. Watch the first run, and
 > [open an issue](https://github.com/lockflight/lockflight/issues/new/choose) when something does not work.
+
+## Platforms and runners
+
+Every job `init` writes runs on Linux x64: the GitHub workflow and the Azure pipeline on `ubuntu-latest`, the Bitbucket and
+GitLab jobs in the `mcr.microsoft.com/dotnet/sdk:10.0` image. The action and the templates download gitleaks for Linux x64
+only, so other runners fail at that step.
+
+| CI service | Runner | What runs | State |
+|---|---|---|---|
+| GitHub Actions | GitHub-hosted Linux x64 (`ubuntu-latest`) | the CI judge, through the action | supported |
+| GitHub Actions | self-hosted Linux x64 | the CI judge, through the action | unverified: not run |
+| GitHub Actions | Windows | — | not yet: Windows runner support is being added |
+| GitHub Actions | macOS, or Linux arm64 | — | not supported: gitleaks is downloaded for Linux x64 only |
+| Bitbucket Pipelines | the .NET SDK image, Linux x64 | the CI judge | unverified: the template has never run on a live workspace |
+| GitLab CI/CD | the .NET SDK image, Linux x64 | the `pr` gates only | experimental and unverified: its shell steps ran in the SDK container, never on a live GitLab |
+| Azure Pipelines | `ubuntu-latest` | the `pr` gates only | experimental and unverified: not run at all |
 
 ## What every template does
 
@@ -110,7 +126,8 @@ pull request and on pushes to `main`, in three steps:
   commits files under `artifacts/lockflight-evidence/` or `artifacts/lockflight-verdict/` is an ERROR in both. Bitbucket has
   one build status for the whole pipeline, not one per step, so a failing step fails the build: `gates` fails with its
   verdict, and `lockflight/judge` prints its verdict but fails the build only when the repository variable
-  `LOCKFLIGHT_JUDGE_REQUIRED` is `true` (turn it on when the team produces red commits). A push to `main` runs the judge and
+  `LOCKFLIGHT_JUDGE_REQUIRED` is `true` (leave it off at first, and turn it on once your team has run the judge on its own
+  pull requests and seen its verdicts hold). A push to `main` runs the judge and
   `gates` only.
 
 No review step is generated: Bitbucket's secured repository variables reach every step, the judge's included, so an API key

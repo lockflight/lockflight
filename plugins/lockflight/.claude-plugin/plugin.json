@@ -1,7 +1,7 @@
 {
   "name": "lockflight",
   "version": "0.3.1",
-  "description": "Gated, spec-driven delivery for Claude Code agents on .NET: deterministic gates, protected-path guards, a spec lifecycle with approvals, red/green evidence and trace, and evidence-bound review.",
+  "description": "Test-first guardrails for AI coding agents on .NET: new behaviour goes red → green, the build and tests can run before an agent says \"done\", and a CI judge re-checks that evidence on every pull request.",
   "author": { "name": "Bohdan Ivaniichuk" },
   "repository": "https://github.com/lockflight/lockflight",
   "license": "MIT",
