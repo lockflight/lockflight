@@ -56,7 +56,7 @@ internal sealed class LedgerWriter(string projectRoot, TimeProvider time)
             if (ledgerEvent.Context is LedgerEventContext eventContext)
             {
                 WriteIfPresent(writer, "tool", eventContext.Tool);
-                WriteIfPresent(writer, "call", eventContext.Call is string call ? CallRedaction.Shorten(call) : null);
+                WriteIfPresent(writer, "call", CallOf(eventContext));
                 WriteIfPresent(writer, "session", eventContext.Session);
                 WriteIfPresent(writer, "agent", eventContext.Agent);
             }
@@ -103,6 +103,11 @@ internal sealed class LedgerWriter(string projectRoot, TimeProvider time)
 
         return Encoding.UTF8.GetString(stream.ToArray());
     }
+
+    private static string? CallOf(LedgerEventContext eventContext) =>
+        eventContext.Command is string command ? CallRedaction.Shorten(command)
+        : eventContext.FilePath is string filePath ? CallRedaction.ShortenPath(filePath)
+        : null;
 
     private static void WriteIfPresent(Utf8JsonWriter writer, string name, string? value)
     {

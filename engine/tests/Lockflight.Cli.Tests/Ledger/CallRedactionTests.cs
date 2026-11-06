@@ -25,6 +25,15 @@ public sealed class CallRedactionTests
     public void CredentialsAreMaskedAndOrdinaryCommandsKept(string call, string expected) => Assert.Equal(expected, CallRedaction.Shorten(call));
 
     [Fact]
+    public void AFilePathThroughRandomLookingFoldersIsKeptWholeThoughTheSameTextInACommandIsMasked()
+    {
+        const string path = "/var/folders/k3/x9Qz2Lm7Rb4Tn8Vc1Wd6Yf0Hk3Pj5Ns8/T/Q7xR2k/secrets/key.txt";
+
+        Assert.Equal("***.txt", CallRedaction.Shorten(path));
+        Assert.Equal(path, CallRedaction.ShortenPath(path));
+    }
+
+    [Fact]
     public void ALongCallIsShortenedToOneLine()
     {
         string shortened = CallRedaction.Shorten("echo a\n" + new string('x', 10).Replace("x", "word ", StringComparison.Ordinal) + string.Concat(Enumerable.Repeat("echo b; ", 40)));

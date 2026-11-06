@@ -165,7 +165,7 @@ internal sealed class HookCommand(CliContext context) : ICommand
         {
             LedgerEvent blocked = new(LedgerEventType.HookBlocked, $"{HookEventNames.ToName(hookEvent)}:{decision.Code}", decision.Code ?? "blocked", decision.Reason)
             {
-                Context = input is null ? null : new LedgerEventContext(input.Tool.Name, input.Command ?? input.FilePath, input.Session.Id, input.Session.Agent ?? "main"),
+                Context = input is null ? null : new LedgerEventContext(input.Tool.Name, input.Command, input.FilePath, input.Session.Id, input.Session.Agent ?? "main"),
             };
             await new LedgerWriter(projectRoot, context.Time).AppendAsync(blocked, cancellationToken);
         }

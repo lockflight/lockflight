@@ -38,28 +38,31 @@ public sealed class BlockLedgerContextTests : IDisposable
         Assert.Equal(expectedAgent, record.GetProperty("agent").GetString());
     }
 
-    [Fact]
-    public async Task ABlockedFileWriteRecordsTheToolThePathAndTheSession()
+    [Theory]
+    [InlineData("project")]
+    [InlineData("x9Qz2Lm7Rb4Tn8Vc1Wd6Yf0Hk3Pj5Ns8/T/Q7xR2k")]
+    public async Task ABlockedFileWriteRecordsTheToolTheWholePathAndTheSession(string projectFolder)
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\nprotected:\n  - secrets/**\n");
-        string target = Path.Combine(root.FullName, "secrets", "key.txt");
+        DirectoryInfo project = Directory.CreateDirectory(Path.Combine(root.FullName, projectFolder));
+        File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 1\nprotected:\n  - secrets/**\n");
+        string target = Path.Combine(project.FullName, "secrets", "key.txt");
         Dictionary<string, object?> payload = new()
         {
-            ["cwd"] = root.FullName,
+            ["cwd"] = project.FullName,
             ["session_id"] = "s-2",
             ["tool_name"] = "Write",
             ["tool_input"] = new Dictionary<string, string> { ["file_path"] = target, ["content"] = "x" },
         };
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], JsonSerializer.Serialize(payload), root.FullName);
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], JsonSerializer.Serialize(payload), project.FullName);
 
         Assert.Equal(ExitCode.HookBlock, exitCode);
-        string line = File.ReadAllLines(Directory.GetFiles(Path.Combine(root.FullName, ".lockflight", "ledger"))[0]).Last();
+        string line = File.ReadAllLines(Directory.GetFiles(Path.Combine(project.FullName, ".lockflight", "ledger"))[0]).Last();
         using JsonDocument document = JsonDocument.Parse(line);
         JsonElement record = document.RootElement;
         Assert.Equal("hook.blocked", record.GetProperty("type").GetString());
         Assert.Equal("Write", record.GetProperty("tool").GetString());
-        Assert.EndsWith(Path.Combine("secrets", "key.txt"), record.GetProperty("call").GetString(), StringComparison.Ordinal);
+        Assert.Equal(target, record.GetProperty("call").GetString());
         Assert.Equal("s-2", record.GetProperty("session").GetString());
     }
 

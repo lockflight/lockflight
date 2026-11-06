@@ -29,7 +29,18 @@ internal static partial class CallRedaction
         masked = Base64Run().Replace(masked, match => LooksRandom(match.Value) ? Mask : match.Value);
         masked = LongToken().Replace(masked, Mask);
         masked = Labelled().Replace(masked, match => $"{match.Groups["label"].Value}{Mask}");
-        string oneLine = masked.ReplaceLineEndings(" ");
+        return OneLine(masked);
+    }
+
+    /// <summary>
+    /// Shortens a file path without masking: the credential patterns would take a long path of random-looking folder names
+    /// (<c>/var/folders/…/T/…</c> on macOS) for a key and hide the whole path.
+    /// </summary>
+    public static string ShortenPath(string path) => OneLine(path);
+
+    private static string OneLine(string text)
+    {
+        string oneLine = text.ReplaceLineEndings(" ");
         return oneLine.Length > MaxLength ? oneLine[..MaxLength] + "…" : oneLine;
     }
 
