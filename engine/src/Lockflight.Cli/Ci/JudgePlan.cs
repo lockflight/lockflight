@@ -33,6 +33,15 @@ internal sealed record JudgePlan(
     /// </summary>
     public IReadOnlyList<string>? Loosened { get; init; }
 
+    /// <summary>
+    /// Whether the pull request is judged as a structural-only change (<see cref="StructuralLane"/>); null when its spec is not all
+    /// <c>[structural]</c>, or its red check is off.
+    /// </summary>
+    public StructuralEligibility? StructuralChange { get; init; }
+
+    /// <summary>Whether the pull request is judged as a structural-only change: no red commit, trace and the existing tests required.</summary>
+    public bool InStructuralLane => StructuralChange is { Eligible: true };
+
     /// <summary>Why the head's <c>lockflight.yaml</c> could not be compared (it does not parse with this engine); null when it was.</summary>
     public string? PolicyNotCompared { get; init; }
 }

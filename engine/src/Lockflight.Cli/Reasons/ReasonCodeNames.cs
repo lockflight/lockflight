@@ -74,6 +74,9 @@ internal static class ReasonCodeNames
         (ReasonCode.ScannerReplaced, "SCANNER_REPLACED"),
         (ReasonCode.EngineLockRefused, "ENGINE_LOCK_REFUSED"),
         (ReasonCode.NeedsWindowsRunner, "NEEDS_WINDOWS_RUNNER"),
+        (ReasonCode.ExistingTestOldVersionFails, "EXISTING_TEST_OLD_VERSION_FAILS"),
+        (ReasonCode.ExistingTestOldVersionUncheckable, "EXISTING_TEST_OLD_VERSION_UNCHECKABLE"),
+        (ReasonCode.StructuralChangeNewTest, "STRUCTURAL_CHANGE_NEW_TEST"),
     ];
 
     /// <summary>Every code that has a contract name: all but <see cref="ReasonCode.None"/> and <see cref="ReasonCode.Unknown"/>.</summary>

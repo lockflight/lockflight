@@ -258,6 +258,13 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/ci-judge.sh "$RUNNER_TEMP/ci-judge"
+      - name: Structural-only change end to end (no red commit for a reviewed all-structural spec; disguised behaviour changes)
+        if: matrix.part != '2'
+        shell: bash
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/e2e/structural-change.sh "$RUNNER_TEMP/structural-change"
       - name: Fix flow end to end (lockflight red, a fix with no spec, GREEN_BEFORE, refusals, redo)
         if: matrix.part != '2'
         shell: bash

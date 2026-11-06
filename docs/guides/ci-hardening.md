@@ -142,6 +142,12 @@ passes at head and on the fork point's code with its own file and the test side'
 architecture test calling no production code, fails there on an assertion); such tests are not part of a red commit's cycle.
 This shows the test's assertions held on both sides, not that they pin the requirement; that is for review. Local trace checks them on the commit `redgreen start` recorded
 instead of the fork point, so the two can differ when the branch's history moved.
+A pull request whose spec is all `[structural]` needs no red commit when a person gates the spec (changed here under the target
+branch's CODEOWNERS, or merged first under spec-first) and no routing signal carries behaviour: red is N/A, trace answers for every
+requirement and refuses a new test that is not structural, and `tests.existingChanged` is required and runs the base's version of
+each changed existing test on the head's code. Whether it qualifies is decided from git, and the report job decides it again; the
+markers are agent-writable, so the claim rests on the spec's review, a boundary only where the platform requires code-owner
+review on the spec path ([structural-only change](spec-contract.md#specmd)).
 
 - **Read from the target branch** (a boundary, with the judge a required check and a required code-owner review covering
   the workflow files): the policy and baselines the judge applies, the engine the report jobs install, and that the check

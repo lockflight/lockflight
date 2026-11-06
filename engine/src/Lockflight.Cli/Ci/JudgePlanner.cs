@@ -7,7 +7,8 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// Step P0 of the judge: resolves the merge base, reads the base policy, finds the red commits and their fork points, classifies the
-/// change and lays out the build steps — git only, nothing is built or run.
+/// change, decides whether it is a structural-only change (<see cref="StructuralLane"/>) and lays out the build steps — git only,
+/// nothing is built or run.
 /// </summary>
 internal static class JudgePlanner
 {
@@ -86,6 +87,12 @@ internal static class JudgePlanner
         IReadOnlyDictionary<CheckId, CheckLevel> levels = CheckLevels.For(requirements, classification.ProductionChanged, inputs.Event);
         IReadOnlyList<string> ignored = await IgnoredAsync(root, inputs.Head, environment, cancellationToken);
         JudgePlan plan = new(inputs, policy, mergeBase, others, reds, classification, requirements, levels, Steps(inputs, mergeBase, reds, levels), changed, ignored);
+        if (levels[CheckId.Red] != CheckLevel.Off && await StructuralLane.ReadAsync(plan, shell, cancellationToken) is StructuralEligibility structural)
+        {
+            levels = structural.Eligible ? CheckLevels.ForStructuralChange(levels) : levels;
+            plan = plan with { StructuralChange = structural, Levels = levels, Steps = Steps(inputs, mergeBase, reds, levels) };
+        }
+
         if (inputs.Event == JudgeEvent.PullRequest && inputs.Base is not null && policy.Manifest is Manifest baseManifest)
         {
             Dictionary<CheckId, CheckLevel> withPolicy = new(levels) { [CheckId.Policy] = CheckLevel.Required };

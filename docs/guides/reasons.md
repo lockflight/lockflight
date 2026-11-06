@@ -17,7 +17,7 @@ The `red` check: each commit with a `Lockflight-Red: <cycle>` trailer is re-run,
 
 **Means:** The pull request changes production code, and no commit carries a `Lockflight-Red` trailer.
 
-**Why:** The judge proves test-first work from red commits: without one there is nothing that shows the tests told the missing behaviour from the implemented one.
+**Why:** The judge proves test-first work from red commits: without one there is nothing that shows the tests told the missing behaviour from the implemented one. A structural-only change is the exception: when every requirement of the spec is `[structural]`, a person gates the spec (changed in the pull request under the target branch's CODEOWNERS, or merged first under spec-first), no commit carries a trailer, and no routing signal carries behaviour (configuration, dependencies, schema, contract files), red is N/A and trace and the existing tests are required instead ([spec contract](spec-contract.md#specmd)). A spec that is all `[structural]` but misses one of these keeps RED_MISSING, and the detail names the condition.
 
 **Next:** Commit each story's new tests, with stubs for what does not exist yet, before the implementation, as a commit with the trailer `Lockflight-Red: 1` (2 for the next story); `redgreen red` makes that commit for you.
 
@@ -159,7 +159,7 @@ The `tests.sinceRed` check: every cycle test at head is still the test that went
 
 ## Existing tests changed
 
-The `tests.existingChanged` check (advisory): an existing test the pull request changed is run in its head version on the base's code.
+The `tests.existingChanged` check (advisory): an existing test the pull request changed is run in its head version on the base's code. In a structural-only change it is required and runs the other way round: the base's version on the head's code.
 
 ### EXISTING_TEST_PASSES_ON_BASE
 
@@ -176,6 +176,22 @@ The `tests.existingChanged` check (advisory): an existing test the pull request 
 **Why:** The change could not be re-checked, so only reading it shows what it does.
 
 **Next:** The changed test's side does not build or run on the base's code; the person who merges reviews the change by reading it (advisory).
+
+### EXISTING_TEST_OLD_VERSION_FAILS
+
+**Means:** In a structural-only change, the base's version of an existing test the pull request changed fails on the head's code.
+
+**Why:** A structural-only change keeps what the old tests pinned. The base's version runs, with the base's helpers and test inputs, so loosening the test or a shared assertion helper does not hide a behaviour change.
+
+**Next:** The change altered behaviour the existing test pinned, so it is not structural-only: undo the behaviour change, or take the `[structural]` markers off the requirements that change behaviour and commit a red for them.
+
+### EXISTING_TEST_OLD_VERSION_UNCHECKABLE
+
+**Means:** In a structural-only change, the base's version of an existing test the pull request changed does not build or run on the head's code.
+
+**Why:** Without the old version's result the change is not shown to keep what the test pinned; a rename is the usual cause, and a renamed test could also have been weakened.
+
+**Next:** Keep the API the old test uses (as a thin shim for this pull request) so its old version builds on the new code, or change the test in a pull request of its own; remove the shim later.
 
 ## Host tampering
 
@@ -284,6 +300,14 @@ The `trace` check: every requirement of the feature's spec is named by a test th
 **Why:** Every requirement must be shown by a test that failed before the code and passes with it.
 
 **Next:** Name each listed requirement in a test that went red, then green (`[Trait("Requirement", "FR-001")]`, or the NUnit or MSTest property), in a red commit.
+
+### STRUCTURAL_CHANGE_NEW_TEST
+
+**Means:** A structural-only change adds a test that names no structural requirement of its spec.
+
+**Why:** A new test pins new behaviour, and new behaviour needs a red commit; a structural-only change adds only the structural tests its spec names.
+
+**Next:** A structural-only change adds only tests that name its structural requirements: move the new test to a pull request of its own with a red commit, or name a structural requirement in it if it pins behaviour the change keeps.
 
 ## Approvals
 

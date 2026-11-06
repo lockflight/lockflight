@@ -37,6 +37,19 @@ internal static class CheckLevels
     }
 
     /// <summary>
+    /// The levels of a structural-only change (<see cref="StructuralLane"/>): red and tests since red off, trace and the existing
+    /// tests (their old versions run on the head's code) required; every other check keeps its class's level.
+    /// </summary>
+    public static IReadOnlyDictionary<CheckId, CheckLevel> ForStructuralChange(IReadOnlyDictionary<CheckId, CheckLevel> levels) =>
+        new Dictionary<CheckId, CheckLevel>(levels)
+        {
+            [CheckId.Red] = CheckLevel.Off,
+            [CheckId.TestsSinceRed] = CheckLevel.Off,
+            [CheckId.Trace] = CheckLevel.Required,
+            [CheckId.TestsExistingChanged] = CheckLevel.Required,
+        };
+
+    /// <summary>
     /// <see cref="RequirementLevel.WhenApplicable"/> is advisory until the check can tell whether it applies (trace: whether there is a
     /// spec); <see cref="RequirementLevel.RequiredWithKey"/> is required, and a review skipped for want of a key is then NOT-EARNED.
     /// </summary>

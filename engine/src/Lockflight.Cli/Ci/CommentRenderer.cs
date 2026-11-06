@@ -68,6 +68,7 @@ internal static class CommentRenderer
         }
 
         top.Append(Blocked(verdict));
+        top.Append(StructuralChange(verdict));
 
         top.Append(MarkerChanges(verdict));
         top.Append(SpecFromShell(verdict));
@@ -214,6 +215,60 @@ internal static class CommentRenderer
 
     private static string Count(JsonNode? node, string one, string many) =>
         node is JsonValue value && value.TryGetValue(out int count) && count > 0 ? $" · **{count} {(count == 1 ? one : many)}**" : string.Empty;
+
+    /// <summary>
+    /// A structural-only change, above the checks: what the judge checked in place of a red commit, how a person gated the spec, and
+    /// what is accepted by review rather than proved. A pull request whose spec is all <c>[structural]</c> but that is no
+    /// structural-only change gets the conditions it misses. Empty otherwise, and for a red check that is on (evidence from an
+    /// engine that did not judge the lane).
+    /// </summary>
+    private static string StructuralChange(JsonNode verdict)
+    {
+        if (verdict["structuralChange"] is not JsonObject structural)
+        {
+            return string.Empty;
+        }
+
+        string spec = CommentText.Code(Text(structural["spec"]));
+        if (structural["eligible"] is not JsonValue eligible || !eligible.TryGetValue(out bool isEligible) || !isEligible)
+        {
+            StringBuilder unmet = new($"> **Not a structural-only change:** the spec {spec} is all `[structural]`, but a red commit is still needed:\n");
+            foreach (JsonNode? condition in (structural["unmet"]?.AsArray() ?? []).Take(MaxEntriesShown))
+            {
+                unmet.Append($"> - {CommentText.Plain(Text(condition?["why"]))}\n");
+            }
+
+            return unmet.Append('\n').ToString();
+        }
+
+        JsonNode? red = (verdict["checks"]?.AsArray() ?? []).FirstOrDefault(check => Text(check?["id"]) == "red");
+        if (Text(red?["requirement"]) != "off")
+        {
+            return string.Empty;
+        }
+
+        JsonNode?[] tests = [.. structural["tests"]?.AsArray() ?? []];
+        int requirements = structural["requirements"]?.AsArray().Count ?? 0;
+        int counting = tests.Count(test => Text(test?["outcome"]) is "preserved" or "architecture-rule");
+        int rules = tests.Count(test => Text(test?["outcome"]) == "architecture-rule");
+        int kept = Number(structural["existingChanged"]?["kept"]);
+        int changed = kept + Number(structural["existingChanged"]?["changed"]) + Number(structural["existingChanged"]?["uncheckable"]);
+        string route = Text(structural["route"]) == "spec-first"
+            ? "Spec merged on the target branch first and unchanged here (spec-first)."
+            : "Spec changed in this pull request under the target branch's CODEOWNERS: the platform's code-owner review, where it is required, is the review of record.";
+        string coverage = Text(structural["coverage"]) == "measured" ? "Changed lines' coverage measured by the gates." : "Changed lines not measured (no coverage collector).";
+        string existing = changed == 0 ? "No existing test changed." : $"{Plural(changed, "existing test", "existing tests")} changed; the old version of {kept} passes on the new code.";
+        string architecture = rules > 0 ? $" ({Plural(rules, "architecture rule", "architecture rules")} the change establishes)" : string.Empty;
+        return $"> **Structural-only change — no red commit required.** Spec {spec}: {Plural(requirements, "structural requirement", "structural requirements")}; "
+            + $"{Plural(counting, "new structural test passes", "new structural tests pass")} on the fork point and at head{architecture}. {existing} {route} {coverage} "
+            + "**Accepted by review, not proved:** check that each structural test asserts what its requirement says.\n\n";
+    }
+
+    private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue(out string? text) ? text : null;
+
+    private static string Plural(int count, string one, string many) => $"{count} {(count == 1 ? one : many)}";
+
+    private static int Number(JsonNode? node) => node is JsonValue value && value.TryGetValue(out int number) ? number : 0;
 
     /// <summary>Markers put on, changed on or taken off requirements the base already had, open above the checks.</summary>
     private static string MarkerChanges(JsonNode verdict)

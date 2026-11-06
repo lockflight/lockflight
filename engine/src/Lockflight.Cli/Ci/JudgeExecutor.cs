@@ -77,7 +77,7 @@ internal static class JudgeExecutor
                 ? await HostTamperingJudge.DecideAsync(plan, head.Listing, baseListing, cycles ?? [], cancellationToken)
                 : null;
             TraceJudgement? trace = plan.Levels[CheckId.Trace] != CheckLevel.Off
-                ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, cycles ?? [], sinceRed, greenAtHead, await new StructuralJudge(trees, time).JudgeAsync(plan, head, baseListing?.AsBaseline, structuralIds, cancellationToken), cancellationToken)
+                ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, baseListing?.Inventory, cycles ?? [], sinceRed, greenAtHead, await new StructuralJudge(trees, time).JudgeAsync(plan, head, baseListing?.AsBaseline, structuralIds, cancellationToken), cancellationToken)
                 : null;
             await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
             ProcessSweep.Enter(SweepRegion.Gates);

@@ -250,7 +250,11 @@ less. The `default` preset:
 
 Red→green, and spec and trace, apply only when production code lines changed: a docs-only or test-only pull request needs
 neither. For a `fix`, the red is a failing test on the current code (RED_ASSERT), committed before the fix; `lockflight red`
-makes it without a spec ([fix a bug](fix-a-bug.md)). The judge applies the red→green, spec and trace, review and spec-first rows; it reports the class and these
+makes it without a spec ([fix a bug](fix-a-bug.md)). A structural-only change (a spec whose requirements are all `[structural]`,
+reviewed by a person) needs no red commit: red is N/A and trace and the existing tests are required instead, in every class, and
+the class itself is not lowered. A routing signal that carries behaviour a structural test does not pin (`config.changed`,
+`deps.changed`, `db.*`, `api.contractFile`, `api.publicApiFile`, `binary.changed`, `critical.policy`, `ci.workflowChanged`) keeps
+the red ([spec contract](spec-contract.md#specmd)). The judge applies the red→green, spec and trace, review and spec-first rows; it reports the class and these
 requirements in its comment. The coverage, EF Core and architecture rows are shown by `route show` and not applied by the judge
 yet. A critical pull request (a policy file, a build-wide file, a new project or solution change, an engine upgrade) is
 NOT-EARNED until the review job runs with an API key, unless `reviewKeyFrom: none`. The [configuration reference](configuration.md#lockflightyaml) lists the other presets' values.

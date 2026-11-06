@@ -12,6 +12,9 @@ internal static class JudgeChecks
 {
     public const string NotJudgedYet = "not judged by this engine version yet";
 
+    /// <summary>Why red and tests since red are off for a structural-only change.</summary>
+    public const string StructuralLaneWhy = "structural-only change: covered by trace and the existing tests (see structuralChange)";
+
     public static IReadOnlyList<CheckResult> Decide(JudgePlan plan, JudgeFindings findings) =>
         [.. Enum.GetValues<CheckId>().Select(check => Decide(plan, findings, check, plan.Levels[check]))];
 
@@ -29,6 +32,11 @@ internal static class JudgeChecks
             return new CheckResult(check, CheckLevel.Off, CheckVerdict.NotApplicable, ReasonCode.None, why);
         }
 
+        if (level == CheckLevel.Off && check is CheckId.Red or CheckId.TestsSinceRed && plan.InStructuralLane)
+        {
+            return new CheckResult(check, level, CheckVerdict.NotApplicable, ReasonCode.None, StructuralLaneWhy);
+        }
+
         if (level == CheckLevel.Off)
         {
             return new CheckResult(check, level, CheckVerdict.NotApplicable, ReasonCode.None, plan.Inputs.Event == JudgeEvent.PullRequest ? "off for this change class" : "judged on the pull request");
@@ -44,7 +52,7 @@ internal static class JudgeChecks
             CheckId.Red or CheckId.TestsSinceRed or CheckId.TestsExistingChanged or CheckId.TestsHostTampering or CheckId.Trace or CheckId.Gates or CheckId.Green
                 when findings.NotBuilt is { } notBuilt => new CheckResult(check, level, notBuilt.Verdict, notBuilt.Reason, notBuilt.Why),
             CheckId.TestsSinceRed when findings.SinceRed is IReadOnlyList<SinceRedTest> sinceRed => SinceRedCheck(level, sinceRed),
-            CheckId.TestsExistingChanged when findings.ExistingChanged is IReadOnlyList<ExistingChangedTest> existing => ExistingChangedCheck(level, existing),
+            CheckId.TestsExistingChanged when findings.ExistingChanged is IReadOnlyList<ExistingChangedTest> existing => ExistingChangedCheck(level, existing, plan.InStructuralLane),
             CheckId.TestsHostTampering when findings.Tampering is TamperingJudgement tampering => new CheckResult(check, level, tampering.Verdict, tampering.Reason, tampering.Why),
             CheckId.Trace when findings.Trace is TraceJudgement trace => Trace(plan, level, trace),
             CheckId.Gates when findings.Gates is { } gates => new CheckResult(check, level, gates.Verdict, gates.Reason, gates.Why),
@@ -96,25 +104,36 @@ internal static class JudgeChecks
         return new CheckResult(CheckId.TestsSinceRed, level, CheckVerdict.Pass, ReasonCode.None, $"{unchanged} unchanged, {amended} amend{(amended == 1 ? string.Empty : "s")} accepted");
     }
 
-    private static CheckResult ExistingChangedCheck(CheckLevel level, IReadOnlyList<ExistingChangedTest> tests)
+    /// <summary>
+    /// A changed test that no longer tells the behaviours apart, or (in a structural-only change) whose old version fails on the
+    /// head's code, fails; one that could not be checked is NOT-EARNED; else PASS.
+    /// </summary>
+    private static CheckResult ExistingChangedCheck(CheckLevel level, IReadOnlyList<ExistingChangedTest> tests, bool structuralChange)
     {
-        if ((tests.FirstOrDefault(test => test.State == ExistingChange.PassesOnBase) ?? tests.FirstOrDefault(test => test.State == ExistingChange.Uncheckable)) is ExistingChangedTest worst)
+        ExistingChangedTest? failed = tests.FirstOrDefault(test => test.State is ExistingChange.PassesOnBase or ExistingChange.OldVersionFails);
+        ExistingChangedTest? uncheckable = tests.FirstOrDefault(test => test.State is ExistingChange.Uncheckable or ExistingChange.OldVersionUncheckable);
+        if ((failed ?? uncheckable) is ExistingChangedTest worst)
         {
-            return new CheckResult(CheckId.TestsExistingChanged, level, worst.State == ExistingChange.PassesOnBase ? CheckVerdict.Fail : CheckVerdict.NotEarned, CheckReasons.Of(worst.State), $"{worst.Key}: {worst.Why}");
+            return new CheckResult(CheckId.TestsExistingChanged, level, failed is null ? CheckVerdict.NotEarned : CheckVerdict.Fail, CheckReasons.Of(worst.State), $"{worst.Key}: {worst.Why}");
         }
 
         return new CheckResult(CheckId.TestsExistingChanged, level, CheckVerdict.Pass, ReasonCode.None,
-            tests.Count == 0 ? "no existing test changed" : $"{tests.Count} existing tests changed, each still failing on the base's code");
+            tests.Count == 0 ? "no existing test changed"
+            : structuralChange ? $"{tests.Count} existing tests changed; the old version of each passes on the head's code"
+            : $"{tests.Count} existing tests changed, each still failing on the base's code");
     }
 
     /// <summary>With <c>approvals.check: report</c> the problems are listed, and the check never decides the verdict.</summary>
     private static CheckResult Approvals(CheckLevel level, ApprovalsJudgement approvals) =>
         new(CheckId.Approvals, approvals.Facts.Check == ApprovalCheckMode.Report && level == CheckLevel.Required ? CheckLevel.Advisory : level, approvals.Verdict, approvals.Reason, approvals.Why);
 
-    /// <summary>Trace is required when it applies to a class that needs it then (a spec exists), off when it does not.</summary>
+    /// <summary>
+    /// Trace is required when it applies to a class that needs it then (a spec exists), off when it does not; a structural-only
+    /// change always needs it.
+    /// </summary>
     private static CheckResult Trace(JudgePlan plan, CheckLevel level, TraceJudgement trace)
     {
-        CheckLevel resolved = plan.Requirements.LevelOf(RequirementKind.SpecAndTrace) == RequirementLevel.WhenApplicable
+        CheckLevel resolved = plan.Requirements.LevelOf(RequirementKind.SpecAndTrace) == RequirementLevel.WhenApplicable && !plan.InStructuralLane
             ? trace.Applies ? CheckLevel.Required : CheckLevel.Off
             : level;
         return new CheckResult(CheckId.Trace, resolved, trace.Verdict, trace.Reason, trace.Why);
@@ -137,6 +156,12 @@ internal static class JudgeChecks
     {
         int malformed = plan.Reds.All.Count(red => red.Malformed is not null);
         string trailers = malformed > 0 ? $" ({malformed} commits carry a malformed Lockflight-Red trailer)" : string.Empty;
+        if (plan.StructuralChange is { Unmet: [StructuralUnmet first, ..] })
+        {
+            // The spec is all [structural], so the condition it misses is the actionable part; every one is in structuralChange.unmet.
+            return $"no red commit{trailers}, and the all-[structural] spec does not waive it: {first.Why}";
+        }
+
         return $"no red commit in this pull request{trailers}; before the implementation, commit each story's new tests (stub what does not exist yet) "
             + "with git commit --trailer \"Lockflight-Red: 1\" (2 for the next story); 'lockflight red' or 'redgreen red' does this";
     }

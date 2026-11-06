@@ -110,7 +110,10 @@ Never approve for them.
       tests) are not part of a cycle: `redgreen red` leaves them out and says so. `trace` runs them here and on the start
       commit's code, where they must pass too; one that fails there means behaviour changed, which needs a normal
       requirement and a red. Never mark a requirement structural yourself, and never to get past GREEN_BEFORE: the marker is
-      the spec's, which the user approves.
+      the spec's, which the user approves. A refactor-only feature, whose requirements the user approved as all
+      `[structural]`, has no cycle: write its structural tests in files of their own, commit no red, and keep every existing
+      test's assertions as they are (the CI judge runs their old versions on the new code). Add no other new test; a test for
+      new behaviour belongs in a feature with a red.
 
       Under each test, `redgreen red` says why it got its class; `redgreen red --verbose` adds the exception, the deciding
       stack frame with its line, and the production member the test reaches.

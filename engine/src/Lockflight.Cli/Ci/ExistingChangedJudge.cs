@@ -8,7 +8,8 @@ namespace Lockflight.Cli.Ci;
 /// head's whole test side. Failing there in production code means it still tells the old behaviour from the new, as a legitimate
 /// change of expectation does; passing there means it no longer does, which is the cheapest way to fake a green. A refactor of a
 /// test that keeps its expectation also passes there, so a person decides; the check is advisory until the closure fingerprint
-/// makes its false alarms rare.
+/// makes its false alarms rare. In a structural-only change (<see cref="StructuralLane"/>) the question is the other way round and
+/// the check is required: the base's version of each such test runs on the head's code, and must pass there.
 /// </summary>
 internal sealed class ExistingChangedJudge(TreeBuilder trees, TimeProvider time)
 {
@@ -36,6 +37,17 @@ internal sealed class ExistingChangedJudge(TreeBuilder trees, TimeProvider time)
         if (changed.Length == 0)
         {
             return [];
+        }
+
+        if (plan.InStructuralLane)
+        {
+            IReadOnlyList<OriginalCheck> oldVersions = await new OverlayRecheck(trees, time).RunBaseVersionsAsync(plan, mergeBase, baseListing.Fingerprints, changed, side, cancellationToken);
+            return [.. oldVersions.Select(result => result.Passed switch
+            {
+                true => new ExistingChangedTest(result.Key, ExistingChange.Kept, $"changed, and {result.Why}"),
+                false => new ExistingChangedTest(result.Key, ExistingChange.OldVersionFails, $"changed, and {result.Why}: the change altered behaviour this test pinned"),
+                _ => new ExistingChangedTest(result.Key, ExistingChange.OldVersionUncheckable, result.Why),
+            })];
         }
 
         IReadOnlyList<RecheckResult> rechecked = await new OverlayRecheck(trees, time).RunAsync(plan, mergeBase, changed, side, head, new HashSet<string>(StringComparer.Ordinal), "existing tests on base", cancellationToken);
