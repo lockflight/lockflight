@@ -88,6 +88,13 @@ internal static class CliApplication
                                                         test-first cycles: baseline, accepted red, green;
                                                         red --verbose also prints each test's deciding
                                                         stack frame and the production call found
+          red [--base <ref>] [--message <subject>] [--redo <n>] [--dry-run] [--verbose]
+                                                        a fix's red without a spec or session: judge the working
+                                                        tree as CI judges a red commit (against the fork point,
+                                                        the base branch's policy) and commit it with a
+                                                        Lockflight-Red trailer when accepted; unlike redgreen
+                                                        red it keeps no record and locks nothing; --redo <n>
+                                                        replaces a pushed red the judge rejected
           trace [--feature <id>]                        requirement → red/green tests matrix
           blocked validate <file>                       check a lockflight.blocked/v1 report (what stopped and what
                                                         a person must do) against its contract (read only)

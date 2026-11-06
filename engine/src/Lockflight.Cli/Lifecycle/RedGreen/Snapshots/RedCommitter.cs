@@ -85,9 +85,9 @@ internal static class RedCommitter
     /// on the branch HEAD named then. When HEAD has moved since (another commit, another branch, a detached HEAD), nothing is
     /// committed: the red stays accepted and the person gets the line that commits the judged tree once they are back on it.
     /// </summary>
-    public static async Task<RedCommitOutcome> CommitAsync(string root, string snapshot, string featureId, int cycle, TimeSpan timeLimit, CancellationToken cancellationToken)
+    /// <param name="subject">The commit's subject; the trailer is always added, and only that one.</param>
+    public static async Task<RedCommitOutcome> CommitAsync(string root, string snapshot, string subject, int cycle, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
-        string subject = $"test({featureId}): red for cycle {cycle}";
         string trailer = $"{Trailer}: {cycle}";
         string? started = await SnapshotGit.OutputAsync(["rev-parse", "--verify", "--quiet", $"{snapshot}^1"], root, timeLimit, cancellationToken);
         string? branch = await SnapshotGit.OutputAsync(["symbolic-ref", "-q", "HEAD"], root, timeLimit, cancellationToken);
@@ -130,10 +130,11 @@ internal static class RedCommitter
                 : " git could not reset your index to the red commit for its paths, so they show as staged changes against it: run git reset -q before you commit again.";
             ProcessResult committedTree = await SnapshotGit.RunAsync(["rev-parse", "HEAD^{tree}"], root, timeLimit, cancellationToken);
             ProcessResult judgedTree = await SnapshotGit.RunAsync(["rev-parse", $"{snapshot}^{{tree}}"], root, timeLimit, cancellationToken);
-            string note = committedTree.Output.Trim() == judgedTree.Output.Trim()
-                ? $"Red commit {RedGreenSession.Short(committed)} ({subject}, {trailer}): the tree this red judged; CI re-runs the red there."
-                : $"Red commit {RedGreenSession.Short(committed)} differs from the tree this red judged (a hook changed it); CI judges the commit as it is.";
-            return new RedCommitOutcome(committed, note + indexNote);
+            bool treeChanged = committedTree.Output.Trim() != judgedTree.Output.Trim();
+            string note = treeChanged
+                ? $"Red commit {RedGreenSession.Short(committed)} differs from the tree this red judged (a hook changed it); CI judges the commit as it is."
+                : $"Red commit {RedGreenSession.Short(committed)} ({subject}, {trailer}): the tree this red judged; CI re-runs the red there.";
+            return new RedCommitOutcome(committed, note + indexNote) { TreeChanged = treeChanged };
         }
         finally
         {

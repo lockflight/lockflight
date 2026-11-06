@@ -54,6 +54,17 @@ internal static partial class FeatureLocator
             return Existing(root, FromRequest(root, requested), $"feature '{requested}' not found under {SpecsDirectory}/");
         }
 
+        return Active(root, environment) ?? (OnlyFeature(root) is string only
+            ? Found(root, only)
+            : FeatureLookup.NotFound($"no active feature: pass --feature <id> (no {SpecKitPointer}, Spec Kit variable or feature branch names one, and {SpecsDirectory}/ holds zero or several features)"));
+    }
+
+    /// <summary>
+    /// The feature a Spec Kit source names, without the "only feature" fallback: <c>SPECIFY_FEATURE_DIRECTORY</c>,
+    /// <c>.specify/feature.json</c>, <c>SPECIFY_FEATURE</c>, then the branch; null when none of them names one.
+    /// </summary>
+    public static FeatureLookup? Active(string root, EnvironmentReader environment)
+    {
         if (environment.Get(EnvironmentVariables.SpecifyFeatureDirectory) is { Length: > 0 } configured)
         {
             return configured.IndexOfAny(Path.GetInvalidPathChars()) < 0
@@ -75,14 +86,7 @@ internal static partial class FeatureLocator
                 ?? FeatureLookup.NotFound($"{EnvironmentVariables.SpecifyFeature} '{name}' names no feature under {SpecsDirectory}/; pass --feature <id>, or unset it");
         }
 
-        if (GitBranch.Current(root) is string branch && ByName(root, branch, $"branch '{branch}'") is FeatureLookup fromBranch)
-        {
-            return fromBranch;
-        }
-
-        return OnlyFeature(root) is string only
-            ? Found(root, only)
-            : FeatureLookup.NotFound($"no active feature: pass --feature <id> (no {SpecKitPointer}, Spec Kit variable or feature branch names one, and {SpecsDirectory}/ holds zero or several features)");
+        return GitBranch.Current(root) is string branch ? ByName(root, branch, $"branch '{branch}'") : null;
     }
 
     private static string FromRequest(string root, string requested) =>
