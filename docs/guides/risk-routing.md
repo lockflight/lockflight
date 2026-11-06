@@ -244,7 +244,8 @@ less. The `default` preset:
 | Spec first (merged before the code) | — | — | — | when `approvals.specFirstFrom` says so |
 
 Red→green, and spec and trace, apply only when production code lines changed: a docs-only or test-only pull request needs
-neither. The judge applies the red→green, spec and trace, review and spec-first rows; it reports the class and these
+neither. For a `fix`, the red is a failing test on the current code (RED_ASSERT), committed before the fix; `lockflight red`
+makes it without a spec ([fix a bug](fix-a-bug.md)). The judge applies the red→green, spec and trace, review and spec-first rows; it reports the class and these
 requirements in its comment. The coverage, EF Core and architecture rows are shown by `route show` and not applied by the judge
 yet. A critical pull request (a policy file, a build-wide file, a new project or solution change, an engine upgrade) is
 NOT-EARNED until the review job runs with an API key, unless `reviewKeyFrom: none`. The [configuration reference](configuration.md#lockflightyaml) lists the other presets' values.
@@ -310,7 +311,8 @@ move are in the diff, so no path in the pull request avoids them. Two limits hol
   critical file with its callers redirected. Mitigation: broad critical globs that include composition roots
   (`Program.cs`, `*ServiceCollectionExtensions.cs`), and the review.
 - **A change split into many small pull requests.** Each still needs its own evidence, and `size.large` catches the unsplit
-  version, but a split that avoids every signal is possible.
+  version, but a split that avoids every signal is possible. A feature's recorded class (`route record`) keeps its later pull
+  requests at its class, but a series with no spec records none, and `lockflight red` makes such a series cheaper.
 - **Disabling a test by adding lines only**, such as an early `return;`: no code line is taken away and no marker is added.
   Mitigation: the review, and red→green on the tests the pull request needs.
 - **API not written as a declaration or a mapping:** a DTO property that changes an HTTP contract in an application project,

@@ -29,7 +29,8 @@ change to how people work. It needs a CI file, so `--ci none` is refused with it
 hold nothing Lockflight writes (the team's own rules and sandbox are fine), and no settings enable the plugin. The Claude
 settings line is then `info`, and so is the linked engine line when no engine is linked (one that is linked is still checked);
 the plugin engine, deny rules, sandbox and Claude Code lines are left out. A person or an agent can still run the engine by
-hand (`lockflight gate run`) and make a red commit with `git commit --trailer "Lockflight-Red: 1"`.
+hand (`lockflight gate run`) and make a red commit with `dotnet lockflight red`, which checks it the way the judge will first
+([fix a bug](fix-a-bug.md)); a hand-typed `git commit --trailer "Lockflight-Red: 1"` is judged the same way.
 
 What CI reads from the base branch is a boundary: the policy, the engine lock and CODEOWNERS. The check itself is a boundary
 where the platform enforces it: a required check whose workflow files are under CODEOWNERS with required code-owner review

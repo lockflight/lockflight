@@ -43,6 +43,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | Task completion gate (`TaskCompleted` hook, with `stop.gate: true`) | G | A task is marked completed only when the stop gate has passed for the current tree (the Stop gate's or a `gate run`'s cached PASS). It reads evidence and runs no build. Claude Code completes the task when the hook fails or times out (only exit 2 blocks), and it does not block twice on a tree the Stop gate already sent back in the session |
 | Stop gate at the end of a turn | G | the agent's own session; Claude Code caps continuations. An engine that cannot judge the event (it fails, it is older than the plugin's hook API, or it does not know the event) lets Stop, SessionStart and TaskCompleted through rather than brick the session: loudly (a message to you) for a failure or a hook API mismatch, silently for an event an older engine does not know. Tool calls still fail closed, and CI judges either way |
 | Test lock during a red cycle | G | applied by the guard (above); see the shell commands it recognises below. A person's `redgreen amend` makes the one file that declares the amended test writable until the next red re-checks it; everything else in that file is writable too, so the record, trace and pull request summary name each amend for review |
+| `lockflight red` refusals: inside a feature's lifecycle, in an agent session when the branch's feature has a spec, and when the branch is at or above the class that needs a spec with none | G | the engine reads the working tree, the branch name and `CLAUDECODE`; the variable can be unset and a branch can name no feature. The CI judge is the boundary where the platform enforces its check: a feature-class pull request with no spec is NOT-EARNED, whatever made its red commits. A red `lockflight red` accepted is re-run by the judge from scratch ([below](#lockflight-red-and-the-feature-flow)) |
 | Amend re-check on the red-time snapshot | G | The next red after an amend builds and runs the amended test on the tree the red was accepted on, plus the amended file, so an implementation written since cannot make it pass. It runs on your machine and builds test code the agent wrote, and the snapshot ref is local, so it prevents accidents and makes a weakened test harder to slip through; it is not a boundary. It cannot tell a right expected value from a wrong one: the pull request lists every amend for the person who merges |
 | Test file hashes checked at green and review | G | The red records a hash of every file in the locked test projects, and an amend's red records the amended files again. `redgreen green` and `lockflight review` refuse while a file differs without a recorded amend, which catches an edit the guard did not see. The hashes live in `redgreen.json`, which only the guard protects, and the check runs on your machine, so it makes a bypass visible; it is not a boundary |
 | Red/green evidence (local) | G | runtime evidence from commands the agent runs; it does not prove the order of history |
@@ -292,6 +293,34 @@ and a commit made outside Claude Code never meets them. CI stays the definition 
 
 Check the result in a Lockflight project: `/status` names the managed source on its `Setting sources` line, the Lockflight
 banner still appears at session start (the plugin's hooks run), and an agent edit of `lockflight.yaml` is still refused.
+
+## `lockflight red` and the feature flow
+
+`lockflight red` makes a red commit without a spec, an approval or a session ([fix a bug](fix-a-bug.md)), so it skips the
+plugin's spec and tasks approval before red/green. Three guardrails keep it from becoming an agent's way around that approval:
+it refuses in a Claude Code session when the branch's feature has a spec (or a red/green record, or any feature's cycle is
+open); it refuses when the branch since the fork point is already at or above the class that needs a spec under the target
+branch's policy and none resolves; and the `fix` skill checks the class again after the fix and stops when it reached that
+class. None of them is a boundary: an agent can unset `CLAUDECODE`, work on a branch that names no feature, or write the
+feature's code after its red.
+
+The boundary is the judge's verdict: a feature-class pull request without a spec is NOT-EARNED, because trace is required and
+has no spec to trace. A spec added in the same pull request can pass, as it can with hand-typed trailers; the approval of record
+is the platform's review. A team that wants the spec approved *before* any feature code, enforced rather than advised, sets
+`approvals.specFirstFrom: feature` on the target branch.
+
+What no red can tell, with `lockflight red`, `redgreen red` or a hand-typed trailer alike, and what the review is for:
+
+- **Break, then restore.** A red that breaks production code so that an existing behaviour fails, and a "fix" that restores
+  it. The output's "Production files in this red" line and the red commit's diff show it.
+- **A stub in existing code.** `throw new NotImplementedException()` in an existing method makes any test that calls it
+  RED_STUB. It is legitimate for a behaviour change and equally visible in the diff.
+- **A test that asserts the wrong thing.** RED_ASSERT shows the test calls production code and fails on an assertion, not that
+  the assertion is the bug.
+- **Skipped tests landed first.** A test-only pull request needs no red; a later pull request can un-skip those tests beside
+  one token red test, and un-skipped tests are not new, so they are never proven red.
+- **A feature split into small pull requests** so that each stays below the class that needs a spec (see
+  [risk routing](risk-routing.md#what-routing-does-not-see)).
 
 ## Proposing a protected change
 

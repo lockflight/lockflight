@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: fix-not-triggered
+description: "A request to add something new does not load the fix skill: that is the feature skill's."
+tags: [trigger, negative]

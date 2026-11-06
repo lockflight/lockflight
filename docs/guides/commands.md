@@ -94,7 +94,8 @@ Profiles and steps are described in the [configuration reference](configuration.
 
 ## Fixes (any profile)
 
-A bug fix needs a red commit like any change to production code, but no spec, no approval and no red/green session.
+A bug fix needs a red commit like any change to production code, but no spec, no approval and no red/green session. The
+[fix guide](fix-a-bug.md) walks through it, with an agent and in an IDE.
 
 | Command | What it does |
 |---|---|

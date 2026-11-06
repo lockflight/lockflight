@@ -387,6 +387,12 @@ skips the PyYAML check; neither counts against readiness.
    same checks judge their work. See [the crew](skills.md#the-crew-optional).
 3. Now and then, with the crew plugin installed, ask for a retro (its `retro` skill) to see recurring incidents and suggested remedies, as advice.
 
+## Fix a bug
+
+A bug fix needs a red commit, in the lite profile as in the standard one, but no spec and no approval: a test that
+reproduces the bug, committed with `lockflight red` before the fix. With the plugin, describe the bug and the `fix` skill
+does it; in an IDE or a terminal, run `dotnet lockflight red` after writing the test. See [fix a bug](fix-a-bug.md).
+
 ## CI with a development build
 
 The workflow `init` writes installs the engine version the project pins, from nuget.org or the package sources in the
