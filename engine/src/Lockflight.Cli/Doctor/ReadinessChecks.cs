@@ -171,6 +171,11 @@ internal static class ReadinessChecks
             checks.Add(sandbox);
         }
 
+        if (WindowsTargetCheck.Check(root, OperatingSystem.IsWindows()) is DoctorCheck windowsTargets)
+        {
+            checks.Add(windowsTargets);
+        }
+
         return checks;
     }
 

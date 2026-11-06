@@ -35,7 +35,7 @@ internal static class StopGate
         if (manifest.Units.Count > 0 && Path.GetFullPath(manifest.StopTarget ?? ".", manifest.Root).TrimEnd(Path.DirectorySeparatorChar) == Path.GetFullPath(manifest.Root).TrimEnd(Path.DirectorySeparatorChar))
         {
             // A workspace: every changed unit, each also with its own cache entry, so a PASS of one survives edits to another.
-            GateRunContext workspace = new(manifest.Root, manifest.Root, GateProfile.Stop, manifest.Gates, BaseRef: null, time);
+            GateRunContext workspace = new(manifest.Root, manifest.Root, GateProfile.Stop, manifest.Gates, BaseRef: null, time) { LeavesOutWindowsTests = !OperatingSystem.IsWindows() };
             result = await WorkspaceGateRunner.RunAsync(manifest, workspace, [], useCache: true, TextWriter.Null, cancellationToken);
             await StopTimings.RecordAsync(manifest, result, time, cancellationToken);
         }
@@ -43,7 +43,7 @@ internal static class StopGate
         {
             string target = Path.GetFullPath(manifest.StopTarget ?? ".", manifest.Root);
             // A stop target inside a unit runs with that unit's build: file, test framework and stop filter.
-            GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, time);
+            GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, time) with { LeavesOutWindowsTests = !OperatingSystem.IsWindows() };
             result = await GateRunner.RunAsync(run, TextWriter.Null, cancellationToken);
         }
 

@@ -327,6 +327,13 @@ ledger). It names the projects the gate built and why.
 
 Whatever the Stop gate leaves out, CI runs: `gate run --profile pr` builds and tests everything.
 
+## The tests of a WPF or Windows Forms project do not run on macOS or Linux
+
+The gates leave out test projects that target Windows (`net8.0-windows`) when they run off Windows, and say so in the `test`
+detail ("left out off Windows: …"). Those tests cannot start without Windows. They run on a Windows machine, and in CI on a
+Windows runner. `lockflight doctor` lists the projects. See
+[projects that target Windows, off Windows](configuration.md#projects-that-target-windows-off-windows).
+
 ## The format gate fails
 
 The format gate judges only the lines the change touched (see the [configuration reference](configuration.md#the-format-step-judges-the-change-not-the-file)).

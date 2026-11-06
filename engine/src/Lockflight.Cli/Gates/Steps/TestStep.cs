@@ -1,8 +1,10 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Xml;
+using Lockflight.Cli.Gates.Affected;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Gates.Parsers;
+using Lockflight.Cli.Gates.WindowsTargets;
 using Lockflight.Cli.Processes;
 using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Testing;
@@ -20,6 +22,8 @@ internal sealed partial class TestStep : IGateStep
 
     /// <summary>Where a VSTest run writes its TRX and coverage files: git-ignored local state, emptied before each run.</summary>
     public const string ResultsRelativePath = ".lockflight/local/test-results";
+
+    private const string WindowsLeftOutExtension = ".off-windows.slnf";
 
     public string Name => StepName;
 
@@ -40,16 +44,50 @@ internal sealed partial class TestStep : IGateStep
         }
 
         DateTimeOffset started = run.Time.GetUtcNow();
-        TestStepOutcome tests = await RunTestsAsync(run, facts.Selection?.FilterFile, cancellationToken);
+        TestStepOutcome tests = await RunTestsAsync(run, facts.Selection, cancellationToken);
         return new(tests.Step, facts with { TestsTotal = tests.TestsTotal, TestResultsDirectory = tests.ResultsDirectory, TestsStarted = started });
     }
 
     /// <summary>The test run over everything with the failures it named, which <see cref="Baselines.BaselineRun"/> records as a baseline.</summary>
     public static Task<TestStepOutcome> RunTestsAsync(GateRunContext run, CancellationToken cancellationToken) =>
-        RunTestsAsync(run, filterFile: null, cancellationToken);
+        RunTestsAsync(run, selection: null, cancellationToken);
+
+    /// <summary>
+    /// The test run over the chosen projects (<paramref name="selection"/>; null for everything). Off Windows
+    /// (<see cref="GateRunContext.LeavesOutWindowsTests"/>) the projects that target Windows are left out through a solution filter of
+    /// the others, and the step's detail says which test projects were left out; N/A when no test project is left.
+    /// </summary>
+    private static async Task<TestStepOutcome> RunTestsAsync(GateRunContext run, ProjectSelection? selection, CancellationToken cancellationToken)
+    {
+        string? filterFile = selection?.FilterFile;
+        if (!run.LeavesOutWindowsTests || WindowsTargeting.Find(run.Target, run.BuildFile) is not WindowsTargetedSolution windows)
+        {
+            return await RunTestsOnAsync(run, filterFile, cancellationToken);
+        }
+
+        IReadOnlyList<string> chosen = filterFile is null ? windows.Entries : [.. selection!.Projects.Select(project => project.SolutionEntry).OfType<string>()];
+        IReadOnlyList<string> leftOut = windows.WindowsTestsAmong(chosen);
+        if (leftOut.Count == 0)
+        {
+            return await RunTestsOnAsync(run, filterFile, cancellationToken);
+        }
+
+        string note = WindowsTargetedSolution.LeftOutNote(leftOut);
+        string[] kept = [.. chosen.Where(entry => !windows.WindowsEntries.Contains(entry, StringComparer.Ordinal))];
+        if (!kept.Any(windows.TestEntries.Contains))
+        {
+            return new TestStepOutcome(new GateStep(StepName, 0, Verdict.NotApplicable, ReasonCode.None, 0, $"no test project left to run: {note}"), null, []);
+        }
+
+        string keptFilter = StopPassRecord.PathOf(run.ProjectRoot, run.Target, WindowsLeftOutExtension);
+        await SolutionFilter.WriteAsync(keptFilter, windows.Solution, kept, cancellationToken);
+        TestStepOutcome outcome = await RunTestsOnAsync(run, keptFilter, cancellationToken);
+        string detail = outcome.Step.Detail.Length == 0 ? note : $"{outcome.Step.Detail}; {note}";
+        return outcome with { Step = outcome.Step with { Detail = detail } };
+    }
 
     /// <param name="filterFile">The solution filter of the chosen projects; null for the target's solution or <c>build:</c> file.</param>
-    private static Task<TestStepOutcome> RunTestsAsync(GateRunContext run, string? filterFile, CancellationToken cancellationToken) =>
+    private static Task<TestStepOutcome> RunTestsOnAsync(GateRunContext run, string? filterFile, CancellationToken cancellationToken) =>
         TestRunnerDetection.For(run.Target) == TestRunnerKind.MicrosoftTestingPlatform
             ? RunOnTestingPlatformAsync(run, filterFile ?? run.BuildFile, cancellationToken)
             : RunOnVSTestAsync(run, filterFile is null ? run.BuildFileArguments : [filterFile], cancellationToken);
