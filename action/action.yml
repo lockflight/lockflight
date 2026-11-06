@@ -120,6 +120,11 @@ runs:
           *) tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" "$binary" ;;
         esac
         echo "LOCKFLIGHT_GITLEAKS=$RUNNER_TEMP/$binary" >> "$GITHUB_ENV"
+        # The binary's own hash, taken before any of the pull request's code runs: the engine checks it before each gitleaks run,
+        # since a build in this job could replace the file.
+        if command -v sha256sum >/dev/null 2>&1; then binary_sum=$(sha256sum < "$RUNNER_TEMP/$binary")
+        else binary_sum=$(shasum -a 256 < "$RUNNER_TEMP/$binary"); fi
+        echo "LOCKFLIGHT_GITLEAKS_SHA256=${binary_sum%% *}" >> "$GITHUB_ENV"
 
     - name: Install the engine the target branch pins (outside the repository's global.json)
       id: install

@@ -25,8 +25,8 @@ public sealed class RunnerCrossCheckTests
         Assert.Contains("The verdict stays GREEN_BEFORE", lines[0], StringComparison.Ordinal);
         Assert.DoesNotContain("hunter2", string.Join('\n', lines), StringComparison.Ordinal);
         Assert.Equal($"  red's run:   cd {ShellQuoting.QuoteIfNeeded(app.OutputDirectory)} && dotnet {ShellQuoting.QuoteIfNeeded(app.AssemblyPath)} -noLogo -noColor -method Shop.Tests.ZoneTests.Converts -method Shop.Tests.ZoneTests.Parses", lines[1]);
-        Assert.Equal("               environment: ASPNETCORE_ConnectionStrings__Shop=<redacted> DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 LANG=C TZ=Europe/Kyiv", lines[2]);
+        Assert.Equal("               environment: ASPNETCORE_ConnectionStrings__Shop=<redacted> DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_CLI_USE_MSBUILD_SERVER=0 DOTNET_NOLOGO=1 LANG=C TZ=Europe/Kyiv", lines[2]);
         Assert.Equal($"  dotnet test: cd {ShellQuoting.QuoteIfNeeded(project)} && dotnet test Shop.Tests.csproj --no-build --filter FullyQualifiedName=Shop.Tests.ZoneTests.Converts", lines[3]);
-        Assert.Equal($"               environment: ASPNETCORE_ConnectionStrings__Shop=<redacted> DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 LANG=C (and the variables of {app.RunSettingsFile}, which dotnet test applies itself)", lines[4]);
+        Assert.Equal($"               environment: ASPNETCORE_ConnectionStrings__Shop=<redacted> DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_CLI_USE_MSBUILD_SERVER=0 DOTNET_NOLOGO=1 LANG=C (and the variables of {app.RunSettingsFile}, which dotnet test applies itself)", lines[4]);
     }
 }

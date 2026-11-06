@@ -41,6 +41,18 @@ internal sealed record GateRunContext(
     /// <summary>The full paths of the workspace's units; a change inside another unit does not choose this one's projects.</summary>
     public IReadOnlyList<string> UnitDirectories { get; init; } = [];
 
+    /// <summary>
+    /// The SHA-256 the gitleaks binary must have (<c>LOCKFLIGHT_GITLEAKS_SHA256</c>, set by a CI template before any of the pull
+    /// request's code ran); the secrets step checks it before each gitleaks run. Null when the run names none.
+    /// </summary>
+    public string? GitleaksSha256 { get; init; }
+
+    /// <summary>
+    /// The secrets step's result from the scan the CI judge ran before it built any of the pull request's code; the step reports
+    /// it instead of scanning again after the build. Null outside the judge.
+    /// </summary>
+    public GateStep? SecretsScannedFirst { get; init; }
+
     /// <summary>Runs the tools the steps judge (the .NET SDK, gitleaks); real processes unless a test supplies its own.</summary>
     public RunTimedProcess Processes { get; init; } = ProcessRunner.RunAsync;
 

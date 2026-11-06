@@ -88,6 +88,9 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
   5. `security.deps` — no new High/Critical advisories;
   6. `security.secrets` — gitleaks over the PR's commits, uncommitted changes, and untracked files that git does not ignore.
      False positives go to `.gitleaksignore`, reviewed by a human. An added inline `gitleaks:allow` comment fails the step.
+     In the CI judge this scan runs first, before anything of the pull request is built (see
+     [what the CI judge shows](#what-the-ci-judge-shows-and-what-it-does-not)), and the gates report
+     its result here.
      The engine's own recorded hashes are not findings: a generic-key hit in a red/green, approval or review record under
      `.lockflight/features/<id>/` whose whole match is a JSON name and a bare 40- or 64-digit lowercase hex value (a commit id
      or SHA-256). Everything else in those files is scanned as usual.
@@ -143,12 +146,23 @@ instead of the fork point, so the two can differ when the branch's history moved
 - **A strong guardrail, not a boundary:** the evidence file itself. In 0.3.0 the judge writes its evidence in the same job
   as the pull request's code, so a process that code leaves running could rewrite it before the report jobs read it.
   Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0.
-- **What the pull request's code can affect in the judge job.** In 0.3.0 the pull request's code runs as the same user, in
-  the same job, before the judge has finished:
+- **What the pull request's code can affect in the judge job.** The pull request's code runs as the same user as the engine,
+  in the same job, before the judge has finished. On GitHub-hosted runners that user has administrator rights (passwordless
+  `sudo` on Linux and macOS, an administrator account on Windows), so the code can act as root on the runner's VM:
   - leftovers in `obj/` and `bin/` carry from one build to the next in the judge's worktree;
   - git hooks the pull request's code installs can run when the judge checks out paths;
-  - the policy, baselines and gitleaks config are read from the worktree after the pull request's code has built and run
-    there;
+  - the policy and baselines are laid over the worktree from the target branch before each build, but are read there after
+    the pull request's code has built and run in it;
+  - the secrets scan runs before any of it: the judge checks out the head with the target branch's `.gitleaks.toml` and
+    `.gitleaksignore` and scans it before the first build, and the `pr` gates report that scan instead of scanning again
+    after the build. The action takes the SHA-256 of the gitleaks binary it installed, outside the checkout and before any of
+    the pull request's code runs, and passes it as `LOCKFLIGHT_GITLEAKS_SHA256`; the engine hashes the binary before every
+    gitleaks run and refuses one that differs (ERROR). This protects the scan from a build that replaces the binary or the
+    config; it is still a guardrail, since code with root on the VM could interfere with the engine itself;
+  - the engine starts every build with the .NET build servers off (`UseSharedCompilation=false`, `UseRazorBuildServer=false`,
+    `DOTNET_CLI_USE_MSBUILD_SERVER=0`, beside `MSBUILDDISABLENODEREUSE=1`), so the project's analyzers and source generators
+    do not stay alive in a compiler server after its build, and runs `dotnet build-server shutdown` after each phase of the
+    judge. A project can set these properties back, and an `<Exec>` can start any process it likes;
   - test-framework extension points (an xUnit v3 `TestFramework`, an NUnit `IWrapTestMethod` attribute, a custom runner)
     run inside the test host;
   - an MSBuild `<Exec>` task or inline task in a project, props or targets file runs arbitrary code at build time;
@@ -343,7 +357,10 @@ run of the workflow (it skips a fork, whose pull requests run in the upstream re
 
 `gate run --profile pr` works locally too. Without `--base` it scans uncommitted changes and untracked, non-ignored files only
 and says so; without gitleaks on
-`PATH` (or `LOCKFLIGHT_GITLEAKS`) the secrets step is NOT-EARNED, not PASS.
+`PATH` (or `LOCKFLIGHT_GITLEAKS`) the secrets step is NOT-EARNED, not PASS. When `LOCKFLIGHT_GITLEAKS_SHA256` is set, the
+binary must have that SHA-256 or the secrets step is ERROR: a CI script on another platform that installs gitleaks before it
+runs any of the pull request's code can set it the way the action does. Outside the CI judge the scan runs last, after the
+build, as the step order above shows.
 
 ## Workspace shells: unit repositories
 

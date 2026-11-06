@@ -12,7 +12,9 @@ namespace Lockflight.Cli.Gates.Steps;
 /// directory only the current user can read, and scanned there in one run; findings and <c>.gitleaksignore</c> fingerprints then
 /// carry repository-relative paths. Findings are accepted only through gitleaks' own <c>.gitleaksignore</c>, a protected path; an
 /// added inline <c>gitleaks:allow</c> comment — which would silence gitleaks — fails the step (in an untracked file it is also ignored
-/// by the scan). Without gitleaks the step cannot vouch for anything, so it is NOT-EARNED rather than PASS.
+/// by the scan). Without gitleaks the step cannot vouch for anything, so it is NOT-EARNED rather than PASS. When the run names the
+/// binary's SHA-256 (<c>LOCKFLIGHT_GITLEAKS_SHA256</c>) the binary is hashed before each gitleaks run, and one that differs is an
+/// ERROR. In the CI judge the scan runs before any of the pull request's code is built, and the step reports that scan.
 /// </summary>
 internal sealed class SecretsStep : IGateStep
 {
@@ -40,7 +42,7 @@ internal sealed class SecretsStep : IGateStep
     public string CacheKey => StepName;
 
     public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken) =>
-        new(await CheckAsync(run, cancellationToken), facts);
+        new(run.SecretsScannedFirst ?? await CheckAsync(run, cancellationToken), facts);
 
     private static async Task<GateStep> CheckAsync(GateRunContext run, CancellationToken cancellationToken)
     {
@@ -236,6 +238,11 @@ internal sealed class SecretsStep : IGateStep
         /// </summary>
         public async Task<GateStep?> RunAsync(string[] arguments, string workingDirectory, string label, string pathPrefix, CancellationToken cancellationToken)
         {
+            if (run.GitleaksSha256 is string expected && await ExecutableHash.MismatchAsync(gitleaks, expected, cancellationToken) is string replaced)
+            {
+                return new GateStep(StepName, 0, Verdict.Error, ReasonCode.ToolError, DurationMs, $"gitleaks was not run: {replaced}");
+            }
+
             ProcessResult scan = await run.Processes(gitleaks, arguments, workingDirectory, run.TimeLeft(), cancellationToken);
             DurationMs += scan.DurationMs;
             if (StepHealth.Unhealthy(StepName, scan, run) is GateStep unhealthy)

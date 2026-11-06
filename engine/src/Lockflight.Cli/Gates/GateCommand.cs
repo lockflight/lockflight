@@ -14,9 +14,11 @@ namespace Lockflight.Cli.Gates;
 /// weaken the gates. At the root of a workspace with units the run covers every unit, or those <c>--unit</c> names. The stop profile
 /// builds and tests the projects the changes since its last PASS affect; <c>--full</c> makes it build and test every project. In a unit
 /// repository of a workspace shell (<c>shell:</c>) the run judges with the shell's policy for the unit too, read from the clone
-/// <c>--shell</c> names or from the shell the unit is checked out in; a pr run cannot go without it.
+/// <c>--shell</c> names or from the shell the unit is checked out in; a pr run cannot go without it. The CI judge passes
+/// <paramref name="secretsScannedFirst"/>, the secrets scan it ran before building the pull request's code, for the secrets step
+/// to report.
 /// </summary>
-internal sealed class GateCommand(CliContext context) : ICommand
+internal sealed class GateCommand(CliContext context, GateStep? secretsScannedFirst = null) : ICommand
 {
     public const string ShellOption = "--shell";
 
@@ -67,7 +69,13 @@ internal sealed class GateCommand(CliContext context) : ICommand
         GateRunContext run = manifest is null
             ? new(target, target, profile, GateSettings.Default, options.Value("--base"), context.Time)
             : GateRunContext.ForTarget(manifest, target, profile, options.Value("--base"), context.Time);
-        run = run with { FullRun = full, Policy = shell.Policy is null ? null : manifest };
+        run = run with
+        {
+            FullRun = full,
+            Policy = shell.Policy is null ? null : manifest,
+            GitleaksSha256 = context.Environment.Get(EnvironmentVariables.GitleaksSha256) is { Length: > 0 } sha256 ? sha256 : null,
+            SecretsScannedFirst = secretsScannedFirst,
+        };
         if (shell.Policy is ShellPolicy policy)
         {
             await context.Output.WriteLineAsync($"Policy: {Manifest.FileName} with the workspace shell's policy for unit {policy.Unit.Path} ({manifest!.Shell!.Url} at {CommitIds.Short(policy.Commit)})");

@@ -15,6 +15,12 @@ internal static class EnvironmentVariables
     /// <summary>Path of the gitleaks binary for the secrets gate; when unset, gitleaks is looked up on PATH.</summary>
     public const string Gitleaks = "LOCKFLIGHT_GITLEAKS";
 
+    /// <summary>
+    /// The SHA-256 (64 hex digits) the gitleaks binary must have, set by a CI template that installed and checked it before any of
+    /// the pull request's code ran; when set, the secrets gate hashes the binary before each run and refuses one that differs.
+    /// </summary>
+    public const string GitleaksSha256 = "LOCKFLIGHT_GITLEAKS_SHA256";
+
     /// <summary>A temporary folder outside the checkout that a CI template provides (the runner's temp); the CI judge's worktree goes there.</summary>
     public const string Temp = "LOCKFLIGHT_TEMP";
 
