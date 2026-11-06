@@ -74,6 +74,29 @@ public sealed class ProcessRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task ToolsRunWithEveryBuildServerTurnedOff()
+    {
+        ProcessResult result = OperatingSystem.IsWindows()
+            ? await ProcessRunner.RunAsync("cmd.exe", ["/d", "/c", "echo %UseSharedCompilation% %UseRazorBuildServer% %DOTNET_CLI_USE_MSBUILD_SERVER% %MSBUILDDISABLENODEREUSE%"], directory.FullName, TestContext.Current.CancellationToken)
+            : await ProcessRunner.RunAsync("sh", ["-c", "echo \"$UseSharedCompilation $UseRazorBuildServer $DOTNET_CLI_USE_MSBUILD_SERVER $MSBUILDDISABLENODEREUSE\""], directory.FullName, TestContext.Current.CancellationToken);
+
+        Assert.Equal("false false 0 1", result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task MSBuildStartedByTheEngineSeesTheCompilerAndRazorServersTurnedOff()
+    {
+        File.WriteAllText(Path.Combine(directory.FullName, "empty.proj"), "<Project />\n");
+
+        ProcessResult result = await ProcessRunner.RunAsync(
+            "dotnet", ["msbuild", "empty.proj", "-getProperty:UseSharedCompilation", "-getProperty:UseRazorBuildServer"], directory.FullName, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("\"UseSharedCompilation\": \"false\"", result.Output, StringComparison.Ordinal);
+        Assert.Contains("\"UseRazorBuildServer\": \"false\"", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AMissingExecutableIsReportedAsNotOnPath()
     {
         ExecutableNotFoundException exception = await Assert.ThrowsAsync<ExecutableNotFoundException>(() =>

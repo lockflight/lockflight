@@ -1,8 +1,10 @@
+using System.Security.Cryptography;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Tests.Gates.Steps;
 
@@ -217,15 +219,77 @@ public sealed class SecretsStepTests : IDisposable
         Assert.Contains("house-secret at README.md:1", step.Detail, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AGitleaksBinaryThatIsNotTheInstalledOneIsNotRun()
+    {
+        await InitRepositoryAsync();
+        Write("notes/new-config.txt", FakeToken);
+        List<string> started = [];
+        GateRunContext run = Context() with
+        {
+            GitleaksSha256 = new string('0', 64),
+            Processes = (fileName, arguments, directory, limit, cancellationToken) =>
+            {
+                started.Add(fileName);
+                return ProcessRunner.RunAsync(fileName, arguments, directory, limit, cancellationToken);
+            },
+        };
+
+        GateStep step = (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
+
+        Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Contains(new string('0', 64), step.Detail, StringComparison.Ordinal);
+        Assert.Empty(started);
+    }
+
+    [Fact]
+    public async Task TheGitleaksBinaryItWasInstalledWithRuns()
+    {
+        await InitRepositoryAsync();
+        Write("notes/new-config.txt", FakeToken);
+        GateRunContext run = Context();
+        string gitleaks = Executables.Find("gitleaks", Environment.GetEnvironmentVariable(EnvironmentVariables.Gitleaks))!;
+        run = run with { GitleaksSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(gitleaks, TestContext.Current.CancellationToken))) };
+
+        GateStep step = (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+    }
+
+    [Fact]
+    public async Task TheSecretsScanTheJudgeRanFirstIsReportedWithoutScanningAgain()
+    {
+        await InitRepositoryAsync();
+        Write("notes/new-config.txt", FakeToken);
+        GateStep scannedFirst = new(SecretsStep.StepName, 99, Verdict.Fail, ReasonCode.SecretFound, 12, "found before the build");
+        int started = 0;
+        GateRunContext run = new(repository.FullName, repository.FullName, GateProfile.PullRequest, GateSettings.Default, null, TimeProvider.System)
+        {
+            SecretsScannedFirst = scannedFirst,
+            Processes = (fileName, arguments, directory, limit, cancellationToken) =>
+            {
+                started++;
+                return ProcessRunner.RunAsync(fileName, arguments, directory, limit, cancellationToken);
+            },
+        };
+
+        GateStep step = (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
+
+        Assert.Same(scannedFirst, step);
+        Assert.Equal(0, started);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(repository);
 
-    private async Task<GateStep> RunStepAsync(string? baseRef = null)
+    private async Task<GateStep> RunStepAsync(string? baseRef = null) =>
+        (await new SecretsStep().RunAsync(Context(baseRef), GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
+
+    private GateRunContext Context(string? baseRef = null)
     {
         Assert.SkipWhen(
             Executables.Find("gitleaks", Environment.GetEnvironmentVariable(EnvironmentVariables.Gitleaks)) is null,
             "gitleaks is not installed (set LOCKFLIGHT_GITLEAKS or put it on PATH)");
-        GateRunContext run = new(repository.FullName, repository.FullName, GateProfile.PullRequest, GateSettings.Default, baseRef, TimeProvider.System);
-        return (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
+        return new GateRunContext(repository.FullName, repository.FullName, GateProfile.PullRequest, GateSettings.Default, baseRef, TimeProvider.System);
     }
 
     private async Task InitRepositoryAsync()

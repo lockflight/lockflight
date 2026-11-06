@@ -9,13 +9,13 @@ namespace Lockflight.Cli.Ci;
 /// <summary>
 /// The <c>pr</c> gates at head (step P5), run in the judge's worktree with the base policy laid over it and the merge base as
 /// <c>--base</c> (and, in a unit repository, the workspace shell's clone as <c>--shell</c>), exactly as
-/// <c>lockflight gate run --profile pr</c> runs them; their result file (<c>lockflight.result/v1</c>, read by step id) is embedded in
-/// the evidence.
+/// <c>lockflight gate run --profile pr</c> runs them, except that the secrets step reports the scan the judge ran before it
+/// built anything; their result file (<c>lockflight.result/v1</c>, read by step id) is embedded in the evidence.
 /// </summary>
 internal static class GatesJudge
 {
     public static async Task<(CheckVerdict Verdict, ReasonCode Reason, string Why, JsonNode? Result, string? TestStep)> RunAsync(
-        JudgeWorktree worktree, JudgePlan plan, CliContext context, string resultDirectory, JudgeBudget budget, CancellationToken cancellationToken)
+        JudgeWorktree worktree, JudgePlan plan, CliContext context, GateStep secrets, string resultDirectory, JudgeBudget budget, CancellationToken cancellationToken)
     {
         string resultPath = Path.Combine(resultDirectory, "gates-result.json");
         if (File.Exists(resultPath))
@@ -44,7 +44,7 @@ internal static class GatesJudge
         ExitCode exitCode;
         try
         {
-            exitCode = await new GateCommand(gates).RunAsync(new CommandArguments(command, [.. args]), deadline.Token);
+            exitCode = await new GateCommand(gates, secrets).RunAsync(new CommandArguments(command, [.. args]), deadline.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Processes;
@@ -9,8 +10,9 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// Runs the steps of a plan that build: opens the judge's worktree (in <c>LOCKFLIGHT_TEMP</c> when the template sets it, else
-/// locally in the repository's git directory, else the system's temporary folder), runs the head's suite (P1), lists the base (P2)
-/// and re-runs the red commits (P3), then judges green over what they found, and removes the worktree again whatever happened.
+/// locally in the repository's git directory, else the system's temporary folder), scans the head for secrets before anything is
+/// built there, runs the head's suite (P1), lists the base (P2) and re-runs the red commits (P3), then judges green over what they
+/// found, and removes the worktree again whatever happened. The .NET build servers are shut down after each phase that builds.
 /// </summary>
 internal static class JudgeExecutor
 {
@@ -39,12 +41,16 @@ internal static class JudgeExecutor
 
         try
         {
+            GateStep secrets = await SecretsJudge.ScanAsync(worktree, plan, context, cancellationToken);
             TreeBuilder trees = new(worktree, plan.Policy, root, budget, time);
             HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);
+            await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
             TreeListing? baseListing = plan.MergeBase is string mergeBase ? await trees.ListAsync(mergeBase, "base", fresh: false, cancellationToken) : null;
             BaseSkipCheck baseSkips = await BaseSkipsAsync(trees, head, baseListing, cancellationToken);
+            await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
             IReadOnlySet<string> structuralIds = await StructuralJudge.IdsAsync(plan, cancellationToken);
             IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, structuralIds, cancellationToken) : null;
+            await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
             GreenJudgement greenAtHead = baseListing is { AsBaseline: null }
                 ? new GreenJudgement(CheckVerdict.NotEarned, CheckReasons.BaseNotListed(baseListing.Outcome), $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
                 : GreenJudge.Decide(head, baseListing?.AsBaseline, baseSkips, cycles ?? []);
@@ -60,11 +66,12 @@ internal static class JudgeExecutor
             TraceJudgement? trace = plan.Levels[CheckId.Trace] != CheckLevel.Off
                 ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, cycles ?? [], sinceRed, greenAtHead, await new StructuralJudge(trees, time).JudgeAsync(plan, head, baseListing?.AsBaseline, structuralIds, cancellationToken), cancellationToken)
                 : null;
+            await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
             (CheckVerdict Verdict, ReasonCode Reason, string Why, JsonNode? Result, string? TestStep) gates = !budget.TryStart("gates")
                 ? (CheckVerdict.NotEarned, ReasonCode.CiBudgetExhausted, budget.Why(trees.Builds.Count), null, null)
                 : await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: false, cancellationToken) is string notMoved
                 ? (CheckVerdict.Error, ReasonCode.ToolError, notMoved, null, null)
-                : await GatesJudge.RunAsync(worktree, plan, context, plan.Inputs.EvidenceDirectory, budget, cancellationToken);
+                : await GatesJudge.RunAsync(worktree, plan, context, secrets, plan.Inputs.EvidenceDirectory, budget, cancellationToken);
             // Only when the base had none either: a pull request that turns the test projects into ones red/green cannot run must
             // not lose the check that nothing was deleted.
             bool baseHadNone = baseListing is null || baseListing.Outcome == TreeOutcome.NoTestApps;
@@ -93,6 +100,7 @@ internal static class JudgeExecutor
         }
         finally
         {
+            await BuildServers.ShutdownAsync(worktree.Root, CancellationToken.None);
             await worktree.RemoveAsync();
         }
     }

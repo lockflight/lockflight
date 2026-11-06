@@ -22,6 +22,13 @@ internal static class ProcessRunner
     {
         // MSBuild node reuse leaves server processes behind, which breaks hooks and sandboxes.
         ["MSBUILDDISABLENODEREUSE"] = "1",
+
+        // The other build servers would outlive the build too: the compiler server (VBCSCompiler, which runs a project's analyzers
+        // and source generators), the Razor build server and the MSBuild server. MSBuild reads the first two as properties, so a
+        // project can still set them back; the CI judge also shuts the servers down after each phase.
+        ["UseSharedCompilation"] = "false",
+        ["UseRazorBuildServer"] = "false",
+        ["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0",
         ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
         ["DOTNET_NOLOGO"] = "1",
 

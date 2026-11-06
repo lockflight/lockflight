@@ -128,7 +128,8 @@ run_case() {
   echo "## $title"
   echo "\$ lockflight gate run $*"
   local code=0
-  (cd "$root" && PATH="$fakes:$PATH" LOCKFLIGHT_GITLEAKS="${GITLEAKS:-$fakes/gitleaks}" "$engine" gate run "$@" 2>&1) > "$scratch/out" || code=$?
+  # The stand-in gitleaks is not the binary a CI job's LOCKFLIGHT_GITLEAKS_SHA256 names.
+  (cd "$root" && PATH="$fakes:$PATH" LOCKFLIGHT_GITLEAKS="${GITLEAKS:-$fakes/gitleaks}" LOCKFLIGHT_GITLEAKS_SHA256='' "$engine" gate run "$@" 2>&1) > "$scratch/out" || code=$?
   sed -E -e 's/\([0-9]+ ms\)/(N ms)/' -e "s#$root#<root>#g" "$scratch/out"
   echo "exit: $code"
   echo
