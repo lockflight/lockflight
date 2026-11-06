@@ -93,6 +93,28 @@ public sealed class StaleApprovalTests : IDisposable
         Assert.Empty(report.Evidence);
     }
 
+    [Fact]
+    public async Task ARedBeforeStartNamesTheMissingTasksApprovalFirst()
+    {
+        File.Delete(new ApprovalStore(Feature).RecordPath(ApprovalPhase.Tasks));
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["redgreen", "red", "--feature", "f1"], "", root.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains("tasks is not approved", error, StringComparison.Ordinal);
+        Assert.DoesNotContain("no baseline", error, StringComparison.Ordinal);
+        Assert.Equal("engine:redgreen-red", BlockedReportReader.Read(File.ReadAllText(BlockedReportFile.PathIn(root.FullName))).Report!.Source);
+    }
+
+    [Fact]
+    public async Task ARedBeforeStartWithApprovedTasksAsksForTheStart()
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["redgreen", "red", "--feature", "f1"], "", root.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains("no baseline; run", error, StringComparison.Ordinal);
+    }
+
     public void Dispose() => root.Delete(recursive: true);
 
     private void SaveRecord(bool openCycle)
