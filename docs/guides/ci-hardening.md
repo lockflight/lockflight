@@ -222,6 +222,9 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
     output to end after the process it started has exited, then stops reading, keeps what was written, and notes the command
     in the summary and in the evidence (`processes.outputHeld`,
     [`SURVIVOR_OUTPUT_HELD`](reasons.md#survivor_output_held)); the process holding it is stopped like any other.
+  - The CI files that run the gates alone (GitLab CI/CD, Azure Pipelines, a unit repository's workflow) run
+    `gate run --profile pr` with `CI` set, which sweeps the same way and adds a `processes` row that is ERROR for a process it
+    cannot stop; they list no containers, since an agent's Docker daemon may be shared with other jobs.
   - **A guardrail, not a boundary.** The pull request's code runs with the runner's root or administrator rights, and such
     code can still act without leaving a process the engine finds or can stop: a process started outside the engine's tree
     (`sudo systemd-run`, WMI, a scheduled task), a container that runs and is gone between two checks, a change to a file a

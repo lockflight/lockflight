@@ -4,6 +4,7 @@ using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Mascot;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Processes.Survivors;
 using Lockflight.Cli.Workspace;
 
 namespace Lockflight.Cli.Gates;
@@ -37,6 +38,8 @@ internal sealed class GateCommand(CliContext context, GateStep? secretsScannedFi
             return ExitCode.Config;
         }
 
+        // In CI, before anything the pull request's code could start (the shell's policy is read with git).
+        using ProcessSweep? sweep = GateSurvivors.Sweeps(profile, context.Environment, ProcessSweep.Current) ? ProcessSweep.Start(context.ProcessScope()) : null;
         bool full = options.Flag("--full");
         if (full && profile != GateProfile.Stop)
         {
@@ -107,6 +110,11 @@ internal sealed class GateCommand(CliContext context, GateStep? secretsScannedFi
         GateResult result = workspaceRun
             ? await WorkspaceGateRunner.RunAsync(manifest!, run, units, useCache: false, context.Output, cancellationToken)
             : await GateRunner.RunAsync(run, context.Output, cancellationToken);
+        if (sweep is not null)
+        {
+            result = await WithSurvivorsAsync(result, sweep, cancellationToken);
+        }
+
         long durationMs = (long)context.Time.GetElapsedTime(started).TotalMilliseconds;
         // Before Scope and Result, which stay the last lines; a format-only edit run is no first green.
         if (manifest is not null && result.Verdict == Verdict.Pass && profile != GateProfile.Edit
@@ -168,6 +176,24 @@ internal sealed class GateCommand(CliContext context, GateStep? secretsScannedFi
         return reading.Policy is ShellPolicy policy
             ? new ShellPolicyApplication(ShellPolicyOverlay.Apply(manifest, policy), policy, Error: null, ExitCode.Pass)
             : new ShellPolicyApplication(manifest, Policy: null, reading.Error, ExitCode.Error);
+    }
+
+    /// <summary>Lists what the run left running and, when one could not be stopped, adds its ERROR row (<see cref="GateSurvivors"/>).</summary>
+    private async Task<GateResult> WithSurvivorsAsync(GateResult result, ProcessSweep sweep, CancellationToken cancellationToken)
+    {
+        ProcessesReport processes = await sweep.FinishAsync(cancellationToken);
+        foreach (string line in GateSurvivors.Lines(processes))
+        {
+            await context.Output.WriteLineAsync(line);
+        }
+
+        GateResult swept = GateSurvivors.Apply(result, processes);
+        if (swept.Steps.Count > result.Steps.Count)
+        {
+            await GateStepText.WriteAsync(context.Output, swept.Steps[^1]);
+        }
+
+        return swept;
     }
 
     private static bool SameDirectory(string first, string second) =>
