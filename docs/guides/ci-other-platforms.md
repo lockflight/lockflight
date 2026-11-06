@@ -46,7 +46,9 @@ The policy and install steps of the GitHub workflow, in the same order:
   policy, the root `nuget.config`, `.lockflight/baselines/`, `.lockflight/ci/` and the code-style and analyzer config anywhere
   in the tree. The list is the GitHub
   workflow's, from the same source in the engine, and a test checks that they match.
-- **Pinned tools:** gitleaks at a fixed version, checked against its SHA-256; the engine the base commit pins, installed
+- **Pinned tools:** gitleaks at a fixed version, checked against its SHA-256; right after the install, before any of the pull
+  request's code runs, the binary's own SHA-256 is handed to the gates as `LOCKFLIGHT_GITLEAKS_SHA256` (on Azure Pipelines a
+  read-only pipeline variable), and the secrets step refuses a binary that differs. The engine the base commit pins, installed
   outside the repository, so a `global.json` that pins SDK 8 or 9 does not matter: with `.lockflight/engine.lock`, by the
   vendored install script checked against the lock (no .NET SDK needed for it; the SDK image reads the package with `perl`),
   else by the version in the tool pin with `dotnet tool install --tool-path`. The same step as the GitHub workflow's, from the

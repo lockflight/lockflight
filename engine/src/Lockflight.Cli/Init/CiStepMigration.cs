@@ -167,6 +167,16 @@ internal static class CiStepMigration
             ]),
     ];
 
+    /// <summary>
+    /// The line that hands the gitleaks binary to the gates, on GitLab and Bitbucket and on Azure, and the lines that follow it
+    /// since the engine checks the binary's hash: <see cref="CiShellScripts.HashGitleaks"/> and the hash handed on the same way.
+    /// </summary>
+    private static readonly (string Path, string Sha256)[] GitleaksHandOffs =
+    [
+        (CiShellScripts.ExportGitleaksPath, CiShellScripts.ExportGitleaksSha256),
+        (AzurePipelinesTemplate.SetGitleaksPath, AzurePipelinesTemplate.SetGitleaksSha256),
+    ];
+
     /// <summary>The lines that take an Azure or GitLab pull request's base from the target branch's tip.</summary>
     private static readonly string[] TipBases = ["BASE=$(git rev-parse \"origin/$target\")", "BASE=$(git rev-parse \"origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME\")"];
 
@@ -178,10 +188,11 @@ internal static class CiStepMigration
         ReplaceBlocks(lines, HeaderBlocks);
 
         // The CI judge's pipelines install the engine from the base's lock already (GitHub's through its action): only the header
-        // moves, and GitHub's workflow takes the name of both its checks.
+        // moves, GitHub's workflow takes the name of both its checks, and Bitbucket's hands the gitleaks binary's hash on.
         if (text.Contains("mode: judge", StringComparison.Ordinal) || text.Contains(CiShellScripts.JudgeCommand, StringComparison.Ordinal))
         {
             RenameJudgeWorkflow(lines);
+            AddGitleaksHash(lines);
             return string.Join(newline, lines);
         }
 
@@ -191,6 +202,7 @@ internal static class CiStepMigration
         }
 
         ReplaceBlocks(lines, BaseBlocks);
+        AddGitleaksHash(lines);
 
         // A hand-edited base on Azure or GitLab would keep taking the policy from the merge base: leave the file to a person.
         bool pullRequestBase = text.Contains("SYSTEM_PULLREQUEST_TARGETBRANCH", StringComparison.Ordinal) || text.Contains("merge_request_event", StringComparison.Ordinal);
@@ -220,6 +232,29 @@ internal static class CiStepMigration
             if (lines[index].StartsWith('#'))
             {
                 lines[index] = lines[index].Replace($"Actions → {LegacyWorkflowName} → Run workflow", $"Actions → {WorkflowName} → Run workflow", StringComparison.Ordinal);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Adds the gitleaks binary's hash after the line that hands the binary to the gates, when that line is found exactly once and
+    /// the file does not hash the binary yet, keeping the line's indent.
+    /// </summary>
+    private static void AddGitleaksHash(List<string> lines)
+    {
+        if (lines.Any(line => line.Trim() == CiShellScripts.HashGitleaks))
+        {
+            return;
+        }
+
+        foreach ((string path, string sha256) in GitleaksHandOffs)
+        {
+            int[] handOffs = [.. Indexes(lines, line => line.Trim() == path)];
+            if (handOffs.Length == 1)
+            {
+                string line = lines[handOffs[0]];
+                string indent = line[..(line.Length - line.TrimStart().Length)];
+                lines.InsertRange(handOffs[0] + 1, [indent + CiShellScripts.HashGitleaks, indent + sha256]);
             }
         }
     }
