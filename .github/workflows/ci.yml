@@ -553,6 +553,34 @@ jobs:
           echo "verdict of the pull request that commits a result: $PLANTED_VERDICT"
           git checkout -q main
           rm -rf "$RUNNER_TEMP/lockflight-evidence"
+      # A desktop client's tests judged on Linux: nothing is built, every check that builds says NEEDS_WINDOWS_RUNNER.
+      - name: The action judges a pull request with Windows-only tests (Linux)
+        id: desktop
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        uses: ./lockflight/action
+        with:
+          mode: judge
+          head: ${{ steps.fixture.outputs.desktop }}
+          base: ${{ steps.fixture.outputs.base }}
+          branch: 004-desktop
+          review-expected: "false"
+          artifact-suffix: -${{ matrix.rid }}-desktop
+      - name: ERROR with NEEDS_WINDOWS_RUNNER for the pull request with Windows-only tests, nothing built
+        if: runner.os == 'Linux'
+        env:
+          DESKTOP_VERDICT: ${{ steps.desktop.outputs.verdict }}
+        run: |
+          echo "pull request with Windows-only tests on Linux: $DESKTOP_VERDICT"
+          python3 -I -c 'import json, sys
+          evidence = json.load(open(sys.argv[1]))
+          checks = {check["id"]: check for check in evidence["checks"]}
+          for name in ("red", "green", "gates"):
+              print(name, checks[name]["verdict"], checks[name].get("reason"), checks[name].get("why"))
+              assert checks[name]["verdict"] == "ERROR" and checks[name].get("reason") == "NEEDS_WINDOWS_RUNNER", name
+          assert not evidence.get("builds"), "something was built"' "$RUNNER_TEMP/lockflight-evidence/evidence.json"
+          [ "$DESKTOP_VERDICT" = ERROR ]
+          rm -rf "$RUNNER_TEMP/lockflight-evidence"
       # The pull request that adds the first engine lock, judged without a token: refused, never accepted unchecked.
       - name: The action refuses a first engine lock it has no token to check
         id: first-lock

@@ -30,6 +30,12 @@ internal sealed record JudgeFindings(GreenJudgement? Green, IReadOnlyList<CycleJ
     /// <summary>The gates at head: verdict, line and their result file; null when they did not run.</summary>
     public (CheckVerdict Verdict, ReasonCode Reason, string Why, JsonNode? Result)? Gates { get; init; }
 
+    /// <summary>
+    /// Why the judge built nothing, given to every check that builds (red, tests since red, existing tests changed, host
+    /// tampering, trace, gates, green); null when it built what it needed.
+    /// </summary>
+    public (CheckVerdict Verdict, ReasonCode Reason, string Why)? NotBuilt { get; init; }
+
     /// <summary>The time budget the steps ran under; null when nothing was built.</summary>
     public JudgeBudget? Budget { get; init; }
 

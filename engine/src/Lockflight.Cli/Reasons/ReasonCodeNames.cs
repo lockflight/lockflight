@@ -73,6 +73,7 @@ internal static class ReasonCodeNames
         (ReasonCode.EnvironmentProblem, "ENVIRONMENT_PROBLEM"),
         (ReasonCode.ScannerReplaced, "SCANNER_REPLACED"),
         (ReasonCode.EngineLockRefused, "ENGINE_LOCK_REFUSED"),
+        (ReasonCode.NeedsWindowsRunner, "NEEDS_WINDOWS_RUNNER"),
     ];
 
     /// <summary>Every code that has a contract name: all but <see cref="ReasonCode.None"/> and <see cref="ReasonCode.Unknown"/>.</summary>

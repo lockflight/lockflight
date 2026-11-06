@@ -12,7 +12,8 @@ namespace Lockflight.Cli.Ci;
 /// Runs the steps of a plan that build: opens the judge's worktree (in <c>LOCKFLIGHT_TEMP</c> when the template sets it, else
 /// locally in the repository's git directory, else the system's temporary folder), scans the head for secrets before anything is
 /// built there, runs the head's suite (P1), lists the base (P2) and re-runs the red commits (P3), then judges green over what they
-/// found, and removes the worktree again whatever happened. The .NET build servers are shut down after each phase that builds.
+/// found, and removes the worktree again whatever happened. A head with a test project that needs Windows is not built on another
+/// OS (<see cref="WindowsRunner"/>). The .NET build servers are shut down after each phase that builds.
 /// </summary>
 internal static class JudgeExecutor
 {
@@ -41,6 +42,13 @@ internal static class JudgeExecutor
 
         try
         {
+            // The worktree is opened without a checkout, so off Windows the head's project files are checked out to be read.
+            if (!OperatingSystem.IsWindows() && await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: true, cancellationToken) is null
+                && WindowsRunner.Why(worktree.Root, onWindows: false) is string needsWindows)
+            {
+                return JudgeFindings.None with { NotBuilt = (CheckVerdict.Error, ReasonCode.NeedsWindowsRunner, needsWindows), HeadCommit = plan.Inputs.Head };
+            }
+
             GateStep secrets = await SecretsJudge.ScanAsync(worktree, plan, context, cancellationToken);
             TreeBuilder trees = new(worktree, plan.Policy, root, budget, time);
             HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);

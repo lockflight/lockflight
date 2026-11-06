@@ -41,6 +41,8 @@ internal static class JudgeChecks
             CheckId.Red when plan.Reds.Cycles.Count == 0 => new CheckResult(check, level, CheckVerdict.NotEarned, ReasonCode.RedMissing, NoRedWhy(plan)),
             CheckId.Red when findings.Cycles is IReadOnlyList<CycleJudgement> cycles => Red(level, cycles),
             CheckId.TestsSinceRed when plan.Reds.OverCap || plan.Reds.Cycles.Count == 0 => new CheckResult(check, level, CheckVerdict.NotEarned, plan.Reds.OverCap ? ReasonCode.TooManyRedCommits : ReasonCode.RedMissing, "no red commit to compare with"),
+            CheckId.Red or CheckId.TestsSinceRed or CheckId.TestsExistingChanged or CheckId.TestsHostTampering or CheckId.Trace or CheckId.Gates or CheckId.Green
+                when findings.NotBuilt is { } notBuilt => new CheckResult(check, level, notBuilt.Verdict, notBuilt.Reason, notBuilt.Why),
             CheckId.TestsSinceRed when findings.SinceRed is IReadOnlyList<SinceRedTest> sinceRed => SinceRedCheck(level, sinceRed),
             CheckId.TestsExistingChanged when findings.ExistingChanged is IReadOnlyList<ExistingChangedTest> existing => ExistingChangedCheck(level, existing),
             CheckId.TestsHostTampering when findings.Tampering is TamperingJudgement tampering => new CheckResult(check, level, tampering.Verdict, tampering.Reason, tampering.Why),
