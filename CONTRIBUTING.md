@@ -55,9 +55,12 @@ than a fix, please open an issue first, because the design still moves. Everyone
 
 ## Build and test
 
-Requirements: .NET SDK 10.0.114 or newer, or 10.0.403 or newer in the 4xx band (see [`engine/global.json`](engine/global.json)).
-An older SDK brings a Native AOT compiler package with a known vulnerability, and restore fails on its advisory. For Native AOT
-publishing, the platform's C++ toolchain is also needed.
+Requirements: .NET SDK 10.0.114 or newer in the 1xx band, or 10.0.403 or newer in the 4xx band. An SDK older than its band's
+patched release brings a Native AOT compiler package with a known vulnerability, and restore fails on its advisory (NU1903; audit
+warnings are errors). [`engine/global.json`](engine/global.json) asks for 10.0.114 and rolls forward to newer feature bands
+(`rollForward: latestFeature`), so it also accepts the unpatched 10.0.400 to 10.0.402, which then fail restore that way: install
+10.0.403 or newer instead. CI installs the newest 10.0 SDK from the same file. For Native AOT publishing, the platform's C++
+toolchain is also needed.
 
 ```sh
 cd engine

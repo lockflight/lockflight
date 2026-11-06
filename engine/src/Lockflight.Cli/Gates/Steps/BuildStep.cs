@@ -29,7 +29,7 @@ internal sealed class BuildStep : IGateStep
 
     private static async Task<GateStep> BuildAsync(GateRunContext run, IReadOnlyList<string> projectArguments, CancellationToken cancellationToken)
     {
-        ProcessResult buildRun = await run.Processes("dotnet", ["build", .. projectArguments, "--nologo", "--interactive", "false"], run.Target, run.TimeLeft(), cancellationToken);
+        ProcessResult buildRun = await run.Processes("dotnet", ["build", .. projectArguments, "--nologo", "--interactive", "false", .. BuildServerSwitches.Build], run.Target, run.TimeLeft(), cancellationToken);
         if (StepHealth.Unhealthy(StepName, buildRun, run) is GateStep unhealthy)
         {
             return unhealthy;

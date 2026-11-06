@@ -58,7 +58,7 @@ internal static class ReasonCatalogue
         ReasonCode.ReviewStale => "Re-run the review job for the current head.",
         ReasonCode.ReviewFindings => "Fix the review's confirmed findings (the review job's summary lists them) and push; a person dismisses a wrong one with `review dismiss`.",
         ReasonCode.CiBudgetExhausted => "Raise `ci.timeoutMinutes` on the target branch (and the CI job's own time limit with it), or split the pull request.",
-        ReasonCode.JudgeDidNotFinish => "Re-run the workflow: the judge job was cancelled, killed at the platform's time limit, or failed to upload its evidence.",
+        ReasonCode.JudgeDidNotFinish => "Read the judge job's annotations first: when the engine's lock check refused the engine pin, re-running does not help, so fix what it names. Otherwise re-run the workflow: the judge job was cancelled, killed at the platform's time limit, or failed to upload its evidence.",
         ReasonCode.EvidenceInvalid => "Re-run the workflow from the start; if it repeats, the job log shows what in the evidence disagreed (the code was not judged).",
         ReasonCode.NotJudgedYet => "Update the engine pin to a version that judges this check, or turn the check off in the target branch's policy.",
         ReasonCode.GatesFailed => "Open the gates result in the evidence: the first step that did not pass says what failed.",
@@ -83,6 +83,7 @@ internal static class ReasonCatalogue
         ReasonCode.GitUnavailable => "Run the gates in a git clone with git on `PATH`.",
         ReasonCode.StepTimedOut => "Make the step faster, or raise `gates.timeoutSeconds`; the Stop gate leaves slow tests to CI with `test.stopFilter`.",
         ReasonCode.EnvironmentProblem => "Fix the machine as the detail says (a runtime, a toolchain, network for restore, Docker), then run the gates again.",
+        ReasonCode.ScannerReplaced => "Do not re-run: something in the build replaced the secrets scanner after it was installed. A person reviews the pull request's build files (projects, props and targets, scripts) for what replaced it.",
         _ => string.Empty,
     };
 

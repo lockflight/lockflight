@@ -24,8 +24,10 @@ internal static class ProcessRunner
         ["MSBUILDDISABLENODEREUSE"] = "1",
 
         // The other build servers would outlive the build too: the compiler server (VBCSCompiler, which runs a project's analyzers
-        // and source generators), the Razor build server and the MSBuild server. MSBuild reads the first two as properties, so a
-        // project can still set them back; the CI judge also shuts the servers down after each phase.
+        // and source generators), the Razor build server and the MSBuild server. MSBuild reads the first two as properties, which a
+        // project file can set back, so the engine's own builds and test runs also pass them as global properties
+        // (BuildServerSwitches); a tool that builds by itself (dotnet ef) has only these. The CI judge also shuts the servers down
+        // after each phase.
         ["UseSharedCompilation"] = "false",
         ["UseRazorBuildServer"] = "false",
         ["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0",

@@ -270,26 +270,26 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     {
         if (reading.Problem is string unreadable)
         {
-            return check with { Verdict = CheckVerdict.Error, Why = $"the review's result ({ReviewFileName}) was not read: {unreadable}" };
+            return check.Judged(CheckVerdict.Error, ReasonCode.EvidenceInvalid, $"the review's result ({ReviewFileName}) was not read: {unreadable}");
         }
 
         if (reading.Document is not JsonObject review)
         {
-            return check with { Verdict = CheckVerdict.Skipped, Reason = ReasonCode.ReviewNotRun, Why = "no review ran (no API key configured, a fork, or the review job was skipped)" };
+            return check.Judged(CheckVerdict.Skipped, ReasonCode.ReviewNotRun, "no review ran (no API key configured, a fork, or the review job was skipped)");
         }
 
         if (CiReviewResult.Problem(review) is string problem)
         {
-            return check with { Verdict = CheckVerdict.Error, Reason = ReasonCode.EvidenceInvalid, Why = $"the review's result is not {CiReviewResult.Schema}: {problem}" };
+            return check.Judged(CheckVerdict.Error, ReasonCode.EvidenceInvalid, $"the review's result is not {CiReviewResult.Schema}: {problem}");
         }
 
         if (review["head"]?.GetValue<string>() != head)
         {
-            return check with { Verdict = CheckVerdict.Skipped, Reason = ReasonCode.ReviewStale, Why = "SKIPPED (stale): the review is about another head" };
+            return check.Judged(CheckVerdict.Skipped, ReasonCode.ReviewStale, "SKIPPED (stale): the review is about another head");
         }
 
         CheckVerdict verdict = CheckVerdictNames.Parse(review["verdict"]?.GetValue<string>() ?? string.Empty) ?? CheckVerdict.Error;
-        return check with { Verdict = verdict, Reason = verdict is CheckVerdict.Pass or CheckVerdict.NotApplicable ? ReasonCode.None : ReasonCode.ReviewFindings, Why = review["why"]?.GetValue<string>() ?? CheckVerdictNames.ToName(verdict) };
+        return check.Judged(verdict, verdict is CheckVerdict.Pass or CheckVerdict.NotApplicable ? ReasonCode.None : ReasonCode.ReviewFindings, review["why"]?.GetValue<string>() ?? CheckVerdictNames.ToName(verdict));
     }
 
     private static CheckResult? Parse(JsonNode? node) =>

@@ -238,22 +238,39 @@ public sealed class SecretsStepTests : IDisposable
         GateStep step = (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
 
         Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Equal(ReasonCode.ScannerReplaced, step.Reason);
         Assert.Contains(new string('0', 64), step.Detail, StringComparison.Ordinal);
         Assert.Empty(started);
     }
 
     [Fact]
-    public async Task TheGitleaksBinaryItWasInstalledWithRuns()
+    public async Task AVerifiedPrivateCopyOfTheInstalledGitleaksRunsAndIsDeleted()
     {
         await InitRepositoryAsync();
         Write("notes/new-config.txt", FakeToken);
         GateRunContext run = Context();
         string gitleaks = Executables.Find("gitleaks", Environment.GetEnvironmentVariable(EnvironmentVariables.Gitleaks))!;
-        run = run with { GitleaksSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(gitleaks, TestContext.Current.CancellationToken))) };
+        List<string> started = [];
+        run = run with
+        {
+            GitleaksSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(gitleaks, TestContext.Current.CancellationToken))),
+            Processes = (fileName, arguments, directory, limit, cancellationToken) =>
+            {
+                started.Add(fileName);
+                return ProcessRunner.RunAsync(fileName, arguments, directory, limit, cancellationToken);
+            },
+        };
 
         GateStep step = (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
 
         Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.NotEmpty(started);
+        Assert.All(started, fileName =>
+        {
+            Assert.NotEqual(gitleaks, fileName);
+            Assert.Equal(Path.GetFileName(gitleaks), Path.GetFileName(fileName));
+            Assert.False(File.Exists(fileName), "the verified copy is deleted with the scan");
+        });
     }
 
     [Fact]

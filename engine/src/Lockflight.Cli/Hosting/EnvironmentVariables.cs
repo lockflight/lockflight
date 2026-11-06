@@ -17,7 +17,8 @@ internal static class EnvironmentVariables
 
     /// <summary>
     /// The SHA-256 (64 hex digits) the gitleaks binary must have, set by a CI template that installed and checked it before any of
-    /// the pull request's code ran; when set, the secrets gate hashes the binary before each run and refuses one that differs.
+    /// the pull request's code ran; when set, the secrets gate runs only a private copy of the binary that has this hash, and refuses
+    /// one that differs.
     /// </summary>
     public const string GitleaksSha256 = "LOCKFLIGHT_GITLEAKS_SHA256";
 
@@ -89,6 +90,12 @@ internal static class EnvironmentVariables
 
     /// <summary>The 32-bit Program Files folder on 64-bit Windows.</summary>
     public const string ProgramFilesX86 = "ProgramFiles(x86)";
+
+    /// <summary>The Windows folder (<c>C:\Windows</c>), whose <c>System32</c> holds WSL's <c>bash.exe</c>.</summary>
+    public const string SystemRoot = "SystemRoot";
+
+    /// <summary>The Windows folder, as older programs name it; the same as <see cref="SystemRoot"/>.</summary>
+    public const string WindowsDirectory = "windir";
 
     /// <summary>The NuGet global packages folder, where <c>dotnet tool restore</c> caches tools; <c>~/.nuget/packages</c> when unset.</summary>
     public const string NuGetPackages = "NUGET_PACKAGES";

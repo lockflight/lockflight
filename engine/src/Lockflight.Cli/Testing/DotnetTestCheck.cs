@@ -21,7 +21,7 @@ internal static class DotnetTestCheck
     {
         if (platform == TestRunnerKind.MicrosoftTestingPlatform)
         {
-            ProcessResult run = await ProcessRunner.RunAsync("dotnet", command.Arguments, command.WorkingDirectory, timeLimit, cancellationToken);
+            ProcessResult run = await ProcessRunner.RunAsync("dotnet", [.. command.Arguments, .. BuildServerSwitches.Properties], command.WorkingDirectory, timeLimit, cancellationToken);
             return run.TimedOut ? DotnetTestOutcome.Inconclusive : run.ExitCode switch
             {
                 0 => DotnetTestOutcome.Passed,
@@ -34,7 +34,7 @@ internal static class DotnetTestCheck
         try
         {
             ProcessResult run = await ProcessRunner.RunAsync(
-                "dotnet", [.. command.Arguments, "--logger", $"trx;LogFileName={ReportName}", "--results-directory", results.FullName], command.WorkingDirectory, timeLimit, cancellationToken);
+                "dotnet", [.. command.Arguments, .. BuildServerSwitches.Properties, "--logger", $"trx;LogFileName={ReportName}", "--results-directory", results.FullName], command.WorkingDirectory, timeLimit, cancellationToken);
             string[] reports = Directory.GetFiles(results.FullName, "*.trx", SearchOption.AllDirectories);
             if (run.TimedOut || reports.Length == 0)
             {

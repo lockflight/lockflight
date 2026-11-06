@@ -379,10 +379,11 @@ Reasons that say the judge could not decide, not that the code is wrong.
 ### JUDGE_DID_NOT_FINISH
 
 **Means:** The report job found no evidence from the judge: it was cancelled, killed at the platform's time limit, or failed to upload.
+The judge also stops before writing evidence when the engine's lock check refuses the pinned engine; its annotations say why.
 
 **Why:** Without evidence there is no verdict, so it is never a pass.
 
-**Next:** Re-run the workflow: the judge job was cancelled, killed at the platform's time limit, or failed to upload its evidence.
+**Next:** Read the judge job's annotations first: when the engine's lock check refused the engine pin, re-running does not help, so fix what it names. Otherwise re-run the workflow: the judge job was cancelled, killed at the platform's time limit, or failed to upload its evidence.
 
 ### EVIDENCE_INVALID
 
@@ -579,6 +580,15 @@ The steps of `lockflight gate run`, in the Stop hook and in CI's `gates` check.
 **Why:** ERROR: the code was not judged. The detail names the problem and its fix.
 
 **Next:** Fix the machine as the detail says (a runtime, a toolchain, network for restore, Docker), then run the gates again.
+
+### SCANNER_REPLACED
+
+**Means:** The gitleaks binary the secrets step was about to run does not have the SHA-256 the CI template recorded when it
+installed it (`LOCKFLIGHT_GITLEAKS_SHA256`): something replaced it after the install, most likely code the pull request's build ran.
+
+**Why:** ERROR: a replaced scanner could report no secrets whatever the code holds, so the scan is not run at all.
+
+**Next:** Do not re-run: something in the build replaced the secrets scanner after it was installed. A person reviews the pull request's build files (projects, props and targets, scripts) for what replaced it.
 
 ## Blocked reports
 

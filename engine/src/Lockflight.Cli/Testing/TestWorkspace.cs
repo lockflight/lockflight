@@ -46,7 +46,7 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
         foreach (BuildTarget target in targets)
         {
             ProcessResult build = await ProcessRunner.RunAsync(
-                "dotnet", ["build", .. target.BuildFile is null ? [] : new[] { target.BuildFile }, "--nologo", "--interactive", "false"], target.Directory, timeLimit, cancellationToken);
+                "dotnet", ["build", .. target.BuildFile is null ? [] : new[] { target.BuildFile }, "--nologo", "--interactive", "false", .. BuildServerSwitches.Build], target.Directory, timeLimit, cancellationToken);
             if (build.ExitCode != 0)
             {
                 return build.Combined;

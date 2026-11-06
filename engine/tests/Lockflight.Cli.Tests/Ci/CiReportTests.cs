@@ -298,6 +298,10 @@ public sealed class CiReportTests : IDisposable
         JsonNode check = verdict["checks"]!.AsArray().Single(node => node!["id"]!.GetValue<string>() == "review")!;
         Assert.Equal("ERROR", check["verdict"]!.GetValue<string>());
         Assert.Equal("the review's result (review-result.json) was not read: the property 'verdict' appears twice in one object", check["why"]!.GetValue<string>());
+        Assert.Equal("EVIDENCE_INVALID", check["reason"]!.GetValue<string>());
+        string comment = File.ReadAllText(Path.Combine(output, "comment.md"));
+        Assert.Contains("EVIDENCE_INVALID", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("REVIEW_NOT_RUN", comment, StringComparison.Ordinal);
         Assert.Equal("unreadable", verdict["review"]!["state"]!.GetValue<string>());
         Assert.Null(verdict["blocked"]);
     }

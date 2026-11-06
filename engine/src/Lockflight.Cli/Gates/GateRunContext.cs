@@ -43,7 +43,7 @@ internal sealed record GateRunContext(
 
     /// <summary>
     /// The SHA-256 the gitleaks binary must have (<c>LOCKFLIGHT_GITLEAKS_SHA256</c>, set by a CI template before any of the pull
-    /// request's code ran); the secrets step checks it before each gitleaks run. Null when the run names none.
+    /// request's code ran); the secrets step runs only a private copy of the binary that has it. Null when the run names none.
     /// </summary>
     public string? GitleaksSha256 { get; init; }
 
