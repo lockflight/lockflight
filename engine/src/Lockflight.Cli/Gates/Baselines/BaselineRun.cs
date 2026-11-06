@@ -2,6 +2,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Gates.Suppressions;
+using Lockflight.Cli.Gates.WindowsTargets;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Processes;
@@ -80,9 +81,9 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
     private async Task<BaselineCapture> WarningsAsync(string target, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         // A full rebuild: an incremental build skips unchanged projects and would leave their warnings out of the baseline.
-        GateRunContext buildRun = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: false);
+        GateRunContext buildRun = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: false) with { LeavesOutWindowsTests = !OperatingSystem.IsWindows() };
         ProcessResult build = await ProcessRunner.RunAsync(
-            "dotnet", ["build", .. buildRun.BuildFileArguments, "--no-incremental", "--nologo", "--interactive", "false", .. BuildServerSwitches.Build], target, timeLimit, cancellationToken);
+            "dotnet", ["build", .. buildRun.BuildFileArguments, "--no-incremental", "--nologo", "--interactive", "false", .. WindowsTargeting.BuildArguments(buildRun), .. BuildServerSwitches.Build], target, timeLimit, cancellationToken);
         if (build.ExitCode != 0)
         {
             return BaselineCapture.Failed(build.TimedOut ? $"the build did not finish within {timeLimit.TotalSeconds:0} seconds" : "the build fails; a baseline is taken from a building tree only", ExitCode.Fail);
@@ -94,7 +95,7 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
 
     private async Task<BaselineCapture> FailingTestsAsync(string target, bool underHook, CancellationToken cancellationToken)
     {
-        GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: underHook);
+        GateRunContext run = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: underHook) with { LeavesOutWindowsTests = !OperatingSystem.IsWindows() };
         if ((await BuildStep.BuildAsync(run, cancellationToken)).Verdict != Verdict.Pass)
         {
             return BaselineCapture.Failed("the build gate does not pass; fix it before accepting failing tests", ExitCode.Fail);

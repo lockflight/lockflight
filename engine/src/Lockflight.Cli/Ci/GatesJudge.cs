@@ -44,7 +44,7 @@ internal static class GatesJudge
         ExitCode exitCode;
         try
         {
-            exitCode = await new GateCommand(gates, secrets).RunAsync(new CommandArguments(command, [.. args]), deadline.Token);
+            exitCode = await new GateCommand(gates, secrets, judgesAPullRequest: true).RunAsync(new CommandArguments(command, [.. args]), deadline.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

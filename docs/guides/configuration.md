@@ -467,6 +467,22 @@ The choice is made per unit in a workspace, inside the unit's solution, after th
 A monorepo unit whose projects reference or include files in another unit is not chosen when only that other unit changes
 (the unit's state covers its own directory and the shared build inputs outside every unit); CI's `pr` run builds both.
 
+### Projects that target Windows, off Windows
+
+A WPF, Windows Forms or WinUI project targets a `net*-windows` framework. On macOS or Linux the SDK builds it only with
+`EnableWindowsTargeting=true`, and its tests cannot start (the machine has no `Microsoft.WindowsDesktop.App`). So a person's run
+off Windows (the Stop gate, `gate run`, `baseline tests`) does two things in a solution that has such projects:
+
+- **build** adds `-p:EnableWindowsTargeting=true`, so the client code still compiles and its compile errors still fail;
+- **test** leaves the test projects that target Windows out, through a solution filter of the other projects
+  (`.lockflight/local/affected/<target>.off-windows.slnf`), and its detail names them: `total 12; left out off Windows:
+  Desk.Client.Tests (…)`. When no other test project is left, `test` is N/A and says why.
+
+A project targets Windows when its `TargetFramework` or `TargetFrameworks`, in its project file or a `Directory.Build.props`
+between it and the solution, names a `-windows` platform. On Windows nothing is left out, and the CI judge never leaves
+anything out: it judges on the runner it is given, so a solution with Windows test projects needs a Windows runner.
+`lockflight doctor` says which projects are affected on a machine that is not Windows.
+
 ### The format step judges the change, not the file
 
 `format` runs `dotnet format whitespace --folder --verify-no-changes --report <dir>` on the C# files the change touches, then

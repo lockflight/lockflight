@@ -16,9 +16,10 @@ namespace Lockflight.Cli.Gates;
 /// repository of a workspace shell (<c>shell:</c>) the run judges with the shell's policy for the unit too, read from the clone
 /// <c>--shell</c> names or from the shell the unit is checked out in; a pr run cannot go without it. The CI judge passes
 /// <paramref name="secretsScannedFirst"/>, the secrets scan it ran before building the pull request's code, for the secrets step
-/// to report.
+/// to report, and <paramref name="judgesAPullRequest"/>: the judge never leaves out the tests of projects that target Windows,
+/// which a person's run off Windows does (<see cref="GateRunContext.LeavesOutWindowsTests"/>).
 /// </summary>
-internal sealed class GateCommand(CliContext context, GateStep? secretsScannedFirst = null) : ICommand
+internal sealed class GateCommand(CliContext context, GateStep? secretsScannedFirst = null, bool judgesAPullRequest = false) : ICommand
 {
     public const string ShellOption = "--shell";
 
@@ -75,6 +76,7 @@ internal sealed class GateCommand(CliContext context, GateStep? secretsScannedFi
             Policy = shell.Policy is null ? null : manifest,
             GitleaksSha256 = context.Environment.Get(EnvironmentVariables.GitleaksSha256) is { Length: > 0 } sha256 ? sha256 : null,
             SecretsScannedFirst = secretsScannedFirst,
+            LeavesOutWindowsTests = !OperatingSystem.IsWindows() && !judgesAPullRequest,
         };
         if (shell.Policy is ShellPolicy policy)
         {
