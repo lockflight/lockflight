@@ -91,6 +91,12 @@ internal static class ReadinessChecks
         }
 
         checks.Add(CheckGitleaks(gitleaks));
+        // At every level: a CI-only repository's developers run the gates by hand off Windows too.
+        if (WindowsTargetCheck.Check(root, OperatingSystem.IsWindows()) is DoctorCheck windowsTargets)
+        {
+            checks.Add(windowsTargets);
+        }
+
         if (OperatingSystem.IsWindows())
         {
             checks.Add(await CheckGitBashAsync(root, GitBash.Find(environment), cancellationToken));
@@ -169,11 +175,6 @@ internal static class ReadinessChecks
         if (SandboxCheck.Check(root, userHome) is DoctorCheck sandbox)
         {
             checks.Add(sandbox);
-        }
-
-        if (WindowsTargetCheck.Check(root, OperatingSystem.IsWindows()) is DoctorCheck windowsTargets)
-        {
-            checks.Add(windowsTargets);
         }
 
         return checks;
