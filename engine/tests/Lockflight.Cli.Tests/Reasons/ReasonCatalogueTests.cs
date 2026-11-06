@@ -49,6 +49,7 @@ public sealed partial class ReasonCatalogueTests
         Assert.Null(ReasonCatalogue.Link(ReasonCode.Unknown));
         Assert.Null(ReasonCatalogue.ConsoleLine(ReasonCode.None));
         Assert.Null(BlockedNextSteps.Link(BlockedReasonCode.Unknown));
+        Assert.Null(BlockedNextSteps.ConsoleLine(BlockedReasonCode.Unknown));
     }
 
     [Fact]
