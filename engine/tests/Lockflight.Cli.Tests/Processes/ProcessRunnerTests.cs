@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Tests.Processes;
@@ -97,6 +99,64 @@ public sealed class ProcessRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task AProcessThatLeavesADaemonHoldingItsOutputReturnsWhenItExits()
+    {
+        // The daemon inherits the output pipe and keeps it open for a minute: waiting for the pipe to end would stall the run that long.
+        ProcessResult result = OperatingSystem.IsWindows()
+            ? await ProcessRunner.RunAsync(
+                "powershell.exe",
+                ["-NoProfile", "-NonInteractive", "-Command", "Write-Output before; $daemon = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep 60' -NoNewWindow -PassThru; Write-Output $daemon.Id"],
+                directory.FullName,
+                TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)
+            : await ProcessRunner.RunAsync("sh", ["-c", "echo before; sleep 60 & echo $!"], directory.FullName, TestContext.Current.CancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        string[] lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        try
+        {
+            Assert.Equal(0, result.ExitCode);
+            Assert.True(result.OutputHeld);
+            Assert.False(result.TimedOut);
+            Assert.Equal("before", lines[0]);
+            Assert.Contains(OperatingSystem.IsWindows() ? "powershell.exe -NoProfile" : "sh -c", HeldOutputs.Snapshot());
+        }
+        finally
+        {
+            StopDaemon(lines);
+        }
+    }
+
+    [Fact]
+    public async Task AProcessWhoseOutputEndsWithItIsNotReportedAsHeld()
+    {
+        ProcessResult result = OperatingSystem.IsWindows()
+            ? await ProcessRunner.RunAsync("cmd.exe", ["/d", "/c", "echo data"], directory.FullName, TestContext.Current.CancellationToken)
+            : await ProcessRunner.RunAsync("sh", ["-c", "echo data"], directory.FullName, TestContext.Current.CancellationToken);
+
+        Assert.False(result.OutputHeld);
+        Assert.Equal("data", result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task ABinaryRunReturnsWhenTheProcessExitsThoughADaemonHoldsItsOutput()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Uses the POSIX sh command.");
+
+        BinaryProcessResult result = await ProcessRunner.RunForBytesAsync(
+                "sh", ["-c", "cat; sleep 60 & echo $!"], directory.FullName, "before\n"u8.ToArray(), TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken)
+            .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        string[] lines = Encoding.UTF8.GetString(result.Output).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        try
+        {
+            Assert.True(result.OutputHeld);
+            Assert.Equal("before", lines[0]);
+        }
+        finally
+        {
+            StopDaemon(lines);
+        }
+    }
+
+    [Fact]
     public async Task AMissingExecutableIsReportedAsNotOnPath()
     {
         ExecutableNotFoundException exception = await Assert.ThrowsAsync<ExecutableNotFoundException>(() =>
@@ -106,4 +166,22 @@ public sealed class ProcessRunnerTests : IDisposable
     }
 
     public void Dispose() => directory.Delete(recursive: true);
+
+    private static void StopDaemon(string[] lines)
+    {
+        if (lines.Length < 2 || !int.TryParse(lines[^1], out int pid))
+        {
+            return;
+        }
+
+        try
+        {
+            using Process daemon = Process.GetProcessById(pid);
+            daemon.Kill();
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            // Already gone.
+        }
+    }
 }

@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Processes;
 using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Workspace;
 
@@ -147,6 +148,13 @@ internal sealed class CiCommand(CliContext context) : ICommand
         if (plan.Reds.LabelsOutOfOrder)
         {
             await context.Output.WriteLineAsync("  note: the cycle labels are out of order; the commits' order decides the cycle order");
+        }
+
+        foreach (string command in HeldOutputs.Snapshot())
+        {
+            await context.Output.WriteLineAsync(
+                $"  note: '{Printable(command)}' exited, but a process it started kept its output open; Lockflight stopped waiting for it after "
+                + $"{ProcessRunner.OutputDrainTime.TotalSeconds:0} s");
         }
 
         if (plan.Ignored.Count > 0)

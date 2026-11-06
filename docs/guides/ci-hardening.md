@@ -181,7 +181,9 @@ instead of the fork point, so the two can differ when the branch's history moved
     run inside the test host;
   - an MSBuild `<Exec>` task or inline task in a project, props or targets file runs arbitrary code at build time;
   - the host-tampering scan reads the test assemblies only: production code and MSBuild files are not scanned;
-  - processes the pull request's code starts are killed only when the job times out.
+  - processes the pull request's code starts are killed only when the job times out. One that keeps a build's or a test
+    run's output open no longer holds up the judge: the engine waits 2 seconds for the output to end after the process it
+    started has exited, then stops reading, keeps what was written, and the summary notes the command whose output was held.
 
   Each needs deliberate code in the diff, which the person who merges can read. Isolation (the pull request's code in a
   container or a separate job, the evidence computed outside it) is planned after 0.3.0.

@@ -6,6 +6,12 @@ namespace Lockflight.Cli.Processes;
 /// </summary>
 internal sealed record ProcessResult(int ExitCode, string Output, string Error, long DurationMs, bool TimedOut)
 {
+    /// <summary>
+    /// The process exited, but something it started kept its output open, so the runner stopped waiting after a short drain;
+    /// <see cref="Output"/> and <see cref="Error"/> hold what was written until then.
+    /// </summary>
+    public bool OutputHeld { get; init; }
+
     /// <summary>Standard output followed by standard error, for messages a person reads.</summary>
     public string Combined => Error.Length == 0 ? Output : Output.Length == 0 ? Error : $"{Output}\n{Error}";
 }
