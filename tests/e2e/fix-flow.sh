@@ -157,7 +157,7 @@ add_test '    [Theory]
     public void ApplyDiscount_RoundsEachMidpointToEven(decimal amount, decimal expected) =>
         Assert.Equal(expected, calculator.ApplyDiscount(amount, 0m));'
 expect_exit 0 "lockflight red accepts a two-row theory" -- red
-perl -0pi -e 's/\n    \[InlineData\(0\.145, 0\.14\)\]//' "$tests"
+perl -0pi -e 's/\r?\n    \[InlineData\(0\.145, 0\.14\)\]//' "$tests"
 fix_bug; git commit -qam "fix, and one row less"
 expect_exit 1 "the judge fails a theory that lost a row after its red" -- judge
 check tests.sinceRed FAIL; check_field tests.sinceRed reason AMEND_WEAKENED
@@ -181,11 +181,11 @@ add_test '    [Fact]
         Assert.Equal(-0.9m, calculator.ApplyDiscount(-1m, 10m));'
 git commit -qam "test: red 2" -m "Lockflight-Red: 2"
 rejected=$(git rev-parse HEAD)
-perl -0pi -e 's/ApplyDiscount_OfANegativeAmount\(\) =>\n\s*Assert\.Equal\(-0\.9m, calculator\.ApplyDiscount\(-1m, 10m\)\);/ApplyDiscount_OfANegativeAmount() =>\n        Assert.Throws<ArgumentOutOfRangeException>(() => calculator.ApplyDiscount(-1m, 10m));/' "$tests"
+perl -0pi -e 's/ApplyDiscount_OfANegativeAmount\(\) =>\s*Assert\.Equal\(-0\.9m, calculator\.ApplyDiscount\(-1m, 10m\)\);/ApplyDiscount_OfANegativeAmount() =>\n        Assert.Throws<ArgumentOutOfRangeException>(() => calculator.ApplyDiscount(-1m, 10m));/' "$tests"
 expect_exit 0 "--redo 2 replaces the rejected red" -- red --redo 2
 if [ "$(git log -1 --format='%(trailers:key=Lockflight-Red,valueonly)' | tr -d '\r\n')" = 2 ] && [ "$(git rev-parse HEAD^)" = "$rejected" ]; then echo "ok   the redo is a new commit labelled 2"
 else echo "FAIL the redo is not a new commit labelled 2"; failures=$((failures + 1)); fi
-fix_bug; perl -0pi -e 's/(public decimal ApplyDiscount\(decimal amount, decimal percent\)\n    \{\n)/${1}        ArgumentOutOfRangeException.ThrowIfNegative(amount);\n/' "$calc"
+fix_bug; perl -0pi -e 's/(public decimal ApplyDiscount\(decimal amount, decimal percent\)\r?\n    \{\r?\n)/${1}        ArgumentOutOfRangeException.ThrowIfNegative(amount);\n/' "$calc"
 git commit -qam "fix: rounding and negative amounts"
 expect_exit 0 "the judge passes both cycles, the rejected red superseded" -- judge
 check red PASS; check green PASS
