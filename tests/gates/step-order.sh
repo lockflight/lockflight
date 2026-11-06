@@ -18,7 +18,7 @@ trap 'rm -rf "$scratch"' EXIT
 fakes="$scratch/bin"
 mkdir -p "$fakes"
 
-# dotnet: build, test (writes a TRX report), format and package list, each failing when FAKE_FAIL names it, in every directory
+# dotnet: build, test (writes a TRX report), format and the package listing, each failing when FAKE_FAIL names it, in every directory
 # or only in one whose path contains FAKE_FAIL_IN.
 cat > "$fakes/dotnet" <<'FAKE'
 #!/usr/bin/env bash
@@ -43,7 +43,8 @@ TRX
   format)
     if fails format; then echo "format broke"; exit 3; fi
     exit 0 ;;
-  package)
+  package|list)
+    # `dotnet package list` (SDK 10), or `dotnet list package` that the step asks when that gives no report (SDK 8 and 9).
     if fails deps; then echo "error: no assets file"; exit 1; fi
     echo '{ "version": 1, "parameters": "--vulnerable", "projects": [] }'; exit 0 ;;
 esac

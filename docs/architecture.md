@@ -163,7 +163,8 @@ A gate run executes the steps of a profile in order and ends in one verdict:
 | `pr` | in CI, and before a pull request | protected changes, the `stop` steps, patch coverage, vulnerable packages, secrets |
 
 Each step normalises its tool's output instead of trusting the exit code alone (for example `dotnet package list --vulnerable`
-exits 0 with findings). Existing problems in a brownfield repository are accepted once, by a person, as baselines, so gates
+exits 0 with findings; under an SDK 8 or 9 pinned by `global.json` the step asks `dotnet list package`, which gives the same
+report). Existing problems in a brownfield repository are accepted once, by a person, as baselines, so gates
 judge new problems only. Patch coverage judges the changed lines against the base branch, with test code excluded.
 
 The Stop gate runs the `stop` profile when the agent tries to end its turn. It is cached by a hash of its inputs, so an
