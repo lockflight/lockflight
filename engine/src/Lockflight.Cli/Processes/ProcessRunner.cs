@@ -9,6 +9,9 @@ internal static class ProcessRunner
     /// <summary>Exit code reported for a process killed at its time limit (128 + SIGKILL, as shells do).</summary>
     public const int TimedOutExitCode = 137;
 
+    /// <summary>How long the runner waits for a process's output to end after the process has exited.</summary>
+    public static readonly TimeSpan OutputDrainTime = TimeSpan.FromSeconds(2);
+
     private static readonly IReadOnlyDictionary<string, string?> NoVariables = new Dictionary<string, string?>(StringComparer.Ordinal);
 
     private static readonly string[] RunnerVariables =
@@ -93,11 +96,12 @@ internal static class ProcessRunner
 
         Stopwatch stopwatch = Stopwatch.StartNew();
         using Process process = Start(startInfo);
-        Task<string> standardOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
-        Task<string> standardError = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        using OutputCapture standardOutput = new(process.StandardOutput.BaseStream);
+        using OutputCapture standardError = new(process.StandardError.BaseStream);
 
         using CancellationTokenSource limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         limit.CancelAfter(timeLimit);
+        bool timedOut = false;
         try
         {
             if (standardInputPath is not null)
@@ -111,10 +115,19 @@ internal static class ProcessRunner
         {
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync(CancellationToken.None);
-            return new ProcessResult(TimedOutExitCode, await standardOutput, await standardError, stopwatch.ElapsedMilliseconds, TimedOut: true);
+            timedOut = true;
         }
 
-        return new ProcessResult(process.ExitCode, await standardOutput, await standardError, stopwatch.ElapsedMilliseconds, TimedOut: false);
+        bool outputHeld = await DrainAsync(startInfo, standardOutput, standardError);
+        return new ProcessResult(
+            timedOut ? TimedOutExitCode : process.ExitCode,
+            standardOutput.Text(process.StandardOutput.CurrentEncoding),
+            standardError.Text(process.StandardError.CurrentEncoding),
+            stopwatch.ElapsedMilliseconds,
+            timedOut)
+        {
+            OutputHeld = outputHeld,
+        };
     }
 
     /// <summary>
@@ -126,12 +139,12 @@ internal static class ProcessRunner
     {
         ProcessStartInfo startInfo = StartInfo(fileName, arguments, workingDirectory, redirectInput: true);
         using Process process = Start(startInfo);
-        using MemoryStream output = new();
-        Task standardOutput = process.StandardOutput.BaseStream.CopyToAsync(output, CancellationToken.None);
-        Task<string> standardError = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        using OutputCapture standardOutput = new(process.StandardOutput.BaseStream);
+        using OutputCapture standardError = new(process.StandardError.BaseStream);
 
         using CancellationTokenSource limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         limit.CancelAfter(timeLimit);
+        bool timedOut = false;
         try
         {
             try
@@ -150,12 +163,15 @@ internal static class ProcessRunner
         {
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync(CancellationToken.None);
-            await standardOutput;
-            return new BinaryProcessResult(TimedOutExitCode, output.ToArray(), await standardError, TimedOut: true);
+            timedOut = true;
         }
 
-        await standardOutput;
-        return new BinaryProcessResult(process.ExitCode, output.ToArray(), await standardError, TimedOut: false);
+        bool outputHeld = await DrainAsync(startInfo, standardOutput, standardError);
+        return new BinaryProcessResult(
+            timedOut ? TimedOutExitCode : process.ExitCode, standardOutput.Bytes(), standardError.Text(process.StandardError.CurrentEncoding), timedOut)
+        {
+            OutputHeld = outputHeld,
+        };
     }
 
     private static ProcessStartInfo StartInfo(string fileName, IEnumerable<string> arguments, string workingDirectory, bool redirectInput)
@@ -200,6 +216,27 @@ internal static class ProcessRunner
             // A missing working directory fails the same way; only a missing executable gets this message.
             throw new ExecutableNotFoundException(startInfo.FileName, exception);
         }
+    }
+
+    /// <summary>
+    /// Waits briefly for the output streams to end once the process has exited, then gives them up: a process it started (a build
+    /// server, a daemon a test forgot) may have inherited them and hold them open until the job's own timeout. Returns whether they
+    /// were given up.
+    /// </summary>
+    private static async Task<bool> DrainAsync(ProcessStartInfo startInfo, OutputCapture standardOutput, OutputCapture standardError)
+    {
+        Task streamsEnded = Task.WhenAll(standardOutput.Completion, standardError.Completion);
+        if (await Task.WhenAny(streamsEnded, Task.Delay(OutputDrainTime, CancellationToken.None)) == streamsEnded)
+        {
+            return false;
+        }
+
+        standardOutput.Abandon();
+        standardError.Abandon();
+        HeldOutputs.Record(startInfo.ArgumentList.Count == 0
+            ? Path.GetFileName(startInfo.FileName)
+            : $"{Path.GetFileName(startInfo.FileName)} {startInfo.ArgumentList[0]}");
+        return true;
     }
 
     private static async Task WriteInputAsync(Process process, string standardInputPath, CancellationToken cancellationToken)
