@@ -3,8 +3,8 @@
 # scripted pull request per scenario.
 # On Windows, the CI judge: an honest ViewModel feature PASSes (the gates too, under the SDK 8 pin); a feature whose stub is in
 # code-behind, with [StaFact] tests that open the window directly and through the Dispatcher, PASSes; a test written after the
-# code FAILs red with GREEN_BEFORE; a server-only feature PASSes; a [structural] refactor without a red commit is NOT-EARNED
-# (RED_MISSING) today. The Stop gate runs every test project, the UI tests left to CI by test.stopFilter. On both, a
+# code FAILs red with GREEN_BEFORE; a server-only feature PASSes; a [structural] refactor without a red commit, its spec
+# changed under the target branch's CODEOWNERS, PASSes as a structural-only change (red N/A). The Stop gate runs every test project, the UI tests left to CI by test.stopFilter. On both, a
 # visual-only XAML change is routed as class fix.
 # Off Windows, the local gates: the Stop gate builds the client with EnableWindowsTargeting, leaves its test projects out with a
 # note and runs the server's tests; doctor explains why.
@@ -198,8 +198,11 @@ plain "feat(004-server): US1"
 judge 004-server 0
 for id in red green trace gates; do check "$record" "$id" PASS; done
 
-# 5. A [structural] refactor of the ViewModel with a structural test and no red commit. Today red is NOT-EARNED (RED_MISSING)
-# even though trace passes: this asserts the current behaviour.
+# 5. A [structural] refactor of the ViewModel with a structural test and no red commit. The target branch's CODEOWNERS gives
+# the spec an owner, so a person reviews the spec this pull request changes: a structural-only change, red N/A.
+git checkout -q main
+mkdir -p .github; printf 'specs/** @desk-team\n' > .github/CODEOWNERS
+git add -A; git commit -qm "chore: code owners for the specs"; main=$(git rev-parse HEAD)
 git checkout -q -b 005-structural "$main"
 spec 005-structural '- **FR-010** [structural]: Order totals MUST stay as they are after the change notification is split out'
 replace "$vm" '        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
@@ -233,9 +236,10 @@ public class StructuralTotalsTests
 }
 CS
 plain "refactor(005-structural): split the change notification"
-judge 005-structural 5
-check "$record" red NOT-EARNED RED_MISSING
+judge 005-structural 0
+check "$record" red N/A "structural-only change"
 check "$record" trace PASS
+check "$record" tests.existingChanged PASS
 
 if [ "$failures" -eq 0 ]; then echo "desktop: all passed"; else echo "desktop: $failures failed"; fi
 exit $((failures > 0))
