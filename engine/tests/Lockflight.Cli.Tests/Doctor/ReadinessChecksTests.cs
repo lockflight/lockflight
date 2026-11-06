@@ -592,6 +592,19 @@ public sealed class ReadinessChecksTests : IDisposable
     }
 
     [Fact]
+    public async Task TheCiOnlyLevelExplainsWindowsTestsLeftOutOffWindows()
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--ci-only"], string.Empty, root.FullName);
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Write("Desk.sln", "Microsoft Visual Studio Solution File, Format Version 12.00\nProject(\"{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}\") = \"Desk.Client\", \"src\\Desk.Client\\Desk.Client.csproj\", \"{00000000-0000-0000-0000-000000000001}\"\nEndProject\n");
+        Write("src/Desk.Client/Desk.Client.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup></Project>\n");
+
+        IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
+
+        Assert.Equal(!OperatingSystem.IsWindows(), checks.Any(check => check.Name == "windows targets"));
+    }
+
+    [Fact]
     public async Task SettingsWithLockflightDenyRulesAreNotTheCiOnlyLevel()
     {
         Write(".claude/settings.json", """{ "permissions": { "deny": ["Edit(/lockflight.yaml)"] } }""");
