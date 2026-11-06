@@ -325,7 +325,8 @@ ledger). It names the projects the gate built and why.
   `Category!=Integration`); the `pr` profile still runs them.
 - **A workspace:** `doctor` names the units whose Stop time is above 2 minutes at the 95th percentile.
 
-Whatever the Stop gate leaves out, CI runs: `gate run --profile pr` builds and tests everything.
+Whatever the Stop gate leaves out, CI runs: `gate run --profile pr` builds and tests everything. For what the gate and the
+hooks cost on hosted runners, and how to measure them on your machine, see [performance](performance.md).
 
 ## The format gate fails
 
@@ -463,7 +464,7 @@ moves the worktree there.
 
 Install the package with `scripts\install.ps1` ([Install on Windows](getting-started.md#install-on-windows)); contributors
 build from source with `scripts\dev-install.ps1`. The hook shim is a POSIX script, so Claude Code needs **Git Bash**; `doctor`
-checks for it.
+checks for it. Git Bash makes each hook call slower than on macOS or Linux ([performance](performance.md#what-they-mean-for-daily-use)).
 
 - **"running scripts is disabled on this system":** PowerShell's execution policy refuses unsigned scripts. Run the installer
   as `powershell -ExecutionPolicy Bypass -File scripts\install.ps1 -Version <version>`, which changes the policy for that one

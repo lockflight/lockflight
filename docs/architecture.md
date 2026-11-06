@@ -87,7 +87,8 @@ ruleset requires ([CI hardening](guides/ci-hardening.md)).
 
 The plugin registers five hooks: `SessionStart`, `PreToolUse`, `UserPromptExpansion`, `TaskCompleted` and `Stop`. Each runs a small shim,
 [`lockflight-hook`](../plugins/lockflight/bin/lockflight-hook), which finds the project from `CLAUDE_PROJECT_DIR` and runs the
-engine linked into `.lockflight/bin/`. Running the binary directly keeps a hook at a few milliseconds.
+engine linked into `.lockflight/bin/`. Running the binary directly keeps a hook at a few milliseconds of engine time, under
+10 ms on Linux and about 20 ms on macOS and Windows, plus the shell that runs the shim ([performance](guides/performance.md)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/hook-flow-dark.svg">
