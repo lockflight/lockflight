@@ -385,6 +385,17 @@ The judge also stops before writing evidence when the engine's lock check refuse
 
 **Next:** Read the judge job's annotations first: when the engine's lock check refused the engine pin, re-running does not help, so fix what it names. Otherwise re-run the workflow: the judge job was cancelled, killed at the platform's time limit, or failed to upload its evidence.
 
+### ENGINE_LOCK_REFUSED
+
+**Means:** The CI action checks a pull request that changes `.lockflight/engine.lock` before the judge runs, and it refused the
+lock: it does not match the release's attested hashes (`hash-mismatch` and the other checks `engine verify-lock` names), its
+install script is missing, or a first lock could not be checked because the job has no token (`unattested`). The judge did not
+run; the detail names the failed check.
+
+**Why:** CI installs the engine from that lock once it is merged, so a lock that cannot be checked is never accepted.
+
+**Next:** Fix what the engine lock check names (the failed check is in the detail): a lock must match the release's attested hashes. A first lock is checked with the workflow's token: keep the judge's `github-token` input at its default with `contents: read` in the job's permissions, then re-run.
+
 ### EVIDENCE_INVALID
 
 **Means:** The judge's evidence or the review's result is about another head, does not have the expected shape, or disagrees with what the report works out from git.

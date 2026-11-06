@@ -62,8 +62,12 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
     lock as strictly as the engine does: an unknown or repeated key, or any backslash (which `install.sh`'s reader would not
     decode as JSON does), is refused. A failure is an error annotation that names the check as `engine verify-lock` does
     (`engine lock: FAIL hash-mismatch: …`). Without a token nothing can be checked, so the step fails with
-    `engine lock: FAIL unattested`: leave the judge step's `github-token` input at its default, the workflow's token
-    (`contents: read` is enough). On Azure, Bitbucket and GitLab the first lock is **not** release-checked: the job prints a warning, and
+    `engine lock: FAIL unattested`, and keeps failing until it has one: leave the judge step's `github-token` input at its
+    default, the workflow's token (`contents: read` is enough), and re-run.
+  - **When the lock is refused** (a changed or first lock, or a pull request that removes the lock: `lock-removed`), the judge
+    does not run. The step leaves a short evidence instead (`refused.json`, `lockflight.ci-evidence/v1` with `judge`
+    `refused`), and the report shows FAIL with the reason `ENGINE_LOCK_REFUSED` and the failed check, rather than "the judge
+    did not finish". An engine older than this reads no such file and still says the judge did not finish. On Azure, Bitbucket and GitLab the first lock is **not** release-checked: the job prints a warning, and
     the person accepting the pull request runs `lockflight engine verify-lock .lockflight/engine.lock` first.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass

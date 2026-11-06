@@ -62,7 +62,7 @@ inputs:
     required: false
     default: ""
   github-token:
-    description: "report: the token that posts the comment (needs pull-requests: write) and fetches the head to re-plan (contents: read)"
+    description: "judge: checks the attestation of a changed or first engine lock (contents: read; without it a first lock is refused); report: posts the comment (pull-requests: write) and fetches the head to re-plan (contents: read)"
     required: false
     default: ${{ github.token }}
 
@@ -178,10 +178,30 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
         if [ -z "$LF_BASE" ]; then exit 0; fi
+        # A refusal stops the job before the judge runs. It leaves a short evidence (lockflight.ci-evidence/v1, judge "refused")
+        # beside where the judge's would be, so the report says which check failed and what to do, not "the judge did not
+        # finish". The argument is "<check>: <what failed>", as engine verify-lock names it.
+        refuse() {
+          local line="engine lock: FAIL $1" why
+          echo "::error::$line"
+          why=$(printf '%s' "$line" | tr '\r\n\t' '   ' | tr -d '\000-\037' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+          mkdir -p "$RUNNER_TEMP/lockflight-evidence"
+          check() { printf '{ "id": "%s", "context": "%s", "verdict": "FAIL", "requirement": "required", "reason": "ENGINE_LOCK_REFUSED", "why": "%s" }' "$1" "$2" "$why"; }
+          printf '{ "schema": "lockflight.ci-evidence/v1", "head": "%s", "judge": "refused", "checks": [ %s, %s ], "contexts": { "gates": "FAIL", "lockflight/judge": "FAIL" }, "verdict": "FAIL" }\n' \
+            "$LF_HEAD" "$(check green gates)" "$(check red lockflight/judge)" > "$RUNNER_TEMP/lockflight-evidence/refused.json"
+          exit 1
+        }
+        # A check that printed "engine lock: FAIL <check>: …" (engine verify-lock, first-lock-check.py) is refused with that line.
+        refuse_from() {
+          local output="$1" failed
+          printf '%s\n' "$output" | sed 's/^::error:://'
+          failed=$(printf '%s\n' "$output" | sed -n 's/^\(::error::\)\{0,1\}engine lock: FAIL //p' | tail -n 1)
+          refuse "${failed:-$2}"
+        }
         if ! git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null; then
           # Without the lock, CI would install the engine by version alone once this is merged.
           if git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null; then
-            echo "::error::this pull request removes .lockflight/engine.lock, which pins the engine by hash; without it CI would install the engine by version only"; exit 1
+            refuse "lock-removed: this pull request removes .lockflight/engine.lock, which pins the engine by hash; without it CI would install the engine by version only"
           fi
           exit 0
         fi
@@ -191,33 +211,38 @@ runs:
           git show "$LF_BASE:.lockflight/engine.lock" > "$RUNNER_TEMP/base-engine.lock"
           # The pull request's vendored install script is compared with the lock it proposes: CI runs that script next time.
           if ! git show "$LF_HEAD:.lockflight/ci/install.sh" > "$RUNNER_TEMP/proposed-install.sh" 2>/dev/null; then
-            echo "::error::the changed engine lock comes without .lockflight/ci/install.sh"; exit 1
+            refuse "vendored-script-missing: the changed engine lock comes without .lockflight/ci/install.sh"
           fi
-          "$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" --base "$RUNNER_TEMP/base-engine.lock" \
-            --script "$RUNNER_TEMP/proposed-install.sh" ${GH_TOKEN:+--attestation}
+          if ! output=$("$LF_LOCKFLIGHT" engine verify-lock "$RUNNER_TEMP/proposed-engine.lock" --base "$RUNNER_TEMP/base-engine.lock" \
+            --script "$RUNNER_TEMP/proposed-install.sh" ${GH_TOKEN:+--attestation} 2>&1); then
+            refuse_from "$output" "unreadable-lock: engine verify-lock refused the changed engine lock"
+          fi
+          printf '%s\n' "$output"
           exit 0
         fi
         # The first lock (the pull request that moves a 0.2 tool pin to the lock): the base's engine predates verify-lock, so the
         # GitHub Release's attested engine-hashes.json is downloaded and compared here.
         # Without a token nothing can be downloaded or verified, so the lock is refused, never accepted unchecked.
         if [ -z "$GH_TOKEN" ]; then
-          echo "::error::engine lock: FAIL unattested: the first engine lock cannot be checked against its GitHub Release without a token; leave the judge step's github-token input at its default, the workflow's token (it needs contents: read), or run lockflight engine verify-lock .lockflight/engine.lock --attestation yourself before you accept it"
-          exit 1
+          refuse "unattested: the first engine lock cannot be checked against its GitHub Release without a token, and this job fails until it is; leave the judge step's github-token input at its default, the workflow's token, give the job contents: read, and re-run"
         fi
         work="$RUNNER_TEMP/lockflight-first-lock"
         rm -rf "$work" && mkdir -p "$work"
         git show "$LF_HEAD:.lockflight/engine.lock" > "$work/engine.lock"
-        if ! git show "$LF_HEAD:.lockflight/ci/install.sh" > "$work/install.sh" 2>/dev/null; then echo "::error::engine lock: FAIL vendored-script-missing: the first engine lock comes without .lockflight/ci/install.sh"; exit 1; fi
+        if ! git show "$LF_HEAD:.lockflight/ci/install.sh" > "$work/install.sh" 2>/dev/null; then refuse "vendored-script-missing: the first engine lock comes without .lockflight/ci/install.sh"; fi
         version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([0-9A-Za-z.-]*\)".*/\1/p' "$work/engine.lock" | head -n 1)
-        if [ -z "$version" ]; then echo "::error::engine lock: FAIL unreadable-lock: the first engine lock names no version"; exit 1; fi
+        if [ -z "$version" ]; then refuse "unreadable-lock: the first engine lock names no version"; fi
         gh release download "v$version" --repo lockflight/lockflight --pattern engine-hashes.json --dir "$work/release" \
-          || { echo "::error::engine lock: FAIL no-release: the first engine lock pins $version, and the GitHub Release v$version has no engine-hashes.json"; exit 1; }
+          || refuse "no-release: the first engine lock pins $version, and the GitHub Release v$version has no engine-hashes.json"
         gh attestation verify "$work/release/engine-hashes.json" --repo lockflight/lockflight --source-ref "refs/tags/v$version" \
           --signer-workflow lockflight/lockflight/.github/workflows/release-packages.yml > /dev/null \
-          || { echo "::error::engine lock: FAIL unattested: the release workflow's attestation of engine-hashes.json for v$version did not verify"; exit 1; }
+          || refuse "unattested: the release workflow's attestation of engine-hashes.json for v$version did not verify"
         # Windows runners have python, not python3.
-        python=$(command -v python3 || command -v python) || { echo "::error::no python3 or python to check the first engine lock"; exit 1; }
-        "$python" -I "$GITHUB_ACTION_PATH/first-lock-check.py" "$work/engine.lock" "$work/release/engine-hashes.json" "$work/install.sh"
+        python=$(command -v python3 || command -v python) || refuse "unattested: no python3 or python to check the first engine lock"
+        if ! output=$("$python" -I "$GITHUB_ACTION_PATH/first-lock-check.py" "$work/engine.lock" "$work/release/engine-hashes.json" "$work/install.sh" 2>&1); then
+          refuse_from "$output" "unreadable-lock: the first engine lock check failed"
+        fi
+        printf '%s\n' "$output"
 
     - name: Clone the workspace shell (read-only)
       if: inputs.mode == 'judge' && inputs.shell-clone == 'true'

@@ -36,6 +36,15 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     /// <summary>The review job's result file the report joins: <c>lockflight.ci-review/v1</c> (<see cref="CiReviewResult"/>).</summary>
     public const string ReviewFileName = "review-result.json";
 
+    /// <summary>
+    /// The short evidence the CI action's engine lock check leaves beside the judge's when it refuses the pin and the judge never
+    /// runs: <c>lockflight.ci-evidence/v1</c> with <c>judge</c> <c>refused</c> and the failed check as the reason and why.
+    /// </summary>
+    public const string RefusalFileName = "refused.json";
+
+    private const string JudgeMissing = "missing";
+    private const string JudgeRefused = "refused";
+
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
         if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options)
@@ -68,7 +77,10 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             ? CiArtifactReader.Read(Path.GetFullPath(Path.Combine(review, ReviewFileName), context.WorkingDirectory))
             : CiArtifactReading.None;
         JsonObject? evidence = evidenceReading.Document;
-        JsonObject verdict = JoinArtifacts(evidenceReading, head, reviewReading);
+        JsonObject verdict = evidenceReading == CiArtifactReading.None
+            && Refused(CiArtifactReader.Read(Path.GetFullPath(Path.Combine(evidenceDirectory, RefusalFileName), context.WorkingDirectory)), head) is JsonObject refused
+            ? refused
+            : JoinArtifacts(evidenceReading, head, reviewReading);
         // Join returns the evidence itself only when it read it as the judge's; anything else is already an ERROR or NOT-EARNED.
         if (options.Value(BaseOption) is string baseCommit && ReferenceEquals(verdict, evidence))
         {
@@ -308,17 +320,52 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             ? ReasonCode.None
             : ReasonCodeNames.Parse(node?["reason"] is JsonValue value && value.TryGetValue(out string? name) ? name : null);
 
-    private static JsonObject Missing(string head, string why, CheckVerdict verdict = CheckVerdict.NotEarned)
+    /// <summary>
+    /// The verdict of record when the judge never ran because the action's engine lock check refused the pin: FAIL (or ERROR, when
+    /// the refusal says so) with the refusal's reason and why. Null when there is no readable refusal about this head, so a missing
+    /// judge stays "did not finish". A refusal can never pass: any other verdict it names is read as ERROR.
+    /// </summary>
+    public static JsonObject? Refused(CiArtifactReading refusal, string head)
+    {
+        if (refusal.Document is not JsonObject document || Text(document, "schema") != CiEvidence.Schema || Text(document, "judge") != JudgeRefused
+            || Text(document, "head") != head || document["checks"] is not JsonArray { Count: > 0 } checks || checks[0] is not JsonObject check)
+        {
+            return null;
+        }
+
+        CheckVerdict verdict = CheckVerdictNames.Parse(Text(check, "verdict") ?? string.Empty) is CheckVerdict.Fail ? CheckVerdict.Fail : CheckVerdict.Error;
+        ReasonCode reason = ReasonCodeNames.Parse(Text(check, "reason"));
+        string why = CiEvidence.Cap(Text(check, "why") is { Length: > 0 } stated ? stated : "the engine lock check refused the engine pin before the judge ran");
+        return ShortForm(head, JudgeRefused, verdict, reason, why);
+    }
+
+    private static string? Text(JsonObject node, string name) =>
+        node[name] is JsonValue value && value.TryGetValue(out string? text) ? text : null;
+
+    private static JsonObject Missing(string head, string why, CheckVerdict verdict = CheckVerdict.NotEarned) =>
+        ShortForm(head, JudgeMissing, verdict, verdict == CheckVerdict.NotEarned ? ReasonCode.JudgeDidNotFinish : ReasonCode.EvidenceInvalid, why);
+
+    /// <summary>The report's short form: the two required checks with one verdict, reason and why; nothing the judge decided.</summary>
+    private static JsonObject ShortForm(string head, string judge, CheckVerdict verdict, ReasonCode reasonCode, string why)
     {
         string name = CheckVerdictNames.ToName(verdict);
-        string reason = ReasonCodeNames.ToName(verdict == CheckVerdict.NotEarned ? ReasonCode.JudgeDidNotFinish : ReasonCode.EvidenceInvalid)!;
+        JsonObject Check(string id, StatusContext statusContext)
+        {
+            JsonObject check = new() { ["id"] = id, ["context"] = StatusContextNames.ToName(statusContext), ["verdict"] = name, ["requirement"] = "required", ["why"] = why };
+            if (ReasonCodeNames.ToName(reasonCode) is string reason)
+            {
+                check["reason"] = reason;
+            }
+
+            return check;
+        }
+
         return new JsonObject
         {
             ["schema"] = CiEvidence.Schema,
             ["head"] = head,
-            ["judge"] = "missing",
-            ["checks"] = new JsonArray(new JsonObject { ["id"] = "green", ["context"] = "gates", ["verdict"] = name, ["requirement"] = "required", ["why"] = why, ["reason"] = reason },
-                new JsonObject { ["id"] = "red", ["context"] = "lockflight/judge", ["verdict"] = name, ["requirement"] = "required", ["why"] = why, ["reason"] = reason }),
+            ["judge"] = judge,
+            ["checks"] = new JsonArray(Check("green", StatusContext.Gates), Check("red", StatusContext.Judge)),
             ["contexts"] = new JsonObject { [StatusContextNames.ToName(StatusContext.Gates)] = name, [StatusContextNames.ToName(StatusContext.Judge)] = name },
             ["verdict"] = name,
         };

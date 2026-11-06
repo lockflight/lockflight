@@ -16,8 +16,11 @@
       "const": "lockflight.ci-evidence/v1"
     },
     "judge": {
-      "const": "missing",
-      "description": "Present only in the report's short form when the judge's evidence is missing or about another head."
+      "enum": [
+        "missing",
+        "refused"
+      ],
+      "description": "Present only in the short form: missing when the report found the judge's evidence missing, unreadable or about another head; refused when the CI action's engine lock check refused the engine pin before the judge ran (the action writes it as refused.json, and the report's verdict carries it)."
     },
     "engine": {
       "type": "object",

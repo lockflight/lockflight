@@ -84,6 +84,7 @@ internal static class ReasonCatalogue
         ReasonCode.StepTimedOut => "Make the step faster, or raise `gates.timeoutSeconds`; the Stop gate leaves slow tests to CI with `test.stopFilter`.",
         ReasonCode.EnvironmentProblem => "Fix the machine as the detail says (a runtime, a toolchain, network for restore, Docker), then run the gates again.",
         ReasonCode.ScannerReplaced => "Do not re-run: something in the build replaced the secrets scanner after it was installed. A person reviews the pull request's build files (projects, props and targets, scripts) for what replaced it.",
+        ReasonCode.EngineLockRefused => "Fix what the engine lock check names (the failed check is in the detail): a lock must match the release's attested hashes. A first lock is checked with the workflow's token: keep the judge's `github-token` input at its default with `contents: read` in the job's permissions, then re-run.",
         _ => string.Empty,
     };
 

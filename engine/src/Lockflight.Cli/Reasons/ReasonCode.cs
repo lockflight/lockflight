@@ -216,4 +216,10 @@ internal enum ReasonCode
     /// install (<c>SCANNER_REPLACED</c>).
     /// </summary>
     ScannerReplaced = 68,
+
+    /// <summary>
+    /// The CI action's engine lock check refused the pull request's engine lock before the judge ran: the lock does not match the
+    /// release's attested hashes, or it could not be checked (<c>ENGINE_LOCK_REFUSED</c>).
+    /// </summary>
+    EngineLockRefused = 69,
 }

@@ -24,6 +24,47 @@ public sealed class CiReportTests : IDisposable
     }
 
     [Fact]
+    public async Task AnEngineLockTheActionRefusedIsAFailThatSaysWhy()
+    {
+        string judge = Path.Combine(directory.FullName, "judge");
+        string output = Path.Combine(directory.FullName, "out");
+        JsonFiles.Write(Path.Combine(judge, CiReportCommand.RefusalFileName), Refusal(Head, "FAIL", "engine lock: FAIL unattested: the first engine lock cannot be checked without a token"));
+
+        (ExitCode exitCode, string printed, _) = await TestConsole.RunAsync(["ci", "report", "--evidence", judge, "--head", Head, "--out", output, "--context", "gates"], string.Empty, directory.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        JsonObject verdict = JsonNode.Parse(File.ReadAllText(Path.Combine(output, "verdict.json")))!.AsObject();
+        Assert.Equal("refused", verdict["judge"]!.GetValue<string>());
+        Assert.Equal("FAIL", verdict["verdict"]!.GetValue<string>());
+        Assert.All(verdict["checks"]!.AsArray(), check => Assert.Equal("ENGINE_LOCK_REFUSED", check!["reason"]!.GetValue<string>()));
+        string comment = File.ReadAllText(Path.Combine(output, "comment.md"));
+        Assert.Contains("`ENGINE_LOCK_REFUSED`", comment, StringComparison.Ordinal);
+        Assert.Contains("unattested", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("JUDGE_DID_NOT_FINISH", comment, StringComparison.Ordinal);
+        Assert.Contains("Next (ENGINE_LOCK_REFUSED)", printed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARefusalIsReadOnlyWhenTheJudgeLeftNoEvidence()
+    {
+        JsonObject refusal = Refusal(Head, "FAIL", "engine lock: FAIL hash-mismatch: x");
+
+        Assert.Null(CiReportCommand.Refused(new CiArtifactReading(refusal, null), new string('b', 40)));
+        Assert.Null(CiReportCommand.Refused(CiArtifactReading.None, Head));
+        Assert.Null(CiReportCommand.Refused(new CiArtifactReading(Evidence(), null), Head));
+        Assert.Equal("FAIL", CiReportCommand.Refused(new CiArtifactReading(refusal, null), Head)!["verdict"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ARefusalThatClaimsAPassIsAnError()
+    {
+        JsonObject verdict = CiReportCommand.Refused(new CiArtifactReading(Refusal(Head, "PASS", "all good"), null), Head)!;
+
+        Assert.Equal("ERROR", verdict["verdict"]!.GetValue<string>());
+        Assert.Equal("ERROR", verdict["contexts"]!["gates"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void EvidenceAboutAnotherHeadIsAnError() =>
         Assert.Equal("ERROR", CiReportCommand.Join(Evidence(), new string('b', 40), null)["verdict"]!.GetValue<string>());
 
@@ -538,6 +579,19 @@ public sealed class CiReportTests : IDisposable
             Check("trace", "lockflight/judge", "PASS", "required", "1/1 requirements of 001-shipping"),
             Check("routing", "lockflight/judge", "PASS", "required", "class behaviour (routing)"),
             Check("policy", "lockflight/judge", "PASS", "required", "lockflight.yaml is no looser than the base's")),
+    };
+
+    /// <summary>The short evidence the action's engine lock step writes when it refuses the pin.</summary>
+    private static JsonObject Refusal(string head, string verdict, string why) => new()
+    {
+        ["schema"] = "lockflight.ci-evidence/v1",
+        ["head"] = head,
+        ["judge"] = "refused",
+        ["checks"] = new JsonArray(
+            Check("green", "gates", verdict, "required", why, "ENGINE_LOCK_REFUSED"),
+            Check("red", "lockflight/judge", verdict, "required", why, "ENGINE_LOCK_REFUSED")),
+        ["contexts"] = new JsonObject { ["gates"] = verdict, ["lockflight/judge"] = verdict },
+        ["verdict"] = verdict,
     };
 
     private static JsonObject Check(string id, string context, string verdict, string level, string why, string? reason = null)
