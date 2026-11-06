@@ -35,4 +35,10 @@ internal enum FileRole
 
     /// <summary>Anything else: scripts, Dockerfiles, YAML, SQL outside projects.</summary>
     Other = 11,
+
+    /// <summary>
+    /// A XAML view, window or resource dictionary (<c>.xaml</c>) of a production project. It counts toward size like markup but is
+    /// not configuration, so a visual change stays in its size class; its code-behind (<c>.xaml.cs</c>) is production code.
+    /// </summary>
+    Xaml = 12,
 }

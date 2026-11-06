@@ -28,6 +28,7 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
     private static readonly string[] TestConfigSuffixes = [".runsettings"];
     private static readonly string[] CSharpSuffixes = [".cs"];
     private static readonly string[] MarkupSuffixes = [".razor", ".cshtml"];
+    private static readonly string[] XamlSuffixes = [".xaml"];
     private static readonly string[] OtherSourceSuffixes = [".fs", ".fsi", ".vb"];
     private static readonly string[] DocsSuffixes = [".md"];
     private static readonly string[] LooseDocsSuffixes = [".txt", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".bmp"];
@@ -106,6 +107,11 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
         if (EndsWithAny(name, MarkupSuffixes))
         {
             return FileRole.Markup;
+        }
+
+        if (project is not null && EndsWithAny(name, XamlSuffixes))
+        {
+            return FileRole.Xaml;
         }
 
         if (path.StartsWith(FeatureRecords, StringComparison.OrdinalIgnoreCase) || EndsWithAny(name, DocsSuffixes)

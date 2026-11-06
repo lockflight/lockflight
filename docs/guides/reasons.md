@@ -60,6 +60,10 @@ The `red` check: each commit with a `Lockflight-Red: <cycle>` trailer is re-run,
 
 **Next:** The failure is not the stub's NotImplementedException thrown by production code; declare the member as a stub, or assert on the value it returns.
 
+When the failure comes from loading XAML (a `XamlParseException`: a missing resource, type or name in the view), the test fails
+in the view, not in the behaviour it is about: the red output says so. Test the ViewModel instead, or stub a member the view
+calls and assert on what it returns.
+
 ### RED_IN_TEST
 
 **Means:** A new test fails in its own code or setup: a fixture, a constructor, `Assert.Fail`.

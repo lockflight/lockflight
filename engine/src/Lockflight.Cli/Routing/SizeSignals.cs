@@ -12,9 +12,9 @@ namespace Lockflight.Cli.Routing;
 /// </summary>
 internal sealed class SizeSignals : IChangeSignalSource
 {
-    private static readonly FileRole[] CountedRoles = [FileRole.Production, FileRole.Markup, FileRole.ProductionConfig, FileRole.Other];
-    private static readonly FileRole[] AddedRoles = [FileRole.Production, FileRole.Markup, FileRole.ProductionConfig, FileRole.Other];
-    private static readonly FileRole[] DeletedRoles = [FileRole.Production, FileRole.Markup];
+    private static readonly FileRole[] CountedRoles = [FileRole.Production, FileRole.Markup, FileRole.Xaml, FileRole.ProductionConfig, FileRole.Other];
+    private static readonly FileRole[] AddedRoles = [FileRole.Production, FileRole.Markup, FileRole.Xaml, FileRole.ProductionConfig, FileRole.Other];
+    private static readonly FileRole[] DeletedRoles = [FileRole.Production, FileRole.Markup, FileRole.Xaml];
     private static readonly FileRole[] ConfigRoles = [FileRole.ProductionConfig, FileRole.Other];
 
     public IEnumerable<ChangeSignal> Find(ChangeAnalysis analysis, RoutingPolicy policy)
@@ -74,7 +74,7 @@ internal sealed class SizeSignals : IChangeSignalSource
             yield return Signal(SignalIds.FileAdded, ChangeClass.Behaviour, file.Path, $"new {RoleName(file.Role)} file");
         }
 
-        if (file.Change.Kind == ChangeKind.Deleted && (file.Move is null || file.Role == FileRole.Markup) && DeletedRoles.Contains(file.Role))
+        if (file.Change.Kind == ChangeKind.Deleted && (file.Move is null || file.Role is FileRole.Markup or FileRole.Xaml) && DeletedRoles.Contains(file.Role))
         {
             yield return Signal(SignalIds.FileDeleted, ChangeClass.Behaviour, file.Path, "production file deleted");
         }
@@ -114,6 +114,7 @@ internal sealed class SizeSignals : IChangeSignalSource
     {
         FileRole.ProductionConfig => "production configuration",
         FileRole.Markup => "markup",
+        FileRole.Xaml => "XAML",
         FileRole.Other => "non-project",
         _ => "production",
     };

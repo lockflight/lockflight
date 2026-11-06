@@ -1,0 +1,31 @@
+A visual-only change to a WPF window's XAML stays in its size class: XAML is not configuration.
+=== base src/Desk/Desk.csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+</Project>
+=== base src/Desk/MainWindow.xaml
+<Window x:Class="Desk.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StackPanel Margin="12">
+    <TextBlock Text="{Binding Total}" />
+  </StackPanel>
+</Window>
+=== base src/Desk/MainWindow.xaml.cs
+namespace Desk;
+
+public partial class MainWindow
+{
+    public MainWindow() => InitializeComponent();
+}
+=== head src/Desk/MainWindow.xaml
+<Window x:Class="Desk.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StackPanel Margin="16">
+    <TextBlock Text="{Binding Total}" FontWeight="Bold" />
+  </StackPanel>
+</Window>

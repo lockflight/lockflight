@@ -62,12 +62,17 @@ Each changed path gets one role, first match wins. Every name test ignores case 
 | `test` | the nearest project is a test project — its text, or a `Directory.Build.props` above it, references `Microsoft.NET.Test.Sdk`, `xunit`, `xunit.core`, `xunit.v3`, `NUnit`, `MSTest` or `MSTest.TestFramework`, uses `MSTest.Sdk`, or sets `<IsTestProject>true` — and no production project in a directory above it would compile the file too | no |
 | `production` | a `.cs`, `.fs`, `.fsi` or `.vb` file under a production project, **or a `.cs` file under no project** | yes |
 | `markup` | `*.razor`, `*.cshtml` in a production project | yes |
+| `xaml` | `*.xaml` in a production project (WPF, WinUI, .NET MAUI, Avalonia views, windows and resource dictionaries). Its code-behind (`*.xaml.cs`) is `production` | yes |
 | `docs` | `*.md` anywhere; `*.txt`, images and `docs/**` outside projects; Lockflight's own feature records under `.lockflight/features/`; `PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt` (judged by `api.publicApiFile`) | no |
 | `production-config` | any other file inside a production project (`appsettings*.json`, resources) | yes |
 | `other` | anything else: scripts, Dockerfiles, CI files, SQL outside projects | yes |
 
 - **A project is found from the tree, without building:** the nearest directory above the file that holds a project file.
   XML comments in a project file are ignored, so a commented-out test package changes nothing.
+- **XAML is neither code nor configuration.** A `.xaml` file has no code lines, so a change to it alone needs no red, and it
+  does not fire `config.changed`, so a margin or a colour stays in the class its size gives it. XAML can still wire behaviour
+  (event handlers, triggers, bindings), so green runs the existing tests, and a test that opens the window catches a view that
+  no longer loads. Logic belongs in the code-behind or, better, the ViewModel, where a change needs its red.
 - **The role of a file that exists on the base branch is read on the base branch.** Adding a test package to a production
   project in the pull request does not turn its existing files into tests (the project edit has its own signal).
 
@@ -107,11 +112,11 @@ can see why a pull request is in its class. The defaults below are the `default`
 
 | Signal | Fires when | Raises to |
 |---|---|---|
-| `size.lines` | counted lines (production, markup, production config and other files) above `routing.fix.maxLines` (20) | `behaviour` |
+| `size.lines` | counted lines (production, markup, XAML, production config and other files) above `routing.fix.maxLines` (20) | `behaviour` |
 | `size.files` | changed files of those roles above `routing.fix.maxFiles` (2); an exact move is not a change, an edited move is one file | `behaviour` |
 | `size.large` | counted lines above `routing.largeLines` (400) | `feature` |
-| `file.added` | a new production, markup, production config or other file (an exact move is not new) | `behaviour` |
-| `file.deleted` | a production or markup file deleted (not moved) | `behaviour` |
+| `file.added` | a new production, markup, XAML, production config or other file (an exact move is not new) | `behaviour` |
+| `file.deleted` | a production, markup or XAML file deleted (not moved) | `behaviour` |
 | `config.changed` | a production config or other file changed | `behaviour` |
 | `binary.changed` | binary content in a file of those roles | `behaviour` |
 | `content.unreadable` | a production or markup file whose text cannot be read on a side where it exists (binary to git, a NUL byte in its first 8000 bytes, or above 4 MB): no type, endpoint or database signal can see it | `feature` |

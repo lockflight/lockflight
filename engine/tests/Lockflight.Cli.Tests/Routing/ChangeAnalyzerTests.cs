@@ -94,6 +94,12 @@ public sealed class ChangeAnalyzerTests
                 "global.json BuildWide 1", "src/App/App.sln Project 1", "src/App/Page.razor Markup 1", "src/App/appsettings.json ProductionConfig 1",
                 "src/Fs/Library.fs Production 1",
             ]),
+        new("XamlInAProductionProjectIsXamlAndItsCodeBehindIsProduction",
+            App(("src/App/MainWindow.xaml", "<Window>\n  <Grid Margin=\"12\" />\n</Window>\n"), ("src/App/MainWindow.xaml.cs", "partial class MainWindow\n{\n}\n")),
+            repo => repo.Write("src/App/MainWindow.xaml", "<Window>\n  <Grid Margin=\"16\" />\n</Window>\n")
+                .Write("src/App/MainWindow.xaml.cs", "partial class MainWindow\n{\n    int Count;\n}\n")
+                .Write("tools/Theme.xaml", "<ResourceDictionary />\n"),
+            ["src/App/MainWindow.xaml Xaml 2", "src/App/MainWindow.xaml.cs Production 1", "tools/Theme.xaml Other 1"]),
     }.ToDictionary(routingCase => routingCase.Name, StringComparer.Ordinal);
 
     [Theory]
