@@ -177,6 +177,13 @@ instead of the fork point, so the two can differ when the branch's history moved
 `gates` keeps its meaning (the `pr` gates and green at head), so a ruleset that requires it keeps working; make
 `lockflight/judge` required when the team produces red commits.
 
+The action runs on Linux (x64, Arm64), Windows (x64) and macOS runners: its scripts run in bash (Git Bash on Windows), it
+installs the gitleaks build for the runner, and the vendored install script installs `lockflight.exe` on Windows. The
+generated workflow runs its jobs on `ubuntu-latest`. To judge on Windows, change `runs-on:` of the `judge` job to
+`windows-latest` by hand; the report jobs read data only and can stay on Linux. The engine lock pins the install script by
+hash, so this needs a lock from an engine release whose `install.sh` knows Windows (released Lockflight 0.3 scripts refuse
+it); moving the lock to such a release (`lockflight update`, by a person) vendors that script with it.
+
 ### Which check is required
 
 The workflow is named `lockflight` (until 0.3.0 it was `lockflight-gates`; the file keeps its name,
