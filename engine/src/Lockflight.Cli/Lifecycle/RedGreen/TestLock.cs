@@ -17,6 +17,10 @@ internal static class TestLock
     public static IReadOnlyList<(string Glob, string Reason)> LockedGlobs(Manifest manifest) =>
         [.. Locks(manifest).SelectMany(featureLock => featureLock.Globs.Select(glob => (glob, featureLock.Reason)))];
 
+    /// <summary>What holds the lock now: each open red cycle, and each record that cannot be read; empty when nothing is locked.</summary>
+    public static IReadOnlyList<TestLockHolder> Holders(Manifest manifest) =>
+        [.. Locks(manifest).Select(featureLock => new TestLockHolder(featureLock.Feature, featureLock.FeatureId, featureLock.Reason, featureLock.Unreadable))];
+
     /// <summary>
     /// Test files a person's open amend makes writable, relative to the root and '/'-separated: an exception to the lock of the
     /// amending feature only, so a file that another feature's open cycle also locks stays locked.
@@ -48,7 +52,7 @@ internal static class TestLock
             if (Read(recordPath) is not RecordReading reading)
             {
                 // An unreadable record must neither unlock silently nor crash the hook: lock the conventional test folders.
-                yield return new FeatureLock(recordPath, [.. ConventionalGlobs(manifest)], $"an unreadable red/green record of {feature}", []);
+                yield return new FeatureLock(recordPath, [.. ConventionalGlobs(manifest)], $"an unreadable red/green record of {feature}", []) { FeatureId = feature, Unreadable = true };
                 continue;
             }
 
@@ -58,7 +62,7 @@ internal static class TestLock
             }
 
             string[] globs = [.. reading.Record.TestProjects.Select(project => project is "." or "" ? "**" : $"{project.TrimEnd('/')}/**")];
-            yield return new FeatureLock(recordPath, globs, $"red cycle {open.Number} of {feature}", [.. open.OpenAmends.SelectMany(amend => amend.Files)]);
+            yield return new FeatureLock(recordPath, globs, $"red cycle {open.Number} of {feature}", [.. open.OpenAmends.SelectMany(amend => amend.Files)]) { FeatureId = feature };
         }
     }
 
@@ -80,7 +84,12 @@ internal static class TestLock
         ConventionalTestGlobs.Concat(manifest.Units.SelectMany(unit => new[] { $"{unit.Path}/tests/**", $"{unit.Path}/test/**" }));
 
     /// <summary>One feature's lock: its record (identity), the globs it locks, why, and the files its open amends make writable.</summary>
-    private sealed record FeatureLock(string Feature, IReadOnlyList<string> Globs, string Reason, IReadOnlyList<string> AmendedFiles);
+    private sealed record FeatureLock(string Feature, IReadOnlyList<string> Globs, string Reason, IReadOnlyList<string> AmendedFiles)
+    {
+        public string FeatureId { get; init; } = string.Empty;
+
+        public bool Unreadable { get; init; }
+    }
 
     private sealed record RecordReading(RedGreenRecord? Record);
 }

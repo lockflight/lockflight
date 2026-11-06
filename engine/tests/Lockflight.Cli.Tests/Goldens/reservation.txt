@@ -21,6 +21,7 @@ redgreen green: reserved=False words=- shell=- powershell=-
 redgreen status: reserved=False words=- shell=- powershell=-
 redgreen reset: reserved=True words=redgreen reset shell=redgreen reset powershell=redgreen reset
 redgreen amend: reserved=True words=redgreen amend shell=redgreen amend powershell=redgreen amend
+red: reserved=False words=- shell=- powershell=-
 review: reserved=False words=- shell=- powershell=-
 review status: reserved=False words=- shell=- powershell=-
 review dismiss: reserved=True words=review dismiss shell=review dismiss powershell=review dismiss

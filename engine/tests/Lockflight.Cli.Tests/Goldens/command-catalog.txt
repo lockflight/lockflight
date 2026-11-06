@@ -22,6 +22,7 @@ redgreen green: [--feature]
 redgreen status: [--feature]
 redgreen reset: [--feature]
 redgreen amend: [--feature --reason] arguments
+red: [--base --message --redo --dry-run --verbose]
 review: [--feature --base --model --budget]
 review status: [--feature]
 review dismiss: [--reason --feature] arguments

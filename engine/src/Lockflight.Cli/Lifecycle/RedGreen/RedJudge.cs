@@ -34,14 +34,21 @@ internal sealed class RedJudge(RedGreenSession session, bool verbose)
 
     public async Task WarnAssertionFreeAsync(List<RedGreenTest> classified)
     {
-        string[] assertionFree = [.. classified.Where(test => test.AssertionFree).Select(test => TraceMatrix.ShortName(test.MethodFilter))];
-        if (assertionFree.Length > 0)
+        if (AssertionFreeWarning(classified) is string warning)
         {
-            await session.Output.WriteLineAsync(
-                $"Warning: {assertionFree.Length} new tests assert nothing ({RedGreenTest.AssertionFreeMark}): {string.Join(", ", assertionFree.Take(RedGreenSession.MaxTestsListed))}. " +
-                "Such a test passes as soon as the code returns without throwing. Add an assertion on the result; " +
-                "a test that verifies by letting the production code throw may keep this warning, which trace and review show.");
+            await session.Output.WriteLineAsync(warning);
         }
+    }
+
+    /// <summary>The warning for new tests that assert nothing; null when every one asserts.</summary>
+    public static string? AssertionFreeWarning(IReadOnlyList<RedGreenTest> classified)
+    {
+        string[] assertionFree = [.. classified.Where(test => test.AssertionFree).Select(test => TraceMatrix.ShortName(test.MethodFilter))];
+        return assertionFree.Length == 0
+            ? null
+            : $"Warning: {assertionFree.Length} new tests assert nothing ({RedGreenTest.AssertionFreeMark}): {string.Join(", ", assertionFree.Take(RedGreenSession.MaxTestsListed))}. " +
+              "Such a test passes as soon as the code returns without throwing. Add an assertion on the result; " +
+              "a test that verifies by letting the production code throw may keep this warning, which trace and review show.";
     }
 
     /// <summary>Why the test got its class, under its line; with <c>--verbose</c> also the exception, the deciding frame and the production call.</summary>

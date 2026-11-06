@@ -10,6 +10,7 @@ using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Init;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.Approvals;
+using Lockflight.Cli.Lifecycle.Fix;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Mascot;
@@ -56,6 +57,7 @@ internal static class CommandRegistry
         {
             Listing = CommandListing.Unlisted,
         },
+        new(["red"], CommandAudience.Anyone, [RedBase.Option, RedCommand.MessageOption, RedCommand.RedoOption], [RedCommand.DryRunFlag, RedCommand.VerboseFlag], CommandOperands.Options, OptionParsing.Shared, context => new RedCommand(context)),
         new(["review"], CommandAudience.Anyone, ["--feature", "--base", "--model", "--budget"], [], CommandOperands.Options, OptionParsing.Shared, context => new ReviewCommand(context)),
         new(["review", "status"], CommandAudience.Anyone, ["--feature"], [], CommandOperands.Options, OptionParsing.Shared, context => new ReviewStatusCommand(context)),
         new(["review", "dismiss"], CommandAudience.Human, ["--reason", "--feature"], [], CommandOperands.Any, OptionParsing.Shared, context => new ReviewDismissCommand(context)),

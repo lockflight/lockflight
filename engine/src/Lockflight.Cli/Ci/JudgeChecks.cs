@@ -70,7 +70,8 @@ internal static class JudgeChecks
             ?? cycles.FirstOrDefault(cycle => cycle.Verdict != CheckVerdict.Pass);
         return worst is null
             ? new CheckResult(CheckId.Red, level, CheckVerdict.Pass, ReasonCode.None, $"{cycles.Count} cycles, {cycles.Sum(cycle => cycle.Tests.Count)} tests, each red in production code")
-            : new CheckResult(CheckId.Red, level, worst.Verdict, worst.Reason, $"cycle {worst.Red.Label} ({CommitIds.Short(worst.Red.Commit)}): {worst.Why}");
+            : new CheckResult(CheckId.Red, level, worst.Verdict, worst.Reason, $"cycle {worst.Red.Label} ({CommitIds.Short(worst.Red.Commit)}): {worst.Why}"
+                + (worst.Verdict == CheckVerdict.Fail ? $"; a new red commit with the same label supersedes it ('lockflight red --redo {worst.Red.Label}')" : string.Empty));
     }
 
     /// <summary>Any amend rejected or weakened fails; a test missing at head, or an amend that cannot be re-checked or changed the expectation, is NOT-EARNED; else PASS.</summary>
@@ -135,6 +136,6 @@ internal static class JudgeChecks
         int malformed = plan.Reds.All.Count(red => red.Malformed is not null);
         string trailers = malformed > 0 ? $" ({malformed} commits carry a malformed Lockflight-Red trailer)" : string.Empty;
         return $"no red commit in this pull request{trailers}; before the implementation, commit each story's new tests (stub what does not exist yet) "
-            + "with git commit --trailer \"Lockflight-Red: 1\" (2 for the next story); 'redgreen red' does this in the lifecycle";
+            + "with git commit --trailer \"Lockflight-Red: 1\" (2 for the next story); 'lockflight red' or 'redgreen red' does this";
     }
 }

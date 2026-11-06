@@ -228,7 +228,7 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
         await DescribeAsync(snapshot, number);
         if (session.Manifest.Ci.RedCommits && snapshot.Commit is string judged)
         {
-            RedCommitOutcome committed = await RedCommitter.CommitAsync(session.Manifest.Root, judged, session.Feature.Id, number, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), cancellationToken);
+            RedCommitOutcome committed = await RedCommitter.CommitAsync(session.Manifest.Root, judged, $"test({session.Feature.Id}): red for cycle {number}", number, TimeSpan.FromSeconds(session.Manifest.Gates.TimeoutSeconds), cancellationToken);
             await session.Output.WriteLineAsync(committed.Message);
         }
 

@@ -54,6 +54,31 @@ internal sealed class JudgeWorktree
     }
 
     /// <summary>
+    /// The worktree at <paramref name="directory"/>, kept between runs so its <c>bin/</c> and <c>obj/</c> make the next build
+    /// incremental: reused when the directory is the top of a worktree that holds <paramref name="firstCommit"/>, else (re)added
+    /// there; null, after cleaning up, when git cannot. The caller holds a lock so no two runs share it.
+    /// </summary>
+    public static async Task<JudgeWorktree?> OpenKeptAsync(string repositoryRoot, string directory, string firstCommit, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        JudgeWorktree worktree = new(repositoryRoot, directory, timeLimit);
+        if (await IsKeptWorktreeAsync(directory, firstCommit, timeLimit, cancellationToken))
+        {
+            return worktree;
+        }
+
+        await worktree.RemoveAsync();
+        Directory.CreateDirectory(Path.GetDirectoryName(directory)!);
+        ProcessResult added = await SnapshotGit.RunAsync(["worktree", "add", "--detach", "--no-checkout", "--quiet", directory, firstCommit], repositoryRoot, timeLimit, cancellationToken);
+        if (added.ExitCode != 0)
+        {
+            await worktree.RemoveAsync();
+            return null;
+        }
+
+        return worktree;
+    }
+
+    /// <summary>
     /// Moves the worktree to <paramref name="commit"/> and lays the policy of <paramref name="policyCommit"/> over it; with
     /// <paramref name="clean"/> the build output goes too (the retry after an incremental build failed). Null on success, else why.
     /// </summary>
@@ -133,4 +158,14 @@ internal sealed class JudgeWorktree
 
         await SnapshotGit.RunAsync(["worktree", "prune"], repositoryRoot, CleanupTimeLimit, CancellationToken.None);
     }
+
+    /// <summary>
+    /// Whether <paramref name="directory"/> is the top of a git worktree (its own <c>.git</c> file, no prefix below a work tree)
+    /// whose repository has <paramref name="commit"/>; never a directory inside some other checkout.
+    /// </summary>
+    private static async Task<bool> IsKeptWorktreeAsync(string directory, string commit, TimeSpan timeLimit, CancellationToken cancellationToken) =>
+        File.Exists(Path.Combine(directory, ".git"))
+        && await SnapshotGit.RunAsync(["rev-parse", "--show-prefix"], directory, timeLimit, cancellationToken) is { ExitCode: 0 } prefix
+        && prefix.Output.Trim().Length == 0
+        && (await SnapshotGit.RunAsync(["cat-file", "-e", $"{commit}^{{commit}}"], directory, timeLimit, cancellationToken)).ExitCode == 0;
 }

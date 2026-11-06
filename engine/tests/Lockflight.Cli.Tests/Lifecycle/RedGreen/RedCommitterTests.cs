@@ -31,7 +31,7 @@ public sealed class RedCommitterTests : IAsyncLifetime
         repository.Write("README.md", "# shop, staged, then edited\n").Write("tests/Shop.Tests/PriceTests.cs", "class PriceTests {}\n").Write("src/Shop/Price.cs", "class Price {}\n");
         RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
 
-        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 2, TimeLimit, cancellationToken);
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "test(001-shipping): red for cycle 2", 2, TimeLimit, cancellationToken);
 
         Assert.NotNull(outcome.Commit);
         Assert.Contains("the tree this red judged", outcome.Message, StringComparison.Ordinal);
@@ -78,7 +78,7 @@ public sealed class RedCommitterTests : IAsyncLifetime
         RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
         string moved = await repository.Write("README.md", "# shop, moved on\n").CommitAsync("other work", cancellationToken);
 
-        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "test(001-shipping): red for cycle 1", 1, TimeLimit, cancellationToken);
 
         Assert.Null(outcome.Commit);
         Assert.Contains("HEAD moved", outcome.Message, StringComparison.Ordinal);
@@ -114,7 +114,7 @@ public sealed class RedCommitterTests : IAsyncLifetime
         RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
         repository.Write("src/Shop/Price.cs", "class Price { /* written after the red */ }\n");
 
-        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "test(001-shipping): red for cycle 1", 1, TimeLimit, cancellationToken);
 
         Assert.Null(outcome.Commit);
         Assert.Contains($"git read-tree {snapshot.Commit} && git commit --allow-empty --no-verify", outcome.Message, StringComparison.Ordinal);
@@ -131,7 +131,7 @@ public sealed class RedCommitterTests : IAsyncLifetime
         empty.Write("src/Shop/Shop.csproj", "<Project />\n").Write("tests/Shop.Tests/PriceTests.cs", "class PriceTests {}\n");
         RedSnapshot snapshot = await RedSnapshots.TakeAsync(empty.Root, [empty.Root], TimeLimit, cancellationToken);
 
-        RedCommitOutcome outcome = await RedCommitter.CommitAsync(empty.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(empty.Root, snapshot.Commit!, "test(001-shipping): red for cycle 1", 1, TimeLimit, cancellationToken);
 
         Assert.NotNull(outcome.Commit);
         Assert.Equal(string.Empty, (await empty.GitAsync(["diff", "--cached", "--name-only"], cancellationToken)).Trim());
@@ -156,7 +156,7 @@ public sealed class RedCommitterTests : IAsyncLifetime
         string tests = await repository.Write("tests/Shop.Tests/PriceTests.cs", "class PriceTests {}\n").CommitAsync("test: prices", cancellationToken);
         RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
 
-        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "test(001-shipping): red for cycle 1", 1, TimeLimit, cancellationToken);
 
         Assert.NotNull(outcome.Commit);
         Assert.Equal(tests, await repository.CommitOfAsync("HEAD^", cancellationToken));
@@ -171,7 +171,7 @@ public sealed class RedCommitterTests : IAsyncLifetime
         RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
         repository.Write(".git/index.lock", string.Empty);
 
-        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "001-shipping", 1, TimeLimit, cancellationToken);
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "test(001-shipping): red for cycle 1", 1, TimeLimit, cancellationToken);
 
         Assert.NotNull(outcome.Commit);
         Assert.Contains("git reset -q", outcome.Message, StringComparison.Ordinal);
