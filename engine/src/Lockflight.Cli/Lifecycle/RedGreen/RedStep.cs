@@ -182,7 +182,7 @@ internal sealed class RedStep(RedGreenSession session, bool verbose)
             await session.Output.WriteLineAsync($"Red rejected: {rejected.Length} of {classified.Count} new tests do not fail for the right reason. A red must be RED_STUB or RED_ASSERT.");
             foreach (RedClass redClass in rejected.Select(test => test.RedClass).Distinct())
             {
-                await session.Output.WriteLineAsync($"  {RedClassNames.ToName(redClass)}: {RedClassFixes.For(redClass)}.");
+                await session.Output.WriteLineAsync($"  {RedClassNames.ToName(redClass)}: {RedClassFixes.For(redClass, rejected.Select(test => verdicts[test.Key]))}.");
             }
 
             await session.RecordAsync(LedgerSignatures.RedRejected, $"{session.Feature.Id}: {string.Join(",", rejected.Select(test => RedClassNames.ToName(test.RedClass)).Distinct())}", cancellationToken);

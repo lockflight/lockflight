@@ -60,7 +60,7 @@ internal sealed class RedCandidate(TreeBuilder trees, TimeProvider time)
         string why = rejected.Length == 0
             ? $"{evaluation.Classified.Count} new tests, each RED_STUB or RED_ASSERT"
             : $"{rejected.Length} of {evaluation.Classified.Count} new tests do not fail for the right reason: "
-              + string.Join("; ", rejected.Select(test => test.RedClass).Distinct().Select(redClass => $"{RedClassNames.ToName(redClass)} ({RedClassFixes.For(redClass)})"));
+              + string.Join("; ", rejected.Select(test => test.RedClass).Distinct().Select(redClass => $"{RedClassNames.ToName(redClass)} ({RedClassFixes.For(redClass, rejected.Select(test => evaluation.Verdicts[test.Key]))})"));
         return new CycleJudgement(red, tree.Outcome, evaluation.Classified, evaluation.Verdicts, rejected.Length == 0 ? CheckVerdict.Pass : CheckVerdict.Fail,
             rejected.Length == 0 ? ReasonCode.None : CheckReasons.Of(rejected[0].RedClass), why)
         {

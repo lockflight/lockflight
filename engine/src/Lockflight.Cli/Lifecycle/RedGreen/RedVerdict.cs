@@ -5,4 +5,8 @@ namespace Lockflight.Cli.Lifecycle.RedGreen;
 /// test reaches or that it reaches none); <see cref="Detail"/> adds the exception type, the deciding stack frame and its source line,
 /// for <c>redgreen red --verbose</c>.
 /// </summary>
-internal sealed record RedVerdict(RedClass Class, string Why, string Detail);
+internal sealed record RedVerdict(RedClass Class, string Why, string Detail)
+{
+    /// <summary>The failure came from loading XAML (a missing resource, type or name in the view), not from code the test calls.</summary>
+    public bool InXamlLoading { get; init; }
+}

@@ -186,7 +186,7 @@ internal sealed class AmendRecheck(RedGreenSession session, RedJudge judge)
                 $"Red rejected: {rejected.Length} of {classified.Count} amended tests do not fail in production code{(open.Snapshot is null ? string.Empty : " as it was at red")}. The amend stays open and the file writable until they do.");
             foreach (RedClass redClass in rejected.Select(test => test.RedClass).Distinct())
             {
-                await session.Output.WriteLineAsync($"  {RedClassNames.ToName(redClass)}: {RedClassFixes.For(redClass)}.");
+                await session.Output.WriteLineAsync($"  {RedClassNames.ToName(redClass)}: {RedClassFixes.For(redClass, rejected.Select(test => verdicts[test.Key]))}.");
             }
 
             await session.RecordAsync(LedgerSignatures.RedRejected, $"{session.Feature.Id}: amended tests, {string.Join(",", rejected.Select(test => RedClassNames.ToName(test.RedClass)).Distinct())}", cancellationToken);

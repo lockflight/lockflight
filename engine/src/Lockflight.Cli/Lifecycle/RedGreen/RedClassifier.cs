@@ -71,6 +71,14 @@ internal static class RedClassifier
     /// </summary>
     private static readonly string[] AssertionLibraryFrames = ["FluentAssertions.Execution.", "AwesomeAssertions.Execution."];
 
+    /// <summary>
+    /// The exceptions XAML frameworks throw when a view cannot be loaded (WPF, WinUI and .NET MAUI's <c>XamlParseException</c>,
+    /// Avalonia's <c>XamlLoadException</c>), matched by name; WPF's loader frames are in <see cref="WpfMarkupNamespace"/>.
+    /// </summary>
+    private static readonly string[] XamlLoadingExceptions = ["XamlParseException", "XamlLoadException"];
+
+    private const string WpfMarkupNamespace = "System.Windows.Markup.";
+
     /// <summary>The order in which one failing row decides a theory's class: the worst row wins.</summary>
     private static readonly RedClass[] Precedence = [RedClass.RedInTest, RedClass.RedNoProduction, RedClass.RedOther, RedClass.RedAssert, RedClass.RedStub];
 
@@ -133,6 +141,11 @@ internal static class RedClassifier
             return new RedVerdict(RedClass.RedStub, $"NotImplementedException from production code at {ShortFrame(row.TopFrame)}", detail);
         }
 
+        if (IsXamlLoading(row))
+        {
+            return new RedVerdict(RedClass.RedOther, $"{exception} while loading XAML, at {ShortFrame(row.TopFrame)}: {RedClassFixes.XamlLoading}", detail) { InXamlLoading = true };
+        }
+
         return new RedVerdict(
             RedClass.RedOther,
             inProduction
@@ -150,6 +163,10 @@ internal static class RedClassifier
     private static bool IsAssertion(string? exceptionType, string? topFrame) => exceptionType is null
         ? topFrame is not null && AssertionLibraryFrames.Any(frame => topFrame.StartsWith(frame, StringComparison.Ordinal))
         : LibraryAssertionExceptions.Contains(exceptionType) || IsXunitAssertion(exceptionType);
+
+    private static bool IsXamlLoading(ExecutedTest row) =>
+        (row.ExceptionType is string type && XamlLoadingExceptions.Contains(ShortType(type), StringComparer.Ordinal))
+        || (row.TopFrame is string frame && frame.StartsWith(WpfMarkupNamespace, StringComparison.Ordinal));
 
     private static bool IsXunitAssertion(string exceptionType) =>
         exceptionType.StartsWith(XunitNamespace, StringComparison.Ordinal) && exceptionType.EndsWith("Exception", StringComparison.Ordinal)

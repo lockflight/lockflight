@@ -172,6 +172,42 @@ public sealed class RedClassifierTests
         Assert.Contains("ShippingTests.Cheat", verdict.Why, StringComparison.Ordinal);
     }
 
+    /// <summary>A view's XAML failing to load, as WPF, WinUI, .NET MAUI and Avalonia report it.</summary>
+    [Theory]
+    [InlineData("System.Windows.Markup.XamlParseException", "System.Windows.Markup.XamlReader.RewrapException(Exception e, Uri baseUri)")]
+    [InlineData("System.Windows.Markup.XamlParseException", "Desk.Client.MainWindow.InitializeComponent()")]
+    [InlineData("System.Exception", "System.Windows.Markup.WpfXamlLoader.Load(XamlReader xamlReader)")]
+    [InlineData("Microsoft.UI.Xaml.Markup.XamlParseException", "WinRT.ExceptionHelpers.ThrowExceptionForHR(Int32 hr)")]
+    [InlineData("Microsoft.Maui.Controls.Xaml.XamlParseException", "Microsoft.Maui.Controls.Xaml.ApplyPropertiesVisitor.Visit(ElementNode node)")]
+    [InlineData("Avalonia.Markup.Xaml.XamlLoadException", "Avalonia.Markup.Xaml.AvaloniaXamlLoader.Load(Object obj)")]
+    public void AFailureLoadingXamlIsRejectedWithAdviceToTestTheViewModel(string exception, string topFrame)
+    {
+        RedVerdict verdict = RedClassifier.Judge([Fail(exception, topFrame, file: null)], TestClasses, TestDirectories, Production, "MainWindow..ctor()");
+
+        Assert.Equal(RedClass.RedOther, verdict.Class);
+        Assert.True(verdict.InXamlLoading);
+        Assert.EndsWith(RedClassFixes.XamlLoading, verdict.Why, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnotherRedOtherIsNotTakenForAXamlFailure()
+    {
+        RedVerdict verdict = RedClassifier.Judge([Fail("System.NullReferenceException", "Shop.Api.PriceCalculator.ShippingCost(Decimal w)", file: null)], TestClasses, TestDirectories, Production, null);
+
+        Assert.False(verdict.InXamlLoading);
+        Assert.Equal(RedClassFixes.For(RedClass.RedOther), RedClassFixes.For(RedClass.RedOther, [verdict]));
+    }
+
+    [Fact]
+    public void TheRejectionAdviceAddsTheXamlAdviceWhenATestFailedLoadingXaml()
+    {
+        RedVerdict xaml = new(RedClass.RedOther, "XamlParseException while loading XAML", string.Empty) { InXamlLoading = true };
+        RedVerdict other = new(RedClass.RedOther, "NullReferenceException", string.Empty);
+
+        Assert.Equal($"{RedClassFixes.For(RedClass.RedOther)}; {RedClassFixes.XamlLoading}", RedClassFixes.For(RedClass.RedOther, [other, xaml]));
+        Assert.Equal(RedClassFixes.For(RedClass.RedInTest), RedClassFixes.For(RedClass.RedInTest, [xaml]));
+    }
+
     private static RedClass Classify(ExecutedTest row, bool callsProduction) => RedClassifier.Classify([row], TestClasses, TestDirectories, Production, callsProduction);
 
     private static ExecutedTest Fail(string? exception, string? topFrame, string? file) => new("a:k", "n", TestOutcome.Fail, exception, topFrame, file);
