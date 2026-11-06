@@ -60,13 +60,22 @@ internal sealed class EnginePackageFeed(string source, EnvironmentReader environ
             return (null, package);
         }
 
-        using ZipArchive archive = new(new MemoryStream(bytes), ZipArchiveMode.Read);
-        if (archive.GetEntry(EngineHashes.FileName) is not ZipArchiveEntry entry)
+        byte[] content;
+        try
         {
-            return (null, EngineFetch.Failed(EngineFetchStatus.Invalid, $"Lockflight.Cli {version} has no {EngineHashes.FileName} (released before the engine lock?)"));
+            using ZipArchive archive = new(new MemoryStream(bytes), ZipArchiveMode.Read);
+            if (archive.GetEntry(EngineHashes.FileName) is not ZipArchiveEntry entry)
+            {
+                return (null, EngineFetch.Failed(EngineFetchStatus.Invalid, $"Lockflight.Cli {version} has no {EngineHashes.FileName} (released before the engine lock?)"));
+            }
+
+            content = ReadEntry(entry);
+        }
+        catch (InvalidDataException exception)
+        {
+            return (null, EngineFetch.Failed(EngineFetchStatus.Invalid, $"the Lockflight.Cli {version} package is not a valid package: {exception.Message}"));
         }
 
-        byte[] content = ReadEntry(entry);
         if (EngineHashesReader.Read(Encoding.UTF8.GetString(content), out string? problem) is not EngineHashes hashes)
         {
             return (null, EngineFetch.Failed(EngineFetchStatus.Invalid, $"{EngineHashes.FileName} of {version}: {problem}"));

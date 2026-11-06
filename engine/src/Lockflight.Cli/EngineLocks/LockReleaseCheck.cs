@@ -36,12 +36,12 @@ internal sealed record LockReleaseCheck(LockReleaseVerdict Verdict, string Detai
 
         if (hashes.InstallScriptSha256 is null)
         {
-            return new LockReleaseCheck(LockReleaseVerdict.Differs, $"pins {engineLock.Version}, whose release published no install script hash, so the install script it pins cannot be checked");
+            return new LockReleaseCheck(LockReleaseVerdict.ScriptUnpublished, $"pins {engineLock.Version}, whose release published no install script hash, so the install script it pins cannot be checked");
         }
 
         if (engineLock.InstallScriptSha256 != hashes.InstallScriptSha256)
         {
-            return new LockReleaseCheck(LockReleaseVerdict.Differs, $"pins {engineLock.Version}, but its install script hash is not the one release v{engineLock.Version} published: {InstallScript.RelativePath} is not the release's script");
+            return new LockReleaseCheck(LockReleaseVerdict.ScriptDiffers, $"pins {engineLock.Version}, but its install script hash is not the one release v{engineLock.Version} published: {InstallScript.RelativePath} is not the release's script");
         }
 
         string matches = $"matches the published hashes of release v{engineLock.Version} (commit {hashes.Commit[..12]}), its install script included{Downgrade(engineLock, baseLockText)}";

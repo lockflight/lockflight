@@ -12,7 +12,8 @@ namespace Lockflight.Cli.Ci;
 /// running anything from them), joins the review into its check, recomputes both status contexts, and writes the evidence of record
 /// (<c>verdict.json</c>), the PR comment (<c>comment.md</c>, within GitHub's limit) and the job summary (<c>summary.md</c>). The exit
 /// code is the verdict of <c>--context</c> (<c>gates</c> or <c>lockflight/judge</c>), else of the whole run. A missing judge
-/// artifact is NOT-EARNED ("the judge did not finish"); evidence about another head is ERROR; a review about another head is ignored.
+/// artifact is NOT-EARNED ("the judge did not finish"); one the report refuses to read (<see cref="CiArtifactReader"/>: too large, too
+/// deep, a property named twice, not a JSON object) is ERROR, as is evidence about another head; a review about another head is ignored.
 /// With <c>--base</c> (the target branch's tip, checked out, and the head fetched) the report re-plans the run from git and refuses
 /// evidence whose policy, engine, event, class, red commits or check levels disagree with it (<see cref="EvidenceCrossCheck"/>).
 /// </summary>
@@ -62,9 +63,12 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         }
 
         string output = Path.GetFullPath(outDirectory, context.WorkingDirectory);
-        JsonObject? evidence = Read(Path.GetFullPath(Path.Combine(evidenceDirectory, CiEvidence.FileName), context.WorkingDirectory));
-        JsonObject verdict = Join(evidence, head,
-            options.Value(ReviewOption) is string review ? Read(Path.GetFullPath(Path.Combine(review, ReviewFileName), context.WorkingDirectory)) : null);
+        CiArtifactReading evidenceReading = CiArtifactReader.Read(Path.GetFullPath(Path.Combine(evidenceDirectory, CiEvidence.FileName), context.WorkingDirectory));
+        CiArtifactReading reviewReading = options.Value(ReviewOption) is string review
+            ? CiArtifactReader.Read(Path.GetFullPath(Path.Combine(review, ReviewFileName), context.WorkingDirectory))
+            : CiArtifactReading.None;
+        JsonObject? evidence = evidenceReading.Document;
+        JsonObject verdict = JoinArtifacts(evidenceReading, head, reviewReading);
         // Join returns the evidence itself only when it read it as the judge's; anything else is already an ERROR or NOT-EARNED.
         if (options.Value(BaseOption) is string baseCommit && ReferenceEquals(verdict, evidence))
         {
@@ -136,11 +140,23 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     /// The evidence with the review joined and the contexts and verdict recomputed from the checks; an artifact of the wrong shape
     /// is ERROR, never a crash that leaves no verdict.
     /// </summary>
-    public static JsonObject Join(JsonObject? evidence, string head, JsonObject? review)
+    public static JsonObject Join(JsonObject? evidence, string head, JsonObject? review) =>
+        JoinArtifacts(new CiArtifactReading(evidence, null), head, new CiArtifactReading(review, null));
+
+    /// <summary>
+    /// As <see cref="Join(JsonObject?, string, JsonObject?)"/> for the artifacts as read: evidence the report refused to read is
+    /// ERROR, and a review result it refused makes the review check ERROR, each naming why.
+    /// </summary>
+    public static JsonObject JoinArtifacts(CiArtifactReading evidence, string head, CiArtifactReading review)
     {
+        if (evidence.Problem is string evidenceProblem)
+        {
+            return Missing(head, CiEvidence.Cap($"the judge's evidence ({CiEvidence.FileName}) was not read: {evidenceProblem}"), CheckVerdict.Error);
+        }
+
         try
         {
-            return JoinChecked(evidence, head, review);
+            return JoinChecked(evidence.Document, head, review);
         }
         catch (Exception exception) when (exception is InvalidOperationException or FormatException or JsonException or KeyNotFoundException)
         {
@@ -148,7 +164,7 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
         }
     }
 
-    private static JsonObject JoinChecked(JsonObject? evidence, string head, JsonObject? review)
+    private static JsonObject JoinChecked(JsonObject? evidence, string head, CiArtifactReading review)
     {
         if (evidence is null || evidence["schema"]?.GetValue<string>() != CiEvidence.Schema)
         {
@@ -196,7 +212,7 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             // The review can turn the judge's NOT-EARNED into a FAIL: then no person is waited for.
             evidence["blocked"] = null;
         }
-        else if (evidence["blocked"] is null && review is null && EvidenceTime.Parse(evidence["finishedAt"]?.GetValue<string>()) is DateTimeOffset finishedAt
+        else if (evidence["blocked"] is null && review.Document is null && review.Problem is null && EvidenceTime.Parse(evidence["finishedAt"]?.GetValue<string>()) is DateTimeOffset finishedAt
             && checks.Any(check => check is { Id: CheckId.Review, Level: CheckLevel.Required, Verdict: CheckVerdict.Skipped })
             && JudgeBlocked.OnlyWaitingOn(checks, check => check.Id == CheckId.Review))
         {
@@ -207,18 +223,21 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     }
 
     /// <summary>
-    /// The review section of the verdict of record: <c>skipped</c> when no review ran, else <c>ran</c> or <c>stale</c> (about another
-    /// head) with the review's head, verdict and line as data.
+    /// The review section of the verdict of record: <c>skipped</c> when no review ran, <c>unreadable</c> with why when the report
+    /// refused its result, else <c>ran</c> or <c>stale</c> (about another head) with the review's head, verdict and line as data.
     /// </summary>
-    private static JsonObject ReviewNode(JsonObject? review, string head) => review is null
-        ? new JsonObject { ["state"] = "skipped" }
-        : new JsonObject
+    private static JsonObject ReviewNode(CiArtifactReading reading, string head) => reading switch
+    {
+        { Problem: string problem } => new JsonObject { ["state"] = "unreadable", ["why"] = CiEvidence.Cap(problem) },
+        { Document: JsonObject review } => new JsonObject
         {
             ["state"] = review["head"]?.GetValue<string>() == head ? "ran" : "stale",
             ["head"] = review["head"]?.GetValue<string>() is string reviewed ? CiEvidence.Cap(reviewed) : null,
             ["verdict"] = review["verdict"]?.GetValue<string>() is string verdict ? CiEvidence.Cap(verdict) : null,
             ["why"] = review["why"]?.GetValue<string>() is string why ? CiEvidence.Cap(why) : null,
-        };
+        },
+        _ => new JsonObject { ["state"] = "skipped" },
+    };
 
     /// <summary>
     /// Why the checks cannot be what this engine's judge wrote: a check missing or listed twice, or green and the gates not
@@ -243,9 +262,14 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     }
 
     /// <summary>The review job's verdict as the review check, or SKIPPED: no review ran, or it reviewed another head.</summary>
-    private static CheckResult Review(CheckResult check, JsonObject? review, string head)
+    private static CheckResult Review(CheckResult check, CiArtifactReading reading, string head)
     {
-        if (review is null)
+        if (reading.Problem is string unreadable)
+        {
+            return check with { Verdict = CheckVerdict.Error, Why = $"the review's result ({ReviewFileName}) was not read: {unreadable}" };
+        }
+
+        if (reading.Document is not JsonObject review)
         {
             return check with { Verdict = CheckVerdict.Skipped, Reason = ReasonCode.ReviewNotRun, Why = "no review ran (no API key configured, a fork, or the review job was skipped)" };
         }
@@ -294,17 +318,5 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             ["contexts"] = new JsonObject { [StatusContextNames.ToName(StatusContext.Gates)] = name, [StatusContextNames.ToName(StatusContext.Judge)] = name },
             ["verdict"] = name,
         };
-    }
-
-    private static JsonObject? Read(string path)
-    {
-        try
-        {
-            return File.Exists(path) ? JsonNode.Parse(File.ReadAllText(path)) as JsonObject : null;
-        }
-        catch (Exception exception) when (exception is JsonException or IOException or InvalidOperationException)
-        {
-            return null;
-        }
     }
 }

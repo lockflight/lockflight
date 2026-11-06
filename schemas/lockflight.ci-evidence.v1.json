@@ -459,7 +459,7 @@
       "required": [
         "state"
       ],
-      "description": "In evidence.json: expected (with the artifact name) or not-expected. In verdict.json: skipped when no review ran, else ran or stale (about another head) with the review's head, verdict and why.",
+      "description": "In evidence.json: expected (with the artifact name) or not-expected. In verdict.json: skipped when no review ran, unreadable (with why) when the report refused the review's result file, else ran or stale (about another head) with the review's head, verdict and why.",
       "properties": {
         "state": {
           "type": "string"

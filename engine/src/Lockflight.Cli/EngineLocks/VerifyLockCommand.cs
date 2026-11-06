@@ -7,7 +7,8 @@ namespace Lockflight.Cli.EngineLocks;
 /// <summary>
 /// <c>lockflight engine verify-lock &lt;file&gt; [--source &lt;feed&gt;] [--base &lt;file&gt;] [--script &lt;file&gt;]</c>: compares an engine lock, its install
 /// script's hash included, with the hashes the release of its version published, and the vendored install script, when given,
-/// with the lock (exit 0 when they match, 1 when they do not or there is no such release). CI runs it on a pull request's
+/// with the lock (exit 0 when they match, 1 when they do not or there is no such release; a failure names the check that failed,
+/// <c>engine lock: FAIL &lt;check&gt;: …</c>, from <see cref="LockReleaseVerdictNames"/>). CI runs it on a pull request's
 /// changed lock, so the reviewer reads "matches release vX" instead of judging hashes; it checks integrity against the feed,
 /// and GitHub's attestation of the release is verified separately where <c>gh</c> runs. Read only.
 /// </summary>
@@ -49,26 +50,27 @@ internal sealed class VerifyLockCommand(CliContext context) : ICommand
         if (options.Value(BaseOption) is string basePath)
         {
             string fullBase = Path.GetFullPath(basePath, context.WorkingDirectory);
-            if (File.Exists(fullBase))
+            baseLock = File.Exists(fullBase) ? await ReadTextAsync(fullBase, cancellationToken) : null;
+            if (baseLock is null)
             {
-                baseLock = await File.ReadAllTextAsync(fullBase, cancellationToken);
-            }
-            else
-            {
-                await context.Output.WriteLineAsync($"engine lock: warning: no base lock at {fullBase}, so a move to an older engine is not checked");
+                await context.Output.WriteLineAsync($"engine lock: warning: no readable base lock at {fullBase}, so a move to an older engine is not checked");
             }
         }
 
-        string lockText = await File.ReadAllTextAsync(path, cancellationToken);
+        if (await ReadTextAsync(path, cancellationToken) is not string lockText)
+        {
+            return await FailedAsync(LockReleaseVerdict.Unreadable, $"the lock at {path} cannot be read from disk");
+        }
+
         EnginePackageFeed feed = options.Value("--source") is string source ? new EnginePackageFeed(source, context.Environment) : EnginePackageFeed.FromEnvironment(context.Environment);
         LockReleaseCheck check = await LockReleaseCheck.RunAsync(
             lockText, baseLock, feed, options.Flag(AttestationFlag) ? context.Processes : null, cancellationToken);
-        await context.Output.WriteLineAsync($"engine lock: {check.Detail}");
         if (check.Verdict != LockReleaseVerdict.Matches)
         {
-            return ExitCode.Fail;
+            return await FailedAsync(check.Verdict, check.Detail);
         }
 
+        await context.Output.WriteLineAsync($"engine lock: {check.Detail}");
         if (options.Value(ScriptOption) is not string scriptPath)
         {
             return ExitCode.Pass;
@@ -76,20 +78,49 @@ internal sealed class VerifyLockCommand(CliContext context) : ICommand
 
         string fullScript = Path.GetFullPath(scriptPath, context.WorkingDirectory);
         string pinned = EngineLockReader.Read(lockText, allowDevelopment: false, ToolPin.RunningVersion).Lock!.InstallScriptSha256;
-        if (!File.Exists(fullScript))
+        if (await ReadBytesAsync(fullScript, cancellationToken) is not byte[] script)
         {
-            await context.Output.WriteLineAsync($"engine lock: there is no install script at {fullScript} to compare with the one the lock pins");
-            return ExitCode.Fail;
+            return await FailedAsync(LockReleaseVerdict.VendoredScriptMissing, $"there is no install script at {fullScript} to compare with the one the lock pins");
         }
 
-        string vendored = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(fullScript, cancellationToken)));
+        string vendored = Convert.ToHexStringLower(SHA256.HashData(script));
         if (vendored != pinned)
         {
-            await context.Output.WriteLineAsync($"engine lock: {InstallScript.RelativePath} is not the script the lock pins (its SHA-256 is {vendored}, the lock's {pinned}); CI would refuse to run it");
-            return ExitCode.Fail;
+            return await FailedAsync(LockReleaseVerdict.VendoredScriptDiffers, $"{InstallScript.RelativePath} is not the script the lock pins (its SHA-256 is {vendored}, the lock's {pinned}); CI would refuse to run it");
         }
 
         await context.Output.WriteLineAsync($"engine lock: {InstallScript.RelativePath} is the script the lock pins");
         return ExitCode.Pass;
+    }
+
+    /// <summary>Prints the failed check by name, then what failed: <c>engine lock: FAIL hash-mismatch: …</c>.</summary>
+    private async Task<ExitCode> FailedAsync(LockReleaseVerdict verdict, string detail)
+    {
+        await context.Output.WriteLineAsync($"engine lock: FAIL {LockReleaseVerdictNames.ToName(verdict)}: {detail}");
+        return ExitCode.Fail;
+    }
+
+    private static async Task<byte[]?> ReadBytesAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return File.Exists(path) ? await File.ReadAllBytesAsync(path, cancellationToken) : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<string?> ReadTextAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await File.ReadAllTextAsync(path, cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 }
