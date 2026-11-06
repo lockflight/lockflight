@@ -7,6 +7,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Evidence.Blocked;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.RedGreen;
+using Lockflight.Cli.Processes.Survivors;
 using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Routing;
 
@@ -133,10 +134,32 @@ internal static class CiEvidence
                 ["seconds"] = Math.Round(build.Seconds, 1),
                 ["outcome"] = TreeOutcomeNames.ToName(build.Outcome),
             })]),
+            ["processes"] = run.Findings.Processes is ProcessesReport processes ? ProcessesNode(processes) : null,
             ["startedAt"] = Timestamp(run.StartedAt),
             ["finishedAt"] = Timestamp(run.FinishedAt),
         };
     }
+
+    /// <summary>The processes left running that the sweeps found; command lines come from the pull request's code and are capped.</summary>
+    private static JsonObject ProcessesNode(ProcessesReport processes) => new()
+    {
+        ["mechanism"] = SweepMechanismNames.ToName(processes.Mechanism),
+        ["note"] = processes.Note,
+        ["sweeps"] = processes.Sweeps,
+        ["survivors"] = new JsonArray([.. processes.Survivors.Select(survivor => new JsonObject
+        {
+            ["region"] = SweepRegionNames.ToName(survivor.Region),
+            ["after"] = Cap(survivor.After),
+            ["pid"] = survivor.Process.Pid,
+            ["image"] = Cap(survivor.Process.Image),
+            ["command"] = Cap(survivor.Process.Command),
+            ["user"] = survivor.Process.User,
+            ["kind"] = "process",
+            ["outcome"] = SurvivorOutcomeNames.ToName(survivor.Process.Outcome),
+        })]),
+        ["more"] = processes.More,
+        ["outputHeld"] = Strings(processes.OutputHeld.Select(Cap)),
+    };
 
     /// <summary>The plan as <c>lockflight ci --plan</c> prints it.</summary>
     public static JsonObject Plan(JudgePlan plan) => new()

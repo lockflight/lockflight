@@ -13,6 +13,7 @@ rm -f "$W/repo/tests/Shop.Tests/ContainerSmokeTests.cs"
 export LOCKFLIGHT_TEMP="$W/temp"
 export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
 failures=0
+PY="$(command -v python3 || command -v python)"
 expect_exit() { # expect_exit <code> <what> -- command…
   local want="$1" what="$2"; shift 3
   local out; out="$("$@" 2>&1)"; local got=$?
@@ -60,6 +61,7 @@ EOF
 git commit -qam "feat: ten percent off above 100"
 before=$failures
 expect_exit 0 "lockflight ci gives PASS on the red and green commits" -- "$E" ci
+"$PY" -I "$ROOT/tests/e2e/left-running.py" record .lockflight/local/ci/last.json "$W/left-running.log"
 if [ "$failures" = "$before" ]; then
   first_green="**$(( $(date +%s) - started ))s**"
 else
@@ -72,6 +74,7 @@ git checkout -q feat/discount -- src tests
 git add src tests; git commit -qm "test and code together" --trailer "Lockflight-Red: 1"
 before=$failures
 expect_exit 1 "lockflight ci gives FAIL when the red commit holds the implementation" -- "$E" ci
+"$PY" -I "$ROOT/tests/e2e/left-running.py" record .lockflight/local/ci/last.json "$W/left-running.log"
 said_no=$([ "$failures" = "$before" ] && echo "FAIL, as expected" || echo "not FAIL: see the log")
 
 if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
@@ -81,5 +84,6 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     echo "See it say no (test and code in one red commit): ${said_no}."
   } >> "$GITHUB_STEP_SUMMARY"
 fi
+"$PY" -I "$ROOT/tests/e2e/left-running.py" summary "$W/left-running.log" || failures=$((failures + 1))
 if [ "$failures" -gt 0 ]; then echo "$failures checks failed"; exit 1; fi
 echo "quickstart: all checks passed"

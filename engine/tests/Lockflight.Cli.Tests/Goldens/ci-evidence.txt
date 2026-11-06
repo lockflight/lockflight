@@ -188,6 +188,27 @@
     "notRun": []
   },
   "builds": [],
+  "processes": {
+    "mechanism": "subreaper",
+    "note": null,
+    "sweeps": 12,
+    "survivors": [
+      {
+        "region": "head",
+        "after": "dotnet build",
+        "pid": 4711,
+        "image": "/usr/bin/sleep",
+        "command": "sleep 600",
+        "user": "runner",
+        "kind": "process",
+        "outcome": "stopped"
+      }
+    ],
+    "more": 0,
+    "outputHeld": [
+      "dotnet test"
+    ]
+  },
   "startedAt": "2026-10-29T10:00:00Z",
   "finishedAt": "2026-10-29T10:00:12Z"
 }

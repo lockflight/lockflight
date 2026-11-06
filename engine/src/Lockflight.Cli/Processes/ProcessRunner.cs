@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using Lockflight.Cli.Processes.Survivors;
 
 namespace Lockflight.Cli.Processes;
 
@@ -80,6 +81,27 @@ internal static class ProcessRunner
         IReadOnlyDictionary<string, string?> variables,
         CancellationToken cancellationToken)
     {
+        ProcessSweep? sweep = ProcessSweep.Current;
+        sweep?.Starting();
+        try
+        {
+            return await RunCountedAsync(fileName, arguments, workingDirectory, timeLimit, standardInputPath, variables, cancellationToken);
+        }
+        finally
+        {
+            sweep?.Finished(Command(fileName, arguments));
+        }
+    }
+
+    private static async Task<ProcessResult> RunCountedAsync(
+        string fileName,
+        IEnumerable<string> arguments,
+        string workingDirectory,
+        TimeSpan timeLimit,
+        string? standardInputPath,
+        IReadOnlyDictionary<string, string?> variables,
+        CancellationToken cancellationToken)
+    {
         ProcessStartInfo startInfo = StartInfo(fileName, arguments, workingDirectory, redirectInput: standardInputPath is not null);
         // A caller's variables (a test project's run settings among them) cannot put back the CI runner's files and tokens.
         foreach ((string name, string? value) in variables.Where(variable => !RunnerVariables.Contains(variable.Key, StringComparer.OrdinalIgnoreCase)))
@@ -135,6 +157,21 @@ internal static class ProcessRunner
     /// bytes, not characters): standard output is returned as raw bytes. Past <paramref name="timeLimit"/> the process tree is killed.
     /// </summary>
     public static async Task<BinaryProcessResult> RunForBytesAsync(
+        string fileName, IEnumerable<string> arguments, string workingDirectory, byte[] input, TimeSpan timeLimit, CancellationToken cancellationToken)
+    {
+        ProcessSweep? sweep = ProcessSweep.Current;
+        sweep?.Starting();
+        try
+        {
+            return await RunForBytesCountedAsync(fileName, arguments, workingDirectory, input, timeLimit, cancellationToken);
+        }
+        finally
+        {
+            sweep?.Finished(Command(fileName, arguments));
+        }
+    }
+
+    private static async Task<BinaryProcessResult> RunForBytesCountedAsync(
         string fileName, IEnumerable<string> arguments, string workingDirectory, byte[] input, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         ProcessStartInfo startInfo = StartInfo(fileName, arguments, workingDirectory, redirectInput: true);
@@ -233,11 +270,13 @@ internal static class ProcessRunner
 
         standardOutput.Abandon();
         standardError.Abandon();
-        HeldOutputs.Record(startInfo.ArgumentList.Count == 0
-            ? Path.GetFileName(startInfo.FileName)
-            : $"{Path.GetFileName(startInfo.FileName)} {startInfo.ArgumentList[0]}");
+        HeldOutputs.Record(Command(startInfo.FileName, startInfo.ArgumentList));
         return true;
     }
+
+    /// <summary>A process's program and first argument, as reports name it.</summary>
+    private static string Command(string fileName, IEnumerable<string> arguments) =>
+        arguments.FirstOrDefault() is string first ? $"{Path.GetFileName(fileName)} {first}" : Path.GetFileName(fileName);
 
     private static async Task WriteInputAsync(Process process, string standardInputPath, CancellationToken cancellationToken)
     {

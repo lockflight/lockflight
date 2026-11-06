@@ -3,6 +3,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Processes.Survivors;
 using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Workspace;
 
@@ -19,6 +20,9 @@ internal sealed class CiCommand(CliContext context) : ICommand
 {
     public const string PlanFlag = "--plan";
 
+    /// <summary>The longest command line of a process left running the summary shows; the evidence keeps more.</summary>
+    private const int MaxCommandShown = 200;
+
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
         if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options)
@@ -26,6 +30,8 @@ internal sealed class CiCommand(CliContext context) : ICommand
             return ExitCode.Config;
         }
 
+        // Before the judge starts anything, so every process it starts, and every one those leave running, is in the sweep's reach.
+        using ProcessSweep sweep = ProcessSweep.Start(context.ProcessScope());
         DateTimeOffset startedAt = context.Time.GetUtcNow();
         JudgeInputsReading reading = await JudgeInputsReader.ReadAsync(options, context.WorkingDirectory, cancellationToken);
         if (reading.Inputs is not JudgeInputs inputs)
@@ -95,9 +101,10 @@ internal sealed class CiCommand(CliContext context) : ICommand
             Approvals = await ApprovalsJudge.DecideAsync(plan, findings, cancellationToken),
             SpecDiff = await SpecDiffReader.ReadAsync(plan, cancellationToken),
         };
+        string? engineSha256 = await JudgeEngineHash.ReadAsync(plan, ToolPin.RunningVersion, RuntimeInformation.RuntimeIdentifier, cancellationToken);
+        findings = findings with { Processes = sweep.Finish() };
         JudgeRun run = new(plan, findings, JudgeChecks.Decide(plan, findings), startedAt, context.Time.GetUtcNow());
         string path = Path.Combine(inputs.EvidenceDirectory, inputs.Platform == JudgePlatform.Local ? CiEvidence.LocalFileName : CiEvidence.FileName);
-        string? engineSha256 = await JudgeEngineHash.ReadAsync(plan, ToolPin.RunningVersion, RuntimeInformation.RuntimeIdentifier, cancellationToken);
         JsonFiles.Write(path, CiEvidence.Build(run, ToolPin.RunningVersion, RuntimeInformation.RuntimeIdentifier, engineSha256));
         await WriteSummaryAsync(run, path);
         if (inputs.Platform == JudgePlatform.Local && run.Verdict == CheckVerdict.Pass
@@ -150,7 +157,12 @@ internal sealed class CiCommand(CliContext context) : ICommand
             await context.Output.WriteLineAsync("  note: the cycle labels are out of order; the commits' order decides the cycle order");
         }
 
-        foreach (string command in HeldOutputs.Snapshot())
+        if (run.Findings.Processes is ProcessesReport processes)
+        {
+            await WriteProcessesAsync(processes);
+        }
+
+        foreach (string command in run.Findings.Processes?.OutputHeld ?? HeldOutputs.Snapshot())
         {
             await context.Output.WriteLineAsync(
                 $"  note: '{Printable(command)}' exited, but a process it started kept its output open; Lockflight stopped waiting for it after "
@@ -164,6 +176,30 @@ internal sealed class CiCommand(CliContext context) : ICommand
 
         await context.Output.WriteLineAsync($"Evidence: {path}");
     }
+
+    private async Task WriteProcessesAsync(ProcessesReport processes)
+    {
+        if (processes.Mechanism == SweepMechanism.None)
+        {
+            await context.Output.WriteLineAsync($"  note: {processes.Note}");
+            return;
+        }
+
+        // A process that exited by itself before the sweep (an MSBuild worker node a moment after its build) was only reaped.
+        Survivor[] running = [.. processes.Survivors.Where(survivor => survivor.Process.Outcome != SurvivorOutcome.Exited)];
+        int exited = processes.Survivors.Count - running.Length;
+        await context.Output.WriteLineAsync(
+            $"  processes: {running.Length + processes.More} left running, {exited} exited by themselves, found by {processes.Sweeps} checks "
+            + $"({SweepMechanismNames.ToName(processes.Mechanism)}); the verdict does not depend on them yet");
+        foreach (Survivor survivor in running)
+        {
+            await context.Output.WriteLineAsync(
+                $"    {SurvivorOutcomeNames.ToName(survivor.Process.Outcome)}: '{Printable(Cut(survivor.Process.Command))}' (pid {survivor.Process.Pid}, "
+                + $"{SweepRegionNames.ToName(survivor.Region)}, after '{Printable(survivor.After)}')");
+        }
+    }
+
+    private static string Cut(string text) => text.Length <= MaxCommandShown ? text : $"{text[..MaxCommandShown]}…";
 
     /// <summary>A name from the pull request's code on one line, without control characters that a terminal would act on.</summary>
     private static string Printable(string text) => new([.. text.ReplaceLineEndings(" ").Where(character => !char.IsControl(character))]);

@@ -583,6 +583,92 @@
         ]
       }
     },
+    "processes": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Processes the pull request's code left running, found whenever the engine had no child of its own running, stopped and listed; they do not change a verdict. Absent from older engines' evidence; null when the judge did not look.",
+      "required": [
+        "mechanism",
+        "sweeps",
+        "survivors"
+      ],
+      "properties": {
+        "mechanism": {
+          "type": "string",
+          "description": "subreaper (Linux), job (Windows) or none, with the reason in note; later engines may add others."
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sweeps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "survivors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "region",
+              "after",
+              "pid",
+              "image",
+              "command",
+              "kind",
+              "outcome"
+            ],
+            "properties": {
+              "region": {
+                "type": "string",
+                "description": "Where in the run it was found: setup, head, base, red, rechecks, gates or final."
+              },
+              "after": {
+                "type": "string",
+                "description": "The program and first argument of the engine's child whose exit the process outlived."
+              },
+              "pid": {
+                "type": "integer"
+              },
+              "image": {
+                "type": "string"
+              },
+              "command": {
+                "type": "string",
+                "description": "The command line where the platform gives one (Linux), else the image; text from the pull request's code, capped."
+              },
+              "user": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "description": "process; later engines may add others."
+              },
+              "outcome": {
+                "type": "string",
+                "description": "stopped: killed and gone; exited: it had already exited and was reaped; not-stopped: still running after the engine tried (another user's process). Later engines may add others."
+              }
+            }
+          }
+        },
+        "more": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Survivors past the 50 listed."
+        },
+        "outputHeld": {
+          "$ref": "#/$defs/strings",
+          "description": "Commands whose output a process they started held open after they exited; the engine stopped waiting for it."
+        }
+      }
+    },
     "startedAt": {
       "type": "string",
       "format": "date-time"
