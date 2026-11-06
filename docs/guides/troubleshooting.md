@@ -12,7 +12,7 @@ Fixes for the messages and blocks you are most likely to meet, grouped by what y
 | One command or edit is blocked | [a protected file](#the-agent-needs-to-change-a-protected-file) · [`git reset --hard` and other whole-tree rewrites](#git-reset---hard-is-blocked-this-command-may-rewrite-) · [a human decision](#records-a-human-decision-and-does-not-run-inside-a-claude-code-session) |
 | Install and versions | [fresh clone has no plugin](#a-fresh-clone-does-not-offer-the-lockflight-plugin) · [pinned version not found](#dotnet-lockflight-fails-the-pinned-version-is-not-found) · [development pin or plugin engine](#doctor-reports-a-development-pin-or-the-plugin-needs-a-newer-engine) · [`update` fails](#lockflight-update-fails-to-install-the-package) · [command not found](#command-not-found-lockflight) · [package not found](#the-engine-package-is-not-found) · [Windows](#windows) · [uninstall](#uninstall) |
 | A gate result | [`doctor --self-test` reports MISSED or BROKEN](#doctor---self-test-reports-missed-or-broken) · [`NOT-EARNED`](#a-gate-says-not-earned) · [review: changes not committed](#review-says-the-working-tree-has-changes-that-are-not-committed) · [format fails](#the-format-gate-fails) · [`test: ERROR` with coverage](#test-error-with-rejected-the-coverage-options-exit-5) |
-| CI | [the `gates` check waits: "Expected — Waiting for status to be reported"](#the-gates-check-waits-expected--waiting-for-status-to-be-reported) · [`gates` passes but a local `lockflight ci` fails](#cis-gates-passes-but-a-local-lockflight-ci-fails) |
+| CI | [the `gates` check waits: "Expected — Waiting for status to be reported"](#the-gates-check-waits-expected--waiting-for-status-to-be-reported) · [`gates` passes but a local `lockflight ci` fails](#cis-gates-passes-but-a-local-lockflight-ci-fails) · [the first engine lock fails: "FAIL unattested"](#the-first-engine-lock-fails-engine-lock-fail-unattested) |
 | Red/green | [other tests fail](#redgreen-green-says-other-tests-fail-for-tests-the-feature-never-touched) · [approval is stale](#redgreen-redgreen-refuse-approval-is-stale) · [a test file changed after red](#redgreen-green-or-review-says-a-test-file-changed-after-red-cycle-n-was-accepted-without-a-recorded-amend) · [amended tests do not build at red](#a-red-after-an-amend-says-the-amended-tests-do-not-build-against-the-code-as-it-was-at-red) · [a project could not be evaluated](#redgreen-or-trace-says-a-project-could-not-be-evaluated) · [passes under red but fails under `dotnet test`](#a-test-passes-under-reds-run-but-fails-under-dotnet-test) |
 
 ## Every tool call is blocked: "engine not installed in this project"
@@ -191,6 +191,18 @@ workflow; `lockflight doctor` warns about it (**workflow: CI judge**). Once the 
 `lockflight update --project --judge-workflow` in a branch: see [moving from 0.2](ci-hardening.md#moving-from-lockflight-02s-gates-workflow). With the CI judge's workflow,
 `gates` can still pass while `lockflight/judge` fails: the comment marks the judge "advisory — would block if required", since
 only a check your ruleset requires blocks a merge ([which check is required](ci-hardening.md#which-check-is-required)).
+
+## The first engine lock fails: "engine lock: FAIL unattested"
+
+The pull request that adds `.lockflight/engine.lock` to a branch pinned the Lockflight 0.2 way is checked by the GitHub
+action against the GitHub Release its version names: it downloads the release's `engine-hashes.json` and verifies the
+release workflow's attestation with `gh`, which needs a token. Without one the judge job fails with
+`engine lock: FAIL unattested: the first engine lock cannot be checked against its GitHub Release without a token`, rather
+than accepting a lock nobody checked. Leave the judge step's `github-token` input out (its default is the workflow's token,
+and `contents: read` is enough), or pass `${{ github.token }}` to it. The other failures name the check that failed, as
+[`engine verify-lock`](commands.md) does: `no-release` (no `engine-hashes.json` for that version), `hash-mismatch`,
+`script-hash-mismatch`, `vendored-script-mismatch` or `vendored-script-missing` (`.lockflight/ci/install.sh` is not the script
+the lock pins, or is missing), `unreadable-lock`. See [what the generated workflow does](ci-hardening.md#what-the-generated-workflow-does).
 
 ## "lockflight: internal error" or "the engine failed (exit N)"
 

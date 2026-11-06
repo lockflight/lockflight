@@ -60,8 +60,10 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
     the action downloads the GitHub Release's `engine-hashes.json` for the lock's version, verifies its attestation with `gh`,
     and compares every hash, the install script's included, and the vendored `.lockflight/ci/install.sh` with it. It reads the
     lock as strictly as the engine does: an unknown or repeated key, or any backslash (which `install.sh`'s reader would not
-    decode as JSON does), is refused. Without a
-    token it only warns. On Azure, Bitbucket and GitLab the first lock is **not** release-checked: the job prints a warning, and
+    decode as JSON does), is refused. A failure is an error annotation that names the check as `engine verify-lock` does
+    (`engine lock: FAIL hash-mismatch: …`). Without a token nothing can be checked, so the step fails with
+    `engine lock: FAIL unattested`: leave the judge step's `github-token` input at its default, the workflow's token
+    (`contents: read` is enough). On Azure, Bitbucket and GitLab the first lock is **not** release-checked: the job prints a warning, and
     the person accepting the pull request runs `lockflight engine verify-lock .lockflight/engine.lock` first.
 - **Trigger.** On every pull request and push to `main` (`init --ci pr`), or only when started by hand (`--ci manual`). An
   engine pin that is a development build is on no package feed, so `init` writes the manual trigger for it unless you pass
@@ -181,10 +183,12 @@ instead of the fork point, so the two can differ when the branch's history moved
 
 - **`judge`** (no secret, `contents: read`): installs the engine the target branch pins and the pinned gitleaks, runs
   [`lockflight ci`](commands.md#ci) on the pull request's head commit against the target branch's tip, and uploads
-  `lockflight-evidence` (and the gates' `result.json` as `lockflight-result`, under its old name for one release). Every
+  `lockflight-evidence` (and the gates' `result.json` as `lockflight-result`, under its old name for one release, copied
+  from the engine's evidence outside the checkout, so a pull request that commits `artifacts/lockflight/` cannot replace it). Every
   platform value reaches its scripts through `env:`, never interpolated into a script, so a branch name is a string.
-- **`review`** (the only job with an API key, for pull requests from the same repository): runs `lockflight ci review` and
-  uploads `lockflight-review`. The reviewer's reproductions run the pull request's code in this job, so the key can be
+- **`review`** (the only job with an API key, for pull requests from the same repository): installs Claude Code with
+  `npm ci` from the action's own lockfile (`action/claude-code/package-lock.json`, every package pinned by version and
+  integrity hash, so the version moves with the action's pin), runs `lockflight ci review` and uploads `lockflight-review`. The reviewer's reproductions run the pull request's code in this job, so the key can be
   reached by that code: use a spend-limited key scoped to CI.
 - **`report`** (checks out the target branch only, `pull-requests: write`): downloads both artifacts as data, runs
   `lockflight ci report` for one status context (`gates` or `lockflight/judge`), writes the job summary, and in one of the

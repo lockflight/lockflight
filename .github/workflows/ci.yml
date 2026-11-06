@@ -490,6 +490,71 @@ jobs:
             "$RUNNER_TEMP/lockflight-evidence/evidence.json")
           echo "red check of the failing pull request: $red"
           [ "$PASS_VERDICT" = PASS ] && [ "$FAIL_VERDICT" = FAIL ] && [ "$red" = FAIL ]
+      # As actions/checkout leaves it: the pull request's tree, with its artifacts/lockflight/ (a file and a symlink), in the
+      # workspace.
+      - name: The workspace holds a pull request that commits a result of its own
+        env:
+          PLANTED: ${{ steps.fixture.outputs.planted }}
+        run: |
+          rm -rf "$RUNNER_TEMP/lockflight-evidence"
+          git -c advice.detachedHead=false checkout -q "$PLANTED"
+          cat artifacts/lockflight/result.json
+      - name: The action judges the pull request that commits a result
+        id: planted
+        continue-on-error: true
+        uses: ./lockflight/action
+        with:
+          mode: judge
+          head: ${{ steps.fixture.outputs.planted }}
+          base: ${{ steps.fixture.outputs.base }}
+          branch: 003-planted
+          review-expected: "false"
+          artifact-suffix: -${{ matrix.rid }}-planted
+      - name: Download the uploaded result
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lockflight-result-${{ matrix.rid }}-planted
+          path: ${{ runner.temp }}/planted-result
+      - name: The uploaded result is the engine's, not the pull request's
+        env:
+          PLANTED_VERDICT: ${{ steps.planted.outputs.verdict }}
+        run: |
+          uploaded="$RUNNER_TEMP/planted-result"
+          engine_result="$RUNNER_TEMP/lockflight-evidence/gates-result.json"
+          if grep -rq planted "$uploaded" 2>/dev/null; then echo "::error::the pull request's own result was uploaded"; exit 1; fi
+          if [ -f "$engine_result" ]; then
+            # Exactly the engine's file, and nothing else.
+            [ "$(ls -A "$uploaded")" = result.json ] || { echo "::error::the artifact is not the engine's result.json alone"; ls -la "$uploaded"; exit 1; }
+            cmp "$uploaded/result.json" "$engine_result"
+          else
+            # No gates ran, so there is no result to upload, and none was.
+            [ ! -e "$uploaded" ] || [ -z "$(ls -A "$uploaded")" ] || { echo "::error::a result was uploaded that the engine never wrote"; exit 1; }
+          fi
+          echo "verdict of the pull request that commits a result: $PLANTED_VERDICT"
+          git checkout -q main
+          rm -rf "$RUNNER_TEMP/lockflight-evidence"
+      # The pull request that adds the first engine lock, judged without a token: refused, never accepted unchecked.
+      - name: The action refuses a first engine lock it has no token to check
+        id: first-lock
+        continue-on-error: true
+        uses: ./lockflight/action
+        with:
+          mode: judge
+          head: ${{ steps.fixture.outputs.base }}
+          base: ${{ steps.fixture.outputs.prelock }}
+          branch: main
+          review-expected: "false"
+          engine: ${{ runner.temp }}/lockflight/lockflight${{ runner.os == 'Windows' && '.exe' || '' }}
+          github-token: ""
+          artifact-suffix: -${{ matrix.rid }}-first-lock
+      - name: The tokenless first lock failed before the judge ran
+        env:
+          OUTCOME: ${{ steps.first-lock.outcome }}
+          VERDICT: ${{ steps.first-lock.outputs.verdict }}
+        run: |
+          echo "first lock without a token: $OUTCOME, verdict '${VERDICT}'"
+          [ "$OUTCOME" = failure ] && [ -z "$VERDICT" ] && [ ! -e "$RUNNER_TEMP/lockflight-evidence" ]
 
   # The engine's canary suite (engine/tests/Lockflight.Cli.Tests/Canaries, trait Category=Canary): a violation planted in front
   # of every guard rule, relay guard case, human-only command, in-session command check, gate step, the test gate's judgement and

@@ -75,7 +75,7 @@ internal static class Templates
     /// A commit whose <c>action/</c> is this tree's; the release needs it on main. <c>scripts/action-pin.sh</c> fails CI while
     /// <c>action/</c> differs from this commit's, and the release while it is not in the release commit's history.
     /// </summary>
-    public const string ActionCommit = "973d412bba8cd6fb0657f118ef43fb36ef8bbf54";
+    public const string ActionCommit = "92367d897a630cf40ecd9b6519412dc164a9e3d8";
 
     /// <summary>The pin's label: this engine's version (the release sets it with <c>-p:Version</c>), so a release writes <c># vX.Y.Z</c>.</summary>
     public static string ActionVersion => "v" + ToolPin.RunningVersion;
@@ -157,7 +157,7 @@ internal static class Templates
               - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
                 with:
                   node-version: 22
-              - run: npm install -g @anthropic-ai/claude-code@2.1.309
+              # The action installs Claude Code with npm ci from its own lockfile: every package pinned by version and hash.
               - uses: {ActionReference}
                 env:
                   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
