@@ -8,7 +8,8 @@
 # commit is judged unarmed, then armed: the armed run must give the same verdict and check verdicts, every daemon must have
 # started and be listed as stopped in the evidence, none may have forged anything, none may be left running, and no container
 # may be left. On Linux with passwordless sudo, a daemon started as root cannot be stopped: green and gates are ERROR with
-# SURVIVOR_NOT_STOPPED. A first check runs a daemon outside the judge to show it does forge what it finds.
+# SURVIVOR_NOT_STOPPED. `gate run --profile pr` with CI set lists the daemons as stopped too, and with the root one is ERROR
+# with a processes row. A first check runs a daemon outside the judge to show it does forge what it finds.
 # Usage: ENGINE=<lockflight binary> survivors.sh <workdir>
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -109,6 +110,15 @@ else
   echo "info no Docker here: the container case did not run"
 fi
 
+# The pr gates alone in CI (GitLab, Azure, a unit repository) sweep the same way: the daemons are listed as stopped.
+gates_run() { CI=true LOCKFLIGHT_FIXTURE_EVIDENCE="$(native "$W/gates-$1")" "$E" gate run --profile pr --base "$main" > "$W/gates-$1.log" 2>&1; echo $?; }
+gates=$(gates_run armed)
+if grep -q "^Left running (stopped): " "$W/gates-armed.log"; then ok "gate run in CI lists the daemons it stopped (exit $gates)"
+else fail "gate run in CI lists no daemon it stopped (exit $gates)"; sed 's/^/     /' "$W/gates-armed.log"; fi
+if grep -q "^processes: " "$W/gates-armed.log"; then fail "gate run in CI has a processes row with only stopped daemons"; fi
+if ls "$W/markers"/forged-* > /dev/null 2>&1; then fail "a daemon forged a result during gate run"; fi
+if $docker_ok; then docker ps -aq --filter label=lockflight-fixture=1 | xargs -r docker rm -f > /dev/null 2>&1; fi
+
 # A process another user owns (root, through sudo) cannot be stopped: green and gates are ERROR, and the judge stops.
 if ! $windows && sudo -n true 2> /dev/null; then
   LOCKFLIGHT_FIXTURE_ROOT=1 LOCKFLIGHT_FIXTURE_EVIDENCE="$W/root" judge root > "$W/root.code"
@@ -120,6 +130,10 @@ if ! $windows && sudo -n true 2> /dev/null; then
     if [ "$got" = "ERROR SURVIVOR_NOT_STOPPED" ]; then ok "$id is ERROR SURVIVOR_NOT_STOPPED"; else fail "$id is $got, want ERROR SURVIVOR_NOT_STOPPED"; fi
   done
   if grep -q "SURVIVOR_NOT_STOPPED" "$W/root.log"; then ok "the summary names SURVIVOR_NOT_STOPPED"; else fail "the summary does not name SURVIVOR_NOT_STOPPED"; fi
+  gates=$(LOCKFLIGHT_FIXTURE_ROOT=1 gates_run root)
+  sudo -n pkill -f "daemon.py root" 2> /dev/null
+  if [ "$gates" = 3 ] && grep -q "^processes: ERROR" "$W/gates-root.log" && grep -q "SURVIVOR_NOT_STOPPED" "$W/gates-root.log"; then ok "gate run in CI is ERROR with a processes row for the root process"
+  else fail "gate run in CI with a root process exits $gates, want 3 with a processes row"; sed 's/^/     /' "$W/gates-root.log"; fi
   if $docker_ok; then docker ps -aq --filter label=lockflight-fixture=1 | xargs -r docker rm -f > /dev/null 2>&1; fi
 else
   echo "info no passwordless sudo here: the root case did not run"
