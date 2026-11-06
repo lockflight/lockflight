@@ -225,9 +225,10 @@ entry_of() {
   esac
   printf '%s' "$matches"
 }
+# From stdin: GNU sha256sum starts its line with a backslash when the file name holds one (a Windows path).
 sha256_of() {
-  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d ' ' -f 1
-  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d ' ' -f 1
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1" | cut -d ' ' -f 1
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 < "$1" | cut -d ' ' -f 1
   else fail "no sha256sum or shasum to check the engine; install one of them"
   fi
 }

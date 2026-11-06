@@ -13,7 +13,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 E="${ENGINE:?path to the lockflight binary}"
 repo="${1:?repository dir}" feed="${2:?feed dir}"
 PY="$(command -v python3 || command -v python)"
-sha256() { if command -v sha256sum >/dev/null; then sha256sum "$1" | cut -d ' ' -f 1; else shasum -a 256 "$1" | cut -d ' ' -f 1; fi; }
+# From stdin: GNU sha256sum starts its line with a backslash when the file name holds one (a Windows path).
+sha256() { if command -v sha256sum >/dev/null; then sha256sum < "$1" | cut -d ' ' -f 1; else shasum -a 256 < "$1" | cut -d ' ' -f 1; fi; }
 
 case "$(uname -s)/$(uname -m)" in
   Darwin/arm64) rid=osx-arm64 exe="" ;;
