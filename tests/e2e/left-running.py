@@ -4,7 +4,7 @@
   left-running.py summary <log>                  print every run's sweeps and processes left running; exit 1 when a run on
                                                  Linux or Windows did not sweep (the mechanism did not start)
 
-The judge does not change a verdict for a process left running yet, so the suites only report them.
+A process the judge stopped does not change its verdict, so the suites only report them; survivors.sh tests the enforcement.
 """
 
 import json

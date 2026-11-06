@@ -11,4 +11,7 @@ internal enum SurvivorOutcome
 
     /// <summary>It was still running after the engine's attempts to kill it (another user's process, typically started through sudo).</summary>
     NotStopped = 2,
+
+    /// <summary>Found and left running: a local run lists the Docker containers created while it ran but does not remove them.</summary>
+    Observed = 3,
 }

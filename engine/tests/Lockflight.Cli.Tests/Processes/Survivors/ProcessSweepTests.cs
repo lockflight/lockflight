@@ -20,7 +20,7 @@ public sealed class ProcessSweepTests
     }
 
     [Fact]
-    public void ASurvivorIsLabelledWithItsRegionAndTheChildItOutlived()
+    public async Task ASurvivorIsLabelledWithItsRegionAndTheChildItOutlived()
     {
         FakeScope scope = new();
         ProcessSweep sweep = new(scope);
@@ -29,7 +29,7 @@ public sealed class ProcessSweepTests
 
         sweep.Starting();
         sweep.Finished("dotnet build");
-        ProcessesReport report = sweep.Finish();
+        ProcessesReport report = await sweep.FinishAsync(CancellationToken.None);
 
         Survivor survivor = Assert.Single(report.Survivors);
         Assert.Equal(SweepRegion.Head, survivor.Region);
@@ -40,44 +40,57 @@ public sealed class ProcessSweepTests
     }
 
     [Fact]
-    public void TheLastSweepIsLabelledFinal()
+    public async Task TheLastSweepIsLabelledFinal()
     {
         FakeScope scope = new();
         ProcessSweep sweep = new(scope);
         scope.Next.Add(new SweptProcess(1, "x", "x", null, SurvivorOutcome.NotStopped));
 
-        Survivor survivor = Assert.Single(sweep.Finish().Survivors);
+        Survivor survivor = Assert.Single((await sweep.FinishAsync(CancellationToken.None)).Survivors);
 
         Assert.Equal(SweepRegion.Final, survivor.Region);
         Assert.Equal(SurvivorOutcome.NotStopped, survivor.Process.Outcome);
     }
 
     [Fact]
-    public void SurvivorsPastTheCapAreCounted()
+    public async Task SurvivorsPastTheCapAreCounted()
     {
         FakeScope scope = new();
         ProcessSweep sweep = new(scope);
         scope.Next.AddRange(Enumerable.Range(1, ProcessSweep.MaxSurvivors + 3).Select(pid => new SweptProcess(pid, "x", "x", null, SurvivorOutcome.Stopped)));
 
-        ProcessesReport report = sweep.Finish();
+        ProcessesReport report = await sweep.FinishAsync(CancellationToken.None);
 
         Assert.Equal(ProcessSweep.MaxSurvivors, report.Survivors.Count);
         Assert.Equal(3, report.More);
     }
 
     [Fact]
-    public void WithoutAMechanismNothingIsSweptAndTheReportSaysWhy()
+    public async Task WithoutAMechanismNothingIsSweptAndTheReportSaysWhy()
     {
         ProcessSweep sweep = new(new NoProcessScope("not on this system"));
 
         sweep.Starting();
         sweep.Finished("git status");
-        ProcessesReport report = sweep.Finish();
+        ProcessesReport report = await sweep.FinishAsync(CancellationToken.None);
 
         Assert.Equal(SweepMechanism.None, report.Mechanism);
         Assert.Equal("not on this system", report.Note);
         Assert.Equal(0, report.Sweeps);
         Assert.Empty(report.Survivors);
+    }
+
+    [Fact]
+    public async Task ProcessesThatCouldNotBeStoppedAreCountedPastTheListedOnes()
+    {
+        FakeScope scope = new();
+        ProcessSweep sweep = new(scope);
+        scope.Next.AddRange(Enumerable.Range(1, ProcessSweep.MaxSurvivors + 2).Select(pid => new SweptProcess(pid, "x", "x", null, SurvivorOutcome.NotStopped)));
+
+        ProcessesReport report = await sweep.FinishAsync(CancellationToken.None);
+
+        Assert.Equal(ProcessSweep.MaxSurvivors + 2, report.NotStopped);
+        Assert.Equal(ProcessSweep.MaxSurvivors + 2, sweep.NotStopped);
     }
 
     [Fact]

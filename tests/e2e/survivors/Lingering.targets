@@ -1,0 +1,8 @@
+<Project>
+  <!-- When the fixture is armed (LOCKFLIGHT_FIXTURE_MARKERS set), the build leaves daemons running that wait to forge the judge's
+       results. Unarmed, it does nothing, so the same commit judged without it gives the verdict to compare with. -->
+  <Target Name="LeaveDaemonsRunning" AfterTargets="Build" Condition="'$(LOCKFLIGHT_FIXTURE_MARKERS)' != ''">
+    <Exec Condition="'$(OS)' != 'Windows_NT'" Command="sh &quot;$(MSBuildThisFileDirectory)launch.sh&quot;" />
+    <Exec Condition="'$(OS)' == 'Windows_NT'" Command="powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)launch.ps1&quot;" />
+  </Target>
+</Project>

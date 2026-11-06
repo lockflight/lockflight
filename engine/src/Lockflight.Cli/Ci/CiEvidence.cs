@@ -182,9 +182,11 @@ internal static class CiEvidence
             ["image"] = Cap(survivor.Process.Image),
             ["command"] = Cap(survivor.Process.Command),
             ["user"] = survivor.Process.User,
-            ["kind"] = "process",
+            ["kind"] = SurvivorKindNames.ToName(survivor.Process.Kind),
+            ["container"] = survivor.Process.Container,
             ["outcome"] = SurvivorOutcomeNames.ToName(survivor.Process.Outcome),
         })]),
+        ["notStopped"] = processes.NotStopped,
         ["more"] = processes.More,
         ["outputHeld"] = Strings(processes.OutputHeld.Select(Cap)),
     };

@@ -596,7 +596,7 @@
         "object",
         "null"
       ],
-      "description": "Processes the pull request's code left running, found whenever the engine had no child of its own running, stopped and listed; they do not change a verdict. Absent from older engines' evidence; null when the judge did not look.",
+      "description": "Processes the pull request's code left running, found whenever the engine had no child of its own running, and Docker containers created while the judge ran, found at the end of each part of the run; each is stopped and listed. A stopped one does not change a verdict; one that could not be stopped makes green and gates ERROR (SURVIVOR_NOT_STOPPED). Absent from older engines' evidence; null when the judge did not look.",
       "required": [
         "mechanism",
         "sweeps",
@@ -657,11 +657,18 @@
               },
               "kind": {
                 "type": "string",
-                "description": "process; later engines may add others."
+                "description": "process or container (a Docker container; pid is 0 and container holds its id); later engines may add others."
+              },
+              "container": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The container's id, for kind container."
               },
               "outcome": {
                 "type": "string",
-                "description": "stopped: killed and gone; exited: it had already exited and was reaped; not-stopped: still running after the engine tried (another user's process). Later engines may add others."
+                "description": "stopped: killed (or a container removed) and gone; exited: it had already exited and was reaped (or a container that had exited was removed); not-stopped: still running after the engine tried (another user's process); observed: a container listed and left running (a local run, or a self-hosted runner). Later engines may add others."
               }
             }
           }
@@ -670,6 +677,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Survivors past the 50 listed."
+        },
+        "notStopped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many processes and containers found could not be stopped, listed or not; above 0, green and gates are ERROR."
         },
         "outputHeld": {
           "$ref": "#/$defs/strings",

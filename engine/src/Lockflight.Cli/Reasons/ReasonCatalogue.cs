@@ -89,6 +89,8 @@ internal static class ReasonCatalogue
         ReasonCode.ExistingTestOldVersionFails => "The change altered behaviour the existing test pinned, so it is not structural-only: undo the behaviour change, or take the `[structural]` markers off the requirements that change behaviour and commit a red for them.",
         ReasonCode.ExistingTestOldVersionUncheckable => "Keep the API the old test uses (as a thin shim for this pull request) so its old version builds on the new code, or change the test in a pull request of its own; remove the shim later.",
         ReasonCode.StructuralChangeNewTest => "A structural-only change adds only tests that name its structural requirements: move the new test to a pull request of its own with a red commit, or name a structural requirement in it if it pins behaviour the change keeps.",
+        ReasonCode.SurvivorNotStopped => "Do not re-run: a process the pull request's build or tests started could not be stopped (it runs as another user, typically through `sudo`), so this run's verdict cannot be trusted. Remove the code that starts it; the evidence's `processes` names its command line and the step it outlived.",
+        ReasonCode.SurvivorOutputHeld => "Nothing blocks: a process the step started kept its output open after it exited, and Lockflight stopped waiting for it. Stop that process in the build or in the test's teardown (dispose it, or kill it); the evidence's `processes` lists it.",
         _ => string.Empty,
     };
 
