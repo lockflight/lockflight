@@ -12,6 +12,8 @@ internal sealed class DependencyStep : IGateStep
 
     private const int MaxListed = 3;
 
+    private static readonly string[] ListingOptions = ["--vulnerable", "--include-transitive", "--format", "json"];
+
     public string Name => StepName;
 
     public StepScope Scope => StepScope.Unit;
@@ -21,22 +23,33 @@ internal sealed class DependencyStep : IGateStep
     public async Task<GateStepResult> RunAsync(GateRunContext run, GateRunFacts facts, CancellationToken cancellationToken) =>
         new((await ScanAsync(run, cancellationToken)).Step, facts);
 
-    /// <summary>The verdict with every vulnerable package found, which <see cref="Baselines.BaselineRun"/> records as a baseline.</summary>
+    /// <summary>
+    /// The verdict with every vulnerable package found, which <see cref="Baselines.BaselineRun"/> records as a baseline. The listing
+    /// uses the .NET 10 command (<c>dotnet package list</c>); an older SDK chosen by <c>global.json</c> does not have it, so when that
+    /// gives no report the step asks again with the command SDK 7.0.200 and later understand (<c>dotnet list package</c>).
+    /// </summary>
     public static async Task<DependencyScan> ScanAsync(GateRunContext run, CancellationToken cancellationToken)
     {
-        ProcessResult listing = await run.Processes(
-            "dotnet", ["package", "list", .. (run.BuildFile is null ? [] : new[] { "--project", run.BuildFile }), "--vulnerable", "--include-transitive", "--format", "json"], run.Target, run.TimeLeft(), cancellationToken);
+        string command = "dotnet package list";
+        ProcessResult listing = await run.Processes("dotnet", NounFirstArguments(run), run.Target, run.TimeLeft(), cancellationToken);
+        if (!listing.TimedOut && !HasReport(listing))
+        {
+            ProcessResult olderSdkListing = await run.Processes("dotnet", VerbFirstArguments(run), run.Target, run.TimeLeft(), cancellationToken);
+            command = "dotnet list package";
+            listing = olderSdkListing with { DurationMs = listing.DurationMs + olderSdkListing.DurationMs };
+        }
+
         if (StepHealth.Unhealthy(StepName, listing, run) is GateStep unhealthy)
         {
             return new DependencyScan(unhealthy, []);
         }
 
-        int jsonStart = listing.Output.IndexOf('{', StringComparison.Ordinal);
-        if (listing.ExitCode != 0 || jsonStart < 0)
+        if (!HasReport(listing))
         {
-            return new DependencyScan(new GateStep(StepName, listing.ExitCode, Verdict.Error, ReasonCode.ToolError, listing.DurationMs, $"dotnet package list exited {listing.ExitCode} without a report"), []);
+            return new DependencyScan(new GateStep(StepName, listing.ExitCode, Verdict.Error, ReasonCode.ToolError, listing.DurationMs, $"{command} exited {listing.ExitCode} without a report"), []);
         }
 
+        int jsonStart = listing.Output.IndexOf('{', StringComparison.Ordinal);
         IReadOnlyList<VulnerablePackage> found = VulnerablePackages.Parse(listing.Output[jsonStart..]);
         IReadOnlySet<string> accepted = new AcceptedAdvisories(run.ProjectRoot, run.UnitPath).Load();
         List<VulnerablePackage> blocking = [.. found.Where(package => package.IsBlocking && !accepted.Contains(package.Fingerprint))];
@@ -47,4 +60,11 @@ internal sealed class DependencyStep : IGateStep
             : new GateStep(StepName, listing.ExitCode, Verdict.Pass, ReasonCode.None, listing.DurationMs, reportedOnly > 0 ? $"{reportedOnly} Moderate/Low advisories reported" : string.Empty);
         return new DependencyScan(step, found);
     }
+
+    private static string[] NounFirstArguments(GateRunContext run) =>
+        ["package", "list", .. run.BuildFileArguments.SelectMany(file => new[] { "--project", file }), .. ListingOptions];
+
+    private static string[] VerbFirstArguments(GateRunContext run) => ["list", .. run.BuildFileArguments, "package", .. ListingOptions];
+
+    private static bool HasReport(ProcessResult listing) => listing.ExitCode == 0 && listing.Output.Contains('{', StringComparison.Ordinal);
 }
