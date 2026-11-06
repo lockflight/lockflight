@@ -182,6 +182,71 @@ public sealed class CiReportTests : IDisposable
     }
 
     [Fact]
+    public async Task EvidenceOverTheSizeLimitIsAnErrorThatSaysWhy()
+    {
+        string judge = Path.Combine(directory.FullName, "judge");
+        string output = Path.Combine(directory.FullName, "out");
+        Directory.CreateDirectory(judge);
+        using (FileStream stream = File.Create(Path.Combine(judge, "evidence.json")))
+        {
+            stream.SetLength(CiArtifactReader.MaxBytes + 1L);
+        }
+
+        (ExitCode exitCode, string printed, _) = await TestConsole.RunAsync(["ci", "report", "--evidence", judge, "--head", Head, "--out", output, "--context", "gates"], string.Empty, directory.FullName);
+
+        Assert.Equal(ExitCode.Error, exitCode);
+        Assert.Contains("ERROR gates", printed, StringComparison.Ordinal);
+        JsonObject verdict = JsonNode.Parse(File.ReadAllText(Path.Combine(output, "verdict.json")))!.AsObject();
+        Assert.Contains($"the judge's evidence (evidence.json) was not read: it is {CiArtifactReader.MaxBytes + 1L} bytes, more than the {CiArtifactReader.MaxBytes} the report reads",
+            verdict["checks"]![0]!["why"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EvidenceThatIsNotJsonIsAnErrorNotAMissingJudge()
+    {
+        string judge = Path.Combine(directory.FullName, "judge");
+        Directory.CreateDirectory(judge);
+        File.WriteAllText(Path.Combine(judge, "evidence.json"), "{ \"schema\": ");
+
+        (ExitCode exitCode, string printed, _) = await TestConsole.RunAsync(["ci", "report", "--evidence", judge, "--head", Head, "--out", Path.Combine(directory.FullName, "out")], string.Empty, directory.FullName);
+
+        Assert.Equal(ExitCode.Error, exitCode);
+        Assert.Contains("the judge's evidence (evidence.json) was not read: it is not valid JSON", printed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TooDeepEvidenceIsAnErrorThatSaysWhy()
+    {
+        JsonObject verdict = CiReportCommand.JoinArtifacts(new CiArtifactReading(null, "it nests objects and arrays deeper than 32 levels"), Head, CiArtifactReading.None);
+
+        Assert.Equal("ERROR", verdict["verdict"]!.GetValue<string>());
+        Assert.Equal("ERROR", verdict["contexts"]!["lockflight/judge"]!.GetValue<string>());
+        Assert.Contains("deeper than 32 levels", CommentRenderer.Next(verdict), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReviewResultThatNamesAPropertyTwiceMakesTheReviewAnErrorThatSaysWhy()
+    {
+        string judge = Path.Combine(directory.FullName, "judge");
+        string review = Path.Combine(directory.FullName, "review");
+        string output = Path.Combine(directory.FullName, "out");
+        JsonFiles.Write(Path.Combine(judge, "evidence.json"), Evidence(reviewLevel: "required"));
+        Directory.CreateDirectory(review);
+        File.WriteAllText(Path.Combine(review, CiReportCommand.ReviewFileName),
+            $$"""{ "schema": "lockflight.ci-review/v1", "head": "{{Head}}", "verdict": "FAIL", "verdict": "PASS", "why": "x" }""");
+
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["ci", "report", "--evidence", judge, "--review", review, "--head", Head, "--out", output, "--context", "lockflight/judge"], string.Empty, directory.FullName);
+
+        Assert.Equal(ExitCode.Error, exitCode);
+        JsonObject verdict = JsonNode.Parse(File.ReadAllText(Path.Combine(output, "verdict.json")))!.AsObject();
+        JsonNode check = verdict["checks"]!.AsArray().Single(node => node!["id"]!.GetValue<string>() == "review")!;
+        Assert.Equal("ERROR", check["verdict"]!.GetValue<string>());
+        Assert.Equal("the review's result (review-result.json) was not read: the property 'verdict' appears twice in one object", check["why"]!.GetValue<string>());
+        Assert.Equal("unreadable", verdict["review"]!["state"]!.GetValue<string>());
+        Assert.Null(verdict["blocked"]);
+    }
+
+    [Fact]
     public void ANewHostTamperingFindingInTheCommentCarriesItsBaselineEntry()
     {
         JsonObject evidence = Evidence();

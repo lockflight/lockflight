@@ -38,7 +38,7 @@ public sealed class VerifyLockTests : IDisposable
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
 
         Assert.Equal(ExitCode.Fail, exitCode);
-        Assert.Contains("its hashes for win-x64 are not the ones release v0.0.0-ci.7 published", output, StringComparison.Ordinal);
+        Assert.Contains("engine lock: FAIL hash-mismatch: pins 0.0.0-ci.7, but its hashes for win-x64 are not the ones release v0.0.0-ci.7 published", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class VerifyLockTests : IDisposable
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
 
         Assert.Equal(ExitCode.Fail, exitCode);
-        Assert.Contains("its install script hash is not the one release v0.0.0-ci.7 published", output, StringComparison.Ordinal);
+        Assert.Contains("engine lock: FAIL script-hash-mismatch: pins 0.0.0-ci.7, but its install script hash is not the one release v0.0.0-ci.7 published", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public sealed class VerifyLockTests : IDisposable
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
 
         Assert.Equal(ExitCode.Fail, exitCode);
-        Assert.Contains("published no install script hash", output, StringComparison.Ordinal);
+        Assert.Contains("engine lock: FAIL script-hash-unpublished: pins 0.0.0-ci.7, whose release published no install script hash", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class VerifyLockTests : IDisposable
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
 
         Assert.Equal(ExitCode.Fail, exitCode);
-        Assert.Contains("the key 'binaries.linux-x64' appears twice", output, StringComparison.Ordinal);
+        Assert.Contains("engine lock: FAIL unreadable-lock: the lock cannot be read: the key 'binaries.linux-x64' appears twice", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class VerifyLockTests : IDisposable
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed, "--script", script], "", work.FullName);
 
         Assert.Equal(ExitCode.Fail, exitCode);
-        Assert.Contains(".lockflight/ci/install.sh is not the script the lock pins", output, StringComparison.Ordinal);
+        Assert.Contains("engine lock: FAIL vendored-script-mismatch: .lockflight/ci/install.sh is not the script the lock pins", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class VerifyLockTests : IDisposable
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed, "--script", Path.Combine(work.FullName, "none.sh")], "", work.FullName);
 
         Assert.Equal(ExitCode.Fail, exitCode);
-        Assert.Contains("there is no install script at", output, StringComparison.Ordinal);
+        Assert.Contains("engine lock: FAIL vendored-script-missing: there is no install script at", output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -185,7 +185,54 @@ public sealed class VerifyLockTests : IDisposable
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
 
         Assert.Equal(ExitCode.Fail, exitCode);
-        Assert.Contains("no published hashes for 0.0.0-ci.7", output, StringComparison.Ordinal);
+        Assert.Contains("engine lock: FAIL no-release: no published hashes for 0.0.0-ci.7", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALockWithoutAHashForAReleasedPlatformIsNamedUnreadable()
+    {
+        WriteRelease(rid => Hash(rid));
+        string lockFile = WriteLock(rid => Hash(rid));
+        File.WriteAllText(lockFile, File.ReadAllText(lockFile).Replace("\"win-x64\"", "\"zzz-x64\"", StringComparison.Ordinal));
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains("engine lock: FAIL unreadable-lock: the lock cannot be read: a release lock needs a hash for every released platform; missing: win-x64", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALockThatCannotBeReadFromDiskIsNamedUnreadable()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Uses Unix file permissions.");
+            return;
+        }
+
+        string lockFile = WriteLock(rid => Hash(rid));
+        File.SetUnixFileMode(lockFile, UnixFileMode.None);
+        Assert.SkipWhen(CanRead(lockFile), "this user reads files whatever their mode (root)");
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains($"engine lock: FAIL unreadable-lock: the lock at {lockFile} cannot be read from disk", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AReleasePackageThatIsNotAZipIsNamedAsNoReleaseNotAnInternalError()
+    {
+        string package = Path.Combine(Feed, "lockflight.cli", Version, $"lockflight.cli.{Version}.nupkg");
+        Directory.CreateDirectory(Path.GetDirectoryName(package)!);
+        File.WriteAllText(package, "not a zip");
+        string lockFile = WriteLock(rid => Hash(rid));
+
+        (ExitCode exitCode, string output, string error) = await TestConsole.RunAsync(["engine", "verify-lock", lockFile, "--source", Feed], "", work.FullName);
+
+        Assert.Equal(ExitCode.Fail, exitCode);
+        Assert.Contains($"engine lock: FAIL no-release: no published hashes for {Version}: the Lockflight.Cli {Version} package is not a valid package", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("internal error", error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -237,6 +284,19 @@ public sealed class VerifyLockTests : IDisposable
     public void Dispose() => TempDirectories.DeleteRecursively(work);
 
     private string Feed => Path.Combine(work.FullName, "feed");
+
+    private static bool CanRead(string path)
+    {
+        try
+        {
+            File.ReadAllBytes(path);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     private static string Hash(string rid) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(rid)));
 
