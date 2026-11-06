@@ -220,6 +220,8 @@ Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-
 - **.NET:** SDK-style projects on .NET 8, 9 and 10
 - **Tests:** xUnit (v2 and v3), NUnit, MSTest
 - **Your machine:** macOS, Linux and Windows; the engine is a Native AOT binary for each
+- **Desktop:** WPF, Windows Forms and WinUI clients, also beside an ASP.NET Core server in one solution: see
+  [desktop applications](docs/guides/desktop.md)
 - **Agents:** Claude Code with the plugin; any agent, or a person, with CI only
 
 **The CI judge**, by CI service and runner:

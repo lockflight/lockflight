@@ -63,7 +63,7 @@ The `red` check: each commit with a `Lockflight-Red: <cycle>` trailer is re-run,
 
 When the failure comes from loading XAML (a `XamlParseException`: a missing resource, type or name in the view), the test fails
 in the view, not in the behaviour it is about: the red output says so. Test the ViewModel instead, or stub a member the view
-calls and assert on what it returns.
+calls and assert on what it returns ([desktop applications](desktop.md#a-red-in-code-behind)).
 
 ### RED_IN_TEST
 

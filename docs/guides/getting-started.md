@@ -452,3 +452,4 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
 - [CI hardening](ci-hardening.md): CODEOWNERS and required checks
 - [CI on other platforms](ci-other-platforms.md): Azure Pipelines, Bitbucket Pipelines and GitLab CI/CD
 - [Code quality](code-quality.md): the recommended analyzers, code metrics rules and architecture tests `init` can add
+- [Desktop applications](desktop.md): WPF and Windows Forms clients, Windows runners and STA tests

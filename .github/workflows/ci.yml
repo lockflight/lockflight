@@ -1,8 +1,8 @@
 # Lockflight CI: engine tests, Native AOT build, the published engine's self-test and the LLM-free hook compatibility suite, and
 # beside them the end-to-end suites with their own published engine, on Linux and Windows (Git Bash) for pull requests and also
 # on macOS for pushes to main and manual runs; the engine's canary suite on each (on macOS inside the engine job), the Windows
-# install and update from a checkout, the CI judge's action on Linux and Windows runners, plus plugin and marketplace validation
-# and the public-tree check.
+# install and update from a checkout, the CI judge's action on Linux and Windows runners, the desktop sample (WPF) on Windows and
+# Linux, plus plugin and marketplace validation and the public-tree check.
 name: ci
 
 on:
@@ -279,6 +279,47 @@ jobs:
           ENGINE="$engine" sh tests/workspace/gates.sh "$RUNNER_TEMP/workspace"
           ENGINE="$engine" bash tests/workspace/lifecycle.sh "$RUNNER_TEMP/workspace-lifecycle"
           ENGINE="$engine" sh tests/workspace/shell-pointer.sh "$RUNNER_TEMP/shell-pointer"
+
+  # A WPF client and an ASP.NET Core server (samples/dotnet-desktop, .NET 8): the CI judge on Windows, where WPF's tests run;
+  # the local gates on Linux, which leave the client's tests out with a note. In a job of its own: the Windows part judges five
+  # pull requests (about 3 minutes each).
+  desktop:
+    name: desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, rid: win-x64 }
+          - { os: ubuntu-latest, rid: linux-x64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+          # The sample pins SDK 8 in its global.json.
+          dotnet-version: 8.0.x
+      - name: Install gitleaks (pinned, checksum-verified)
+        uses: ./.github/actions/install-gitleaks
+      - name: Turn off Defender real-time scanning (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try { Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop; "real-time scanning off" } catch { "left as it is: $($_.Exception.Message)" }
+      - name: Native AOT publish
+        working-directory: engine
+        run: dotnet publish src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o ../out -nologo
+      - name: Git identity for the suite's commits
+        run: git config --global user.email ci@example.com && git config --global user.name ci
+      - name: Desktop end to end (WPF + ASP.NET Core)
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/e2e/desktop.sh "$RUNNER_TEMP/desktop"
 
   # The Windows user install: scripts/dev-install.ps1 from a checkout in a folder with spaces, then the installed engine runs
   # init, link and the hook suite, and `lockflight update` replaces the engine it runs from, from source and from a package.
