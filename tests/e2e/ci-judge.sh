@@ -48,9 +48,16 @@ judge() { rm -rf "$W/evidence"; "$E" ci --platform github --head "$1" --base "$m
 # MSBuild server (worker nodes started without reuse exit on their own).
 build_servers() {
   if [ "$(uname -o 2>/dev/null)" = Msys ] || [ "$(uname -o 2>/dev/null)" = Cygwin ]; then
-    powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.CommandLine -match 'VBCSCompiler|rzc\.dll|nodemode:8|nodeReuse:true' } | ForEach-Object { \$_.ProcessId }" | tr -d '\r' | sort
+    powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -ne 'powershell.exe' -and \$_.CommandLine -match 'VBCSCompiler|rzc\.dll|nodemode:8|nodeReuse:true' } | ForEach-Object { \$_.ProcessId }" | tr -d '\r' | sort
   else
     pgrep -f 'VBCSCompiler|rzc\.dll|nodemode:8|nodeReuse:true' | sort
+  fi
+}
+describe_processes() { # describe_processes "<pid> <pid>…"
+  if [ "$(uname -o 2>/dev/null)" = Msys ] || [ "$(uname -o 2>/dev/null)" = Cygwin ]; then
+    powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { @(${1// /,}) -contains \$_.ProcessId } | ForEach-Object { '{0} {1}' -f \$_.ProcessId, \$_.CommandLine }" | tr -d '\r' | sed 's/^/     /'
+  else
+    ps -o pid,args -p "${1// /,}" 2>/dev/null | sed 's/^/     /'
   fi
 }
 dotnet build-server shutdown > /dev/null 2>&1
@@ -60,7 +67,7 @@ left_running() { comm -13 <(printf '%s\n' "$servers_before") <(build_servers) | 
 left=$(left_running)
 for _ in 1 2 3 4 5; do [ -z "$left" ] && break; sleep 2; left=$(left_running); done
 if [ -z "$left" ]; then echo "ok   no build server the judge started is left running"
-else echo "FAIL build servers left running after the judge: $left"; ps -o pid,args -p "${left// /,}" 2>/dev/null | sed 's/^/     /'; failures=$((failures + 1)); fi
+else echo "FAIL build servers left running after the judge: $left"; describe_processes "$left"; failures=$((failures + 1)); fi
 for id in red tests.sinceRed green trace tests.hostTampering; do check "$W/evidence/evidence.json" "$id" PASS; done
 expect_exit 0 "the lockflight/judge context passes" -- "$E" ci report --evidence "$W/evidence" --head "$head" --out "$W/verdict" --context lockflight/judge
 expect_exit 0 "the gates context passes" -- "$E" ci report --evidence "$W/evidence" --head "$head" --out "$W/verdict-gates" --context gates
