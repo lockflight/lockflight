@@ -90,7 +90,15 @@ function Read-Entry([string]$Package, [string]$Pattern, [string]$OutFile) {
   } finally { $archive.Dispose() }
 }
 
-function Get-Sha256([string]$Path) { (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant() }
+# .NET rather than Get-FileHash: Windows PowerShell started from a PowerShell 7 terminal inherits its module path and may not
+# load the module that defines Get-FileHash.
+function Get-Sha256([string]$Path) {
+  $stream = [IO.File]::OpenRead((Resolve-Path -LiteralPath $Path).ProviderPath)
+  try {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($sha.ComputeHash($stream)) -replace "-", "").ToLowerInvariant() } finally { $sha.Dispose() }
+  } finally { $stream.Dispose() }
+}
 
 # The user engine in bin: a staged copy of the checked engine, checked again, then renamed into place. Windows refuses to
 # overwrite a running program but allows renaming it, so an engine that runs is renamed aside and removed by a later install.
