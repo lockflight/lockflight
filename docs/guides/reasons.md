@@ -584,7 +584,8 @@ The steps of `lockflight gate run`, in the Stop hook and in CI's `gates` check.
 
 When a run stops because a person must act, it leaves a `lockflight.blocked/v1` report: in CI inside `verdict.json` (and in the
 PR comment), locally in `.lockflight/local/blocked.json`. The report names who must do what, never a command; the Next line below
-is derived from its reason code (see [`blocked validate`](commands.md)).
+is derived from its reason code (see [`blocked validate`](commands.md)). The PR comment shows it, and so does the console of a
+`redgreen` step refused for a missing or stale approval.
 
 ### approval-missing
 

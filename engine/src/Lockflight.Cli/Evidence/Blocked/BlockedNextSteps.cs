@@ -32,4 +32,8 @@ internal static class BlockedNextSteps
     public static string? Anchor(BlockedReasonCode code) => code == BlockedReasonCode.Unknown ? null : BlockedNames.ToName(code);
 
     public static string? Link(BlockedReasonCode code) => Anchor(code) is string anchor ? $"{ReasonCatalogue.GuideUrl}#{anchor}" : null;
+
+    /// <summary>The Next line for a console, as <see cref="ReasonCatalogue.ConsoleLine"/> writes a check's; null without an entry.</summary>
+    public static string? ConsoleLine(BlockedReasonCode code) =>
+        Link(code) is string link ? $"Next ({BlockedNames.ToName(code)}): {Next(code)} See {link}" : null;
 }

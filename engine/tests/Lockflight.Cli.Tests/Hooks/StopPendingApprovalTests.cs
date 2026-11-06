@@ -6,6 +6,7 @@ using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.Approvals;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Tests.Hooks;
 
@@ -28,6 +29,10 @@ public sealed class StopPendingApprovalTests : IDisposable
 
         Assert.Equal(ExitCode.Fail, exitCode);
         Assert.Contains("tasks is not approved", error, StringComparison.Ordinal);
+        Assert.EndsWith(
+            $"Next (approval-missing): {BlockedNextSteps.Next(BlockedReasonCode.ApprovalMissing)} See {ReasonCatalogue.GuideUrl}#approval-missing",
+            error.TrimEnd(),
+            StringComparison.Ordinal);
         BlockedReading reading = BlockedReportReader.Read(File.ReadAllText(BlockedReportFile.PathIn(root.FullName)));
         Assert.True(reading.Valid, string.Join("; ", reading.Problems));
         BlockedReport report = reading.Report!;

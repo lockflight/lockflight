@@ -87,14 +87,21 @@ internal sealed class RedGreenSession(CliContext context, Manifest manifest, Fea
     /// <summary>
     /// Refuses the step because <paramref name="notValid"/> phases are not approved: writes the blocked report a person reads
     /// (<c>.lockflight/local/blocked.json</c>), records a wait for a first approval (<see cref="PendingApproval"/>) and fails
-    /// with the message.
+    /// with the message and the report's Next line, the one a pull request comment shows for its reason code.
     /// </summary>
     public async Task<ExitCode> RefuseUnapprovedAsync(string command, IReadOnlyList<ApprovalCheck> notValid, CancellationToken cancellationToken)
     {
         string? head = await Git.HeadAsync(manifest.Root, cancellationToken);
-        BlockedReportFile.WriteLocal(manifest.Root, ApprovalBlockedReport.For($"engine:{command}", manifest.Root, feature, notValid, context.Time.GetUtcNow(), head));
+        BlockedReport report = ApprovalBlockedReport.For($"engine:{command}", manifest.Root, feature, notValid, context.Time.GetUtcNow(), head);
+        BlockedReportFile.WriteLocal(manifest.Root, report);
         await PendingApproval.RememberAsync(manifest.Root, feature, notValid, cancellationToken);
-        return await FailAsync(UnapprovedArtifacts(notValid, manifest.Root)!, cancellationToken);
+        ExitCode exitCode = await FailAsync(UnapprovedArtifacts(notValid, manifest.Root)!, cancellationToken);
+        if (BlockedNextSteps.ConsoleLine(report.Code) is string next)
+        {
+            await context.Error.WriteLineAsync(next.AsMemory(), cancellationToken);
+        }
+
+        return exitCode;
     }
 
     private static string? UnapprovedArtifacts(IReadOnlyList<ApprovalCheck> notValid, string root) =>
