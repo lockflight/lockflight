@@ -38,6 +38,19 @@ public sealed class UserInstallTests : IDisposable
     }
 
     [Fact]
+    public void ACopiedEngineComesFromTheToolPathItselfWhenAnInstallWithoutAStorePutItThere()
+    {
+        string toolPath = UserInstall.ToolPath(home.FullName, "0.3.1");
+        Directory.CreateDirectory(toolPath);
+        File.WriteAllText(Path.Combine(toolPath, UserInstall.BinaryName), FakeToolFeed.EngineContent("0.3.1"));
+
+        UserInstall.PointAt(home.FullName, "0.3.1", EngineLayout.Copy);
+
+        Assert.Equal(FakeToolFeed.EngineContent("0.3.1"), File.ReadAllText(UserInstall.Engine(home.FullName)));
+        Assert.Equal("0.3.1", UserInstall.InstalledVersion(home.FullName));
+    }
+
+    [Fact]
     public void ARecordedVersionWithoutTheEngineIsNoInstall()
     {
         string bin = Path.GetDirectoryName(UserInstall.Engine(home.FullName))!;

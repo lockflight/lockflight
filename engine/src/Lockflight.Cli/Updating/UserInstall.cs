@@ -135,12 +135,20 @@ internal static class UserInstall
     }
 
     /// <summary>
-    /// The native engine in a tool path's store. The launcher beside the store is not one on every platform (on Windows it is a
-    /// small program that starts the engine from the store), so the copy is taken from the store.
+    /// The native engine of a tool path. A <c>dotnet tool install</c> leaves it in the store: the launcher beside the store is not
+    /// one on every platform (on Windows it is a small program that starts the engine from the store), so the copy is taken from
+    /// the store. An install without a store (<c>engine install</c>, <c>scripts/install.ps1</c>) wrote the hash-checked executable
+    /// itself into the tool path.
     /// </summary>
     private static string NativeEngine(string toolPath)
     {
         string store = Path.Combine(toolPath, StoreFolder, StorePackageFolder);
+        string direct = Path.Combine(toolPath, BinaryName);
+        if (!System.IO.Directory.Exists(store) && File.Exists(direct))
+        {
+            return direct;
+        }
+
         string[] engines = System.IO.Directory.Exists(store)
             ? System.IO.Directory.GetFiles(store, BinaryName, SearchOption.AllDirectories)
             : [];

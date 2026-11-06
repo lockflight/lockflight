@@ -37,7 +37,7 @@ The sections below use the plugin level.
 ## Install from a package
 
 The released engine, `Lockflight.Cli`, is published on [nuget.org](https://www.nuget.org/packages/Lockflight.Cli). Install it
-for your user, then the plugin:
+for your user, then the plugin (on Windows, [Install on Windows](#install-on-windows) instead):
 
 ```sh
 cd ~                                   # outside any project: a global.json there could pick an SDK older than 10
@@ -55,7 +55,8 @@ or add `~/.lockflight/bin` to `PATH` yourself.
   them earlier, [install from source](#install-from-source).
 
 - **Without the .NET SDK:** [`scripts/install.sh`](../../scripts/install.sh) (macOS and glibc Linux) and
-  [`scripts/install.ps1`](../../scripts/install.ps1) (Windows, x64) install the engine from nuget.org with no `dotnet`,
+  [`scripts/install.ps1`](../../scripts/install.ps1) (Windows, x64, where it also completes the user install:
+  [Install on Windows](#install-on-windows)) install the engine from nuget.org with no `dotnet`,
   for a release that publishes its executable hashes (`engine-hashes.json` in the pointer package). Such a release also
   attaches both scripts to its GitHub Release, with their SHA-256 in `SHA256SUMS`:
 
@@ -97,42 +98,60 @@ or add `~/.lockflight/bin` to `PATH` yourself.
 
 ## Install on Windows
 
-Windows (x64) installs from source with a PowerShell script, into the same layout under your user folder. It needs, besides
-the [requirements](#requirements): **Git for Windows** (Git Bash runs the plugin's hooks, as it runs Claude Code's shell
-commands) and **Visual Studio Build Tools** with the *Desktop development with C++* workload (the engine is a Native AOT
-build). Run it from PowerShell:
+Windows (x64) installs the released package with a PowerShell script, into the same layout under your user folder as on
+macOS and Linux. It needs no .NET SDK and no build tools to install; besides the [requirements](#requirements), it needs
+**Git for Windows** (Git Bash runs the plugin's hooks, as it runs Claude Code's shell commands). From PowerShell:
 
 ```powershell
 git clone https://github.com/lockflight/lockflight; cd lockflight
-powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1    # add -NoPlugin for the engine only
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1 -Version <version>   # the latest release on nuget.org
+claude plugin marketplace add lockflight/lockflight
+claude plugin install lockflight@lockflight --scope user
 ```
 
-From Git Bash, `scripts/dev-install.sh` runs the same script. Paths with spaces are fine for the checkout, your user folder
-and your projects.
+Releases after 0.3.1 also attach this `install.ps1` to their GitHub Release, with its SHA-256 in `SHA256SUMS`. Paths with
+spaces are fine for your user folder and your projects.
 
-- **What it installs:** the engine at `%USERPROFILE%\.lockflight\bin\lockflight.exe` (with `HOME` set, under `HOME` instead,
-  as the engine reads it), the plugin at user scope, and the same feed, `tools\<version>` and `source` as on macOS and Linux.
+- **What it installs:** the engine from the `Lockflight.Cli.win-x64` package, checked against the SHA-256 the release
+  published before anything runs it, at `%USERPROFILE%\.lockflight\tools\<version>\lockflight.exe`, and a copy of it at
+  `%USERPROFILE%\.lockflight\bin\lockflight.exe` (with `HOME` set, under `HOME` instead, as the engine reads it). It is a
+  release engine, so a project it sets up pins a release: `init` writes the [engine lock](configuration.md#the-engine-lock),
+  the generated CI workflow runs on pull requests, and a teammate installs the same engine.
 - **`lockflight` by name:** the script adds `%USERPROFILE%\.lockflight\bin` to your user `PATH` (the per-user environment
-  variable, never the system one), once, and says so; open a new terminal to use it. `-NoModifyPath` skips it. To undo it,
-  remove the folder from the user variable `Path` in *Environment Variables*.
+  variable, never the system one), once, and says so. Open a new terminal to use it; an app that was already open, such as
+  VS Code, passes the old `PATH` to its terminals until you restart it. `-NoModifyPath` skips it. To undo it, remove the
+  folder from the user variable `Path` in *Environment Variables*.
+- **Running it again** changes nothing when that version is in place. `-Version <newer>` moves `bin\lockflight.exe` to it.
+  In a project with an engine lock, without `-Version`, it installs the locked version into `tools\<version>`; when you
+  already have a user engine it leaves that one and names the command that links the locked engine into the project
+  (`link --installed`).
+- **Why not `dotnet tool install --tool-path` as on macOS and Linux:** on Windows that writes a `lockflight.cmd` launcher
+  that starts the engine from the tool's store, not the `bin\lockflight.exe` the plugin's hook shim, `link --installed` and
+  `update` look for. The script also removes such a launcher from `bin`.
 - **A copy, not a link:** on Windows `bin\lockflight.exe` is a copy of the native engine, and `bin\lockflight.version` records
-  its version. Creating a symbolic link needs developer mode or an elevated session, and the launcher that `dotnet tool
-  install` puts in a tool path starts the engine from its store, so it is not one file that `link` can copy into a project.
+  its version. Creating a symbolic link needs developer mode or an elevated session.
 - **Running it:** from PowerShell, `& "$env:USERPROFILE\.lockflight\bin\lockflight.exe" init` in your project, then
   `.lockflight\bin\lockflight.exe doctor`. From Git Bash, `~/.lockflight/bin/lockflight` and `.lockflight/bin/lockflight` work
   as written everywhere in these guides. `doctor` checks that Git Bash is found.
 - **Long paths:** a deep project can pass Windows' 260-character path limit, for example inside the temporary worktree a red
   re-check builds in (`.git/lockflight/red-…`). `git config --global core.longpaths true` covers git, and the .NET build
   needs long paths enabled in Windows (the `LongPathsEnabled` policy).
-- **Updating:** `lockflight update` works as on macOS and Linux: it pulls the checkout and runs `scripts\dev-install.ps1` again
-  (or installs the newest package). Windows does not let a running program be overwritten, so the old engine is renamed
-  aside (`lockflight.exe.old-…`) and removed by a later update once nothing runs it.
+- **Updating:** `lockflight update` works as on macOS and Linux: it installs the newest package (with the .NET 10 SDK), or
+  run `install.ps1 -Version <newer>` again. Windows does not let a running program be overwritten, so the old engine is
+  renamed aside (`lockflight.exe.old-…`) and removed by a later install or update once nothing runs it.
+- **From source, for contributors:** `powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1` (add `-NoPlugin` for
+  the engine only; from Git Bash, `scripts/dev-install.sh`) builds the engine from the checkout and installs it the same way.
+  It needs the .NET 10 SDK and **Visual Studio Build Tools** with the *Desktop development with C++* workload (the engine is
+  a Native AOT build), and it installs the plugin from the checkout. It builds a
+  [development version](#install-from-source), which only your machine has: a project it sets up gets a CI workflow that
+  runs only by hand, and teammates cannot install that engine. A package install afterwards turns the install back into a
+  package one (it removes the recorded checkout, `~\.lockflight\source`).
 
 ## Install from source
 
 For contributors, and to try changes merged to `main` before a release: build the engine from a checkout of this repository
 and install it for your user; it needs no package feed and no token. Everyone else [installs from a package](#install-from-a-package).
-On Windows, see [Install on Windows](#install-on-windows).
+On Windows, the script is `scripts\dev-install.ps1`: see [Install on Windows](#install-on-windows).
 
 ```sh
 git clone https://github.com/lockflight/lockflight && cd lockflight

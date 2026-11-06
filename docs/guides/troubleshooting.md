@@ -419,21 +419,31 @@ not in the repository" means its ref under `refs/lockflight/red/` was deleted; o
 
 ## Windows
 
-Install with `scripts\dev-install.ps1` ([Install on Windows](getting-started.md#install-on-windows)). The hook shim is a POSIX
-script, so Claude Code needs **Git Bash**; `doctor` checks for it.
+Install the package with `scripts\install.ps1` ([Install on Windows](getting-started.md#install-on-windows)); contributors
+build from source with `scripts\dev-install.ps1`. The hook shim is a POSIX script, so Claude Code needs **Git Bash**; `doctor`
+checks for it.
 
 - **"running scripts is disabled on this system":** PowerShell's execution policy refuses unsigned scripts. Run the installer
-  as `powershell -ExecutionPolicy Bypass -File scripts\dev-install.ps1`, which changes the policy for that one run only.
+  as `powershell -ExecutionPolicy Bypass -File scripts\install.ps1 -Version <version>`, which changes the policy for that one
+  run only.
+- **`lockflight` is not found by name after the install:** the script added `~\.lockflight\bin` to your user `PATH`, which
+  terminals opened before it, and those of an app that was already open (VS Code), do not see. Open a new terminal or restart
+  the app; until then, run `& "$env:USERPROFILE\.lockflight\bin\lockflight.exe"`.
+- **`~\.lockflight\bin` holds `lockflight.cmd` and no `lockflight.exe`:** the engine was installed with
+  `dotnet tool install --tool-path`, which on Windows writes a launcher the hook shim and `update` do not use. Run
+  `scripts\install.ps1 -Version <version>`: it puts `lockflight.exe` there and removes the launcher.
 - **"Git Bash was not found":** install [Git for Windows](https://git-scm.com/download/win). If it is installed somewhere
   unusual, set `CLAUDE_CODE_GIT_BASH_PATH` to its `bash.exe` (Claude Code reads the same variable).
-- **"pack failed" with a linker error in `~\.lockflight\pack.log`:** the Native AOT build needs Visual Studio Build Tools with
-  the *Desktop development with C++* workload. Install it, open a new terminal and run the installer again.
+- **"pack failed" with a linker error in `~\.lockflight\pack.log`** (`dev-install.ps1`, from source): the Native AOT build
+  needs Visual Studio Build Tools with the *Desktop development with C++* workload. Install it, open a new terminal and run
+  the script again, or install the package with `scripts\install.ps1`, which builds nothing.
 - **`lockflight.exe.old-…` files in `~\.lockflight\bin`:** engines that were running when an install or `update` replaced them
   (Windows does not let a running program be overwritten, only renamed). The next install or update removes them; deleting them
   by hand once no Claude Code session or terminal runs them is safe too. The same goes for `.lockflight\bin` in a project.
-- **`update` says the install failed:** it runs `scripts\dev-install.ps1` in the recorded checkout (`~\.lockflight\source`)
-  through Windows PowerShell; run that script by hand to see the full output, and see `~\.lockflight\pack.log` and
-  `install.log`.
+- **`update` says the install failed:** with an install from source it runs `scripts\dev-install.ps1` in the recorded checkout
+  (`~\.lockflight\source`) through Windows PowerShell; run that script by hand to see the full output, and see
+  `~\.lockflight\pack.log` and `install.log`. A package install has no recorded checkout: `update` installs the newest package
+  with the .NET 10 SDK, and `scripts\install.ps1 -Version <newer>` does it without one.
 - **`~/.lockflight/bin/lockflight` does not run in `cmd.exe`:** `cmd` does not expand `~` or accept `/`. Use PowerShell or Git
   Bash, or `%USERPROFILE%\.lockflight\bin\lockflight.exe`.
 
