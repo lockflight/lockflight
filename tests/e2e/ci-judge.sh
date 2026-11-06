@@ -2,7 +2,7 @@
 # The CI judge end to end with the published engine, on a copy of samples/dotnet-single with a scripted pull request history: a
 # story whose red commit fails in production code and whose implementation passes is judged PASS on red, tests since red,
 # green and trace, and the report passes both status contexts (gates and lockflight/judge); a red commit that already holds the implementation FAILs red; a
-# test weakened after green FAILs tests since red; a missing judge artifact is NOT-EARNED. The same story on a copy of
+# test weakened after green FAILs tests since red; a missing judge artifact is NOT-EARNED; ci explain names the red's reason. The same story on a copy of
 # samples/dotnet-mstest passes red, green and trace on MSTest. A pull request whose test project replaces the gitleaks binary
 # during its build, and adds a secret, still FAILs the gates: the judge scans for secrets before it builds anything, and a later
 # run of the replaced binary is refused by its hash. No build server (compiler, Razor, MSBuild) the judge started outlives it.
@@ -80,6 +80,9 @@ perl -0pi -e 's/\}\s*\z/\n    [Fact]\n    public void TheFirstKilogramCostsFive(
 git add -A; git commit -qm "test: red" -m "Lockflight-Red: 1"
 expect_exit 1 "a red commit holding the implementation fails the judge" -- judge "$(git rev-parse HEAD)"
 check "$W/evidence/evidence.json" red FAIL
+explained="$("$E" ci explain "$W/evidence")"
+if grep -qx '  Reason: GREEN_BEFORE' <<< "$explained"; then echo "ok   ci explain names GREEN_BEFORE for the red commit"
+else echo "FAIL ci explain does not name GREEN_BEFORE"; sed 's/^/     /' <<< "$explained"; failures=$((failures + 1)); fi
 
 git checkout -q 001-shipping
 perl -pi -e 's/Assert.Equal\(5m, new PriceCalculator\(\).ShippingCost\(1m\)\)/Assert.Equal(5m, 5m)/' "$tests"

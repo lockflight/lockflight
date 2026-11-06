@@ -1,0 +1,9 @@
+FAIL lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: policy-loosened.json
+  Contexts: gates PASS · lockflight/judge FAIL
+
+FAIL policy (Policy vs base), required
+  Detail: lockflight.yaml is looser than the base's: gates.coverage.patchThreshold 80 -> 0
+  Reason: POLICY_LOOSENED
+  Next: Tighten `lockflight.yaml` back to the target branch's rules; a looser policy is a person's decision, merged on its own.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#policy_loosened

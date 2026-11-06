@@ -144,6 +144,12 @@ internal static class CliApplication
                                                         the review in its own CI job: the target branch's model
                                                         and budget, against the merge base, stateless; writes
                                                         review.json and review-result.json for the report
+          ci explain [<file> | <folder> | <run URL> | <run id>] [--json]
+                                                        each check that did not pass: its detail, reason code,
+                                                        Next line and reasons guide entry; reads the judge's
+                                                        evidence, the report's verdict, the action's refusal or
+                                                        a gate result (default: the local judge's last run); a
+                                                        GitHub run is fetched with gh run download (read only)
           route show [--base <ref>] [--head <ref>] [--json]
                                                         the change class of this branch and working tree against
                                                         the target (default: origin/HEAD, else main), its signals

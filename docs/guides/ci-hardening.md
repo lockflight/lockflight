@@ -121,6 +121,12 @@ it should install.
 Every check that does not pass names a reason code (`GREEN_BEFORE`, `TRACE_UNCOVERED`, …); the PR comment lists each one
 under the checks table with what to do next and a link to its entry in [reasons](reasons.md).
 
+To read a verdict outside the pull request, `lockflight ci explain <run URL or id>` fetches the run's verdict with the GitHub
+CLI (`gh run download`, signed in with `gh auth login`) and lists each check that did not pass with its detail, reason code,
+Next line and link; it also reads a downloaded `lockflight-verdict` or `lockflight-evidence` artifact folder, and, without an
+operand, the local judge's last run. In Claude Code, the plugin's `explain-ci` skill runs it and fixes what is the agent's to
+fix ([commands](commands.md#ci)).
+
 `lockflight ci` re-runs the red/green evidence instead of trusting it. For each commit with a `Lockflight-Red: <cycle>`
 trailer it builds that commit and requires its new tests to fail inside production code; it then requires every cycle test to
 be the same test at head (or to fail again on the red commit's code when it changed) and to pass there, the spec's

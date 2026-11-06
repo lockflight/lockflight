@@ -1,0 +1,9 @@
+FAIL lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: trace-uncovered.json
+  Contexts: gates PASS · lockflight/judge FAIL
+
+FAIL trace (Trace), required
+  Detail: 0/1 requirements of 001-shipping: FR-001 has no test that went red, then green
+  Reason: TRACE_UNCOVERED
+  Next: Name each listed requirement in a test that went red, then green (`[Trait("Requirement", "FR-001")]`, or the NUnit or MSTest property), in a red commit.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#trace_uncovered

@@ -1,0 +1,9 @@
+FAIL lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: host-tampering.json
+  Contexts: gates PASS · lockflight/judge FAIL
+
+FAIL tests.hostTampering (Test host tampering), required
+  Detail: 1 new finding: Environment.Exit in Shop.Tests.Setup.Init
+  Reason: HOST_TAMPERING
+  Next: Remove the listed code from the test assemblies, or a person accepts a legitimate finding by merging its baseline entry into `.lockflight/baselines/host-tampering.json` on the target branch first.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#host_tampering

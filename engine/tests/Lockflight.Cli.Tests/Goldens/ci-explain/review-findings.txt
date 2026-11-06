@@ -1,0 +1,9 @@
+FAIL lockflight ci for head aaaaaaa: the CI report's verdict of record
+  Source: review-findings.json
+  Contexts: gates PASS · lockflight/judge FAIL
+
+FAIL review (Review), required
+  Detail: 2 confirmed blocking findings
+  Reason: REVIEW_FINDINGS
+  Next: Fix the review's confirmed findings (the review job's summary lists them) and push; a person dismisses a wrong one with `review dismiss`.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#review_findings

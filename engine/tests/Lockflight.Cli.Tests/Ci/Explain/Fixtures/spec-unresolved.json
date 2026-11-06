@@ -1,0 +1,119 @@
+{
+  "schema": "lockflight.ci-evidence/v1",
+  "engine": {
+    "version": "0.3.0",
+    "rid": "linux-x64",
+    "sha256": null
+  },
+  "platform": "github",
+  "event": "pr",
+  "run": null,
+  "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "base": {
+    "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "mergeBase": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "otherMergeBases": []
+  },
+  "branch": "001-shipping",
+  "policy": {
+    "from": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "manifestSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "restored": [],
+    "loosened": []
+  },
+  "feature": {
+    "id": "001-shipping"
+  },
+  "gates": null,
+  "blocked": null,
+  "review": {
+    "state": "expected",
+    "artifact": "lockflight-review"
+  },
+  "checks": [
+    {
+      "id": "red",
+      "context": "lockflight/judge",
+      "verdict": "PASS",
+      "requirement": "required",
+      "why": "1 cycles, 1 tests, each red in production code"
+    },
+    {
+      "id": "green",
+      "context": "gates",
+      "verdict": "PASS",
+      "requirement": "required",
+      "why": "2 tests, 2 test cases run, 0 failed"
+    },
+    {
+      "id": "gates",
+      "context": "gates",
+      "verdict": "PASS",
+      "requirement": "required",
+      "why": "format PASS · build PASS · test PASS · security.secrets PASS"
+    },
+    {
+      "id": "review",
+      "context": "lockflight/judge",
+      "verdict": "SKIPPED",
+      "requirement": "advisory",
+      "why": "the report joins the review job's result",
+      "reason": "REVIEW_NOT_RUN"
+    },
+    {
+      "id": "approvals",
+      "context": "lockflight/judge",
+      "verdict": "N/A",
+      "requirement": "off",
+      "why": "off for this change class"
+    },
+    {
+      "id": "tests.sinceRed",
+      "context": "lockflight/judge",
+      "verdict": "PASS",
+      "requirement": "required",
+      "why": "1 unchanged, 0 amends accepted"
+    },
+    {
+      "id": "tests.existingChanged",
+      "context": "lockflight/judge",
+      "verdict": "PASS",
+      "requirement": "advisory",
+      "why": "no existing test changed"
+    },
+    {
+      "id": "tests.hostTampering",
+      "context": "lockflight/judge",
+      "verdict": "PASS",
+      "requirement": "required",
+      "why": "no code in the test assemblies that could tamper with the test host"
+    },
+    {
+      "id": "trace",
+      "context": "lockflight/judge",
+      "verdict": "NOT-EARNED",
+      "requirement": "required",
+      "why": "no spec for branch fix-rounding: specs/fix-rounding/spec.md does not exist",
+      "reason": "SPEC_UNRESOLVED"
+    },
+    {
+      "id": "routing",
+      "context": "lockflight/judge",
+      "verdict": "PASS",
+      "requirement": "required",
+      "why": "class behaviour (routing)"
+    },
+    {
+      "id": "policy",
+      "context": "lockflight/judge",
+      "verdict": "PASS",
+      "requirement": "required",
+      "why": "lockflight.yaml is no looser than the base's"
+    }
+  ],
+  "contexts": {
+    "gates": "PASS",
+    "lockflight/judge": "NOT-EARNED"
+  },
+  "verdict": "NOT-EARNED"
+}

@@ -34,6 +34,7 @@ approve verify: reserved=False words=- shell=- powershell=-
 ci: reserved=False words=- shell=- powershell=-
 ci report: reserved=False words=- shell=- powershell=-
 ci review: reserved=False words=- shell=- powershell=-
+ci explain: reserved=False words=- shell=- powershell=-
 route show: reserved=False words=- shell=- powershell=-
 route record: reserved=False words=- shell=- powershell=-
 workspace sync: reserved=False words=- shell=- powershell=-

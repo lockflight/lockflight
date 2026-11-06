@@ -35,6 +35,7 @@ approve verify: [--feature --base --require]
 ci: [--head --base --branch --platform --event --evidence --shell --no-review-expected --plan]
 ci report: [--evidence --review --head --context --out --base --branch --event --platform]
 ci review: [--head --base --branch --platform --out]
+ci explain: [--json] arguments
 route show: [--base --head --json]
 route record: [--feature --base]
 workspace sync: [--check]

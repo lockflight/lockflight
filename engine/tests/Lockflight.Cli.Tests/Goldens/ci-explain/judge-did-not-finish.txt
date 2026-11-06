@@ -1,0 +1,15 @@
+NOT-EARNED lockflight ci for head aaaaaaa: the CI report's verdict without usable judge evidence
+  Source: judge-did-not-finish.json
+  Contexts: gates NOT-EARNED · lockflight/judge NOT-EARNED
+
+NOT-EARNED green (Green at head), required
+  Detail: the judge did not finish: its evidence artifact is missing or not lockflight.ci-evidence/v1 (cancelled, killed at the platform's time limit, or failed to upload)
+  Reason: JUDGE_DID_NOT_FINISH
+  Next: Read the judge job's annotations first: when the engine's lock check refused the engine pin, re-running does not help, so fix what it names. Otherwise re-run the workflow: the judge job was cancelled, killed at the platform's time limit, or failed to upload its evidence.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#judge_did_not_finish
+
+NOT-EARNED red (Red at red commits), required
+  Detail: the judge did not finish: its evidence artifact is missing or not lockflight.ci-evidence/v1 (cancelled, killed at the platform's time limit, or failed to upload)
+  Reason: JUDGE_DID_NOT_FINISH
+  Next: Read the judge job's annotations first: when the engine's lock check refused the engine pin, re-running does not help, so fix what it names. Otherwise re-run the workflow: the judge job was cancelled, killed at the platform's time limit, or failed to upload its evidence.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#judge_did_not_finish

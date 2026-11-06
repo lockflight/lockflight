@@ -1,0 +1,28 @@
+{
+  "schema": "lockflight.ci-evidence/v1",
+  "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "judge": "refused",
+  "checks": [
+    {
+      "id": "green",
+      "context": "gates",
+      "verdict": "FAIL",
+      "requirement": "required",
+      "why": "engine lock: FAIL hash-mismatch: the pinned engine's SHA-256 is not the release's",
+      "reason": "ENGINE_LOCK_REFUSED"
+    },
+    {
+      "id": "red",
+      "context": "lockflight/judge",
+      "verdict": "FAIL",
+      "requirement": "required",
+      "why": "engine lock: FAIL hash-mismatch: the pinned engine's SHA-256 is not the release's",
+      "reason": "ENGINE_LOCK_REFUSED"
+    }
+  ],
+  "contexts": {
+    "gates": "FAIL",
+    "lockflight/judge": "FAIL"
+  },
+  "verdict": "FAIL"
+}

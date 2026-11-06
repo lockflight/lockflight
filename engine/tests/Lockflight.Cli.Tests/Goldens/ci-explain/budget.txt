@@ -1,0 +1,21 @@
+NOT-EARNED lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: budget.json
+  Contexts: gates NOT-EARNED · lockflight/judge NOT-EARNED
+
+NOT-EARNED green (Green at head), required
+  Detail: the CI budget (ci.timeoutMinutes 20) ran out before green at head was decided
+  Reason: CI_BUDGET_EXHAUSTED
+  Next: Raise `ci.timeoutMinutes` on the target branch (and the CI job's own time limit with it), or split the pull request.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#ci_budget_exhausted
+
+NOT-EARNED gates (Gates (pr)), required
+  Detail: the gates did not finish within the CI budget (ci.timeoutMinutes on the target branch); raise it or split the pull request
+  Reason: CI_BUDGET_EXHAUSTED
+  Next: Raise `ci.timeoutMinutes` on the target branch (and the CI job's own time limit with it), or split the pull request.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#ci_budget_exhausted
+
+NOT-EARNED trace (Trace), required
+  Detail: green at head was not decided
+  Reason: GREEN_UNDECIDED
+  Next: Fix green at head first: trace counts only tests that pass there.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#green_undecided

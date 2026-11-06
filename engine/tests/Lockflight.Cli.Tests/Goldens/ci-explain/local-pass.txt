@@ -1,0 +1,5 @@
+PASS lockflight ci for head aaaaaaa: the local judge's evidence (advice; the CI judge is the verdict of record)
+  Source: local-pass.json
+  Contexts: gates PASS · lockflight/judge PASS
+
+Nothing to explain: every check passed, is off, or does not count toward the verdict.

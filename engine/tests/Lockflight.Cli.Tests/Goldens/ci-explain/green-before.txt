@@ -1,0 +1,9 @@
+FAIL lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: green-before.json
+  Contexts: gates PASS · lockflight/judge FAIL
+
+FAIL red (Red at red commits), required
+  Detail: cycle 1 (ddddddd): GREEN_BEFORE
+  Reason: GREEN_BEFORE
+  Next: Commit the tests before the code: the red commit holds the tests and stubs only, the implementation comes in later commits (reorder the branch if it went in first); a test of behaviour that already exists is no red, so make it describe what is still missing.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#green_before

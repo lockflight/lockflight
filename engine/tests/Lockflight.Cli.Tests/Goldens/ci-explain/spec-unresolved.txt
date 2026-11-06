@@ -1,0 +1,9 @@
+NOT-EARNED lockflight ci for head aaaaaaa: the CI judge's evidence
+  Source: spec-unresolved.json
+  Contexts: gates PASS · lockflight/judge NOT-EARNED
+
+NOT-EARNED trace (Trace), required
+  Detail: no spec for branch fix-rounding: specs/fix-rounding/spec.md does not exist
+  Reason: SPEC_UNRESOLVED
+  Next: Name the branch after the feature (`specs/<id>/`, as Spec Kit does) and make sure its `spec.md` exists and is readable.
+  See: https://github.com/lockflight/lockflight/blob/main/docs/guides/reasons.md#spec_unresolved
