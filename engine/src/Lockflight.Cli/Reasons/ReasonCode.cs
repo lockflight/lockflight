@@ -210,4 +210,10 @@ internal enum ReasonCode
 
     /// <summary>The machine lacks something a tool needs: a runtime, a toolchain, the network, Docker (<c>ENVIRONMENT_PROBLEM</c>).</summary>
     EnvironmentProblem = 67,
+
+    /// <summary>
+    /// The secrets scanner is not the binary the CI template installed: its SHA-256 differs, so something replaced it after the
+    /// install (<c>SCANNER_REPLACED</c>).
+    /// </summary>
+    ScannerReplaced = 68,
 }

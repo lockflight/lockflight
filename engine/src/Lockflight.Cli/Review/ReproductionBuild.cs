@@ -91,7 +91,7 @@ internal static class ReproductionBuild
 
             ProcessResult build = await ProcessRunner.RunAsync(
                 "dotnet",
-                ["build", project, "--nologo", "--interactive", "false", .. framework is null ? Array.Empty<string>() : ["-f", framework], isolation, .. BuildProperties],
+                ["build", project, "--nologo", "--interactive", "false", .. framework is null ? Array.Empty<string>() : ["-f", framework], isolation, .. BuildProperties, .. BuildServerSwitches.Build],
                 root,
                 timeLimit,
                 cancellationToken);

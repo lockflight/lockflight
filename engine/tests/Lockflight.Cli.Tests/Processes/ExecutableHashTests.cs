@@ -8,12 +8,42 @@ public sealed class ExecutableHashTests : IDisposable
 {
     private readonly DirectoryInfo directory = Directory.CreateTempSubdirectory("lockflight-hash-");
 
+    private readonly DirectoryInfo copies = Directory.CreateTempSubdirectory("lockflight-hash-copies-");
+
     [Fact]
-    public async Task TheBinaryItWasInstalledWithPasses()
+    public async Task TheBinaryItWasInstalledWithIsCopiedAndTheCopyRuns()
     {
         string binary = Write("tool", "the installed tool");
 
-        Assert.Null(await ExecutableHash.MismatchAsync(binary, Sha256Of("the installed tool").ToUpperInvariant(), TestContext.Current.CancellationToken));
+        VerifiedExecutable verified = await ExecutableHash.CopyAndVerifyAsync(binary, Sha256Of("the installed tool").ToUpperInvariant(), copies, TestContext.Current.CancellationToken);
+
+        Assert.Equal(Path.Combine(copies.FullName, "tool"), verified.Path);
+        Assert.Equal("the installed tool", File.ReadAllText(verified.Path!));
+    }
+
+    [Fact]
+    public async Task TheCopyIsTheOwnersAlone()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes");
+        string binary = Write("tool", "the installed tool");
+
+        VerifiedExecutable verified = await ExecutableHash.CopyAndVerifyAsync(binary, Sha256Of("the installed tool"), copies, TestContext.Current.CancellationToken);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(verified.Path!));
+        }
+    }
+
+    [Fact]
+    public async Task ReplacingTheInstalledBinaryAfterTheCheckDoesNotChangeWhatRuns()
+    {
+        string binary = Write("tool", "the installed tool");
+        VerifiedExecutable verified = await ExecutableHash.CopyAndVerifyAsync(binary, Sha256Of("the installed tool"), copies, TestContext.Current.CancellationToken);
+
+        File.WriteAllText(binary, "#!/bin/sh\nexit 0\n");
+
+        Assert.Equal("the installed tool", File.ReadAllText(verified.Path!));
     }
 
     [Fact]
@@ -23,23 +53,29 @@ public sealed class ExecutableHashTests : IDisposable
         string installed = Sha256Of("the installed tool");
         File.WriteAllText(binary, "#!/bin/sh\nexit 0\n");
 
-        string? why = await ExecutableHash.MismatchAsync(binary, installed, TestContext.Current.CancellationToken);
+        VerifiedExecutable verified = await ExecutableHash.CopyAndVerifyAsync(binary, installed, copies, TestContext.Current.CancellationToken);
 
-        Assert.NotNull(why);
-        Assert.Contains(installed, why, StringComparison.Ordinal);
-        Assert.Contains(Sha256Of("#!/bin/sh\nexit 0\n"), why, StringComparison.Ordinal);
+        Assert.Null(verified.Path);
+        Assert.Null(verified.UnreadableWhy);
+        Assert.Contains(installed, verified.ReplacedWhy, StringComparison.Ordinal);
+        Assert.Contains(Sha256Of("#!/bin/sh\nexit 0\n"), verified.ReplacedWhy, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task AMissingBinaryIsRefused()
+    public async Task AMissingBinaryIsUnreadableNotReplaced()
     {
-        string? why = await ExecutableHash.MismatchAsync(Path.Combine(directory.FullName, "gone"), Sha256Of("x"), TestContext.Current.CancellationToken);
+        VerifiedExecutable verified = await ExecutableHash.CopyAndVerifyAsync(Path.Combine(directory.FullName, "gone"), Sha256Of("x"), copies, TestContext.Current.CancellationToken);
 
-        Assert.NotNull(why);
-        Assert.Contains("could not be read", why, StringComparison.Ordinal);
+        Assert.Null(verified.Path);
+        Assert.Null(verified.ReplacedWhy);
+        Assert.Contains("could not be copied and read", verified.UnreadableWhy, StringComparison.Ordinal);
     }
 
-    public void Dispose() => TempDirectories.DeleteRecursively(directory);
+    public void Dispose()
+    {
+        TempDirectories.DeleteRecursively(directory);
+        TempDirectories.DeleteRecursively(copies);
+    }
 
     private static string Sha256Of(string content) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
 

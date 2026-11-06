@@ -13,8 +13,8 @@ namespace Lockflight.Cli.Gates.Steps;
 /// carry repository-relative paths. Findings are accepted only through gitleaks' own <c>.gitleaksignore</c>, a protected path; an
 /// added inline <c>gitleaks:allow</c> comment — which would silence gitleaks — fails the step (in an untracked file it is also ignored
 /// by the scan). Without gitleaks the step cannot vouch for anything, so it is NOT-EARNED rather than PASS. When the run names the
-/// binary's SHA-256 (<c>LOCKFLIGHT_GITLEAKS_SHA256</c>) the binary is hashed before each gitleaks run, and one that differs is an
-/// ERROR. In the CI judge the scan runs before any of the pull request's code is built, and the step reports that scan.
+/// binary's SHA-256 (<c>LOCKFLIGHT_GITLEAKS_SHA256</c>) the binary is copied into the step's private directory, the copy is hashed,
+/// and only the copy runs; one that differs is an ERROR (<c>SCANNER_REPLACED</c>). In the CI judge the scan runs before any of the pull request's code is built, and the step reports that scan.
 /// </summary>
 internal sealed class SecretsStep : IGateStep
 {
@@ -71,7 +71,22 @@ internal sealed class SecretsStep : IGateStep
                 $"added lines silence gitleaks with an inline '{InlineAllowMarker}': {string.Join(", ", allowances.Files.Take(MaxLeaksListed))}; accept false positives in .gitleaksignore (human review) instead");
         }
 
-        return await ScanAsync(new GitleaksScan(gitleaks, run, PrivateDirectory("lockflight-gitleaks-")), untracked, cancellationToken);
+        DirectoryInfo scanDirectory = PrivateDirectory("lockflight-gitleaks-");
+        if (run.GitleaksSha256 is string expected)
+        {
+            VerifiedExecutable verified = await ExecutableHash.CopyAndVerifyAsync(gitleaks, expected, scanDirectory, cancellationToken);
+            if (verified.Path is null)
+            {
+                scanDirectory.Delete(recursive: true);
+                return verified.ReplacedWhy is string replaced
+                    ? new GateStep(StepName, 0, Verdict.Error, ReasonCode.ScannerReplaced, 0, $"gitleaks was not run: {replaced}")
+                    : new GateStep(StepName, 0, Verdict.Error, ReasonCode.ToolError, 0, $"gitleaks was not run: {verified.UnreadableWhy}");
+            }
+
+            gitleaks = verified.Path;
+        }
+
+        return await ScanAsync(new GitleaksScan(gitleaks, run, scanDirectory), untracked, cancellationToken);
     }
 
     private static async Task<GateStep> ScanAsync(GitleaksScan scan, string[] untracked, CancellationToken cancellationToken)
@@ -215,7 +230,8 @@ internal sealed class SecretsStep : IGateStep
     /// <summary>
     /// One gitleaks report file reused by every scan of the step, with the findings and time collected so far. The report is not
     /// redacted — the engine's own recorded hashes are told apart by their value — so it lives in <paramref name="reportDirectory"/>,
-    /// a private directory deleted with the scan; only rule, file, line and commit are kept.
+    /// a private directory deleted with the scan (with the verified copy of gitleaks, when there is one); only rule, file, line and
+    /// commit are kept.
     /// </summary>
     private sealed class GitleaksScan(string gitleaks, GateRunContext run, DirectoryInfo reportDirectory)
     {
@@ -238,11 +254,6 @@ internal sealed class SecretsStep : IGateStep
         /// </summary>
         public async Task<GateStep?> RunAsync(string[] arguments, string workingDirectory, string label, string pathPrefix, CancellationToken cancellationToken)
         {
-            if (run.GitleaksSha256 is string expected && await ExecutableHash.MismatchAsync(gitleaks, expected, cancellationToken) is string replaced)
-            {
-                return new GateStep(StepName, 0, Verdict.Error, ReasonCode.ToolError, DurationMs, $"gitleaks was not run: {replaced}");
-            }
-
             ProcessResult scan = await run.Processes(gitleaks, arguments, workingDirectory, run.TimeLeft(), cancellationToken);
             DurationMs += scan.DurationMs;
             if (StepHealth.Unhealthy(StepName, scan, run) is GateStep unhealthy)

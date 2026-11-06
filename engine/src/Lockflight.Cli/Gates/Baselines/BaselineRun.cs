@@ -82,7 +82,7 @@ internal sealed class BaselineRun(CliContext context, Manifest manifest)
         // A full rebuild: an incremental build skips unchanged projects and would leave their warnings out of the baseline.
         GateRunContext buildRun = GateRunContext.ForTarget(manifest, target, GateProfile.Stop, baseRef: null, context.Time, underStopHook: false);
         ProcessResult build = await ProcessRunner.RunAsync(
-            "dotnet", ["build", .. buildRun.BuildFileArguments, "--no-incremental", "--nologo", "--interactive", "false"], target, timeLimit, cancellationToken);
+            "dotnet", ["build", .. buildRun.BuildFileArguments, "--no-incremental", "--nologo", "--interactive", "false", .. BuildServerSwitches.Build], target, timeLimit, cancellationToken);
         if (build.ExitCode != 0)
         {
             return BaselineCapture.Failed(build.TimedOut ? $"the build did not finish within {timeLimit.TotalSeconds:0} seconds" : "the build fails; a baseline is taken from a building tree only", ExitCode.Fail);

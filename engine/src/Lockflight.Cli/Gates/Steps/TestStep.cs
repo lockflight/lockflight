@@ -71,7 +71,7 @@ internal sealed partial class TestStep : IGateStep
             Directory.Delete(results, recursive: true);
         }
 
-        List<string> arguments = ["test", .. projectArguments, "--no-build", "--logger", "trx;LogFilePrefix=lockflight", "--results-directory", results];
+        List<string> arguments = ["test", .. projectArguments, "--no-build", "--logger", "trx;LogFilePrefix=lockflight", "--results-directory", results, .. BuildServerSwitches.Properties];
         if (run.Settings.TestFramework is string framework)
         {
             arguments.AddRange(["--framework", framework]);
@@ -154,7 +154,7 @@ internal sealed partial class TestStep : IGateStep
 
     private static async Task<TestStepOutcome> RunOnTestingPlatformAsync(GateRunContext run, string? projectFile, CancellationToken cancellationToken)
     {
-        List<string> arguments = ["test", .. TestingPlatformTarget(projectFile), "--no-build"];
+        List<string> arguments = ["test", .. TestingPlatformTarget(projectFile), "--no-build", .. BuildServerSwitches.Properties];
         if (run.Profile != GateProfile.PullRequest && run.StopFilter is string filter)
         {
             if (TraitFilter(filter) is not string[] traitArguments)

@@ -158,13 +158,21 @@ instead of the fork point, so the two can differ when the branch's history moved
   - the secrets scan runs before any of it: the judge checks out the head with the target branch's `.gitleaks.toml` and
     `.gitleaksignore` and scans it before the first build, and the `pr` gates report that scan instead of scanning again
     after the build. The action takes the SHA-256 of the gitleaks binary it installed, outside the checkout and before any of
-    the pull request's code runs, and passes it as `LOCKFLIGHT_GITLEAKS_SHA256`; the engine hashes the binary before every
-    gitleaks run and refuses one that differs (ERROR). This protects the scan from a build that replaces the binary or the
-    config; it is still a guardrail, since code with root on the VM could interfere with the engine itself;
-  - the engine starts every build with the .NET build servers off (`UseSharedCompilation=false`, `UseRazorBuildServer=false`,
-    `DOTNET_CLI_USE_MSBUILD_SERVER=0`, beside `MSBUILDDISABLENODEREUSE=1`), so the project's analyzers and source generators
-    do not stay alive in a compiler server after its build, and runs `dotnet build-server shutdown` after each phase of the
-    judge. A project can set these properties back, and an `<Exec>` can start any process it likes;
+    the pull request's code runs, and passes it as `LOCKFLIGHT_GITLEAKS_SHA256`; the engine copies the binary into a private
+    temporary folder (readable by its own user only), hashes the copy, runs only the copy and deletes it after the scan, and
+    refuses a binary that differs (ERROR, `SCANNER_REPLACED`). Replacing the installed binary after the check therefore
+    changes nothing. In the judge this all happens before the pull request's code runs. In the CI files that run the gates
+    alone (Azure Pipelines, GitLab CI/CD, and a unit repository's workflow) the `pr` gates build and test the pull request's
+    code before they scan, so a process it left running as the same user could still write to the copy between
+    the hash and the start: there the check is a guardrail. Everywhere it is still a guardrail against code with root on the
+    VM, which could interfere with the engine itself;
+  - the engine starts every build with the .NET build servers off, so the project's analyzers and source generators do not
+    stay alive in a compiler server after its build, and runs `dotnet build-server shutdown` after each phase of the judge.
+    Its `dotnet build` and `dotnet test` runs pass `-p:UseSharedCompilation=false -p:UseRazorBuildServer=false` as global
+    properties, which a project's own files (a `Directory.Build.props`) cannot set back, and its builds also pass
+    `--disable-build-servers`; every process it starts gets the same settings as environment variables, beside
+    `DOTNET_CLI_USE_MSBUILD_SERVER=0` and `MSBUILDDISABLENODEREUSE=1`. A tool that builds by itself (`dotnet ef`) has only
+    the environment variables, which a project can override, and an `<Exec>` can start any process it likes;
   - test-framework extension points (an xUnit v3 `TestFramework`, an NUnit `IWrapTestMethod` attribute, a custom runner)
     run inside the test host;
   - an MSBuild `<Exec>` task or inline task in a project, props or targets file runs arbitrary code at build time;
