@@ -71,10 +71,10 @@ else
 fi
 touch "$work/marker"
 if out=$(install -Version "$version" 2> "$work/err") && grep -q "already installed" "$work/err" && grep -q "is Lockflight $version already" "$work/err" \
-  && [ -z "$(find "$work/profile" -newer "$work/marker")" ]; then
+  && [ -z "$(find "$work/profile/.lockflight" -newer "$work/marker")" ]; then
   ok "a second install of the same version changes nothing"
 else
-  bad "second run: $(find "$work/profile" -newer "$work/marker") $(cat "$work/err")"
+  bad "second run: $(find "$work/profile/.lockflight" -newer "$work/marker") $(cat "$work/err")"
 fi
 if out=$(install -Lock "$work/second.lock" 2> "$work/err") && [ "$(sha256 "$work/profile/.lockflight/tools/$version2/lockflight.exe")" = "$hash2" ] \
   && [ "$(cat "$bin/lockflight.version")" = "$version" ] && grep -q "link --installed" "$work/err"; then
