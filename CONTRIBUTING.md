@@ -87,9 +87,10 @@ safe arguments in `HumanOnlyCanaries.cs`. `CanaryCoverageTests` fails on `main` 
 step whose violation needs a fact the planted tools do not give (a file, a setting) plants it in the same case; a step that only
 reports, as the protected-changes report does, is caught when its report names the planted change.
 
-The canary tests carry the trait `Category=Canary`: CI's `canaries` jobs run them on Linux and Windows (and macOS on main), and the `engine`
-jobs leave them out. `lockflight doctor --self-test` is the product's own, much smaller set (five canaries, no build) for a
-person's machine; it is not where a new control's canary goes.
+The canary tests carry the trait `Category=Canary`: CI's `canaries` jobs run them on Linux and Windows, the macOS `engine`
+job runs them on main (a separate macOS job could wait for a scarce runner), and the other `engine` jobs leave them out.
+`lockflight doctor --self-test` is the product's own, much smaller set (five canaries, no build) for a person's machine; it is
+not where a new control's canary goes.
 
 ### Skill evals
 
