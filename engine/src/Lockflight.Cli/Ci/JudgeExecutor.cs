@@ -3,6 +3,7 @@ using Lockflight.Cli.Gates;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Processes.Survivors;
 using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Testing;
 
@@ -51,14 +52,18 @@ internal static class JudgeExecutor
 
             GateStep secrets = await SecretsJudge.ScanAsync(worktree, plan, context, cancellationToken);
             TreeBuilder trees = new(worktree, plan.Policy, root, budget, time);
+            ProcessSweep.Enter(SweepRegion.Head);
             HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);
             await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
+            ProcessSweep.Enter(SweepRegion.Base);
             TreeListing? baseListing = plan.MergeBase is string mergeBase ? await trees.ListAsync(mergeBase, "base", fresh: false, cancellationToken) : null;
             BaseSkipCheck baseSkips = await BaseSkipsAsync(trees, head, baseListing, cancellationToken);
             await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
             IReadOnlySet<string> structuralIds = await StructuralJudge.IdsAsync(plan, cancellationToken);
+            ProcessSweep.Enter(SweepRegion.Red);
             IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, structuralIds, cancellationToken) : null;
             await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
+            ProcessSweep.Enter(SweepRegion.Rechecks);
             GreenJudgement greenAtHead = baseListing is { AsBaseline: null }
                 ? new GreenJudgement(CheckVerdict.NotEarned, CheckReasons.BaseNotListed(baseListing.Outcome), $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
                 : GreenJudge.Decide(head, baseListing?.AsBaseline, baseSkips, cycles ?? []);
@@ -75,6 +80,7 @@ internal static class JudgeExecutor
                 ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, cycles ?? [], sinceRed, greenAtHead, await new StructuralJudge(trees, time).JudgeAsync(plan, head, baseListing?.AsBaseline, structuralIds, cancellationToken), cancellationToken)
                 : null;
             await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
+            ProcessSweep.Enter(SweepRegion.Gates);
             (CheckVerdict Verdict, ReasonCode Reason, string Why, JsonNode? Result, string? TestStep) gates = !budget.TryStart("gates")
                 ? (CheckVerdict.NotEarned, ReasonCode.CiBudgetExhausted, budget.Why(trees.Builds.Count), null, null)
                 : await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: false, cancellationToken) is string notMoved

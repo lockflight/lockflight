@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Processes.Survivors;
 using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Ci;
@@ -44,6 +45,9 @@ internal sealed record JudgeFindings(GreenJudgement? Green, IReadOnlyList<CycleJ
 
     /// <summary>The pull request's changes to the spec paths; null when it changes none, or the specs live in a workspace shell.</summary>
     public SpecDiff? SpecDiff { get; init; }
+
+    /// <summary>The processes left running that the sweeps found; null when the judge did not sweep (a test host).</summary>
+    public ProcessesReport? Processes { get; init; }
 
     public static JudgeFindings None { get; } = new(null, null, []);
 }

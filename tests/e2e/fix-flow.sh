@@ -44,7 +44,10 @@ same_head() { # same_head <commit> <what>
   if [ "$(git rev-parse HEAD)" = "$1" ]; then echo "ok   $2"; else echo "FAIL $2 (HEAD moved)"; failures=$((failures + 1)); fi
 }
 red() { "$E" red "$@"; }
-judge() { rm -f "$EVIDENCE"; "$E" ci --platform local; }
+judge() { # the processes each run left behind are recorded, and reported at the end
+  rm -f "$EVIDENCE"; "$E" ci --platform local; local code=$?
+  "$PY" -I "$ROOT/tests/e2e/left-running.py" record "$EVIDENCE" "$W/left-running.log"; return $code
+}
 
 cd "$W/repo" || exit 1
 export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
@@ -191,4 +194,5 @@ expect_exit 0 "the judge passes both cycles, the rejected red superseded" -- jud
 check red PASS; check green PASS
 
 echo
+"$PY" -I "$ROOT/tests/e2e/left-running.py" summary "$W/left-running.log" || failures=$((failures + 1))
 if [ "$failures" -eq 0 ]; then echo "fix flow: all checks passed"; else echo "fix flow: $failures failed"; exit 1; fi

@@ -118,6 +118,32 @@ public sealed class ContractSchemaSyncTests : IDisposable
     }
 
     [Fact]
+    public void TheProcessesLeftRunningAreAnOptionalPartOfTheCiEvidence()
+    {
+        JsonObject evidence = CiEvidenceTests.Evidence();
+        Assert.Equal("stopped", evidence["processes"]!["survivors"]![0]!["outcome"]!.GetValue<string>());
+
+        JsonObject older = evidence.DeepClone().AsObject();
+        older.Remove("processes");
+        AssertValid(CiEvidenceId, older.ToJsonString());
+        Assert.Null(EvidenceShape.Problem(older));
+        JsonObject notLooked = evidence.DeepClone().AsObject();
+        notLooked["processes"] = null;
+        AssertValid(CiEvidenceId, notLooked.ToJsonString());
+
+        JsonObject noSurvivors = evidence["processes"]!.DeepClone().AsObject();
+        noSurvivors.Remove("survivors");
+        Assert.False(Accepts(CiEvidenceId, Embedding(evidence, "processes", noSurvivors)), "processes.survivors is not required");
+        JsonObject survivorWithoutPid = evidence["processes"]!.DeepClone().AsObject();
+        survivorWithoutPid["survivors"]![0]!.AsObject().Remove("pid");
+        Assert.False(Accepts(CiEvidenceId, Embedding(evidence, "processes", survivorWithoutPid)), "a survivor's pid is not required");
+        JsonObject notAnObject = evidence.DeepClone().AsObject();
+        notAnObject["processes"] = "none";
+        Assert.False(Accepts(CiEvidenceId, notAnObject.ToJsonString()), "processes is not an object");
+        Assert.Equal("'processes' must be an object or null", EvidenceShape.Problem(notAnObject));
+    }
+
+    [Fact]
     public void TheBlockedReportsTheJudgeWritesAreValid()
     {
         BlockedReport review = JudgeBlocked.ForReview(DateTimeOffset.UnixEpoch, new string('a', 40), "001-shipping");

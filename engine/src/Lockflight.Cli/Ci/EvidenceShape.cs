@@ -23,7 +23,7 @@ internal static class EvidenceShape
             return "'event' must be a string";
         }
 
-        foreach (string property in new[] { "changeClass", "feature", "hostTampering", "policy", "engine", "base", "approvals", "specDiff" })
+        foreach (string property in new[] { "changeClass", "feature", "hostTampering", "policy", "engine", "base", "approvals", "specDiff", "processes" })
         {
             if (evidence.ContainsKey(property) && evidence[property] is not null and not JsonObject)
             {

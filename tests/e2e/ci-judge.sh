@@ -46,12 +46,14 @@ git commit -qam "feat(001-shipping): US1"; head=$(git rev-parse HEAD)
 # Each run starts from an empty evidence folder, so a run that writes none is never judged on an earlier run's evidence.
 sample=dotnet-single
 now_ms() { "$PY" -c 'import time; print(int(time.time() * 1000))'; }
+# The processes each run left behind are recorded, and reported at the end.
 judge() {
   rm -rf "$W/evidence"
   local started status
   [ -z "${JUDGE_TIMES:-}" ] || started=$(now_ms)
   "$E" ci --platform github --head "$1" --base "$main" --branch "${2:-001-shipping}" --evidence "$W/evidence"; status=$?
   [ -z "${JUDGE_TIMES:-}" ] || echo "$sample $(git rev-parse --abbrev-ref HEAD) $status $(( $(now_ms) - started ))" >> "$JUDGE_TIMES"
+  "$PY" -I "$ROOT/tests/e2e/left-running.py" record "$W/evidence/evidence.json" "$W/left-running.log"
   return "$status"
 }
 # The process ids of .NET build servers: the compiler server, the Razor build server, and MSBuild nodes kept for reuse or the
@@ -143,5 +145,6 @@ for id in red tests.sinceRed green trace tests.hostTampering; do check "$W/evide
 expect_exit 0 "the lockflight/judge context passes on MSTest" -- "$E" ci report --evidence "$W/evidence" --head "$head" --out "$W/verdict-mstest" --context lockflight/judge
 expect_exit 0 "the gates context passes on MSTest" -- "$E" ci report --evidence "$W/evidence" --head "$head" --out "$W/verdict-mstest-gates" --context gates
 
+"$PY" -I "$ROOT/tests/e2e/left-running.py" summary "$W/left-running.log" || failures=$((failures + 1))
 if [ "$failures" -gt 0 ]; then echo "$failures CI judge checks failed"; exit 1; fi
 echo "CI judge end to end: all checks passed"

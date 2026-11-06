@@ -40,6 +40,10 @@ contributors who run or extend them.
 | [`install/install-ps1.sh`](install/install-ps1.sh) | A smoke test of `scripts/install.ps1` with PowerShell 7 on a `file://` feed: a lock, a first install by version that completes the user install (`~/.lockflight/bin`), a second run that changes nothing, a lock beside a user engine of another version, an upgrade, a hash mismatch, a usage error | locally (needs `pwsh`); CI on Linux |
 | [`canary/run.sh`](canary/run.sh) | A real headless Claude Code session with the plugin: an ordinary write succeeds, a protected file edit and a Bash redirect into a protected path are blocked | scheduled `canary` workflow (needs a token) |
 
+The suites that run the CI judge (`ci-judge.sh`, `fix-flow.sh`, `quickstart.sh`) record each run's `processes` evidence with
+[`e2e/left-running.py`](e2e/left-running.py) and print, at the end, what each run left running and what the judge did with
+it; they fail when the judge did not look on Linux or Windows.
+
 ## Run them locally
 
 Publish the engine once, then point each suite at it:
