@@ -55,8 +55,9 @@ than a fix, please open an issue first, because the design still moves. Everyone
 
 ## Build and test
 
-Requirements: .NET SDK 10 (see [`engine/global.json`](engine/global.json)). For Native AOT publishing, the platform's C++
-toolchain is also needed.
+Requirements: .NET SDK 10.0.114 or newer, or 10.0.403 or newer in the 4xx band (see [`engine/global.json`](engine/global.json)).
+An older SDK brings a Native AOT compiler package with a known vulnerability, and restore fails on its advisory. For Native AOT
+publishing, the platform's C++ toolchain is also needed.
 
 ```sh
 cd engine
