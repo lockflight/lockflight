@@ -63,7 +63,11 @@ The policy and install steps of the GitHub workflow, in the same order:
   `lockflight engine verify-lock .lockflight/engine.lock` before accepting it.
 - **`lockflight gate run --profile pr --base <base sha>`**, with the result in `artifacts/lockflight/result.json` (Azure and
   GitLab); Bitbucket runs the [CI judge](#bitbucket-pipelines), which runs the same gates at head and adds the red/green
-  evidence. Azure and GitLab run the gates only for now.
+  evidence. Azure and GitLab run the gates only for now. With `CI` set, as these platforms set it in every job, the `pr` gates
+  stop and list the processes the pull request's build and tests leave running, as the judge does (Linux and Windows agents),
+  and a process they cannot stop (another user's, started through `sudo`) adds a `processes` row that is ERROR
+  (`SURVIVOR_NOT_STOPPED`). Docker containers are not looked at there: an agent's Docker daemon may be shared with other jobs.
+  A guardrail, as in the judge ([CI hardening](ci-hardening.md#what-the-ci-judge-shows-and-what-it-does-not)).
 
 | | Azure Pipelines | Bitbucket Pipelines | GitLab CI/CD |
 |---|---|---|---|
