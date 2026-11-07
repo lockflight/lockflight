@@ -15,6 +15,7 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
 {
     private const string FeatureRecords = ".lockflight/features/";
     private const string DocsDirectory = "docs/";
+    private const string WorkflowActivitiesNamespace = "http://schemas.microsoft.com/netfx/2009/xaml/activities";
 
     private static readonly string[] SolutionSuffixes = [".sln", ".slnx", ".slnf"];
     private static readonly string[] BuildWideNames =
@@ -35,6 +36,7 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
 
     private readonly ProjectIndex projects = new(side.Paths);
     private readonly Dictionary<string, bool> testProjects = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, bool> xamlUiProjects = new(StringComparer.Ordinal);
 
     public ProjectIndex Projects => projects;
 
@@ -64,6 +66,22 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
         }
 
         return isTest;
+    }
+
+    /// <summary>
+    /// Whether a project file (with the <c>Directory.Build.props</c> files above it) sets <c>UseWPF</c>, <c>UseMaui</c> or
+    /// <c>UseWinUI</c> on this side, so its <c>.xaml</c> files are views rather than configuration.
+    /// </summary>
+    public bool IsXamlUiProject(string projectFile)
+    {
+        if (!xamlUiProjects.TryGetValue(projectFile, out bool isUi))
+        {
+            isUi = side.TextOf(projectFile) is string text
+                && (ProjectText.MakesXamlUiProject(text) || projects.PropsChain(projectFile).Any(props => side.TextOf(props) is string propsText && ProjectText.MakesXamlUiProject(propsText)));
+            xamlUiProjects[projectFile] = isUi;
+        }
+
+        return isUi;
     }
 
     private FileRole RoleOf(string path, string? project, bool inTestProject)
@@ -109,7 +127,7 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
             return FileRole.Markup;
         }
 
-        if (project is not null && EndsWithAny(name, XamlSuffixes))
+        if (project is not null && EndsWithAny(name, XamlSuffixes) && IsXamlUiProject(project) && !IsWorkflow(path))
         {
             return FileRole.Xaml;
         }
@@ -127,6 +145,10 @@ internal sealed class FileRoles(RevisionSnapshot side, IReadOnlyList<string> exc
 
         return project is null ? FileRole.Other : FileRole.ProductionConfig;
     }
+
+    // A Workflow Foundation definition is a program written in XAML, never a view.
+    private bool IsWorkflow(string path) =>
+        side.TextOf(path) is string text && text.Contains(WorkflowActivitiesNamespace, StringComparison.OrdinalIgnoreCase);
 
     private static bool EndsWithAny(string name, string[] suffixes) => suffixes.Any(suffix => name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
 }

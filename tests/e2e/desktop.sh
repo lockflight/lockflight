@@ -5,7 +5,7 @@
 # code-behind, with [StaFact] tests that open the window directly and through the Dispatcher, PASSes; a test written after the
 # code FAILs red with GREEN_BEFORE; a server-only feature PASSes; a [structural] refactor without a red commit, its spec
 # changed under the target branch's CODEOWNERS, PASSes as a structural-only change (red N/A). The Stop gate runs every test project, the UI tests left to CI by test.stopFilter. On both, a
-# visual-only XAML change is routed as class fix.
+# visual-only XAML change is routed as class fix, and one that wires an event handler fires config.changed.
 # Off Windows, the local gates: the Stop gate builds the client with EnableWindowsTargeting, leaves its test projects out with a
 # note and runs the server's tests; doctor explains why.
 # Usage: ENGINE=<lockflight binary> desktop.sh <workdir>
@@ -54,11 +54,16 @@ printf 'version: 1\ngates:\n  test:\n    stopFilter: "Category!=UI"\n' > lockfli
 printf 'bin/\nobj/\n.lockflight/ledger/\n.lockflight/local/\n' > .gitignore
 git add -A; git commit -qm base; main=$(git rev-parse HEAD)
 
-# A visual-only XAML change is routed by its size, as class fix: XAML is neither code nor configuration.
+# A visual-only XAML change in a WPF project is routed by its size, as class fix: a XAML view is neither code nor configuration.
 git checkout -q -b 006-xaml "$main"
 FROM='<StackPanel Margin="12">' TO='<StackPanel Margin="16">' "$PY" -c 'import os,sys; p=sys.argv[1]; s=open(p).read(); open(p,"w").write(s.replace(os.environ["FROM"], os.environ["TO"]))' src/Desk.Client/MainWindow.xaml
 git add -A; git commit -qm "style: a roomier window"
 expect 0 "a visual-only XAML change is class fix" "**Class: fix**" -- "$E" route show --base "$main" --head 006-xaml
+# A XAML change that wires an event handler is behaviour: config.changed fires.
+git checkout -q -b 007-xaml-handler "$main"
+FROM='Content="Clear"' TO='Content="Clear" Loaded="ClearButton_Loaded"' "$PY" -c 'import os,sys; p=sys.argv[1]; s=open(p).read(); open(p,"w").write(s.replace(os.environ["FROM"], os.environ["TO"]))' src/Desk.Client/MainWindow.xaml
+git add -A; git commit -qm "feat: wire a handler in XAML"
+expect 0 "a XAML change that wires a handler fires config.changed" "config.changed" -- "$E" route show --base "$main" --head 007-xaml-handler
 git checkout -q main
 
 if [ "$windows" = 0 ]; then
