@@ -127,7 +127,8 @@ normal requirement with a test that goes red, then green.
 refactoring, or an architecture rule), the CI judge accepts the pull request without a `Lockflight-Red` commit, provided git
 shows all of these (the report job works them out again from git before it trusts the judge's evidence):
 
-- the change class comes from the target branch's routing policy, and the repository is no unit of a workspace shell;
+- it is a pull request, its change class comes from risk routing (the target branch's routing policy, or the default preset
+  when its `lockflight.yaml` has no `routing:` section), and the repository is no unit of a workspace shell;
 - no commit carries a `Lockflight-Red` trailer (a pull request with one is judged by its red commits);
 - **a person gates the spec:** it is added or changed in this pull request and the target branch's CODEOWNERS gives its path an
   owner under `approvals.specPaths`, or spec-first applies and the spec was merged on the target branch first and is unchanged;

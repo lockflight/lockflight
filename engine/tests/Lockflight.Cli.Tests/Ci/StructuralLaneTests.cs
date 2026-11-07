@@ -52,8 +52,14 @@ public sealed class StructuralLaneTests
         Assert.Null(StructuralLane.Decide(Facts() with { Spec = Spec() with { Problem = "the branch and the tests disagree on the feature" } }));
 
     [Fact]
-    public void AnInterimClassificationIsNotEligible() =>
-        Assert.Equal(StructuralCondition.Routed, Assert.Single(Decide(Facts() with { Routed = false }).Unmet).Condition);
+    public void AnInterimClassificationIsNotEligibleAndSaysRiskRoutingDidNotClassifyIt()
+    {
+        StructuralUnmet unmet = Assert.Single(Decide(Facts() with { Routed = false }).Unmet);
+
+        Assert.Equal(StructuralCondition.Routed, unmet.Condition);
+        Assert.Contains("not computed by risk routing", unmet.Why, StringComparison.Ordinal);
+        Assert.Contains("default preset", unmet.Why, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void AUnitOfAWorkspaceShellIsNotEligible()
@@ -65,8 +71,13 @@ public sealed class StructuralLaneTests
     }
 
     [Fact]
-    public void APushIsNotEligible() =>
-        Assert.Equal(StructuralCondition.Routed, Assert.Single(Decide(Facts() with { PullRequest = false }).Unmet).Condition);
+    public void APushIsNotEligibleAndSaysItIsNoPullRequest()
+    {
+        StructuralUnmet unmet = Assert.Single(Decide(Facts() with { PullRequest = false, Routed = false }).Unmet);
+
+        Assert.Equal(StructuralCondition.Routed, unmet.Condition);
+        Assert.Contains("not a pull request", unmet.Why, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void ARedCommitOrAMalformedTrailerKeepsRedGreen() =>
