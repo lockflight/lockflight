@@ -11,4 +11,7 @@ internal sealed record TraceJudgement(SpecResolution Spec, CheckVerdict Verdict,
     /// comment to call out.
     /// </summary>
     public IReadOnlyList<string> MarkerChanges { get; init; } = [];
+
+    /// <summary>The structural tests new since the fork point and how each did there and at head; empty when there are none.</summary>
+    public IReadOnlyList<StructuralTest> Structural { get; init; } = [];
 }

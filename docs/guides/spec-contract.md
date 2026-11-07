@@ -123,6 +123,41 @@ call no production code (architecture tests that read types or sources). Mark su
 Mark only what the change must keep or the rule it establishes. A behaviour change, even inside a refactoring, stays a
 normal requirement with a test that goes red, then green.
 
+**A structural-only change needs no red commit.** When **every** requirement of the feature's spec is `[structural]` (a
+refactoring, or an architecture rule), the CI judge accepts the pull request without a `Lockflight-Red` commit, provided git
+shows all of these (the report job works them out again from git before it trusts the judge's evidence):
+
+- the change class comes from the target branch's routing policy, and the repository is no unit of a workspace shell;
+- no commit carries a `Lockflight-Red` trailer (a pull request with one is judged by its red commits);
+- **a person gates the spec:** it is added or changed in this pull request and the target branch's CODEOWNERS gives its path an
+  owner under `approvals.specPaths`, or spec-first applies and the spec was merged on the target branch first and is unchanged;
+- no routing signal carries behaviour a structural test does not pin: `config.changed`, `deps.changed`, `db.*`,
+  `api.contractFile`, `api.publicApiFile`, `binary.changed`, `critical.policy`, `ci.workflowChanged`.
+
+Then `red` and `tests.sinceRed` are N/A, and `trace` and `tests.existingChanged` are required, which the build must earn:
+
+- **Every requirement of the spec** is covered by a new structural test that passes on the fork point and at head (or is an
+  architecture rule), not only those the spec diff touches.
+- **No new test that is not structural.** A new test that names no structural requirement pins new behaviour, so trace is
+  NOT-EARNED (STRUCTURAL_CHANGE_NEW_TEST): that test belongs in a pull request with a red commit.
+- **Every existing test the pull request changed keeps what it pinned.** The judge runs the base's version of each one (with the
+  base's helpers and test inputs) on the head's code. It must pass there (EXISTING_TEST_OLD_VERSION_FAILS otherwise), so a test or
+  shared assertion helper loosened to accept new behaviour does not help. A test whose old version does not build on the new code,
+  as after a rename, is NOT-EARNED (EXISTING_TEST_OLD_VERSION_UNCHECKABLE): keep the old API as a thin shim for that pull request,
+  or change the tests in a pull request of their own.
+- Green, the gates and host tampering apply as for any pull request, and the class is never lowered.
+
+The comment then opens with *Structural-only change — no red commit required*, names the spec and how it was reviewed, and
+says whether the changed lines' coverage was measured (without a coverage collector it says they were not). A spec that is all
+`[structural]` but misses a condition keeps RED_MISSING, and the check's detail names the condition.
+
+What this shows, and what it does not: the structural tests held on the fork point and at head, every changed existing test's old
+version passes on the new code, and no test pins new behaviour. It does **not** show that the structural tests pin what the change
+could have broken: a test that asserts little passes on both sides. The markers are written by whoever writes the spec, an agent
+included; the claim "this change is structural" rests on the person who reviews the spec, which the platform enforces only where it
+requires code-owner review on the spec path ([guardrails and boundaries](guardrails-and-boundaries.md)). A refactor without a spec
+needs a red commit as before.
+
 **Placeholders.** The check rejects text left over from a template:
 
 - an ALL-CAPS word of three or more characters in brackets that is not a Markdown link: `[FEATURE NAME]`, `[DATE]`,

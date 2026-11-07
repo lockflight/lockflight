@@ -15,13 +15,15 @@ namespace Lockflight.Cli.Ci;
 /// when every file it names exists at head and names it (<see cref="OutsideVerification"/>); when every requirement is, trace is
 /// N/A, never PASS. A requirement marked <c>[structural]</c> is covered by a structural test that passes at head and on the base's
 /// code (<see cref="StructuralJudge"/>, the rule shared with local trace in <see cref="StructuralCheck"/>). In a unit repository of a workspace shell the spec is the
-/// shell's (<see cref="ShellSpecSource"/>) and the pull request answers for the requirements its red tests name.
+/// shell's (<see cref="ShellSpecSource"/>) and the pull request answers for the requirements its red tests name. A structural-only
+/// change (<see cref="StructuralLane"/>) answers for every requirement of its spec, and adds no test that is not structural.
 /// </summary>
 internal static class TraceJudge
 {
     public static async Task<TraceJudgement> DecideAsync(
         JudgePlan plan,
         IReadOnlyList<TestCase>? headInventory,
+        IReadOnlyList<TestCase>? baseInventory,
         IReadOnlyList<CycleJudgement> cycles,
         IReadOnlyList<SinceRedTest>? sinceRed,
         GreenJudgement? green,
@@ -90,7 +92,8 @@ internal static class TraceJudge
         }
 
         // A feature delivered over several pull requests: this one answers for the requirements its spec diff adds or changes (text
-        // or marker) and those its own red tests name; the others were traced when they were added.
+        // or marker) and those its own red tests name; the others were traced when they were added. A structural-only change answers
+        // for the whole spec: no red is needed because every requirement is covered here.
         IReadOnlyList<string> markerChanges = [];
         if (spec.Origin != SpecOrigin.Shell && plan.MergeBase is string mergeBase && spec.SpecPath is string specPath
             && await JudgeGit.ShowFileAsync(plan.Inputs.Root, mergeBase, specPath, cancellationToken) is string baseText)
@@ -98,7 +101,7 @@ internal static class TraceJudge
             IReadOnlyList<Requirement> baseRequirements = SpecDocument.Parse(baseText).Requirements;
             markerChanges = RequirementMarkers.ChangesSince(baseRequirements, requirements);
             Dictionary<string, Requirement> before = baseRequirements.DistinctBy(requirement => requirement.Id).ToDictionary(requirement => requirement.Id, StringComparer.Ordinal);
-            requirements = [.. requirements.Where(requirement => !before.TryGetValue(requirement.Id, out Requirement? old)
+            requirements = plan.InStructuralLane ? requirements : [.. requirements.Where(requirement => !before.TryGetValue(requirement.Id, out Requirement? old)
                 || old.Text != requirement.Text || old.Marker != requirement.Marker || named.Contains(requirement.Id))];
             if (requirements.Count == 0)
             {
@@ -130,7 +133,35 @@ internal static class TraceJudge
             _ => new TraceJudgement(spec, CheckVerdict.Fail, ReasonCode.TraceUncovered,
                 $"{tally.Covered}/{rows.Count} requirements of {spec.FeatureId} covered{excluded}; not covered by a test that went red, then green: {string.Join(", ", rows.Where(row => tally.Uncovered.Contains(row.RequirementId)).Select(Uncovered))}", Applies: true, rows),
         };
-        return judgement with { MarkerChanges = markerChanges };
+        judgement = judgement with { MarkerChanges = markerChanges, Structural = structural };
+        return plan.InStructuralLane && judgement.Verdict == CheckVerdict.Pass ? NewTestsOfStructuralChange(judgement, spec, headInventory ?? [], baseInventory, requirements) : judgement;
+    }
+
+    /// <summary>
+    /// A structural-only change adds only structural tests: a new test at head that names no structural requirement of the spec pins
+    /// new behaviour, which needs a red commit, so trace is NOT-EARNED.
+    /// </summary>
+    private static TraceJudgement NewTestsOfStructuralChange(
+        TraceJudgement judgement, SpecResolution spec, IReadOnlyList<TestCase> headInventory, IReadOnlyList<TestCase>? baseInventory, IReadOnlyList<Requirement> requirements)
+    {
+        if (baseInventory is null)
+        {
+            return judgement with { Verdict = CheckVerdict.NotEarned, Reason = ReasonCode.BaseNotCompared, Why = "the base's tests could not be listed, so the tests a structural-only change adds are not known" };
+        }
+
+        IReadOnlySet<string> structuralIds = StructuralCheck.Ids(requirements);
+        HashSet<string> onBase = [.. baseInventory.Select(test => test.Key)];
+        string[] plain = [.. headInventory.Where(test => !onBase.Contains(test.Key) && !StructuralCheck.IsStructural(test.Requirements, structuralIds))
+            .Select(test => TraceMatrix.ShortName(test.MethodFilter)).Distinct(StringComparer.Ordinal)];
+        return plain.Length == 0
+            ? judgement with { Why = $"{judgement.Why} (structural-only change)" }
+            : judgement with
+            {
+                Verdict = CheckVerdict.NotEarned,
+                Reason = ReasonCode.StructuralChangeNewTest,
+                Why = $"a structural-only change adds only structural tests, and {plain.Length} new tests name no structural requirement of {spec.FeatureId}: "
+                    + $"{string.Join(", ", plain.Take(3))}{(plain.Length > 3 ? " …" : string.Empty)}; a new test pins new behaviour, which needs a red commit",
+            };
     }
 
     private static string Uncovered(TraceRow row) => row.Note is string problem ? $"{row.RequirementId} ({problem})" : row.RequirementId;

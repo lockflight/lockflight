@@ -1,3 +1,4 @@
+using System.Globalization;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Testing;
 
@@ -76,28 +77,46 @@ internal sealed class OverlayRecheck(TreeBuilder trees, TimeProvider time)
     /// commit's, and it must pass every row. The other half of the D4 idea: the amend kept the bar the implementation had to meet.
     /// Its rows and assertions are counted, so an amend that dropped some is told apart.
     /// </summary>
-    public async Task<IReadOnlyList<OriginalCheck>> RunOriginalAsync(
-        JudgePlan plan, CycleJudgement cycle, IReadOnlyList<string> keys, TestSide side, string purpose, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<OriginalCheck>> RunOriginalAsync(
+        JudgePlan plan, CycleJudgement cycle, IReadOnlyList<string> keys, TestSide side, string purpose, CancellationToken cancellationToken) =>
+        RunOlderVersionsAsync(plan, cycle.Red.Commit, cycle.FingerprintsAtRed, keys, side, new OlderVersion(
+            "the red commit's version",
+            "the red commit's test files do not build on the head's code ({0}; after a change to an API the red tests use, prove the amend with a new red commit)",
+            "on the head's code the red commit's version of the test is not the one that went red (its fingerprint differs)"), purpose, cancellationToken);
+
+    /// <summary>
+    /// In a structural-only change, runs the base's version of the existing tests the pull request changed on the head's code: the
+    /// head is built with the base's whole test side laid over it (helpers and test inputs included, the head's C# test-side files
+    /// the base lacks removed), each test's fingerprint there must be the base's, and it must pass every row. A refactor keeps what
+    /// the old test pinned; a test or shared helper weakened in the pull request does not help, because the base's version runs.
+    /// </summary>
+    public Task<IReadOnlyList<OriginalCheck>> RunBaseVersionsAsync(
+        JudgePlan plan, string mergeBase, IReadOnlyDictionary<string, string> baseFingerprints, IReadOnlyList<string> keys, TestSide side, CancellationToken cancellationToken) =>
+        RunOlderVersionsAsync(plan, mergeBase, baseFingerprints, keys, side, new OlderVersion(
+            "the base's version",
+            "the base's test files do not build on the head's code ({0}); keep the API the old tests use for this pull request",
+            "on the head's code the base's version of the test is not the base's (its fingerprint differs)"), "existing tests' old versions on head", cancellationToken);
+
+    private async Task<IReadOnlyList<OriginalCheck>> RunOlderVersionsAsync(
+        JudgePlan plan, string olderCommit, IReadOnlyDictionary<string, string> olderFingerprints, IReadOnlyList<string> keys, TestSide side, OlderVersion version, string purpose, CancellationToken cancellationToken)
     {
         string root = plan.Inputs.Root;
-        string red = cycle.Red.Commit;
-        IReadOnlyList<string> overlay = side.Of(await JudgeGit.TreeFilesAsync(root, red, cancellationToken) ?? []);
+        IReadOnlyList<string> overlay = side.Of(await JudgeGit.TreeFilesAsync(root, olderCommit, cancellationToken) ?? []);
         HashSet<string> overlaid = [.. overlay];
-        // C# files added since red are left out (later cycles' tests, helpers and hooks); project files and other files added since
-        // stay, so a test project a later cycle added still builds.
+        // C# files added since the older commit are left out (later cycles' tests, new tests, helpers and hooks); project files and
+        // other files added since stay, so a test project added later still builds.
         string[] deleted = [.. side.Of(await JudgeGit.TreeFilesAsync(root, plan.Inputs.Head, cancellationToken) ?? [])
             .Where(path => !overlaid.Contains(path) && path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))];
-        TreeListing tree = await trees.ListOverlaidAsync(plan.Inputs.Head, red, overlay, deleted, purpose, cancellationToken);
+        TreeListing tree = await trees.ListOverlaidAsync(plan.Inputs.Head, olderCommit, overlay, deleted, purpose, cancellationToken);
         if (tree.Inventory is not IReadOnlyList<TestCase> inventory)
         {
-            string why = $"the red commit's test files do not build on the head's code ({TreeOutcomeNames.ToName(tree.Outcome)}; after a change to an API the red tests use, prove the amend with a new red commit)";
+            string why = string.Format(CultureInfo.InvariantCulture, version.NotBuilt, TreeOutcomeNames.ToName(tree.Outcome));
             return [.. keys.Select(key => new OriginalCheck(key, null, why))];
         }
 
         TestCase[] runnable = [.. inventory.Where(test => keys.Contains(test.Key, StringComparer.Ordinal)
-            && tree.Fingerprints.GetValueOrDefault(test.Key) is string print && print == cycle.FingerprintsAtRed.GetValueOrDefault(test.Key))];
-        List<OriginalCheck> results = [.. keys.Where(key => runnable.All(test => test.Key != key)).Select(key =>
-            new OriginalCheck(key, null, "on the head's code the red commit's version of the test is not the one that went red (its fingerprint differs)"))];
+            && tree.Fingerprints.GetValueOrDefault(test.Key) is string print && print == olderFingerprints.GetValueOrDefault(test.Key))];
+        List<OriginalCheck> results = [.. keys.Where(key => runnable.All(test => test.Key != key)).Select(key => new OriginalCheck(key, null, version.NotSame))];
         if (runnable.Length == 0)
         {
             return results;
@@ -114,13 +133,16 @@ internal sealed class OverlayRecheck(TreeBuilder trees, TimeProvider time)
         {
             ExecutedTest[] rows = [.. run.Where(row => row.Key == test.Key)];
             OriginalCheck check = rows.Length == 0
-                ? new OriginalCheck(test.Key, null, "the red commit's version did not run on the head's code")
+                ? new OriginalCheck(test.Key, null, $"{version.Name} did not run on the head's code")
                 : rows.All(row => row.Outcome == TestOutcome.Pass)
-                ? new OriginalCheck(test.Key, true, "the red commit's version passes on the head's code")
-                : new OriginalCheck(test.Key, false, $"the red commit's version fails on the head's code ({rows.First(row => row.Outcome != TestOutcome.Pass).ExceptionType ?? "not passed"})");
+                ? new OriginalCheck(test.Key, true, $"{version.Name} passes on the head's code")
+                : new OriginalCheck(test.Key, false, $"{version.Name} fails on the head's code ({rows.First(row => row.Outcome != TestOutcome.Pass).ExceptionType ?? "not passed"})");
             results.Add(check with { Rows = rows.Length, Assertions = assertions.TryGetValue(test.Key, out int count) ? count : null });
         }
 
         return results;
     }
+
+    /// <summary>How the messages name the older version: the red commit's or the base's.</summary>
+    private sealed record OlderVersion(string Name, string NotBuilt, string NotSame);
 }

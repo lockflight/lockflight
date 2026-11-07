@@ -86,6 +86,9 @@ internal static class ReasonCatalogue
         ReasonCode.NeedsWindowsRunner => "Run the judge on windows-latest: a person runs `lockflight update --project`, which moves the GitHub workflow's judge and review jobs there; on another CI platform, run the Lockflight job on a Windows agent.",
         ReasonCode.ScannerReplaced => "Do not re-run: something in the build replaced the secrets scanner after it was installed. A person reviews the pull request's build files (projects, props and targets, scripts) for what replaced it.",
         ReasonCode.EngineLockRefused => "Fix what the engine lock check names (the failed check is in the detail): a lock must match the release's attested hashes. A first lock is checked with the workflow's token: keep the judge's `github-token` input at its default with `contents: read` in the job's permissions, then re-run.",
+        ReasonCode.ExistingTestOldVersionFails => "The change altered behaviour the existing test pinned, so it is not structural-only: undo the behaviour change, or take the `[structural]` markers off the requirements that change behaviour and commit a red for them.",
+        ReasonCode.ExistingTestOldVersionUncheckable => "Keep the API the old test uses (as a thin shim for this pull request) so its old version builds on the new code, or change the test in a pull request of its own; remove the shim later.",
+        ReasonCode.StructuralChangeNewTest => "A structural-only change adds only tests that name its structural requirements: move the new test to a pull request of its own with a red commit, or name a structural requirement in it if it pins behaviour the change keeps.",
         _ => string.Empty,
     };
 

@@ -8,6 +8,9 @@ internal static class ExistingChangeNames
         ExistingChange.Rechecked => "changed-rechecked",
         ExistingChange.PassesOnBase => "changed-passes-on-base",
         ExistingChange.Uncheckable => "changed-uncheckable",
+        ExistingChange.Kept => "changed-kept",
+        ExistingChange.OldVersionFails => "changed-old-version-fails",
+        ExistingChange.OldVersionUncheckable => "changed-old-version-uncheckable",
         _ => throw new ArgumentOutOfRangeException(nameof(change), change, "Unknown change."),
     };
 }

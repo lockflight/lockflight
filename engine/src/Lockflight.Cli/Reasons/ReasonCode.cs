@@ -228,4 +228,22 @@ internal enum ReasonCode
     /// nothing was built (<c>NEEDS_WINDOWS_RUNNER</c>).
     /// </summary>
     NeedsWindowsRunner = 70,
+
+    /// <summary>
+    /// In a structural-only change, the base's version of an existing test the pull request changed fails on the head's code: the
+    /// change altered behaviour that test pinned (<c>EXISTING_TEST_OLD_VERSION_FAILS</c>).
+    /// </summary>
+    ExistingTestOldVersionFails = 71,
+
+    /// <summary>
+    /// In a structural-only change, the base's version of an existing test the pull request changed does not build or run on the
+    /// head's code (<c>EXISTING_TEST_OLD_VERSION_UNCHECKABLE</c>).
+    /// </summary>
+    ExistingTestOldVersionUncheckable = 72,
+
+    /// <summary>
+    /// A structural-only change adds a test that names no structural requirement of its spec: a new test pins new behaviour
+    /// (<c>STRUCTURAL_CHANGE_NEW_TEST</c>).
+    /// </summary>
+    StructuralChangeNewTest = 73,
 }

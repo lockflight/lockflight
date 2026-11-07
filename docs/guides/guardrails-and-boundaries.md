@@ -54,6 +54,7 @@ Lockflight separates two kinds of control and labels every feature with one of t
 | CI judge: change class (risk routing) | G for the file roles and signals; B only for the target branch's routing policy | on a pull request the judge computes the class as `lockflight route show` does, with the `routing:` policy read from the target branch, so the pull request cannot lower its own thresholds or protected paths; the roles and signals are heuristics over the diff that a determined change can evade. Red/green, tests since red and trace apply only when production code lines changed (a production file, the C# logic of a Razor file, a test project production references, a file a `<Compile Include>` names or whose extension `<DefaultLanguageSourceExtension>` names, or a `<Compile>` item of a production project or build-wide file). A push with no previous commit falls back to the interim rules |
 | CI judge: policy vs base (`policy`) | G, strong — computed from git before any pull request code runs, but reported by the job that then runs that code; only for the settings it compares | on a pull request the judge reads the head's `lockflight.yaml` from git and FAILs when it is looser than the base's: a gate mode lowered, a protected, critical, database or API path, a required workflow, a layer or a unit removed, a path added to what routing or the judge leaves out or treats as a test input, a routing threshold raised, a requirement starting at a higher class, the approvals check or default weakened, a coverage threshold lowered, a unit repository's `shell:` pointer removed or moved, or the file removed. Each one is named. This run is judged by the base's policy anyway; the FAIL makes a person decide to merge a weaker policy (tighten it back, or bypass through the platform). A head this engine cannot parse (a newer engine's key) is NOT-EARNED, not compared. Best effort: globs and layers are compared as written, so a rewritten glob or a narrowed layer is not seen. Time limits, the review model and budget, the build file, the stop filter and `ci.redCommits` are not compared |
 | CI judge: trace | G, strong — not a boundary | built from the results above, so it is as strong as they are: only tests that went red at a red commit, are still that test and pass at head count. A requirement marked `[outside .NET: …]` is excluded on a weaker footing: its files exist and name it, and no test of theirs runs; the marker is shown in the approval digest and the comment, and is for a person to accept |
+| CI judge: a structural-only change needs no red commit (a spec all `[structural]`, `structuralChange` in the evidence) | **G**; the spec's review is **B, delegated** where the platform requires code-owner review on the spec path | whether the pull request qualifies is decided from git (the report job decides it again and refuses evidence that claims it where git does not). The `[structural]` markers are written by whoever writes the spec, an agent included; what holds the claim "this change is structural" is the person who reviews that spec: changed in the pull request under the target branch's CODEOWNERS, or merged first under spec-first. Lockflight cannot see whether the platform requires that review, and Azure Repos reads no CODEOWNERS (only spec-first there). The build then shows the structural tests held on the fork point and at head, that every changed existing test's old version passes on the new code and that no new test pins new behaviour; not that the structural tests pin what the change could break ([below](#a-structural-only-change)) |
 | CI review (`lockflight ci review`) | G | a model; its API key can be reached by the pull request's code, which its reproductions build and run in that job; advisory unless the class requires it |
 | Review of record (`lockflight review`) | G | independent prompt, but the agent may skip running it |
 | Review prompt hardening: the instructions are compiled into the engine; the reviewer runs with `--restricted --safe-mode` (both in every Claude Code version Lockflight supports), so the working tree's `CLAUDE.md`, skills, agents and settings are not loaded; project guidance is the base commit's `CLAUDE.md`; the spec, the diff and that guidance sit in fences with a random per-run marker, labelled as data the reviewer must not take instructions from | G | a model can still be swayed by what it reads; injected text is measured in the review benchmark, not ruled out |
@@ -321,6 +322,27 @@ What no red can tell, with `lockflight red`, `redgreen red` or a hand-typed trai
   one token red test, and un-skipped tests are not new, so they are never proven red.
 - **A feature split into small pull requests** so that each stays below the class that needs a spec (see
   [risk routing](risk-routing.md#what-routing-does-not-see)).
+
+## A structural-only change
+
+A pull request whose spec is all `[structural]` (a refactoring, an architecture rule) is judged without a red commit when a
+person gates that spec ([spec contract](spec-contract.md#specmd)). The waiver is decided from git: the report job plans the run
+again and refuses evidence that turns red off, or claims a structural-only change, where git does not make the pull request one.
+What the build must still earn (trace over every requirement, no new non-structural test, the old version of every changed
+existing test passing on the new code, green, the gates) comes from the pull request's tests running in the judge job, the same
+strong guardrail as red/green.
+
+What it rests on, and what remains for review:
+
+- **The markers are agent-writable.** Any spec author can mark a requirement `[structural]`. The human gate is the review of the
+  spec: a code owner of the spec path in this pull request, or the spec merged first under spec-first. Where the platform does not
+  require code-owner review on the spec path, nothing enforces that a person looked.
+- **A behaviour requirement worded as structural.** A reviewer who accepts it accepts the change; the comment's headline says the
+  claim is accepted by review, not proved.
+- **A test that asserts little.** A structural test that passes on both sides, or an architecture test that only checks a type
+  exists, satisfies trace. Review what each structural test asserts.
+- **A spec merged first.** Under spec-first a later pull request on a branch named after an all-`[structural]` feature reuses that
+  spec's review; the headline names the spec, and the person merging checks it is the change the spec describes.
 
 ## Proposing a protected change
 

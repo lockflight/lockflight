@@ -41,11 +41,13 @@ internal static class CheckReasons
         _ => ReasonCode.None,
     };
 
-    /// <summary>The code of an existing test's re-check on the base; <see cref="ReasonCode.None"/> for one that still tells the behaviours apart.</summary>
+    /// <summary>The code of an existing test's re-check; <see cref="ReasonCode.None"/> for one that still tells the behaviours apart, or whose old version is kept.</summary>
     public static ReasonCode Of(ExistingChange state) => state switch
     {
         ExistingChange.PassesOnBase => ReasonCode.ExistingTestPassesOnBase,
         ExistingChange.Uncheckable => ReasonCode.ExistingTestUncheckable,
+        ExistingChange.OldVersionFails => ReasonCode.ExistingTestOldVersionFails,
+        ExistingChange.OldVersionUncheckable => ReasonCode.ExistingTestOldVersionUncheckable,
         _ => ReasonCode.None,
     };
 }

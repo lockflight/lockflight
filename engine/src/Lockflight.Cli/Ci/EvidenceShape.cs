@@ -6,7 +6,7 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// The structure of <c>lockflight.ci-evidence/v1</c> the report passes on into the verdict of record, beyond the checks it reads
-/// itself: the event a string, the change class, feature and host-tampering sections objects or null, the cycles an array, the red commits
+/// itself: the event a string, the change class, feature, host-tampering and structural-change sections objects or null, the cycles an array, the red commits
 /// objects, no <c>judge</c> field (the report's own), the
 /// embedded gate result a <c>lockflight.result/v1</c> object, and the embedded blocked report a valid <c>lockflight.blocked/v1</c>
 /// (read by the engine's own reader). Evidence that fails it is an ERROR, never a verdict.json that breaks the schema.
@@ -23,7 +23,7 @@ internal static class EvidenceShape
             return "'event' must be a string";
         }
 
-        foreach (string property in new[] { "changeClass", "feature", "hostTampering", "policy", "engine", "base", "approvals", "specDiff", "processes" })
+        foreach (string property in new[] { "changeClass", "feature", "hostTampering", "policy", "engine", "base", "approvals", "specDiff", "processes", "structuralChange" })
         {
             if (evidence.ContainsKey(property) && evidence[property] is not null and not JsonObject)
             {

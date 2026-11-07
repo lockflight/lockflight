@@ -257,7 +257,15 @@
       "type": [
         "array",
         "null"
-      ]
+      ],
+      "description": "Each existing test the pull request changed: key, state and why. The state is changed-rechecked, changed-passes-on-base or changed-uncheckable (its head version on the base's code), or, in a structural-only change, changed-kept, changed-old-version-fails or changed-old-version-uncheckable (its base version on the head's code); more may be added."
+    },
+    "structuralChange": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Present when the spec's requirements are all [structural] and the red check would be on: whether the pull request is judged as a structural-only change (no red commit; trace and tests.existingChanged required), decided from git. eligible; unmet (condition: routed, no-red-commit, spec-reviewed or no-behaviour-signal; why); route (codeowners, spec-first or null); spec; requirements; then from the build: tests (key, outcome: preserved, architecture-rule, behaviour-changed, fails-at-head or uncheckable), existingChanged (kept, changed, uncheckable counts) and coverage (measured or not-measured)."
     },
     "hostTampering": {
       "type": [

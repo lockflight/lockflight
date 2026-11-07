@@ -9,7 +9,7 @@ project, with an agent or in Visual Studio or Rider.
 **On this page:** [The shape of a fix](#the-shape-of-a-fix) · [With an agent](#with-an-agent) ·
 [In Visual Studio or Rider](#in-visual-studio-or-rider) · [From a terminal](#from-a-terminal) ·
 [When the red is rejected](#when-the-red-is-rejected) · [When it is refused](#when-it-is-refused) ·
-[After the red](#after-the-red) · [What it does not prove](#what-it-does-not-prove)
+[After the red](#after-the-red) · [A refactor](#a-refactor) · [What it does not prove](#what-it-does-not-prove)
 
 ## The shape of a fix
 
@@ -117,6 +117,14 @@ A test deleted, newly skipped or made `Explicit` since the fork point refuses th
   judge's checks with the target branch's policy and gives the verdict and reason codes CI gives for the same commits. When it
   does not pass, `lockflight ci explain` lists each check with its reason, what to do next and its entry in
   [reasons](reasons.md). With the plugin, the `check-pr` skill does both.
+
+## A refactor
+
+A refactor changes production code too, so it needs a red commit as a fix does, unless it comes with a spec whose requirements
+are all `[structural]`. Then a person reviews that spec (changed in the pull request under CODEOWNERS, or merged first under
+spec-first), the pull request adds structural tests that pass before and after the change, and the judge needs no red commit
+([structural-only change](spec-contract.md#specmd)). A refactor without a spec, or one that also changes behaviour, keeps the
+red commit: write a test for the behaviour and run `lockflight red` before the change.
 
 ## What it does not prove
 

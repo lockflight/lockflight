@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.ApprovalsOfRecord;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Evidence.Blocked;
+using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Lifecycle;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Processes.Survivors;
@@ -35,6 +36,33 @@ internal static class CiEvidence
 
     /// <param name="engineSha256">The target branch's engine lock hash of this engine (<see cref="JudgeEngineHash"/>); null without one.</param>
     public static JsonObject Build(JudgeRun run, string engineVersion, string runtimeIdentifier, string? engineSha256)
+    {
+        JsonObject evidence = Evidence(run, engineVersion, runtimeIdentifier, engineSha256);
+        if (run.Plan.StructuralChange is StructuralEligibility structural)
+        {
+            // Present only when the spec is all [structural], so evidence of every other pull request keeps its shape.
+            evidence["structuralChange"] = StructuralChangeNode(structural, run.Findings);
+        }
+
+        return evidence;
+    }
+
+    /// <summary>The plan as <c>lockflight ci --plan</c> prints it, with the structural-only change decision when there is one.</summary>
+    public static JsonObject Plan(JudgePlan plan)
+    {
+        JsonObject printed = PlanNode(plan);
+        if (plan.StructuralChange is StructuralEligibility structural)
+        {
+            printed["structuralChange"] = EligibilityNode(structural);
+        }
+
+        return printed;
+    }
+
+    /// <summary>Cuts a string from the pull request to <see cref="MaxTextLength"/> characters.</summary>
+    public static string Cap(string text) => text.Length <= MaxTextLength ? text : text[..(MaxTextLength - 1)] + "…";
+
+    private static JsonObject Evidence(JudgeRun run, string engineVersion, string runtimeIdentifier, string? engineSha256)
     {
         JudgePlan plan = run.Plan;
         JudgeInputs inputs = plan.Inputs;
@@ -161,8 +189,7 @@ internal static class CiEvidence
         ["outputHeld"] = Strings(processes.OutputHeld.Select(Cap)),
     };
 
-    /// <summary>The plan as <c>lockflight ci --plan</c> prints it.</summary>
-    public static JsonObject Plan(JudgePlan plan) => new()
+    private static JsonObject PlanNode(JudgePlan plan) => new()
     {
         ["head"] = plan.Inputs.Head,
         ["base"] = plan.Inputs.Base,
@@ -182,9 +209,6 @@ internal static class CiEvidence
         })]),
         ["builds"] = plan.Builds,
     };
-
-    /// <summary>Cuts a string from the pull request to <see cref="MaxTextLength"/> characters.</summary>
-    public static string Cap(string text) => text.Length <= MaxTextLength ? text : text[..(MaxTextLength - 1)] + "…";
 
     private static JsonObject ChangeClassNode(Classification classification, string engineVersion) => new()
     {
@@ -247,6 +271,49 @@ internal static class CiEvidence
             ["problems"] = Strings(facts.Problems.Select(Cap)),
         };
     }
+
+    /// <summary>
+    /// A structural-only change (<see cref="StructuralLane"/>): whether the pull request is one, the conditions it does not meet, how
+    /// a person gated the spec, the spec and its requirements, then what the build found: each structural test's outcome, the
+    /// existing tests the pull request changed by their old version's result on the head's code, and whether the changed lines'
+    /// coverage was measured.
+    /// </summary>
+    private static JsonObject StructuralChangeNode(StructuralEligibility structural, JudgeFindings findings)
+    {
+        JsonObject node = EligibilityNode(structural);
+        IReadOnlyList<ExistingChangedTest> existing = findings.ExistingChanged ?? [];
+        node["tests"] = new JsonArray([.. (findings.Trace?.Structural ?? []).Select(test => new JsonObject
+        {
+            ["key"] = Cap(test.Key),
+            ["outcome"] = StructuralOutcomeNames.ToName(test.Outcome),
+        })]);
+        node["existingChanged"] = new JsonObject
+        {
+            ["kept"] = existing.Count(test => test.State == ExistingChange.Kept),
+            ["changed"] = existing.Count(test => test.State is ExistingChange.OldVersionFails or ExistingChange.PassesOnBase),
+            ["uncheckable"] = existing.Count(test => test.State is ExistingChange.OldVersionUncheckable or ExistingChange.Uncheckable),
+        };
+        node["coverage"] = CoverageMeasured(findings.Gates?.Result) ? "measured" : "not-measured";
+        return node;
+    }
+
+    private static JsonObject EligibilityNode(StructuralEligibility structural) => new()
+    {
+        ["eligible"] = structural.Eligible,
+        ["unmet"] = new JsonArray([.. structural.Unmet.Select(unmet => new JsonObject
+        {
+            ["condition"] = StructuralConditionNames.ToName(unmet.Condition),
+            ["why"] = Cap(unmet.Why),
+        })]),
+        ["route"] = structural.Route is StructuralRoute route ? StructuralRouteNames.ToName(route) : null,
+        ["spec"] = Cap(structural.SpecPath),
+        ["requirements"] = Strings(structural.Requirements.Select(Cap)),
+    };
+
+    /// <summary>Whether the gates' patch coverage step judged the changed lines (a coverage collector is set and it ran).</summary>
+    private static bool CoverageMeasured(JsonNode? gates) =>
+        (gates?["steps"]?.AsArray() ?? []).Any(step => step?["id"] is JsonValue id && id.TryGetValue(out string? name) && name == CoverageStep.StepName
+            && step["verdict"] is JsonValue verdict && verdict.TryGetValue(out string? judged) && judged is "PASS" or "FAIL");
 
     private static JsonObject Phase(string phase, bool delegated, string detail, string? problem, string rule) => new()
     {
