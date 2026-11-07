@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Lockflight.Cli.Processes;
 using Lockflight.Cli.Processes.Survivors;
 
@@ -104,6 +105,58 @@ public sealed class ProcessScopeTests
 
         Assert.Equal(144, Unsafe.SizeOf<JobLimits>());
     }
+
+    [Fact]
+    public void AProcessOutsideTheJobIsNeverEnded()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Job objects are a Windows mechanism.");
+        nint job = WindowsNative.CreateJobObject(0, 0);
+        using Process outsider = Sleeper();
+        try
+        {
+            // As when a job process has exited and its id now names a process the job never held.
+            WindowsProcessScope.Ending ending = WindowsProcessScope.Stop(job, outsider.Id);
+
+            Assert.Null(ending.Handle);
+            Assert.False(ending.Unchecked);
+            Assert.False(outsider.WaitForExit(TimeSpan.FromMilliseconds(500)));
+        }
+        finally
+        {
+            outsider.Kill();
+            WindowsNative.CloseHandle(job);
+        }
+    }
+
+    [Fact]
+    public void AProcessInTheJobIsEndedThroughTheHandleThatCheckedIt()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Job objects are a Windows mechanism.");
+        nint job = WindowsNative.CreateJobObject(0, 0);
+        using Process member = Sleeper();
+        try
+        {
+            Assert.True(WindowsNative.AssignProcessToJobObject(job, member.Handle));
+
+            WindowsProcessScope.Ending ending = WindowsProcessScope.Stop(job, member.Id);
+            using SafeHandle? handle = ending.Handle;
+
+            Assert.NotNull(handle);
+            Assert.True(member.WaitForExit(TimeSpan.FromSeconds(5)));
+        }
+        finally
+        {
+            if (!member.HasExited)
+            {
+                member.Kill();
+            }
+
+            WindowsNative.CloseHandle(job);
+        }
+    }
+
+    private static Process Sleeper() =>
+        Process.Start(new ProcessStartInfo("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", $"Start-Sleep {DaemonSeconds}"]) { CreateNoWindow = true })!;
 
     private static bool IsDaemon(SweptProcess process) => OperatingSystem.IsWindows()
         ? process.Image.Contains("powershell", StringComparison.OrdinalIgnoreCase)
