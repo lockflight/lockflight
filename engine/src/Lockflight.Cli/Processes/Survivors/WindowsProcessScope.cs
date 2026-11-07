@@ -1,7 +1,7 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 namespace Lockflight.Cli.Processes.Survivors;
 
@@ -17,6 +17,11 @@ internal sealed unsafe class WindowsProcessScope(nint job, int engine) : IProces
     private const int MaxRounds = 5;
     private const int FirstCapacity = 64;
     private const int ListHeaderSize = 8;
+    private const int MaxImageLength = 1024;
+    private const uint KilledExitCode = 1;
+    private const uint EndAccess = WindowsNative.ProcessTerminate | QueryAccess;
+    private const uint QueryAccess = WindowsNative.ProcessQueryLimitedInformation | WindowsNative.Synchronize;
+    private const string UnknownImage = "?";
     private static readonly TimeSpan StopTime = TimeSpan.FromSeconds(2);
 
     public SweepMechanism Mechanism => SweepMechanism.Job;
@@ -65,7 +70,7 @@ internal sealed unsafe class WindowsProcessScope(nint job, int engine) : IProces
     public IReadOnlyList<SweptProcess> Sweep()
     {
         Stopwatch clock = Stopwatch.StartNew();
-        Dictionary<int, (Process? Process, string Image, bool Refused)> found = [];
+        Dictionary<int, Ending> found = [];
         try
         {
             for (int round = 0; round < MaxRounds && clock.Elapsed < StopTime; round++)
@@ -78,7 +83,7 @@ internal sealed unsafe class WindowsProcessScope(nint job, int engine) : IProces
 
                 foreach (int pid in fresh)
                 {
-                    found[pid] = Kill(pid);
+                    found[pid] = Stop(job, pid);
                 }
             }
 
@@ -87,70 +92,82 @@ internal sealed unsafe class WindowsProcessScope(nint job, int engine) : IProces
         }
         finally
         {
-            foreach ((Process? process, _, _) in found.Values)
+            foreach (Ending ending in found.Values)
             {
-                process?.Dispose();
+                ending.Handle?.Dispose();
             }
         }
     }
 
-    private static (Process? Process, string Image, bool Refused) Kill(int pid)
+    /// <summary>
+    /// Ends the process <paramref name="pid"/> names if it is still in <paramref name="job"/>. The id was read from the job's list, and
+    /// the process may have exited and its id been given to another process since, so the process is opened first, checked to be in
+    /// the job through that handle, and ended through the same handle: a process outside the job is never ended.
+    /// </summary>
+    /// <returns>The opened process (null when it is gone or is not the job's any more), its image, and whether it could not be checked.</returns>
+    internal static Ending Stop(nint job, int pid)
     {
-        Process process;
-        try
+        bool canEnd = true;
+        SafeProcessHandle handle = WindowsNative.OpenProcess(EndAccess, inherit: false, pid);
+        if (handle.IsInvalid)
         {
-            process = Process.GetProcessById(pid);
-        }
-        catch (ArgumentException)
-        {
-            return (null, "?", false);
+            int error = Marshal.GetLastPInvokeError();
+            handle.Dispose();
+            if (error != WindowsNative.AccessDenied)
+            {
+                // No process has that id any more.
+                return new Ending(null, UnknownImage, Unchecked: false);
+            }
+
+            canEnd = false;
+            handle = WindowsNative.OpenProcess(QueryAccess, inherit: false, pid);
+            if (handle.IsInvalid)
+            {
+                handle.Dispose();
+                return new Ending(null, UnknownImage, Unchecked: true);
+            }
         }
 
-        string image = Image(process);
-        try
+        if (!WindowsNative.IsProcessInJob(handle, job, out bool inJob))
         {
-            process.Kill();
-            return (process, image, false);
+            handle.Dispose();
+            return new Ending(null, UnknownImage, Unchecked: true);
         }
-        catch (Win32Exception)
+
+        if (!inJob)
         {
-            return (process, image, true);
+            // The job's process exited and its id now names a process outside the job.
+            handle.Dispose();
+            return new Ending(null, UnknownImage, Unchecked: false);
         }
-        catch (InvalidOperationException)
+
+        string image = Image(handle);
+        if (canEnd)
         {
-            // It exited before the kill.
-            return (process, image, false);
+            // It may refuse (it is exiting already, or is protected): waiting on the handle tells which.
+            WindowsNative.TerminateProcess(handle, KilledExitCode);
         }
+
+        return new Ending(handle, image, Unchecked: false);
     }
 
-    private static SurvivorOutcome Outcome((Process? Process, string Image, bool Refused) found, Stopwatch waiting)
+    private static SurvivorOutcome Outcome(Ending ending, Stopwatch waiting)
     {
-        if (found.Process is not Process process)
+        if (ending.Handle is not SafeProcessHandle handle)
         {
-            return SurvivorOutcome.Exited;
+            return ending.Unchecked ? SurvivorOutcome.NotStopped : SurvivorOutcome.Exited;
         }
 
         TimeSpan left = StopTime - waiting.Elapsed;
-        return !found.Refused && process.WaitForExit(left > TimeSpan.Zero ? left : TimeSpan.Zero) ? SurvivorOutcome.Stopped : SurvivorOutcome.NotStopped;
+        uint milliseconds = left > TimeSpan.Zero ? (uint)left.TotalMilliseconds : 0;
+        return WindowsNative.WaitForSingleObject(handle, milliseconds) == WindowsNative.WaitObject0 ? SurvivorOutcome.Stopped : SurvivorOutcome.NotStopped;
     }
 
-    private static string Image(Process process)
+    private static string Image(SafeProcessHandle handle)
     {
-        try
-        {
-            return process.MainModule?.FileName ?? process.ProcessName;
-        }
-        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or NotSupportedException)
-        {
-            try
-            {
-                return process.ProcessName;
-            }
-            catch (InvalidOperationException)
-            {
-                return "?";
-            }
-        }
+        char* name = stackalloc char[MaxImageLength];
+        int length = MaxImageLength;
+        return WindowsNative.QueryFullProcessImageName(handle, 0, name, ref length) ? new string(name, 0, length) : UnknownImage;
     }
 
     /// <summary>The ids of the job's processes, the engine among them (<c>JOBOBJECT_BASIC_PROCESS_ID_LIST</c>: two counts, then the ids).</summary>
@@ -176,4 +193,7 @@ internal sealed unsafe class WindowsProcessScope(nint job, int engine) : IProces
             }
         }
     }
+
+    /// <summary>A job process the sweep tried to end: its handle (null when gone or no longer the job's), image, and whether it could not be checked.</summary>
+    internal sealed record Ending(SafeProcessHandle? Handle, string Image, bool Unchecked);
 }
