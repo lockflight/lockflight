@@ -52,18 +52,34 @@ internal static class JudgeExecutor
 
             GateStep secrets = await SecretsJudge.ScanAsync(worktree, plan, context, cancellationToken);
             TreeBuilder trees = new(worktree, plan.Policy, root, budget, time);
-            ProcessSweep.Enter(SweepRegion.Head);
+            if (await EnterAsync(SweepRegion.Head, plan, cancellationToken) is JudgeFindings stoppedHead)
+            {
+                return stoppedHead;
+            }
+
             HeadRun head = await HeadRunner.RunAsync(trees, plan, cancellationToken);
             await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
-            ProcessSweep.Enter(SweepRegion.Base);
+            if (await EnterAsync(SweepRegion.Base, plan, cancellationToken) is JudgeFindings stoppedBase)
+            {
+                return stoppedBase;
+            }
+
             TreeListing? baseListing = plan.MergeBase is string mergeBase ? await trees.ListAsync(mergeBase, "base", fresh: false, cancellationToken) : null;
             BaseSkipCheck baseSkips = await BaseSkipsAsync(trees, head, baseListing, cancellationToken);
             await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
             IReadOnlySet<string> structuralIds = await StructuralJudge.IdsAsync(plan, cancellationToken);
-            ProcessSweep.Enter(SweepRegion.Red);
+            if (await EnterAsync(SweepRegion.Red, plan, cancellationToken) is JudgeFindings stoppedRed)
+            {
+                return stoppedRed;
+            }
+
             IReadOnlyList<CycleJudgement>? cycles = judgesReds ? await new RedCommitJudge(trees, time).JudgeAsync(plan, structuralIds, cancellationToken) : null;
             await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
-            ProcessSweep.Enter(SweepRegion.Rechecks);
+            if (await EnterAsync(SweepRegion.Rechecks, plan, cancellationToken) is JudgeFindings stoppedRechecks)
+            {
+                return stoppedRechecks;
+            }
+
             GreenJudgement greenAtHead = baseListing is { AsBaseline: null }
                 ? new GreenJudgement(CheckVerdict.NotEarned, CheckReasons.BaseNotListed(baseListing.Outcome), $"the base {CommitIds.Short(plan.MergeBase!)} could not be listed to compare with ({TreeOutcomeNames.ToName(baseListing.Outcome)}: {baseListing.Detail})", 0, 0, [], [], new Dictionary<string, string>(), [])
                 : GreenJudge.Decide(head, baseListing?.AsBaseline, baseSkips, cycles ?? []);
@@ -80,7 +96,11 @@ internal static class JudgeExecutor
                 ? await TraceJudge.DecideAsync(plan, head.Listing.Inventory, baseListing?.Inventory, cycles ?? [], sinceRed, greenAtHead, await new StructuralJudge(trees, time).JudgeAsync(plan, head, baseListing?.AsBaseline, structuralIds, cancellationToken), cancellationToken)
                 : null;
             await BuildServers.ShutdownAsync(worktree.Root, cancellationToken);
-            ProcessSweep.Enter(SweepRegion.Gates);
+            if (await EnterAsync(SweepRegion.Gates, plan, cancellationToken) is JudgeFindings stoppedGates)
+            {
+                return stoppedGates;
+            }
+
             (CheckVerdict Verdict, ReasonCode Reason, string Why, JsonNode? Result, string? TestStep) gates = !budget.TryStart("gates")
                 ? (CheckVerdict.NotEarned, ReasonCode.CiBudgetExhausted, budget.Why(trees.Builds.Count), null, null)
                 : await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: false, cancellationToken) is string notMoved
@@ -118,6 +138,24 @@ internal static class JudgeExecutor
             await worktree.RemoveAsync();
         }
     }
+
+    /// <summary>
+    /// Ends one part of the run and starts the next (<see cref="ProcessSweep.EnterAsync"/>). When a sweep has found a process or
+    /// container it could not stop, nothing read from here on can be trusted, so the judge runs no further part: every check that
+    /// builds is ERROR with <see cref="ReasonCode.SurvivorNotStopped"/>. Null when the run goes on.
+    /// </summary>
+    private static async Task<JudgeFindings?> EnterAsync(SweepRegion region, JudgePlan plan, CancellationToken cancellationToken)
+    {
+        await ProcessSweep.EnterAsync(region, cancellationToken);
+        return ProcessSweep.Current is { NotStopped: > 0 } sweep
+            ? JudgeFindings.None with { NotBuilt = (CheckVerdict.Error, ReasonCode.SurvivorNotStopped, NotStoppedWhy(sweep.NotStopped)), HeadCommit = plan.Inputs.Head }
+            : null;
+    }
+
+    /// <summary>The detail line of a check made ERROR by processes or containers the sweeps could not stop.</summary>
+    public static string NotStoppedWhy(int count) =>
+        $"{count} {(count == 1 ? "process or container" : "processes or containers")} the pull request's code started could not be stopped "
+        + "(another user's, typically started through sudo), so nothing the judge read after it started can be trusted; the evidence's processes lists them";
 
     /// <summary>
     /// Runs the base tests head skipped at run time on the base's build, still in the worktree after the base was listed, within the

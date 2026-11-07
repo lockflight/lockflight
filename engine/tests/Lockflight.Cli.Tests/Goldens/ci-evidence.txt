@@ -201,9 +201,11 @@
         "command": "sleep 600",
         "user": "runner",
         "kind": "process",
+        "container": null,
         "outcome": "stopped"
       }
     ],
+    "notStopped": 0,
     "more": 0,
     "outputHeld": [
       "dotnet test"

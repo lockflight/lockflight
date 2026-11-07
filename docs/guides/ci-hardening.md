@@ -163,8 +163,9 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
   pull request or update it from the target branch: re-running the old check judges against the old base.
 - **A strong guardrail, not a boundary:** the evidence file itself. In 0.3.0 the judge writes its evidence in the same job
   as the pull request's code, so a process that code leaves running could rewrite it before the report jobs read it. On
-  Linux and Windows the judge stops the processes it can find right before it writes the evidence (see below); one started
-  outside the engine's tree, or as root, is not found. Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0.
+  Linux and Windows the judge stops every process the pull request's code left running whenever it has no child of its own
+  running, and on GitHub-hosted runners removes the Docker containers created during the run, before it writes the evidence; one it cannot stop
+  makes the verdict ERROR (see below). One started outside the engine's tree, or with root rights, is not found. Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0.
 - **What the pull request's code can affect in the judge job.** The pull request's code runs as the same user as the engine,
   in the same job, before the judge has finished. On GitHub-hosted runners that user has administrator rights (passwordless
   `sudo` on Linux and macOS, an administrator account on Windows), so the code can act as root on the runner's VM:
@@ -194,20 +195,39 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
     run inside the test host;
   - an MSBuild `<Exec>` task or inline task in a project, props or targets file runs arbitrary code at build time;
   - the host-tampering scan reads the test assemblies only: production code and MSBuild files are not scanned;
-  - processes the pull request's code starts and leaves running (a daemon an `<Exec>` starts, a process a test forgets) are
-    looked for, stopped and listed, but they do not change a verdict yet. Whenever the engine has none of its own child
-    processes running (after each build, test run, git call and gate step), it finds every process its children started that
-    is still alive, kills it, and records it in the evidence's `processes` object (where it was found, the step it outlived,
-    its command line, and whether it was stopped) and in `lockflight ci`'s output. On Linux a process that exited by
-    itself just before the check (an MSBuild worker node a moment after its build) is reaped and listed as `exited`. On Linux the engine makes itself a child
-    subreaper, so a daemon that detaches (a double fork, `setsid`, `nohup`) is re-parented to the engine and found; on
-    Windows the engine runs in a job object, which every process it or its descendants create joins. macOS is not checked
-    yet (`mechanism: none`). A guardrail, not a boundary: code with the runner's root or administrator rights can start a
-    process outside the engine's tree (`sudo systemd-run`, a scheduled task, WMI, a Docker container, which the runner's
-    user can start without `sudo`) or one the engine cannot kill (a `sudo` child), and can change files a later step runs
-    without leaving any process behind. A process that keeps a build's or a test run's output open does not hold up the
-    judge: the engine waits 2 seconds for the output to end after the process it started has exited, then stops reading,
-    keeps what was written, and notes the command in the summary and in the evidence (`processes.outputHeld`).
+  - processes the pull request's code starts and leaves running (a daemon an `<Exec>` starts, a child a source generator
+    starts inside the compiler, a process a test forgets) are stopped. Whenever the engine has none of its own child processes
+    running (after each build, test run, git call and gate step), it finds every process its children started that is still
+    alive, kills it, and records it in the evidence's `processes` object (where it was found, the step it outlived, its command
+    line, and the outcome), in `lockflight ci`'s output and in the PR comment. So nothing the pull request started is running
+    when the engine reads a test assembly, a test report or the gates' result, or writes the evidence. A process that was
+    stopped does not change the verdict (an honest test suite leaves stragglers too); one that is still running after the
+    engine tried (a process of another user, typically started through `sudo`) makes `green` and `gates` ERROR
+    ([`SURVIVOR_NOT_STOPPED`](reasons.md#survivor_not_stopped)), and when it is found before the gates the judge runs no
+    further part of its run. On Linux the engine makes itself a child subreaper, so a daemon that detaches (a double fork,
+    `setsid`, `nohup`) is re-parented to the engine and found; a signal it ignores does not help it, since the engine stops it
+    and then kills it. On Windows the engine runs in a job object, which every process it or its descendants create joins
+    (`start /b`, `Start-Process`, a detached `Process.Start`). A process that exited by itself just before the check (an MSBuild
+    worker node a moment after its build) is reaped and listed as `exited`. macOS is not checked (`mechanism: none`): the
+    summary and the comment say so, and the verdict does not change.
+  - Docker containers: the runner's user can start a container without `sudo`, and the Docker daemon, not the engine, is its
+    parent. When `docker` is on `PATH` and answers, the judge lists the containers when it starts and, at the end of each part
+    of its run (head, base, reds, re-checks, gates) and before it writes the evidence, removes the ones created since and lists
+    them (`kind: container`); one that cannot be removed is not stopped, with the same ERROR. Only a run on a GitHub-hosted
+    runner (`RUNNER_ENVIRONMENT=github-hosted`, a machine of the job's own) removes them: a local run (`ci --platform local`),
+    a self-hosted runner and the other platforms' agents, whose Docker daemon other jobs may share, list them as `observed`
+    and leave them. When `docker` does not answer a later listing within 30 seconds, those containers are not checked: the
+    summary and the comment say so in a note (`processes.note`), and the verdict does not change.
+  - A process that keeps a build's or a test run's output open does not hold up the judge: the engine waits 2 seconds for the
+    output to end after the process it started has exited, then stops reading, keeps what was written, and notes the command
+    in the summary and in the evidence (`processes.outputHeld`,
+    [`SURVIVOR_OUTPUT_HELD`](reasons.md#survivor_output_held)); the process holding it is stopped like any other.
+  - **A guardrail, not a boundary.** The pull request's code runs with the runner's root or administrator rights, and such
+    code can still act without leaving a process the engine finds or can stop: a process started outside the engine's tree
+    (`sudo systemd-run`, WMI, a scheduled task), a container that runs and is gone between two checks, a change to a file a
+    later step runs (the upload action's own scripts under the runner's work folder), the runner's file-command files (behind
+    `GITHUB_ENV` and `GITHUB_OUTPUT`, which the engine removes from its children's environment but which stay on disk), and a
+    test host that rewrites its own report before it exits. Each needs deliberate code in the diff.
 
   Each needs deliberate code in the diff, which the person who merges can read. Isolation (the pull request's code in a
   container or a separate job, the evidence computed outside it) is planned after 0.3.0.

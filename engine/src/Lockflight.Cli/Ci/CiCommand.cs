@@ -23,6 +23,13 @@ internal sealed class CiCommand(CliContext context) : ICommand
     /// <summary>The longest command line of a process left running the summary shows; the evidence keeps more.</summary>
     private const int MaxCommandShown = 200;
 
+    /// <summary>GitHub Actions sets it to <c>github-hosted</c> on its own runners, a fresh machine per job; no other platform sets it.</summary>
+    private const string RunnerEnvironmentVariable = "RUNNER_ENVIRONMENT";
+    private const string GitHubHosted = "github-hosted";
+
+    /// <summary>A container id as <c>docker ps</c> shows it.</summary>
+    private const int ShortContainerId = 12;
+
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
         if (await CommandOptions.ParseOrReportAsync(arguments, context.Error, cancellationToken) is not CommandOptions options)
@@ -40,6 +47,7 @@ internal sealed class CiCommand(CliContext context) : ICommand
             return ExitCode.Config;
         }
 
+        await WatchContainersAsync(sweep, inputs, cancellationToken);
         if (inputs.Platform != JudgePlatform.Local && await JudgeAttributes.NeutraliseAsync(inputs.Root, cancellationToken) is string attributesError)
         {
             await context.Error.WriteLineAsync($"lockflight ci: {attributesError}");
@@ -102,7 +110,7 @@ internal sealed class CiCommand(CliContext context) : ICommand
             SpecDiff = await SpecDiffReader.ReadAsync(plan, cancellationToken),
         };
         string? engineSha256 = await JudgeEngineHash.ReadAsync(plan, ToolPin.RunningVersion, RuntimeInformation.RuntimeIdentifier, cancellationToken);
-        findings = findings with { Processes = sweep.Finish() };
+        findings = findings with { Processes = await sweep.FinishAsync(cancellationToken) };
         JudgeRun run = new(plan, findings, JudgeChecks.Decide(plan, findings), startedAt, context.Time.GetUtcNow());
         string path = Path.Combine(inputs.EvidenceDirectory, inputs.Platform == JudgePlatform.Local ? CiEvidence.LocalFileName : CiEvidence.FileName);
         JsonFiles.Write(path, CiEvidence.Build(run, ToolPin.RunningVersion, RuntimeInformation.RuntimeIdentifier, engineSha256));
@@ -162,11 +170,17 @@ internal sealed class CiCommand(CliContext context) : ICommand
             await WriteProcessesAsync(processes);
         }
 
-        foreach (string command in run.Findings.Processes?.OutputHeld ?? HeldOutputs.Snapshot())
+        IReadOnlyList<string> held = run.Findings.Processes?.OutputHeld ?? HeldOutputs.Snapshot();
+        foreach (string command in held)
         {
             await context.Output.WriteLineAsync(
                 $"  note: '{Printable(command)}' exited, but a process it started kept its output open; Lockflight stopped waiting for it after "
                 + $"{ProcessRunner.OutputDrainTime.TotalSeconds:0} s");
+        }
+
+        if (held.Count > 0 && ReasonCatalogue.ConsoleLine(ReasonCode.SurvivorOutputHeld) is string heldNext)
+        {
+            await context.Output.WriteLineAsync($"        {heldNext}");
         }
 
         if (plan.Ignored.Count > 0)
@@ -181,23 +195,60 @@ internal sealed class CiCommand(CliContext context) : ICommand
     {
         if (processes.Mechanism == SweepMechanism.None)
         {
-            await context.Output.WriteLineAsync($"  note: {processes.Note}");
-            return;
+            await context.Output.WriteLineAsync($"  note: processes left running were not checked: {processes.Note}");
+        }
+        else if (processes.Note is string note)
+        {
+            await context.Output.WriteLineAsync($"  note: {note}");
         }
 
         // A process that exited by itself before the sweep (an MSBuild worker node a moment after its build) was only reaped.
         Survivor[] running = [.. processes.Survivors.Where(survivor => survivor.Process.Outcome != SurvivorOutcome.Exited)];
         int exited = processes.Survivors.Count - running.Length;
-        await context.Output.WriteLineAsync(
-            $"  processes: {running.Length + processes.More} left running, {exited} exited by themselves, found by {processes.Sweeps} checks "
-            + $"({SweepMechanismNames.ToName(processes.Mechanism)}); the verdict does not depend on them yet");
-        foreach (Survivor survivor in running)
+        if (processes.Mechanism != SweepMechanism.None || running.Length > 0)
         {
             await context.Output.WriteLineAsync(
-                $"    {SurvivorOutcomeNames.ToName(survivor.Process.Outcome)}: '{Printable(Cut(survivor.Process.Command))}' (pid {survivor.Process.Pid}, "
+                $"  processes: {running.Length + processes.More} left running, {exited} exited by themselves, found by {processes.Sweeps} checks "
+                + $"({SweepMechanismNames.ToName(processes.Mechanism)}); "
+                + (processes.NotStopped > 0 ? $"{processes.NotStopped} could not be stopped, so green and gates are ERROR" : "each was stopped, which does not change the verdict"));
+        }
+
+        foreach (Survivor survivor in running)
+        {
+            string where = survivor.Process is { Kind: SurvivorKind.Container, Container: string id }
+                ? $"container {Printable(id[..Math.Min(ShortContainerId, id.Length)])}, image '{Printable(Cut(survivor.Process.Image))}'"
+                : $"pid {survivor.Process.Pid}";
+            await context.Output.WriteLineAsync(
+                $"    {SurvivorOutcomeNames.ToName(survivor.Process.Outcome)}: '{Printable(Cut(survivor.Process.Command))}' ({where}, "
                 + $"{SweepRegionNames.ToName(survivor.Region)}, after '{Printable(survivor.After)}')");
         }
     }
+
+    /// <summary>
+    /// Lists the Docker containers that exist before the judge starts anything that builds, so the ones the pull request's code creates
+    /// are found at the end of each part of the run; they are removed only on a GitHub-hosted runner (<see cref="RemovesContainers"/>).
+    /// </summary>
+    private async Task WatchContainersAsync(ProcessSweep sweep, JudgeInputs inputs, CancellationToken cancellationToken)
+    {
+        if (sweep.Mechanism == SweepMechanism.None)
+        {
+            // No process sweep (a test host, or a platform without one): the containers are left to the job's end too.
+            return;
+        }
+
+        if (await DockerContainers.WatchAsync(RemovesContainers(inputs.Platform, context.Environment), cancellationToken) is DockerContainers containers)
+        {
+            sweep.Watch(containers);
+        }
+    }
+
+    /// <summary>
+    /// Whether the judge removes the containers the pull request's code created: only on a GitHub-hosted runner, a machine of the job's
+    /// own. Elsewhere (a local run, a self-hosted runner, another platform's agent) the Docker daemon may be shared with other jobs, whose
+    /// containers must not be removed, so they are listed and left.
+    /// </summary>
+    internal static bool RemovesContainers(JudgePlatform platform, EnvironmentReader environment) =>
+        platform != JudgePlatform.Local && environment.Get(RunnerEnvironmentVariable) == GitHubHosted;
 
     private static string Cut(string text) => text.Length <= MaxCommandShown ? text : $"{text[..MaxCommandShown]}…";
 

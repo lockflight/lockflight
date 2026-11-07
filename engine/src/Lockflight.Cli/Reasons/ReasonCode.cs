@@ -246,4 +246,16 @@ internal enum ReasonCode
     /// (<c>STRUCTURAL_CHANGE_NEW_TEST</c>).
     /// </summary>
     StructuralChangeNewTest = 73,
+
+    /// <summary>
+    /// A process the pull request's build or tests started was still running after the engine tried to stop it (another user's
+    /// process, typically started through <c>sudo</c>), so nothing the judge read afterwards can be trusted (<c>SURVIVOR_NOT_STOPPED</c>).
+    /// </summary>
+    SurvivorNotStopped = 74,
+
+    /// <summary>
+    /// A note, never a verdict: a process kept a build's or a test run's output open after the process the engine started had exited,
+    /// so the engine stopped waiting for it (<c>SURVIVOR_OUTPUT_HELD</c>).
+    /// </summary>
+    SurvivorOutputHeld = 75,
 }

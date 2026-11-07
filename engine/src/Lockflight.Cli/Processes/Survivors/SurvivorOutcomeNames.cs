@@ -7,6 +7,7 @@ internal static class SurvivorOutcomeNames
     {
         SurvivorOutcome.Stopped => "stopped",
         SurvivorOutcome.Exited => "exited",
+        SurvivorOutcome.Observed => "observed",
         _ => "not-stopped",
     };
 }

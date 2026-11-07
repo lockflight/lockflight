@@ -469,6 +469,30 @@ hosts cannot start, so a red would look skipped and a fix would fail for reasons
 **Next:** Run the judge on windows-latest: a person runs `lockflight update --project`, which moves the GitHub workflow's judge and review jobs there; on another CI platform, run the Lockflight job on a Windows agent.
 See [desktop solutions and Windows runners](ci-hardening.md#desktop-solutions-and-windows-runners).
 
+### SURVIVOR_NOT_STOPPED
+
+**Means:** A process the pull request's build or tests started was still running after the judge tried to stop it (a process
+of another user, typically started through `sudo`), or a Docker container created during the run could not be removed. `green`
+and `gates` are ERROR with this code; when it was found before the gates, the judge runs no further part of its run and every
+check that builds is ERROR with it.
+
+**Why:** Whenever the judge has none of its own processes running, it stops every process the pull request's code left
+running, so nothing that code started can rewrite a test report, a test assembly or the evidence after the judge reads it. A
+process it cannot stop could have, so the verdict cannot be trusted. A guardrail: code with the runner's root rights has other
+ways around it ([CI hardening](ci-hardening.md#what-the-ci-judge-shows-and-what-it-does-not)).
+
+**Next:** Do not re-run: a process the pull request's build or tests started could not be stopped (it runs as another user, typically through `sudo`), so this run's verdict cannot be trusted. Remove the code that starts it; the evidence's `processes` names its command line and the step it outlived.
+
+### SURVIVOR_OUTPUT_HELD
+
+**Means:** A note, not a verdict: a build or test run exited, but a process it started kept its output open, so the engine
+stopped waiting for that output after 2 seconds and kept what was written. The process is stopped like any other left running.
+
+**Why:** Without the limit a process that inherits the output would hold the judge until the CI job's own time limit, and no
+evidence would be written.
+
+**Next:** Nothing blocks: a process the step started kept its output open after it exited, and Lockflight stopped waiting for it. Stop that process in the build or in the test's teardown (dispose it, or kill it); the evidence's `processes` lists it.
+
 ## Gates
 
 The steps of `lockflight gate run`, in the Stop hook and in CI's `gates` check.

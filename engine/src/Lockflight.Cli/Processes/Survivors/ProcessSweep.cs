@@ -4,9 +4,10 @@ namespace Lockflight.Cli.Processes.Survivors;
 /// Finds the processes the engine's children leave running, in the CI judge. <see cref="ProcessRunner"/> counts the children it has
 /// in flight; whenever the count drops to zero (an idle point) the sweep runs, before the runner returns to its caller, so the
 /// caller's next read of a build output, a test report or a result happens with nothing the pull request started still running.
-/// A process that starts a child waits until the sweep has finished. The sweep stops what it finds and records it; it does not
-/// change a verdict. A guardrail: code that runs as root, or asks a service outside the engine's tree to start a process, is not
-/// seen.
+/// A process that starts a child waits until the sweep has finished. The sweep stops what it finds and records it; one it could not
+/// stop (<see cref="NotStopped"/>) makes the judge's verdict ERROR. At the end of each part of the run (<see cref="EnterAsync"/>) it
+/// also checks the Docker containers created since the judge started, when it watches them. A guardrail: code that runs as root, or
+/// asks a service outside the engine's tree to start a process, is not seen.
 /// </summary>
 internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
 {
@@ -20,7 +21,10 @@ internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
     private int inFlight;
     private int sweeps;
     private int more;
+    private int notStopped;
+    private string lastFinished = "the judge's first step";
     private SweepRegion region = SweepRegion.Setup;
+    private DockerContainers? containers;
 
     /// <summary>The sweep of this run of the engine; null outside the CI judge.</summary>
     public static ProcessSweep? Current => Volatile.Read(ref current);
@@ -33,8 +37,41 @@ internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
         return sweep;
     }
 
-    /// <summary>Labels the processes found from now on with <paramref name="region"/>; nothing when no sweep runs.</summary>
-    public static void Enter(SweepRegion region) => Current?.Label(region);
+    public SweepMechanism Mechanism => scope.Mechanism;
+
+    /// <summary>How many processes or containers the sweeps found that could not be stopped, listed or not.</summary>
+    public int NotStopped
+    {
+        get
+        {
+            lock (gate)
+            {
+                return notStopped;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Ends the part of the run before <paramref name="region"/>: checks the Docker containers created so far, when the sweep watches
+    /// them, and labels what is found from now on with <paramref name="region"/>; nothing when no sweep runs.
+    /// </summary>
+    public static Task EnterAsync(SweepRegion region, CancellationToken cancellationToken) =>
+        Current is ProcessSweep sweep ? sweep.MoveToAsync(region, cancellationToken) : Task.CompletedTask;
+
+    /// <summary>Checks the containers created since <paramref name="watched"/> listed them at the end of each part of the run.</summary>
+    public void Watch(DockerContainers watched)
+    {
+        lock (gate)
+        {
+            containers = watched;
+        }
+    }
+
+    public async Task MoveToAsync(SweepRegion next, CancellationToken cancellationToken)
+    {
+        await SweepContainersAsync(cancellationToken);
+        Label(next);
+    }
 
     public void Label(SweepRegion region)
     {
@@ -60,6 +97,7 @@ internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
         lock (gate)
         {
             inFlight--;
+            lastFinished = command;
             if (inFlight == 0)
             {
                 SweepNow(command);
@@ -67,9 +105,10 @@ internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
         }
     }
 
-    /// <summary>Sweeps once more, right before the evidence is written, and reports every sweep of the run.</summary>
-    public ProcessesReport Finish()
+    /// <summary>Sweeps once more, and checks the containers, right before the evidence is written; reports every sweep of the run.</summary>
+    public async Task<ProcessesReport> FinishAsync(CancellationToken cancellationToken)
     {
+        await SweepContainersAsync(cancellationToken);
         lock (gate)
         {
             region = SweepRegion.Final;
@@ -78,7 +117,10 @@ internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
                 SweepNow("the judge's last step");
             }
 
-            return new ProcessesReport(scope.Mechanism, scope.Note, sweeps, [.. survivors], more, HeldOutputs.Snapshot());
+            return new ProcessesReport(scope.Mechanism, scope.Note ?? containers?.Note, sweeps, [.. survivors], more, HeldOutputs.Snapshot())
+            {
+                NotStopped = notStopped,
+            };
         }
     }
 
@@ -92,8 +134,39 @@ internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
         }
 
         sweeps++;
-        foreach (SweptProcess process in scope.Sweep())
+        Record(scope.Sweep(), after);
+    }
+
+    private async Task SweepContainersAsync(CancellationToken cancellationToken)
+    {
+        DockerContainers? watched;
+        lock (gate)
         {
+            watched = containers;
+        }
+
+        if (watched is null)
+        {
+            return;
+        }
+
+        // The listing is itself a child the engine starts, so it gets a process sweep of its own when it exits.
+        IReadOnlyList<SweptProcess> found = await watched.SweepAsync(cancellationToken);
+        lock (gate)
+        {
+            Record(found, lastFinished);
+        }
+    }
+
+    private void Record(IReadOnlyList<SweptProcess> found, string after)
+    {
+        foreach (SweptProcess process in found)
+        {
+            if (process.Outcome == SurvivorOutcome.NotStopped)
+            {
+                notStopped++;
+            }
+
             if (survivors.Count < MaxSurvivors)
             {
                 survivors.Add(new Survivor(region, after, process));

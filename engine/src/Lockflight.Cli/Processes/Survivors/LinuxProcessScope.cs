@@ -17,6 +17,9 @@ internal sealed class LinuxProcessScope(int engine, string? engineUid) : IProces
     private static readonly TimeSpan StopTime = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(20);
 
+    /// <summary>The processes an earlier sweep could not stop (pid and start time), reported once rather than at every sweep.</summary>
+    private readonly HashSet<(int Pid, ulong StartTime)> givenUp = [];
+
     public SweepMechanism Mechanism => SweepMechanism.Subreaper;
 
     public string? Note => null;
@@ -47,7 +50,7 @@ internal sealed class LinuxProcessScope(int engine, string? engineUid) : IProces
         // Each one is stopped where it is, so it cannot start another while the walk goes on, until a walk finds nothing new.
         for (int round = 0; round < MaxRounds && clock.Elapsed < StopTime; round++)
         {
-            ProcStat[] fresh = [.. ProcStat.Descendants(Table(), engine).Where(process => !found.ContainsKey(process.Pid))];
+            ProcStat[] fresh = [.. ProcStat.Descendants(Table(), engine).Where(process => !found.ContainsKey(process.Pid) && !givenUp.Contains((process.Pid, process.StartTime)))];
             if (fresh.Length == 0)
             {
                 break;
@@ -95,6 +98,7 @@ internal sealed class LinuxProcessScope(int engine, string? engineUid) : IProces
             Thread.Sleep(PollInterval);
         }
 
+        givenUp.UnionWith(alive.Select(pid => (pid, found[pid].Stat.StartTime)));
         return [.. found.Values.Select(process => new SweptProcess(
             process.Stat.Pid,
             process.Image,
