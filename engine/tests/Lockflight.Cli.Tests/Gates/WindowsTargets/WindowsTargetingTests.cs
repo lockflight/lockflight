@@ -18,7 +18,7 @@ public sealed class WindowsTargetingTests
     }
 
     [Fact]
-    public void AFrameworkSetInDirectoryBuildPropsCounts()
+    public void AFrameworkSetInDirectoryBuildPropsCountsUnlessTheProjectSetsItsOwn()
     {
         using DesktopSolution solution = new();
         solution.Write("src/Desk.Client/Desk.Client.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n");
@@ -27,7 +27,7 @@ public sealed class WindowsTargetingTests
         WindowsTargetedSolution? found = WindowsTargeting.Find(solution.Root, buildFile: null);
 
         Assert.Contains(@"src\Desk.Client\Desk.Client.csproj", found!.WindowsEntries);
-        Assert.Contains(@"src\Desk.Server\Desk.Server.csproj", found.WindowsEntries);
+        Assert.DoesNotContain(@"src\Desk.Server\Desk.Server.csproj", found.WindowsEntries);
     }
 
     [Fact]
@@ -38,6 +38,18 @@ public sealed class WindowsTargetingTests
         solution.Write("tests/Desk.Client.Tests/Desk.Client.Tests.csproj", DesktopSolution.ServerTestProject);
 
         Assert.Null(WindowsTargeting.Find(solution.Root, buildFile: null));
+    }
+
+    [Fact]
+    public void AConditionalWindowsFrameworkOrWpfOnlyCounts()
+    {
+        using DesktopSolution solution = new();
+        solution.Write("src/Desk.Client/Desk.Client.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework Condition=\"'$(OS)' == 'Windows_NT'\">net8.0-windows</TargetFramework></PropertyGroup></Project>\n");
+        solution.Write("tests/Desk.Client.Tests/Desk.Client.Tests.csproj", DesktopSolution.ServerTestProject.Replace("</TargetFramework>", "</TargetFramework><UseWPF>true</UseWPF>"));
+
+        WindowsTargetedSolution? found = WindowsTargeting.Find(solution.Root, buildFile: null);
+
+        Assert.Equal([@"src\Desk.Client\Desk.Client.csproj", @"tests\Desk.Client.Tests\Desk.Client.Tests.csproj"], found!.WindowsEntries);
     }
 
     [Fact]

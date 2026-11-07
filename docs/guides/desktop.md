@@ -26,7 +26,10 @@ Windows runners are slower and dearer:
 - **Extra red cycles are cheap:** each one rebuilds incrementally (about 15 seconds on the sample). The first build at head is
   the expensive one.
 
-A server that has its own solution, with no Windows projects in it, can keep its judge on Linux.
+A server that has its own solution, with no Windows projects in it, can keep its judge on Linux. So can a solution whose only
+Windows project is the app itself, with plain `net8.0` test projects: the judge builds it there with `EnableWindowsTargeting=true`.
+Only the projects the judge builds count (`gates.build` or the root's only solution), so a WPF sample elsewhere in the tree does
+not move the judge to Windows.
 
 ## Off Windows
 

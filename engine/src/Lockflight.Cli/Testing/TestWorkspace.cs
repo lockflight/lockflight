@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Lockflight.Cli.Gates.WindowsTargets;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Testing;
@@ -45,8 +46,9 @@ internal sealed class TestWorkspace(string root, IReadOnlyList<BuildTarget> targ
         List<UnevaluatedProject> unevaluated = [];
         foreach (BuildTarget target in targets)
         {
+            // Off Windows a project that targets Windows builds only with EnableWindowsTargeting: a WPF app beside plain tests.
             ProcessResult build = await ProcessRunner.RunAsync(
-                "dotnet", ["build", .. target.BuildFile is null ? [] : new[] { target.BuildFile }, "--nologo", "--interactive", "false", .. BuildServerSwitches.Build], target.Directory, timeLimit, cancellationToken);
+                "dotnet", ["build", .. target.BuildFile is null ? [] : new[] { target.BuildFile }, "--nologo", "--interactive", "false", .. WindowsTargeting.BuildArguments(new BuildScope(target.Directory, target.BuildFile), OperatingSystem.IsWindows()), .. BuildServerSwitches.Build], target.Directory, timeLimit, cancellationToken);
             if (build.ExitCode != 0)
             {
                 return build.Combined;

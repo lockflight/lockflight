@@ -5,7 +5,7 @@ namespace Lockflight.Cli.Init;
 /// <summary>
 /// The runner of the GitHub workflow's jobs that build the pull request's code, <c>judge</c> and <c>review</c>: Linux
 /// (<c>ubuntu-latest</c>), or Windows (<c>windows-latest</c>, with bash as the jobs' shell) when a test project needs Windows
-/// (<see cref="Projects.ProjectFiles.WindowsTestProjects"/>). The report jobs read data only and stay on Linux. Only these two
+/// (<see cref="Gates.WindowsTargets.WindowsTargeting.WindowsTestProjects"/>). The report jobs read data only and stay on Linux. Only these two
 /// labels are Lockflight's: a job whose <c>runs-on</c> is anything else (a self-hosted label, <c>windows-2025</c>, an
 /// expression) runs where a person chose, and is never moved.
 /// </summary>

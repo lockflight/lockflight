@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Gates.WindowsTargets;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.RedGreen;
 using Lockflight.Cli.Processes;
@@ -13,8 +14,8 @@ namespace Lockflight.Cli.Ci;
 /// Runs the steps of a plan that build: opens the judge's worktree (in <c>LOCKFLIGHT_TEMP</c> when the template sets it, else
 /// locally in the repository's git directory, else the system's temporary folder), scans the head for secrets before anything is
 /// built there, runs the head's suite (P1), lists the base (P2) and re-runs the red commits (P3), then judges green over what they
-/// found, and removes the worktree again whatever happened. A head with a test project that needs Windows is not built on another
-/// OS (<see cref="WindowsRunner"/>). The .NET build servers are shut down after each phase that builds.
+/// found, and removes the worktree again whatever happened. A head whose build includes a test project that needs Windows is not
+/// built on another OS (<see cref="WindowsRunner"/>). The .NET build servers are shut down after each phase that builds.
 /// </summary>
 internal static class JudgeExecutor
 {
@@ -45,7 +46,7 @@ internal static class JudgeExecutor
         {
             // The worktree is opened without a checkout, so off Windows the head's project files are checked out to be read.
             if (!OperatingSystem.IsWindows() && await worktree.MoveToAsync(plan.Inputs.Head, plan.Policy.Commit, clean: true, cancellationToken) is null
-                && WindowsRunner.Why(worktree.Root, onWindows: false) is string needsWindows)
+                && WindowsRunner.Why(worktree.Root, BuildScope.Of(plan.Policy.Manifest, worktree.Root), onWindows: false) is string needsWindows)
             {
                 return JudgeFindings.None with { NotBuilt = (CheckVerdict.Error, ReasonCode.NeedsWindowsRunner, needsWindows), HeadCommit = plan.Inputs.Head };
             }

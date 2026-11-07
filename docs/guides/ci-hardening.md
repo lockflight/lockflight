@@ -278,10 +278,14 @@ release whose `install.sh` knows Windows (released Lockflight 0.3 scripts refuse
 
 ### Desktop solutions and Windows runners
 
-A test project **needs Windows** when it targets a `net*-windows` framework (`net8.0-windows`, `net10.0-windows10.0.19041.0`),
-or when it, or a `Directory.Build.props`/`.targets` above it, sets `UseWPF` or `UseWindowsForms` to `true`. Its tests run only
-on Windows: on Linux the solution does not build (`NETSDK1100`), and with `EnableWindowsTargeting` it builds but the Windows
-test hosts cannot start, so a red would look skipped and a server-only fix would fail.
+A test project **needs Windows** when it targets a `net*-windows` framework (`net8.0-windows`, `net10.0-windows10.0.19041.0`,
+also under a `Condition`), or when it, or a `Directory.Build.props` above it, sets `UseWPF` or `UseWindowsForms` to `true`
+(the project's own setting wins over an inherited one, and XML comments do not count). Only the projects the judge builds
+count: those of `gates.build` or the repository root's only solution (in a workspace, each unit's `build:` file), not a sample or
+tool elsewhere in the tree. Its tests run only on Windows: with `EnableWindowsTargeting` the solution builds on Linux but the
+Windows test hosts cannot start, so a red would look skipped and a server-only fix would fail. A solution whose only Windows
+projects are not test projects (a WPF app with plain `net8.0` tests) needs no Windows runner: off Windows the judge builds it
+with `EnableWindowsTargeting=true`, as a person's gate run does, and runs the plain tests.
 
 - **`init`** writes the `judge` and `review` jobs (the two that build the pull request's code) with `runs-on: windows-latest`
   and bash as their shell when a test project needs Windows, and says why. The `gates` and `lockflight/judge` report jobs read

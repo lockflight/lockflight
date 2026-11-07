@@ -463,7 +463,7 @@ run; the detail names the failed check.
 macOS, so it built nothing: every check that builds (red, tests since red, existing tests changed, host tampering, trace, gates,
 green) is ERROR with this code.
 
-**Why:** Off Windows such a solution does not build (`NETSDK1100`), and with `EnableWindowsTargeting` it builds but the Windows test
+**Why:** Off Windows such a solution builds only with `EnableWindowsTargeting` (otherwise `NETSDK1100`), and then the Windows test
 hosts cannot start, so a red would look skipped and a fix would fail for reasons that have nothing to do with the code.
 
 **Next:** Run the judge on windows-latest: a person runs `lockflight update --project`, which moves the GitHub workflow's judge and review jobs there; on another CI platform, run the Lockflight job on a Windows agent.

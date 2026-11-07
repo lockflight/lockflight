@@ -39,11 +39,18 @@ internal sealed record GateRunContext(
     public bool FullRun { get; init; }
 
     /// <summary>
-    /// The run is off Windows and not the CI judge's: projects that target Windows build with <c>EnableWindowsTargeting=true</c> and
-    /// their test projects are left out of the test run, with a note (<see cref="WindowsTargets.WindowsTargeting"/>). The CI judge
-    /// never leaves tests out: it judges a pull request on the runner it is given.
+    /// The run is off Windows and not the CI judge's: the test projects that target Windows are left out of the test run, with a
+    /// note (<see cref="WindowsTargets.WindowsTargeting"/>). The CI judge never leaves tests out: it judges a pull request on the
+    /// runner it is given.
     /// </summary>
     public bool LeavesOutWindowsTests { get; init; }
+
+    /// <summary>
+    /// The run is off Windows: projects that target Windows build with <c>EnableWindowsTargeting=true</c>, in a person's run and in
+    /// the CI judge's (which reaches the gates off Windows only when no test project targets Windows, so a WPF app with plain
+    /// tests still builds there).
+    /// </summary>
+    public bool OffWindows { get; init; } = !OperatingSystem.IsWindows();
 
     /// <summary>The full paths of the workspace's units; a change inside another unit does not choose this one's projects.</summary>
     public IReadOnlyList<string> UnitDirectories { get; init; } = [];

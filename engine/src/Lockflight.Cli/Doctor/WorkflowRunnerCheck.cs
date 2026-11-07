@@ -1,5 +1,5 @@
+using Lockflight.Cli.Gates.WindowsTargets;
 using Lockflight.Cli.Init;
-using Lockflight.Cli.Projects;
 
 namespace Lockflight.Cli.Doctor;
 
@@ -18,7 +18,7 @@ internal static class WorkflowRunnerCheck
 
     public static IReadOnlyList<DoctorCheck> Check(string root)
     {
-        IReadOnlyList<string> windowsTests = ProjectFiles.WindowsTestProjects(root);
+        IReadOnlyList<string> windowsTests = WindowsTargeting.WindowsTestProjects(BuildScope.OfRepository(root));
         List<DoctorCheck> checks = [];
         if (GitHubCheck(root, windowsTests) is DoctorCheck gitHub)
         {

@@ -1,4 +1,5 @@
 using Lockflight.Cli.Ci;
+using Lockflight.Cli.Gates.WindowsTargets;
 using Lockflight.Cli.Reasons;
 using Lockflight.Cli.Tests.Projects;
 
@@ -14,7 +15,7 @@ public sealed class WindowsRunnerTests : IDisposable
         DesktopProjects.WriteWpfTests(root.FullName);
         DesktopProjects.WriteServerTests(root.FullName);
 
-        string? why = WindowsRunner.Why(root.FullName, onWindows: false);
+        string? why = WindowsRunner.Why(root.FullName, BuildScope.OfRepository(root.FullName), onWindows: false);
 
         Assert.NotNull(why);
         Assert.Contains($"{DesktopProjects.WpfTests} targets Windows", why, StringComparison.Ordinal);
@@ -25,10 +26,32 @@ public sealed class WindowsRunnerTests : IDisposable
     public void OnWindowsOrWithoutADesktopTestProjectTheTreeIsBuilt()
     {
         DesktopProjects.WriteServerTests(root.FullName);
-        Assert.Null(WindowsRunner.Why(root.FullName, onWindows: false));
+        Assert.Null(WindowsRunner.Why(root.FullName, BuildScope.OfRepository(root.FullName), onWindows: false));
 
         DesktopProjects.WriteWpfTests(root.FullName);
-        Assert.Null(WindowsRunner.Why(root.FullName, onWindows: true));
+        Assert.Null(WindowsRunner.Why(root.FullName, BuildScope.OfRepository(root.FullName), onWindows: true));
+    }
+
+    [Fact]
+    public void AWpfAppWithPlainTestsIsJudgedOffWindowsAndBuildsWithWindowsTargeting()
+    {
+        DesktopProjects.Write(root.FullName, "src/Client/Client.csproj", "<PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup>", package: "CommunityToolkit.Mvvm");
+        DesktopProjects.WriteServerTests(root.FullName);
+        BuildScope scope = new(root.FullName, BuildFile: null);
+
+        Assert.Null(WindowsRunner.Why(root.FullName, [scope], onWindows: false));
+        Assert.Equal([WindowsTargeting.BuildProperty], WindowsTargeting.BuildArguments(scope, onWindows: false));
+        Assert.Empty(WindowsTargeting.BuildArguments(scope, onWindows: true));
+    }
+
+    [Fact]
+    public void AWpfTestProjectOutsideWhatTheJudgeBuildsNeedsNoWindowsRunner()
+    {
+        DesktopProjects.WriteServerTests(root.FullName);
+        DesktopProjects.WriteOutsideSolution(root.FullName, "samples/Desk/Desk.Tests.csproj", "<PropertyGroup><TargetFramework>net8.0-windows</TargetFramework><UseWPF>true</UseWPF></PropertyGroup>");
+
+        Assert.Null(WindowsRunner.Why(root.FullName, BuildScope.OfRepository(root.FullName), onWindows: false));
+        Assert.Empty(WindowsTargeting.BuildArguments(new BuildScope(root.FullName, BuildFile: null), onWindows: false));
     }
 
     [Fact]
