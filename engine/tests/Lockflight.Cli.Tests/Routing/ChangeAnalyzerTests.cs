@@ -12,6 +12,7 @@ public sealed class ChangeAnalyzerTests
 {
     private const string ProductionProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>\n";
     private const string TestProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"xunit.v3\" Version=\"3.0.0\" />\n  </ItemGroup>\n</Project>\n";
+    private const string WpfProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0-windows</TargetFramework>\n    <UseWPF>true</UseWPF>\n  </PropertyGroup>\n</Project>\n";
     private const string Service = "namespace Shop;\n\npublic sealed class Service\n{\n    public int Total(int a, int b)\n    {\n        return a + b;\n    }\n\n    // Adds the tax.\n    public int Tax(int amount) => amount / 5;\n}\n";
 
     public static TheoryData<string> Cases => [.. AllCases.Keys];
@@ -94,12 +95,33 @@ public sealed class ChangeAnalyzerTests
                 "global.json BuildWide 1", "src/App/App.sln Project 1", "src/App/Page.razor Markup 1", "src/App/appsettings.json ProductionConfig 1",
                 "src/Fs/Library.fs Production 1",
             ]),
-        new("XamlInAProductionProjectIsXamlAndItsCodeBehindIsProduction",
-            App(("src/App/MainWindow.xaml", "<Window>\n  <Grid Margin=\"12\" />\n</Window>\n"), ("src/App/MainWindow.xaml.cs", "partial class MainWindow\n{\n}\n")),
+        new("XamlInAWpfProjectIsXamlAndItsCodeBehindIsProduction",
+            App(("src/App/App.csproj", WpfProject), ("src/App/MainWindow.xaml", "<Window>\n  <Grid Margin=\"12\" />\n</Window>\n"), ("src/App/MainWindow.xaml.cs", "partial class MainWindow\n{\n}\n")),
             repo => repo.Write("src/App/MainWindow.xaml", "<Window>\n  <Grid Margin=\"16\" />\n</Window>\n")
                 .Write("src/App/MainWindow.xaml.cs", "partial class MainWindow\n{\n    int Count;\n}\n")
                 .Write("tools/Theme.xaml", "<ResourceDictionary />\n"),
             ["src/App/MainWindow.xaml Xaml 2", "src/App/MainWindow.xaml.cs Production 1", "tools/Theme.xaml Other 1"]),
+        new("XamlOutsideAWpfMauiOrWinUIProjectIsProductionConfig",
+            App(("src/App/Theme.xaml", "<ResourceDictionary />\n")),
+            repo => repo.Write("src/App/Theme.xaml", "<ResourceDictionary x:Key=\"a\" />\n"),
+            ["src/App/Theme.xaml ProductionConfig 2"]),
+        new("UseWpfInDirectoryBuildPropsMakesXaml",
+            App(("src/Directory.Build.props", "<Project>\n  <PropertyGroup>\n    <UseWPF>true</UseWPF>\n  </PropertyGroup>\n</Project>\n"), ("src/App/Theme.xaml", "<ResourceDictionary />\n")),
+            repo => repo.Write("src/App/Theme.xaml", "<ResourceDictionary x:Key=\"a\" />\n"),
+            ["src/App/Theme.xaml Xaml 2"]),
+        new("UseMauiAndUseWinUIMakeXaml",
+            App(("src/Maui/Maui.csproj", ProductionProject.Replace("</TargetFramework>", "</TargetFramework>\n    <UseMaui>true</UseMaui>", StringComparison.Ordinal)), ("src/Maui/MainPage.xaml", "<ContentPage />\n"),
+                ("src/Win/Win.csproj", ProductionProject.Replace("</TargetFramework>", "</TargetFramework>\n    <UseWinUI>True</UseWinUI>", StringComparison.Ordinal)), ("src/Win/MainWindow.xaml", "<Window />\n")),
+            repo => repo.Write("src/Maui/MainPage.xaml", "<ContentPage Padding=\"8\" />\n").Write("src/Win/MainWindow.xaml", "<Window Title=\"A\" />\n"),
+            ["src/Maui/MainPage.xaml Xaml 2", "src/Win/MainWindow.xaml Xaml 2"]),
+        new("ACommentedOutUseWpfMakesNoXaml",
+            App(("src/App/App.csproj", ProductionProject.Replace("</TargetFramework>", "</TargetFramework>\n    <!-- <UseWPF>true</UseWPF> -->", StringComparison.Ordinal)), ("src/App/Theme.xaml", "<ResourceDictionary />\n")),
+            repo => repo.Write("src/App/Theme.xaml", "<ResourceDictionary x:Key=\"a\" />\n"),
+            ["src/App/Theme.xaml ProductionConfig 2"]),
+        new("AWorkflowDefinitionInAWpfProjectIsProductionConfig",
+            App(("src/App/App.csproj", WpfProject), ("src/App/Approve.xaml", Workflow("Approve"))),
+            repo => repo.Write("src/App/Approve.xaml", Workflow("Reject")),
+            ["src/App/Approve.xaml ProductionConfig 2"]),
     }.ToDictionary(routingCase => routingCase.Name, StringComparer.Ordinal);
 
     [Theory]
@@ -138,6 +160,9 @@ public sealed class ChangeAnalyzerTests
         return [.. analysis.Files.Select(file =>
             $"{file.Path} {file.Role} {file.CountedLines}{(file.Move is null ? string.Empty : " " + file.Move.Kind)}{(file.Change.Binary ? " Binary" : string.Empty)}")];
     }
+
+    private static string Workflow(string name) =>
+        $"<Activity xmlns=\"http://schemas.microsoft.com/netfx/2009/xaml/activities\">\n  <WriteLine Text=\"{name}\" />\n</Activity>\n";
 
     private static Dictionary<string, string> App(params (string Path, string Content)[] more)
     {

@@ -40,7 +40,7 @@ internal sealed class SizeSignals : IChangeSignalSource
 
         foreach (RoutedFile file in analysis.Files)
         {
-            foreach (ChangeSignal signal in FileSignals(file))
+            foreach (ChangeSignal signal in FileSignals(file, analysis.ChangeSet))
             {
                 yield return signal;
             }
@@ -52,7 +52,7 @@ internal sealed class SizeSignals : IChangeSignalSource
         }
     }
 
-    private static IEnumerable<ChangeSignal> FileSignals(RoutedFile file)
+    private static IEnumerable<ChangeSignal> FileSignals(RoutedFile file, ChangeSet changeSet)
     {
         // A moved source file is the same code; a moved page, setting or script can change what runs (routes follow page paths,
         // settings are picked up by name and place), so its move counts as a new file.
@@ -82,6 +82,11 @@ internal sealed class SizeSignals : IChangeSignalSource
         if (ConfigRoles.Contains(file.Role) && file.Move?.OldPath != file.Path)
         {
             yield return Signal(SignalIds.ConfigChanged, ChangeClass.Behaviour, file.Path, $"{RoleName(file.Role)} file changed");
+        }
+
+        if (file.Role == FileRole.Xaml && XamlBehaviour.Wired(file, changeSet) is string wired)
+        {
+            yield return Signal(SignalIds.ConfigChanged, ChangeClass.Behaviour, file.Path, $"XAML that wires behaviour changed: {wired}");
         }
 
         if (file.Change.Binary && CountedRoles.Contains(file.Role))

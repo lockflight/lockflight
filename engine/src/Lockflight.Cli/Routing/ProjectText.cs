@@ -19,6 +19,12 @@ internal static partial class ProjectText
         return TestPackage().IsMatch(code) || TestSdk().IsMatch(code) || IsTestProjectProperty().IsMatch(code);
     }
 
+    /// <summary>
+    /// Whether the text makes its project a XAML UI project: it sets <c>&lt;UseWPF&gt;</c>, <c>&lt;UseMaui&gt;</c> or
+    /// <c>&lt;UseWinUI&gt;</c> to <c>true</c>.
+    /// </summary>
+    public static bool MakesXamlUiProject(string text) => XamlUiProperty().IsMatch(WithoutComments(text));
+
     public static string WithoutComments(string text) => XmlComment().Replace(text, string.Empty);
 
     [GeneratedRegex(@"<!--.*?-->", RegexOptions.Singleline)]
@@ -29,6 +35,9 @@ internal static partial class ProjectText
 
     [GeneratedRegex(@"<Project\b[^>]*\bSdk\s*=\s*""[^""]*\bMSTest\.Sdk\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex TestSdk();
+
+    [GeneratedRegex(@"<(UseWPF|UseMaui|UseWinUI)\b[^>]*>\s*true\s*</\1\s*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex XamlUiProperty();
 
     [GeneratedRegex(@"<IsTestProject\b[^>]*>\s*true\s*</IsTestProject>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex IsTestProjectProperty();
