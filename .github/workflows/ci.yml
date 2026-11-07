@@ -265,9 +265,8 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/structural-change.sh "$RUNNER_TEMP/structural-change"
-      # macOS has no sweep for processes left running, so a daemon there does forge the result: the suite runs where there is one.
       - name: Processes left running cannot forge the verdict (daemons, a source generator, a container, a root process)
-        if: runner.os != 'macOS' && matrix.part != '1'
+        if: matrix.part != '1'
         shell: bash
         run: |
           engine="$PWD/out/lockflight"

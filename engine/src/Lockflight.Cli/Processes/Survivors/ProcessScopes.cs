@@ -7,6 +7,7 @@ internal static class ProcessScopes
     public static IProcessScope Begin() =>
         OperatingSystem.IsLinux() ? LinuxProcessScope.Begin()
         : OperatingSystem.IsWindows() ? WindowsProcessScope.Begin()
+        : OperatingSystem.IsMacOS() ? MacProcessScope.Begin()
         : new NoProcessScope("processes left running are not looked for on this operating system yet");
 
     /// <summary>No mechanism: for a host that must not change the process it runs in (the engine's own tests).</summary>
