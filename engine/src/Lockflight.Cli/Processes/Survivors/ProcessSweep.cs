@@ -14,6 +14,9 @@ internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
     /// <summary>The most processes left running the report lists; past it, <see cref="ProcessesReport.More"/> counts the rest.</summary>
     public const int MaxSurvivors = 50;
 
+    /// <summary>The variable that carries <see cref="IProcessScope.Marker"/> into every process the engine starts.</summary>
+    public const string MarkerVariable = "LOCKFLIGHT_RUN";
+
     private static ProcessSweep? current;
 
     private readonly Lock gate = new();
@@ -38,6 +41,9 @@ internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
     }
 
     public SweepMechanism Mechanism => scope.Mechanism;
+
+    /// <summary>The marker every child gets in <see cref="MarkerVariable"/>; null when the mechanism needs none.</summary>
+    public string? Marker => scope.Marker;
 
     /// <summary>How many processes or containers the sweeps found that could not be stopped, listed or not.</summary>
     public int NotStopped

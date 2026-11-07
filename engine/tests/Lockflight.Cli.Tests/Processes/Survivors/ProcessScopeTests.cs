@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Lockflight.Cli.Processes;
 using Lockflight.Cli.Processes.Survivors;
@@ -8,6 +9,7 @@ namespace Lockflight.Cli.Tests.Processes.Survivors;
 public sealed class ProcessScopeTests
 {
     private const string DaemonSeconds = "77";
+    private const string MacDaemonSeconds = "78";
 
     [Fact]
     public async Task ADaemonAChildLeftRunningIsFoundAndStopped()
@@ -30,6 +32,45 @@ public sealed class ProcessScopeTests
         SweptProcess daemon = Assert.Single(scope.Sweep(), IsDaemon);
         Assert.Equal(SurvivorOutcome.Stopped, daemon.Outcome);
         Assert.DoesNotContain(scope.Sweep(), IsDaemon);
+    }
+
+    [Fact]
+    public async Task OnMacOSADaemonLeftRunningIsFoundAndStopped()
+    {
+        Assert.SkipUnless(OperatingSystem.IsMacOS(), "The process group and the marker are how macOS finds processes left running.");
+        IProcessScope scope = ProcessScopes.Begin();
+        Assert.True(scope.Mechanism == SweepMechanism.Marker, scope.Note);
+        scope.Sweep();
+
+        // The shell exits at once, so the daemon is re-parented to launchd: its process group links it to the run. Until it has
+        // started sleep it is still a copy of the shell, so the command is matched by what it contains.
+        ProcessStartInfo start = new("sh", ["-c", $"nohup sleep {MacDaemonSeconds} >/dev/null 2>&1 </dev/null &"]) { UseShellExecute = false };
+        start.Environment[ProcessSweep.MarkerVariable] = scope.Marker;
+        using (Process shell = Process.Start(start)!)
+        {
+            await shell.WaitForExitAsync(TestContext.Current.CancellationToken);
+            Assert.Equal(0, shell.ExitCode);
+        }
+
+        SweptProcess daemon = Assert.Single(scope.Sweep(), process => process.Command.Contains($"sleep {MacDaemonSeconds}", StringComparison.Ordinal));
+        Assert.Equal(SurvivorOutcome.Stopped, daemon.Outcome);
+        Assert.DoesNotContain(scope.Sweep(), process => process.Command.Contains($"sleep {MacDaemonSeconds}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheMacProcessInformationHasItsLayout() => Assert.Equal(136, Unsafe.SizeOf<ProcBsdInfo>());
+
+    [Fact]
+    public void AProcessesArgumentsAndEnvironmentAreRead()
+    {
+        byte[] data = [2, 0, 0, 0, .. "/bin/sleep\0\0\0sleep\0600\0LOCKFLIGHT_RUN=AB\0HOME=/x\0\0"u8];
+
+        ProcessArguments arguments = ProcessArguments.Parse(data)!;
+
+        Assert.Equal("/bin/sleep", arguments.Image);
+        Assert.Equal(["sleep", "600"], arguments.Arguments);
+        Assert.Equal(["LOCKFLIGHT_RUN=AB", "HOME=/x"], arguments.Environment);
+        Assert.Null(ProcessArguments.Parse([1, 0]));
     }
 
     [Fact]

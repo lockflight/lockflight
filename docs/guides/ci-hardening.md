@@ -208,8 +208,14 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
     `setsid`, `nohup`) is re-parented to the engine and found; a signal it ignores does not help it, since the engine stops it
     and then kills it. On Windows the engine runs in a job object, which every process it or its descendants create joins
     (`start /b`, `Start-Process`, a detached `Process.Start`). A process that exited by itself just before the check (an MSBuild
-    worker node a moment after its build) is reaped and listed as `exited`. macOS is not checked (`mechanism: none`): the
-    summary and the comment say so, and the verdict does not change.
+    worker node a moment after its build) is reaped and listed as `exited`. On macOS, which has
+    neither, the check is weaker (`mechanism: marker`): a process whose parent exits is re-parented to `launchd` and keeps no
+    link to the engine, so in CI the engine leads a process group of its own, which the processes it starts join, and gives
+    every one a marker in its environment that their children inherit. A process of the runner's user still in that group, or
+    carrying the marker, is stopped, with the processes it started. macOS shows a process's environment only for programs that
+    are not part of the system, so a system program (`sh`, `sleep`) that leaves the group (`setsid`, `setpgid`) is not found,
+    nor is one that leaves the group and clears its environment. Where there is no check at all (another operating system, or
+    setting it up failed: `mechanism: none`), the summary and the comment say so, and the verdict does not change.
   - Docker containers: the runner's user can start a container without `sudo`, and the Docker daemon, not the engine, is its
     parent. When `docker` is on `PATH` and answers, the judge lists the containers when it starts and, at the end of each part
     of its run (head, base, reds, re-checks, gates) and before it writes the evidence, removes the ones created since and lists

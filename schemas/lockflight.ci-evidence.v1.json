@@ -605,7 +605,7 @@
       "properties": {
         "mechanism": {
           "type": "string",
-          "description": "subreaper (Linux), job (Windows) or none, with the reason in note; later engines may add others."
+          "description": "subreaper (Linux), job (Windows), marker (macOS, best effort: the process group and an environment marker) or none, with the reason in note; later engines may add others."
         },
         "note": {
           "type": [
