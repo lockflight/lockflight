@@ -78,14 +78,79 @@ public sealed class CiExplainCommandTests : IDisposable
     [Fact]
     public async Task ARunUrlIsDownloadedWithGhForItsRepository()
     {
-        (ExitCode exitCode, string output, _) = await RunAsync(["ci", "explain", "https://github.com/acme/shop/actions/runs/42/job/7"], GhWrites("engine-lock-refused", "lockflight-evidence", "refused.json"));
+        (ExitCode exitCode, string output, _) = await RunAsync(["ci", "explain", "https://github.com/acme/shop/actions/runs/42/job/7"], GhWrites(("engine-lock-refused", "lockflight-evidence", "refused.json")));
 
         Assert.Equal(ExitCode.Pass, exitCode);
         Assert.Contains("ENGINE_LOCK_REFUSED", output, StringComparison.Ordinal);
         Assert.Contains("Source: run 42/lockflight-evidence/refused.json", output, StringComparison.Ordinal);
+        Assert.Contains("From: the judge job's lockflight-evidence artifact; that job ran the pull request's code", output, StringComparison.Ordinal);
         IReadOnlyList<string> call = Assert.Single(ghCalls);
         Assert.Equal(["run", "download", "42"], call.Take(3));
         Assert.Equal("acme/shop", call[call.ToList().IndexOf("--repo") + 1]);
+    }
+
+    [Fact]
+    public async Task ARunIsDownloadedByTheTwoExactArtifactNamesNeverAPattern()
+    {
+        await RunAsync(["ci", "explain", "42"], GhWrites(("green-before", "lockflight-evidence", "evidence.json")));
+
+        IReadOnlyList<string> call = Assert.Single(ghCalls);
+        Assert.DoesNotContain("--pattern", call);
+        Assert.Equal(["--name", "lockflight-verdict", "--name", "lockflight-evidence"], call.Skip(5).Take(4));
+    }
+
+    [Fact]
+    public async Task TheReportJobsVerdictIsPreferredAndLabelledAsTheVerdictOfRecord()
+    {
+        RunProcess gh = GhWrites(("green-before", "lockflight-evidence", "evidence.json"), ("review-findings", "lockflight-verdict", "verdict.json"));
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["ci", "explain", "42"], gh);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("Source: run 42/lockflight-verdict/verdict.json", output, StringComparison.Ordinal);
+        Assert.Contains("From: the report job's lockflight-verdict artifact (the verdict of record)", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("GREEN_BEFORE", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnArtifactTheJudgeJobNamedLikeTheVerdictIsNotReadAsTheVerdict()
+    {
+        RunProcess gh = GhWrites(
+            ("review-findings", "lockflight-verdict-x", "verdict.json"),
+            ("review-findings", "lockflight-evidence", "verdict.json"),
+            ("green-before", "lockflight-evidence", "evidence.json"));
+
+        (ExitCode exitCode, string output, _) = await RunAsync(["ci", "explain", "42"], gh);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains("Source: run 42/lockflight-evidence/evidence.json", output, StringComparison.Ordinal);
+        Assert.Contains("From: the judge job's lockflight-evidence artifact", output, StringComparison.Ordinal);
+        Assert.Contains("GREEN_BEFORE", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("REVIEW_FINDINGS", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("verdict of record", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ARunWhoseArtifactsHoldNothingToExplainSaysWhatWasLookedFor()
+    {
+        RunProcess gh = GhWrites(("review-findings", "lockflight-verdict-x", "verdict.json"));
+
+        (ExitCode exitCode, _, string error) = await RunAsync(["ci", "explain", "42"], gh);
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("run 42 has no verdict.json in its lockflight-verdict artifact", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EscapeSequencesInAnErrorAreShownVisibly()
+    {
+        RunProcess failing = (_, _, _, _) => Task.FromResult(new ProcessResult(1, string.Empty, "boom \u001b]0;owned\u0007", 10, false));
+
+        (ExitCode exitCode, _, string error) = await RunAsync(["ci", "explain", "42"], failing);
+
+        Assert.Equal(ExitCode.Error, exitCode);
+        Assert.DoesNotContain('\u001b', error);
+        Assert.Contains("boom ^[]0;owned^G", error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -95,7 +160,7 @@ public sealed class CiExplainCommandTests : IDisposable
         RunProcess gh = async (fileName, arguments, workingDirectory, cancellationToken) =>
         {
             downloaded = arguments[arguments.ToList().IndexOf("--dir") + 1];
-            return await GhWrites("green-before", "lockflight-evidence", "evidence.json")(fileName, arguments, workingDirectory, cancellationToken);
+            return await GhWrites(("green-before", "lockflight-evidence", "evidence.json"))(fileName, arguments, workingDirectory, cancellationToken);
         };
 
         (ExitCode exitCode, _, _) = await RunAsync(["ci", "explain", "42"], gh);
@@ -187,14 +252,21 @@ public sealed class CiExplainCommandTests : IDisposable
     private static RunProcess GitAt(string root) => (fileName, _, _, _) =>
         Task.FromResult(fileName == "git" ? new ProcessResult(0, root + "\n", string.Empty, 1, false) : throw new InvalidOperationException($"{fileName} was not expected to run"));
 
-    /// <summary>A <c>gh</c> that records its call and writes a fixture into the artifact folder under <c>--dir</c>, as gh run download does.</summary>
-    private RunProcess GhWrites(string fixture, string artifact, string fileName) => (program, arguments, _, _) =>
+    /// <summary>
+    /// A <c>gh</c> that records its call and writes each fixture into its artifact's folder under <c>--dir</c>, as gh run download
+    /// does; it writes every artifact it is given, whatever names were asked for, as a run whose judge uploaded more would.
+    /// </summary>
+    private RunProcess GhWrites(params (string Fixture, string Artifact, string FileName)[] artifacts) => (program, arguments, _, _) =>
     {
         Assert.Equal("gh", program);
         ghCalls.Add(arguments);
-        string target = Path.Combine(arguments[arguments.ToList().IndexOf("--dir") + 1], artifact);
-        Directory.CreateDirectory(target);
-        File.Copy(Path.Combine(FixtureDirectory, $"{fixture}.json"), Path.Combine(target, fileName));
+        foreach ((string fixture, string artifact, string fileName) in artifacts)
+        {
+            string target = Path.Combine(arguments[arguments.ToList().IndexOf("--dir") + 1], artifact);
+            Directory.CreateDirectory(target);
+            File.Copy(Path.Combine(FixtureDirectory, $"{fixture}.json"), Path.Combine(target, fileName));
+        }
+
         return Task.FromResult(new ProcessResult(0, string.Empty, string.Empty, 10, false));
     };
 

@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Lockflight.Cli.Gates;
+using Lockflight.Cli.Hosting;
 
 namespace Lockflight.Cli.Ci.Explain;
 
@@ -7,7 +8,9 @@ namespace Lockflight.Cli.Ci.Explain;
 /// Reads a Lockflight file as data and lists what did not pass: the checks of <c>lockflight.ci-evidence/v1</c> (the judge's
 /// evidence, the local judge's, the report's verdict, the action's refusal) or the steps of a gate result. A check that passed,
 /// is off, or did not apply or run where it is not required is left out; the gates check carries the gate steps that did not pass. The
-/// file may come from another machine's run, so nothing in it is run or trusted beyond being shown.
+/// file may come from another machine's run, or from a judge job that ran a pull request's code, so nothing in it is run or
+/// trusted beyond being shown: every string it shows is one line with its control characters made visible
+/// (<see cref="TerminalText"/>), so a detail cannot recolour the terminal, rewrite a line or forge one.
 /// </summary>
 internal static class CiExplainer
 {
@@ -23,17 +26,18 @@ internal static class CiExplainer
     private const string Skipped = "SKIPPED";
     private const string GatesCheck = "gates";
 
-    public static CiExplanationReading Explain(JsonObject document, string source)
+    /// <param name="origin">Which job wrote a run's artifact and how far it is trusted; null for a file the person named.</param>
+    public static CiExplanationReading Explain(JsonObject document, string source, string? origin)
     {
         string? schema = Text(document, "schema");
         if (schema == GateResultWriter.Schema)
         {
-            return new CiExplanationReading(GateResult(document, source), null);
+            return new CiExplanationReading(GateResult(document, source) with { Origin = Printable(origin) }, null);
         }
 
         if (schema != CiEvidence.Schema)
         {
-            return new CiExplanationReading(null, $"it is not {CiEvidence.Schema} evidence or a {GateResultWriter.Schema} gate result (schema: {schema ?? "none"})");
+            return new CiExplanationReading(null, $"it is not {CiEvidence.Schema} evidence or a {GateResultWriter.Schema} gate result (schema: {Printable(schema) ?? "none"})");
         }
 
         if (document["checks"] is not JsonArray checks)
@@ -54,16 +58,19 @@ internal static class CiExplainer
             }
 
             IReadOnlyList<ExplainedCheck> steps = id == GatesCheck && gates is not null ? Steps(gates) : [];
-            explained.Add(new ExplainedCheck(id, Title(id), requirement, verdict, Line(Text(check, "why")), ExplainedReason.Of(Text(check, "reason")), steps));
+            explained.Add(new ExplainedCheck(Line(id), Line(Title(id)), Line(requirement), Line(verdict), Line(Text(check, "why")), ExplainedReason.Of(Text(check, "reason")), steps));
         }
 
         return new CiExplanationReading(
-            new CiExplanation(source, Kind(document), Text(document, "head"), Text(document, "verdict") ?? "?", Contexts(document), explained, Blocked(document)),
+            new CiExplanation(Line(source), Kind(document), Printable(Text(document, "head")), Line(Text(document, "verdict") ?? "?"), Contexts(document), explained, Blocked(document))
+            {
+                Origin = Printable(origin),
+            },
             null);
     }
 
     private static CiExplanation GateResult(JsonObject result, string source) =>
-        new(source, ExplainedDocument.GateResult, Text(result, "head"), Text(result, "verdict") ?? "?", [], Steps(result), null);
+        new(Line(source), ExplainedDocument.GateResult, Printable(Text(result, "head")), Line(Text(result, "verdict") ?? "?"), [], Steps(result), null);
 
     /// <summary>The gate steps that did not pass and applied (N/A did not apply); each with its mode as the requirement.</summary>
     private static IReadOnlyList<ExplainedCheck> Steps(JsonObject result) =>
@@ -71,10 +78,10 @@ internal static class CiExplainer
         .. (result["steps"] as JsonArray ?? []).OfType<JsonObject>()
             .Where(step => Text(step, "verdict") is not (Pass or NotApplicable))
             .Select(step => new ExplainedCheck(
-                Text(step, "id") ?? "?",
-                Text(step, "name") ?? Text(step, "id") ?? "?",
-                Text(step, "mode") ?? "?",
-                Text(step, "verdict") ?? "?",
+                Line(Text(step, "id") ?? "?"),
+                Line(Text(step, "name") ?? Text(step, "id") ?? "?"),
+                Line(Text(step, "mode") ?? "?"),
+                Line(Text(step, "verdict") ?? "?"),
                 Line(Text(step, "detail")),
                 ExplainedReason.Of(Text(step, "reason")),
                 [])),
@@ -98,7 +105,7 @@ internal static class CiExplainer
 
     private static IReadOnlyList<KeyValuePair<string, string>> Contexts(JsonObject evidence) =>
         evidence["contexts"] is JsonObject contexts
-            ? [.. contexts.Select(context => KeyValuePair.Create(context.Key, context.Value is JsonValue value && value.TryGetValue(out string? verdict) ? verdict : "?"))]
+            ? [.. contexts.Select(context => KeyValuePair.Create(Line(context.Key), context.Value is JsonValue value && value.TryGetValue(out string? verdict) ? Line(verdict) : "?"))]
             : [];
 
     private static ExplainedBlock? Blocked(JsonObject evidence)
@@ -112,14 +119,18 @@ internal static class CiExplainer
         IReadOnlyList<string> needs =
         [
             .. (blocked["needs"] as JsonArray ?? []).OfType<JsonObject>()
-                .Select(need => $"{Text(need, "who") ?? "person"}: {Line(Text(need, "detail"))}"),
+                .Select(need => $"{Line(Text(need, "who") ?? "person")}: {Line(Text(need, "detail"))}"),
         ];
-        return new ExplainedBlock(reason is null ? null : Text(reason, "code"), Line(reason is null ? null : Text(reason, "summary")), needs);
+        return new ExplainedBlock(Printable(reason is null ? null : Text(reason, "code")), Line(reason is null ? null : Text(reason, "summary")), needs);
     }
 
     private static string Title(string id) => CheckIdNames.Parse(id) is CheckId check ? CheckIdNames.Title(check) : id;
 
-    private static string Line(string? text) => (text ?? string.Empty).ReplaceLineEndings(" ");
+    /// <summary>The text as one printable line (an absent text is empty).</summary>
+    private static string Line(string? text) => Printable(text) ?? string.Empty;
+
+    /// <summary>The text with its line breaks made spaces and every other control character made visible; null stays null.</summary>
+    private static string? Printable(string? text) => text is null ? null : TerminalText.Clean(text.ReplaceLineEndings(" "));
 
     private static string? Text(JsonObject node, string name) =>
         node[name] is JsonValue value && value.TryGetValue(out string? text) ? text : null;
