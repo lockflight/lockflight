@@ -19,6 +19,11 @@ internal static class CiExplanationText
         string what = explanation.Document == ExplainedDocument.GateResult ? "gate run" : "lockflight ci";
         text.Append($"{explanation.Verdict} {what} for head {head}: {ExplainedDocumentNames.Describe(explanation.Document)}\n");
         text.Append($"{Indent}Source: {explanation.Source}\n");
+        if (explanation.Origin is string origin)
+        {
+            text.Append($"{Indent}From: {origin}\n");
+        }
+
         if (explanation.Contexts.Count > 0)
         {
             text.Append($"{Indent}Contexts: {string.Join(" · ", explanation.Contexts.Select(context => $"{context.Key} {context.Value}"))}\n");

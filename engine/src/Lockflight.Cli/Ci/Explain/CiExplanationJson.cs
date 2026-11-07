@@ -17,6 +17,7 @@ internal static class CiExplanationJson
     private static JsonNode Explanation(CiExplanation explanation) => new JsonObject
     {
         ["source"] = explanation.Source,
+        ["from"] = explanation.Origin,
         ["kind"] = ExplainedDocumentNames.ToName(explanation.Document),
         ["head"] = explanation.Head,
         ["verdict"] = explanation.Verdict,

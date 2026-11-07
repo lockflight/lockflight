@@ -1,3 +1,4 @@
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Ci.Explain;
@@ -17,5 +18,6 @@ internal sealed record ExplainedReason(string? Name, ReasonCode Code)
     /// <summary>The reason's entry in the reasons guide, or the guide itself for a reason without one.</summary>
     public string Link => ReasonCatalogue.Link(Code) ?? ReasonCatalogue.GuideUrl;
 
-    public static ExplainedReason Of(string? name) => new(name, ReasonCodeNames.Parse(name));
+    /// <summary>The reason <paramref name="name"/> names, read as written and kept as one printable line for display.</summary>
+    public static ExplainedReason Of(string? name) => new(name is null ? null : TerminalText.Clean(name.ReplaceLineEndings(" ")), ReasonCodeNames.Parse(name));
 }
