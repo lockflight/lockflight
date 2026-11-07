@@ -37,8 +37,10 @@ internal enum FileRole
     Other = 11,
 
     /// <summary>
-    /// A XAML view, window or resource dictionary (<c>.xaml</c>) of a production project. It counts toward size like markup but is
-    /// not configuration, so a visual change stays in its size class; its code-behind (<c>.xaml.cs</c>) is production code.
+    /// A XAML view, window or resource dictionary (<c>.xaml</c>) of a production project that sets <c>UseWPF</c>, <c>UseMaui</c> or
+    /// <c>UseWinUI</c>, a Workflow Foundation definition excepted. It counts toward size like markup but is not configuration, so a
+    /// visual change stays in its size class, while a changed line that wires behaviour (<see cref="XamlBehaviour"/>) still fires
+    /// <c>config.changed</c>. Its code-behind (<c>.xaml.cs</c>) is production code; any other <c>.xaml</c> is production configuration.
     /// </summary>
     Xaml = 12,
 }

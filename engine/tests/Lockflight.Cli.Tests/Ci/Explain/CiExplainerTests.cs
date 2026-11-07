@@ -99,7 +99,7 @@ public sealed class CiExplainerTests
     [Fact]
     public void AFileOfAnotherSchemaIsNotExplained()
     {
-        CiExplanationReading reading = CiExplainer.Explain(new JsonObject { ["schema"] = "lockflight.blocked/v1" }, "blocked.json");
+        CiExplanationReading reading = CiExplainer.Explain(new JsonObject { ["schema"] = "lockflight.blocked/v1" }, "blocked.json", null);
 
         Assert.Null(reading.Explanation);
         Assert.Contains("lockflight.blocked/v1", reading.Problem, StringComparison.Ordinal);
@@ -131,8 +131,52 @@ public sealed class CiExplainerTests
         Assert.Null(routing["next"]);
     }
 
+    [Fact]
+    public void EscapeSequencesAndLineBreaksInTheFileAreShownVisiblyNotActedOn()
+    {
+        const string Escape = "\u001b]52;c;cGF5bG9hZA==\u0007\u001b[2K\rPASS";
+        JsonObject evidence = Fixture("green-before");
+        evidence["head"] = $"aaaa{Escape}";
+        evidence["verdict"] = $"FAIL{Escape}";
+        evidence["contexts"]![$"gates{Escape}"] = $"PASS\nFAIL{Escape}";
+        JsonObject check = evidence["checks"]![0]!.AsObject();
+        check["id"] = $"red{Escape}";
+        check["requirement"] = $"required{Escape}";
+        check["verdict"] = $"FAIL{Escape}";
+        check["why"] = $"line one\nPASS red (fake)\r\n{Escape}\u202Eevil";
+        check["reason"] = $"GREEN_BEFORE{Escape}";
+        evidence["blocked"] = new JsonObject
+        {
+            ["reason"] = new JsonObject { ["code"] = $"X{Escape}", ["summary"] = $"wait{Escape}" },
+            ["needs"] = new JsonArray(new JsonObject { ["who"] = $"owner{Escape}", ["detail"] = $"do{Escape}" }),
+        };
+
+        CiExplanation explanation = CiExplainer.Explain(evidence, $"evidence{Escape}.json", $"origin{Escape}").Explanation!;
+        string text = CiExplanationText.Render(explanation);
+        string json = CiExplanationJson.Render([explanation]).ToJsonString();
+
+        Assert.DoesNotContain(text, character => char.IsControl(character) && character != '\n');
+        Assert.DoesNotContain('\u202E', text);
+        Assert.Contains("^[]52;c;cGF5bG9hZA==^G^[[2K PASS", text, StringComparison.Ordinal);
+        Assert.Contains("Detail: line one PASS red (fake) ", text, StringComparison.Ordinal);
+        Assert.Contains("<U+202E>evil", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("\\u001b", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\\n", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ADetailWithoutControlCharactersIsShownAsWritten()
+    {
+        JsonObject evidence = Fixture("green-before");
+        evidence["checks"]![0]!["why"] = "tests: Shop.Tests.CartTests.Adds passed before src/Cart.cs changed";
+
+        string text = CiExplanationText.Render(Explain(evidence, "evidence.json"));
+
+        Assert.Contains("Detail: tests: Shop.Tests.CartTests.Adds passed before src/Cart.cs changed\n", text, StringComparison.Ordinal);
+    }
+
     private static CiExplanation Explain(JsonObject document, string source) =>
-        CiExplainer.Explain(document, source).Explanation ?? throw new InvalidOperationException($"{source} was not explained");
+        CiExplainer.Explain(document, source, null).Explanation ?? throw new InvalidOperationException($"{source} was not explained");
 
     private static JsonObject Fixture(string name) => CiArtifactReader.Read(Path.Combine(FixtureDirectory, $"{name}.json")).Document!;
 }

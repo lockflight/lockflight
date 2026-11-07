@@ -113,10 +113,14 @@ not found.
 
 ## XAML changes
 
-A `.xaml` file has its own [file role](risk-routing.md#file-roles): it counts toward size, but it is neither code nor
-configuration. A change to XAML alone needs no red, and a margin or a colour stays in the class its size gives it. XAML can
-still wire behaviour (event handlers, triggers, bindings), so green runs the existing tests: a window test catches a view that
-no longer loads.
+In a project that sets `UseWPF`, `UseMaui` or `UseWinUI` (directly or in a `Directory.Build.props` above it), a `.xaml` file
+has its own [file role](risk-routing.md#file-roles): it counts toward size, but it is neither code nor configuration. A change
+to XAML alone needs no red, and a margin, a colour or a binding path stays in the class its size gives it. A changed line that
+wires behaviour (an `x:Code` block, an event handler such as `Click="OnClear"`, a `Command=` or a `Converter=`) fires
+`config.changed`, which raises the change to `behaviour` and keeps it out of the
+[structural lane](spec-contract.md#specmd); move that logic into the ViewModel, where a change needs its red. Green runs the existing tests:
+a window test catches a view that no longer loads. A `.xaml` file of any other project, a Workflow Foundation definition
+included, is production configuration, and every change to it fires `config.changed`.
 
 ## Host-tampering findings in desktop tests
 
