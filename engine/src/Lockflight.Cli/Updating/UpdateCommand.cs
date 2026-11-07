@@ -1,16 +1,16 @@
-using Lockflight.Cli.Adoption;
 using System.Text;
 using System.Text.Json.Nodes;
+using Lockflight.Cli.Adoption;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Config.Migration;
 using Lockflight.Cli.EngineLocks;
+using Lockflight.Cli.Gates.WindowsTargets;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Init;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Mascot;
 using Lockflight.Cli.Processes;
-using Lockflight.Cli.Projects;
 
 namespace Lockflight.Cli.Updating;
 
@@ -465,7 +465,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             return;
         }
 
-        IReadOnlyList<string> windowsTests = ProjectFiles.WindowsTestProjects(root);
+        IReadOnlyList<string> windowsTests = WindowsTargeting.WindowsTestProjects(BuildScope.OfRepository(root));
         string moved = JudgeRunner.Apply(current, windows: windowsTests.Count > 0);
         if (moved == current)
         {

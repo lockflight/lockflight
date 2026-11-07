@@ -8,7 +8,7 @@ namespace Lockflight.Cli.Tests.Gates.WindowsTargets;
 
 /// <summary>
 /// The build and test steps of a run that leaves out Windows-targeted tests (a person's run off Windows), against one that does
-/// not (on Windows, or the CI judge), on a WPF client and ASP.NET Core server solution; the .NET SDK is replaced by canned results.
+/// not (on Windows, or the CI judge, which still builds off Windows with Windows targeting enabled), on a WPF client and ASP.NET Core server solution; the .NET SDK is replaced by canned results.
 /// </summary>
 public sealed class OffWindowsGateStepsTests
 {
@@ -63,13 +63,14 @@ public sealed class OffWindowsGateStepsTests
     }
 
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    public async Task OffWindowsTheBuildEnablesWindowsTargeting(bool leavesOut, bool expected)
+    [InlineData(true, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(false, false, false)]
+    public async Task OffWindowsTheBuildEnablesWindowsTargetingForAPersonAndForTheJudge(bool offWindows, bool leavesOut, bool expected)
     {
         using DesktopSolution solution = new();
 
-        await new BuildStep().RunAsync(Run(solution, leavesOut), GateRunFacts.None, TestContext.Current.CancellationToken);
+        await new BuildStep().RunAsync(Run(solution, leavesOut) with { OffWindows = offWindows }, GateRunFacts.None, TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, Assert.Single(calls).Contains("-p:EnableWindowsTargeting=true"));
     }
@@ -104,6 +105,7 @@ public sealed class OffWindowsGateStepsTests
         new(solution.Root, solution.Root, GateProfile.Stop, GateSettings.Default, BaseRef: null, TimeProvider.System, UnderStopHook: false)
         {
             LeavesOutWindowsTests = leavesOut,
+            OffWindows = leavesOut,
             Processes = (fileName, arguments, workingDirectory, timeLimit, cancellationToken) => FakeDotnetAsync(arguments),
         };
 

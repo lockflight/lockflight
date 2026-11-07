@@ -1,4 +1,4 @@
-using Lockflight.Cli.Projects;
+using Lockflight.Cli.Gates.WindowsTargets;
 
 namespace Lockflight.Cli.Init;
 
@@ -31,7 +31,7 @@ internal static class CiPipeline
             new(GitLabCiTemplate.Path, GitLabCiTemplate.Job(dotnetChannels, trigger, developmentPin)),
             new(GitLabCiTemplate.RootPath, GitLabCiTemplate.Root()),
         ],
-        _ => [new(Templates.WorkflowPath, JudgeRunner.Apply(Templates.Workflow(dotnetChannels, trigger, developmentPin), windows: ProjectFiles.WindowsTestProjects(root).Count > 0))],
+        _ => [new(Templates.WorkflowPath, JudgeRunner.Apply(Templates.Workflow(dotnetChannels, trigger, developmentPin), windows: WindowsTargeting.WindowsTestProjects(BuildScope.OfRepository(root)).Count > 0))],
     };
 
     /// <summary>
@@ -44,7 +44,7 @@ internal static class CiPipeline
         bool written = steps.Any(step => step.Outcome != FileOutcome.Unchanged);
         bool gitLabWithoutInclude = platform == CiPlatform.GitLab && !GitLabCiTemplate.IsIncludedBy(ReadOrEmpty(root, GitLabCiTemplate.RootPath));
         return written || gitLabWithoutInclude
-            ? [.. Instructions(platform, steps, gitLabWithoutInclude, trigger), .. written ? RunnerLines(platform, ProjectFiles.WindowsTestProjects(root), root) : []]
+            ? [.. Instructions(platform, steps, gitLabWithoutInclude, trigger), .. written ? RunnerLines(platform, WindowsTargeting.WindowsTestProjects(BuildScope.OfRepository(root)), root) : []]
             : [];
     }
 

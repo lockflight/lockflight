@@ -479,9 +479,12 @@ off Windows (the Stop gate, `gate run`, `baseline tests`) does two things in a s
   (`.lockflight/local/affected/<target>.off-windows.slnf`), and its detail names them: `total 12; left out off Windows:
   Desk.Client.Tests (…)`. When no other test project is left, `test` is N/A and says why.
 
-A project targets Windows when its `TargetFramework` or `TargetFrameworks`, in its project file or a `Directory.Build.props`
-between it and the solution, names a `-windows` platform. On Windows nothing is left out, and the CI judge never leaves
-anything out: it judges on the runner it is given, so a solution with Windows test projects needs a Windows runner.
+A project targets Windows when its `TargetFramework` (or, without one, its `TargetFrameworks`), in its project file or else the
+nearest `Directory.Build.props` above it that sets one, names a `-windows` platform (a conditional value counts), or when
+`UseWPF` or `UseWindowsForms` is `true`; XML comments do not count. Only the projects the gates build (`gates.build` or the
+target's only solution) are read. On Windows nothing is left out, and the CI judge never leaves anything out: it judges on the
+runner it is given, so a solution with Windows test projects needs a Windows runner. Off Windows the judge, too, builds with
+`EnableWindowsTargeting=true`, so a WPF app whose test projects are plain `net8.0` is judged on Linux.
 `lockflight doctor` says which projects are affected on a machine that is not Windows.
 
 ### The format step judges the change, not the file
