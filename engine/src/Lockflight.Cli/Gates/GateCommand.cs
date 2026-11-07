@@ -39,7 +39,7 @@ internal sealed class GateCommand(CliContext context, GateStep? secretsScannedFi
         }
 
         // In CI, before anything the pull request's code could start (the shell's policy is read with git).
-        using ProcessSweep? sweep = GateSurvivors.Sweeps(profile, context.Environment, ProcessSweep.Current) ? ProcessSweep.Start(context.ProcessScope()) : null;
+        using ProcessSweep? sweep = GateSurvivors.Sweeps(profile, context.Environment, ProcessSweep.Current) ? ProcessSweep.Start(context.ProcessScope(true)) : null;
         bool full = options.Flag("--full");
         if (full && profile != GateProfile.Stop)
         {

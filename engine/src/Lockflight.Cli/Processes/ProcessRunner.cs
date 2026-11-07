@@ -231,6 +231,11 @@ internal static class ProcessRunner
             startInfo.Environment[name] = value;
         }
 
+        if (ProcessSweep.Current?.Marker is string marker)
+        {
+            startInfo.Environment[ProcessSweep.MarkerVariable] = marker;
+        }
+
         // The CI runner's file commands and tokens: a build or test the engine starts (the pull request's code, in the CI judge's
         // job) must not set the next steps' environment or outputs. A guardrail: the files stay on disk under the runner's
         // temporary folder.

@@ -11,4 +11,10 @@ internal enum SweepMechanism
 
     /// <summary>Windows: the engine runs in a job object, which every process it or its descendants create joins.</summary>
     Job = 2,
+
+    /// <summary>
+    /// macOS, best effort: every process the engine starts carries a marker in its environment, and a process of the same user that
+    /// still carries it (or descends from one that does) is found; one that clears its environment, or runs as another user, is not.
+    /// </summary>
+    Marker = 3,
 }

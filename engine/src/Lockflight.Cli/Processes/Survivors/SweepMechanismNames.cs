@@ -7,6 +7,7 @@ internal static class SweepMechanismNames
     {
         SweepMechanism.Subreaper => "subreaper",
         SweepMechanism.Job => "job",
+        SweepMechanism.Marker => "marker",
         _ => "none",
     };
 }

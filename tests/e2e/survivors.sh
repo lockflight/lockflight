@@ -120,7 +120,8 @@ if ls "$W/markers"/forged-* > /dev/null 2>&1; then fail "a daemon forged a resul
 if $docker_ok; then docker ps -aq --filter label=lockflight-fixture=1 | xargs -r docker rm -f > /dev/null 2>&1; fi
 
 # A process another user owns (root, through sudo) cannot be stopped: green and gates are ERROR, and the judge stops.
-if ! $windows && sudo -n true 2> /dev/null; then
+# Linux only: on macOS another user's process is not looked for (its environment cannot be read), a documented gap.
+if [ "$(uname -s)" = Linux ] && sudo -n true 2> /dev/null; then
   LOCKFLIGHT_FIXTURE_ROOT=1 LOCKFLIGHT_FIXTURE_EVIDENCE="$W/root" judge root > "$W/root.code"
   sudo -n pkill -f "daemon.py root" 2> /dev/null
   code=$(cat "$W/root.code")
@@ -136,7 +137,7 @@ if ! $windows && sudo -n true 2> /dev/null; then
   else fail "gate run in CI with a root process exits $gates, want 3 with a processes row"; sed 's/^/     /' "$W/gates-root.log"; fi
   if $docker_ok; then docker ps -aq --filter label=lockflight-fixture=1 | xargs -r docker rm -f > /dev/null 2>&1; fi
 else
-  echo "info no passwordless sudo here: the root case did not run"
+  echo "info not Linux with passwordless sudo: the root case did not run"
 fi
 
 if [ "$failures" -gt 0 ]; then echo "$failures survivor checks failed"; exit 1; fi

@@ -13,4 +13,10 @@ internal interface IProcessScope
     /// has no child process of its own running, so every one it finds was left behind.
     /// </summary>
     IReadOnlyList<SweptProcess> Sweep();
+
+    /// <summary>
+    /// The value of <see cref="ProcessSweep.MarkerVariable"/> every process the engine starts gets, for a mechanism that finds what
+    /// they leave running by it (macOS); null when the mechanism needs none.
+    /// </summary>
+    string? Marker => null;
 }

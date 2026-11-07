@@ -2,7 +2,7 @@
 
   left-running.py record <evidence.json> <log>   append the evidence's processes object (or its absence) to the log
   left-running.py summary <log>                  print every run's sweeps and processes left running; exit 1 when a run on
-                                                 Linux or Windows did not sweep (the mechanism did not start)
+                                                 Linux, Windows or macOS did not sweep (the mechanism did not start)
 
 A process the judge stopped does not change its verdict, so the suites only report them; survivors.sh tests the enforcement.
 """
@@ -11,7 +11,7 @@ import json
 import platform
 import sys
 
-EXPECTED = {"Linux": "subreaper", "Windows": "job"}
+EXPECTED = {"Linux": "subreaper", "Windows": "job", "Darwin": "marker"}
 
 
 def record(evidence_path, log_path):
