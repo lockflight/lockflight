@@ -84,9 +84,7 @@ internal static class StructuralLane
         List<StructuralUnmet> unmet = [];
         if (!facts.PullRequest || !facts.Routed || facts.Unit)
         {
-            unmet.Add(new StructuralUnmet(StructuralCondition.Routed, facts.Unit
-                ? "a unit repository of a workspace shell is judged against the shell's spec, so its structural requirements are not checked here"
-                : "the change class was not computed from the target branch's routing policy"));
+            unmet.Add(new StructuralUnmet(StructuralCondition.Routed, RoutedUnmet(facts)));
         }
 
         if (facts.RedCommits > 0)
@@ -114,6 +112,13 @@ internal static class StructuralLane
     /// <summary>Whether a routing signal carries behaviour a structural test does not pin.</summary>
     public static bool CarriesBehaviour(string signalId) =>
         BehaviourSignals.Contains(signalId) || signalId.StartsWith(DatabaseSignals, StringComparison.Ordinal);
+
+    private static string RoutedUnmet(StructuralLaneFacts facts) => facts switch
+    {
+        { Unit: true } => "a unit repository of a workspace shell is judged against the shell's spec, so its structural requirements are not checked here",
+        { PullRequest: false } => "this run judges a push or a merge queue, not a pull request against a target branch, so the change has no class from risk routing",
+        _ => "the change class was not computed by risk routing (the target branch's routing policy, or the default preset when it has none)",
+    };
 
     private static bool AllStructural(SpecDocument document) =>
         document.DuplicateMarkedIds.Count == 0 && AllStructural(document.Requirements);

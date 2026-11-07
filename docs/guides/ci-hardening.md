@@ -124,7 +124,9 @@ under the checks table with what to do next and a link to its entry in [reasons]
 To read a verdict outside the pull request, `lockflight ci explain <run URL or id>` fetches the run's verdict with the GitHub
 CLI (`gh run download`, signed in with `gh auth login`) and lists each check that did not pass with its detail, reason code,
 Next line and link; it also reads a downloaded `lockflight-verdict` or `lockflight-evidence` artifact folder, and, without an
-operand, the local judge's last run. In Claude Code, the plugin's `explain-ci` skill runs it and fixes what is the agent's to
+operand, the local judge's last run. From a run it reads only the artifacts of those exact names and says which job wrote the
+one it explains: the judge job ran the pull request's code, so its evidence, and anything else that job could upload, is
+untrusted data. Control characters in it are printed visibly. In Claude Code, the plugin's `explain-ci` skill runs it and fixes what is the agent's to
 fix ([commands](commands.md#ci)).
 
 `lockflight ci` re-runs the red/green evidence instead of trusting it. For each commit with a `Lockflight-Red: <cycle>`

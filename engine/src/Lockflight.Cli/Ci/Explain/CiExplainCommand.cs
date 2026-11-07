@@ -42,18 +42,22 @@ internal sealed class CiExplainCommand(CliContext context) : ICommand
             else if (GitHubRun.Parse(operands[0]) is not { Repository: not null } && Path.GetFullPath(operands[0], context.WorkingDirectory) is string path
                 && (File.Exists(path) || Directory.Exists(path)))
             {
-                sources = File.Exists(path) ? new([(path, operands[0])], null) : Folder(path, operands[0]);
+                sources = File.Exists(path) ? new([new ExplainedSource(path, operands[0], null)], null) : Folder(path, operands[0]);
             }
             else if (GitHubRun.Parse(operands[0]) is GitHubRun run)
             {
                 download = Directory.CreateTempSubdirectory("lockflight-explain-");
                 if (await GitHubRunArtifacts.DownloadAsync(context.Processes, run, download.FullName, context.WorkingDirectory, cancellationToken) is string failed)
                 {
-                    await context.Error.WriteLineAsync($"lockflight {Command}: {failed}");
+                    await context.Error.WriteLineAsync(TerminalText.Clean($"lockflight {Command}: {failed}"));
                     return ExitCode.Error;
                 }
 
-                sources = Folder(download.FullName, $"run {run.Id}");
+                string shown = $"run {run.Id}";
+                IReadOnlyList<ExplainedSource> found = GitHubRunArtifacts.Find(download.FullName, shown);
+                sources = found.Count > 0
+                    ? new(found, null)
+                    : new([], $"{shown} has no {CiReportCommand.VerdictFileName} in its {GitHubRunArtifacts.VerdictArtifact} artifact, nor a {CiEvidence.FileName} or {CiReportCommand.RefusalFileName} in its {GitHubRunArtifacts.EvidenceArtifact} artifact");
             }
             else
             {
@@ -62,20 +66,20 @@ internal sealed class CiExplainCommand(CliContext context) : ICommand
 
             if (sources.Problem is string problem)
             {
-                await context.Error.WriteLineAsync($"lockflight {Command}: {problem}");
+                await context.Error.WriteLineAsync(TerminalText.Clean($"lockflight {Command}: {problem}"));
                 return ExitCode.Config;
             }
 
             List<CiExplanation> explanations = [];
-            foreach ((string file, string shown) in sources.Files)
+            foreach ((string file, string shown, string? origin) in sources.Files)
             {
                 CiArtifactReading reading = CiArtifactReader.Read(file);
                 CiExplanationReading explained = reading.Document is { } document
-                    ? CiExplainer.Explain(document, shown)
+                    ? CiExplainer.Explain(document, shown, origin)
                     : new CiExplanationReading(null, reading.Problem ?? "it is not there");
                 if (explained.Explanation is not CiExplanation explanation)
                 {
-                    await context.Error.WriteLineAsync($"lockflight {Command}: {shown} was not explained: {explained.Problem}");
+                    await context.Error.WriteLineAsync(TerminalText.Clean($"lockflight {Command}: {shown} was not explained: {explained.Problem}".ReplaceLineEndings(" ")));
                     return ExitCode.Config;
                 }
 
@@ -100,7 +104,7 @@ internal sealed class CiExplainCommand(CliContext context) : ICommand
         string relative = $"{JudgeInputsReader.LocalEvidenceDirectory}/{CiEvidence.LocalFileName}";
         string path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
         return File.Exists(path)
-            ? new([(path, relative)], null)
+            ? new([new ExplainedSource(path, relative, null)], null)
             : new([], $"there is no local judge evidence ({relative}): run 'lockflight ci --platform local' first, or name a file, folder, run URL or run id");
     }
 
@@ -109,7 +113,7 @@ internal sealed class CiExplainCommand(CliContext context) : ICommand
         IReadOnlyList<string> files = ExplainedFiles.Find(directory);
         return files.Count == 0
             ? new([], $"{shown} holds no {CiReportCommand.VerdictFileName}, {CiEvidence.FileName}, {CiReportCommand.RefusalFileName} or {CiEvidence.LocalFileName}")
-            : new([.. files.Select(file => (file, $"{shown}/{Path.GetRelativePath(directory, file).Replace(Path.DirectorySeparatorChar, '/')}"))], null);
+            : new([.. files.Select(file => new ExplainedSource(file, $"{shown}/{Path.GetRelativePath(directory, file).Replace(Path.DirectorySeparatorChar, '/')}", null))], null);
     }
 
     private async Task<string> RootAsync(CancellationToken cancellationToken)
@@ -126,5 +130,5 @@ internal sealed class CiExplainCommand(CliContext context) : ICommand
     }
 
     /// <summary>The files to explain, each with the name shown for it, or why there are none.</summary>
-    private sealed record ExplainSources(IReadOnlyList<(string File, string Shown)> Files, string? Problem);
+    private sealed record ExplainSources(IReadOnlyList<ExplainedSource> Files, string? Problem);
 }
