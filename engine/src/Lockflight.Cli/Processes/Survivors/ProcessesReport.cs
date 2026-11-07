@@ -5,4 +5,8 @@ namespace Lockflight.Cli.Processes.Survivors;
 /// <see cref="ProcessSweep.MaxSurvivors"/>, <paramref name="More"/> counting the rest) and the commands whose output was held open.
 /// </summary>
 internal sealed record ProcessesReport(
-    SweepMechanism Mechanism, string? Note, int Sweeps, IReadOnlyList<Survivor> Survivors, int More, IReadOnlyList<string> OutputHeld);
+    SweepMechanism Mechanism, string? Note, int Sweeps, IReadOnlyList<Survivor> Survivors, int More, IReadOnlyList<string> OutputHeld)
+{
+    /// <summary>How many of the processes and containers found could not be stopped, including any past the listed ones.</summary>
+    public int NotStopped { get; init; }
+}

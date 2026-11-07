@@ -42,6 +42,12 @@ internal static class JudgeChecks
             return new CheckResult(check, level, CheckVerdict.NotApplicable, ReasonCode.None, plan.Inputs.Event == JudgeEvent.PullRequest ? "off for this change class" : "judged on the pull request");
         }
 
+        if (check is CheckId.Green or CheckId.Gates && findings.Processes is { NotStopped: > 0 } processes)
+        {
+            // A process left running that could not be stopped could have changed anything the judge read after it started.
+            return new CheckResult(check, level, CheckVerdict.Error, ReasonCode.SurvivorNotStopped, JudgeExecutor.NotStoppedWhy(processes.NotStopped));
+        }
+
         return check switch
         {
             CheckId.Red when plan.Reds.OverCap => new CheckResult(check, level, CheckVerdict.NotEarned, ReasonCode.TooManyRedCommits,

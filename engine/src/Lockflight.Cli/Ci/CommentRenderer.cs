@@ -36,6 +36,9 @@ internal static class CommentRenderer
     /// <summary>The most loosenings (and requirement-marker changes) the comment lists, so the section leaves room for the others.</summary>
     private const int MaxLoosenedShown = 30;
     private const int MaxEntriesShown = 30;
+
+    /// <summary>The longest command line of a process left running the comment shows.</summary>
+    private const int MaxCommandShown = 200;
     private const string CutMark = "…";
 
     /// <summary>The order the Next line looks for the first required check that did not pass.</summary>
@@ -384,6 +387,11 @@ internal static class CommentRenderer
             yield return trace.Append("\n</details>\n").ToString();
         }
 
+        if (Processes(verdict) is string processes)
+        {
+            yield return processes;
+        }
+
         if (verdict["hostTampering"] is JsonObject tampering && ((tampering["new"]?.AsArray().Count ?? 0) + (tampering["existing"]?.AsArray().Count ?? 0)) > 0)
         {
             StringBuilder findings = new("<details><summary>Host-tampering findings</summary>\n\n");
@@ -400,6 +408,55 @@ internal static class CommentRenderer
             yield return findings.Append("\n</details>\n").ToString();
         }
     }
+
+    /// <summary>
+    /// The processes the pull request's code left running and the containers it created, as the judge's sweeps found them (open when
+    /// one could not be stopped), or why they were not looked for. Command lines are the pull request's text: code spans, capped.
+    /// A process that exited by itself before a sweep is counted, not listed.
+    /// </summary>
+    private static string? Processes(JsonNode verdict)
+    {
+        if (verdict["processes"] is not JsonObject processes)
+        {
+            return null;
+        }
+
+        string mechanism = processes["mechanism"] is JsonValue mechanismValue && mechanismValue.TryGetValue(out string? name) ? name : "none";
+        if (mechanism == "none")
+        {
+            string note = processes["note"] is JsonValue noteValue && noteValue.TryGetValue(out string? text) ? $": {CommentText.Plain(text)}" : string.Empty;
+            return $"\n> Processes left running were not checked{note}.\n";
+        }
+
+        JsonNode?[] left = [.. (processes["survivors"]?.AsArray() ?? []).Where(survivor => Text(survivor?["outcome"]) != "exited")];
+        int more = processes["more"] is JsonValue moreValue && moreValue.TryGetValue(out int count) ? count : 0;
+        int notStopped = processes["notStopped"] is JsonValue notStoppedValue && notStoppedValue.TryGetValue(out int unstopped) ? unstopped : 0;
+        if (left.Length == 0 && more == 0)
+        {
+            return null;
+        }
+
+        StringBuilder list = new($"<details{(notStopped > 0 ? " open" : string.Empty)}><summary>Processes left running ({left.Length + more})</summary>\n\n");
+        list.Append(notStopped > 0
+            ? $"{notStopped} could not be stopped, so `green` and `gates` are ERROR.\n\n"
+            : "Lockflight stopped each one; they do not change the verdict.\n\n");
+        foreach (JsonNode? survivor in left.Take(MaxEntriesShown))
+        {
+            string what = Text(survivor?["kind"]) == "container" ? $"container, image {CommentText.Code(Cut(Text(survivor?["image"])))}" : "process";
+            list.Append($"- {CommentText.Plain(Text(survivor?["outcome"]))}: {CommentText.Code(Cut(Text(survivor?["command"])))} ({what}; "
+                + $"{CommentText.Plain(Text(survivor?["region"]))}, after {CommentText.Code(Cut(Text(survivor?["after"])))})\n");
+        }
+
+        int unlisted = left.Length - Math.Min(left.Length, MaxEntriesShown) + more;
+        if (unlisted > 0)
+        {
+            list.Append($"- and {unlisted} more in the evidence's processes\n");
+        }
+
+        return list.Append("\n</details>\n").ToString();
+    }
+
+    private static string Cut(string? text) => text is null ? "?" : text.Length <= MaxCommandShown ? text : $"{text[..MaxCommandShown]}{CutMark}";
 
     /// <summary>
     /// The new findings' baseline entries, ready to paste, after how a person accepts one (the engine's own text, so neither escaped

@@ -77,6 +77,8 @@ internal static class ReasonCodeNames
         (ReasonCode.ExistingTestOldVersionFails, "EXISTING_TEST_OLD_VERSION_FAILS"),
         (ReasonCode.ExistingTestOldVersionUncheckable, "EXISTING_TEST_OLD_VERSION_UNCHECKABLE"),
         (ReasonCode.StructuralChangeNewTest, "STRUCTURAL_CHANGE_NEW_TEST"),
+        (ReasonCode.SurvivorNotStopped, "SURVIVOR_NOT_STOPPED"),
+        (ReasonCode.SurvivorOutputHeld, "SURVIVOR_OUTPUT_HELD"),
     ];
 
     /// <summary>Every code that has a contract name: all but <see cref="ReasonCode.None"/> and <see cref="ReasonCode.Unknown"/>.</summary>
