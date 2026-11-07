@@ -431,12 +431,15 @@ internal static class CommentRenderer
         JsonNode?[] left = [.. (processes["survivors"]?.AsArray() ?? []).Where(survivor => Text(survivor?["outcome"]) != "exited")];
         int more = processes["more"] is JsonValue moreValue && moreValue.TryGetValue(out int count) ? count : 0;
         int notStopped = processes["notStopped"] is JsonValue notStoppedValue && notStoppedValue.TryGetValue(out int unstopped) ? unstopped : 0;
+        string checkNote = processes["note"] is JsonValue checkNoteValue && checkNoteValue.TryGetValue(out string? checkText)
+            ? $"\n> {CommentText.Plain(checkText)}.\n"
+            : string.Empty;
         if (left.Length == 0 && more == 0)
         {
-            return null;
+            return checkNote.Length > 0 ? checkNote : null;
         }
 
-        StringBuilder list = new($"<details{(notStopped > 0 ? " open" : string.Empty)}><summary>Processes left running ({left.Length + more})</summary>\n\n");
+        StringBuilder list = new($"{checkNote}<details{(notStopped > 0 ? " open" : string.Empty)}><summary>Processes left running ({left.Length + more})</summary>\n\n");
         list.Append(notStopped > 0
             ? $"{notStopped} could not be stopped, so `green` and `gates` are ERROR.\n\n"
             : "Lockflight stopped each one; they do not change the verdict.\n\n");

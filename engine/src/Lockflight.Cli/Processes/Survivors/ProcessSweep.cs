@@ -117,7 +117,10 @@ internal sealed class ProcessSweep(IProcessScope scope) : IDisposable
                 SweepNow("the judge's last step");
             }
 
-            return new ProcessesReport(scope.Mechanism, scope.Note, sweeps, [.. survivors], more, HeldOutputs.Snapshot()) { NotStopped = notStopped };
+            return new ProcessesReport(scope.Mechanism, scope.Note ?? containers?.Note, sweeps, [.. survivors], more, HeldOutputs.Snapshot())
+            {
+                NotStopped = notStopped,
+            };
         }
     }
 

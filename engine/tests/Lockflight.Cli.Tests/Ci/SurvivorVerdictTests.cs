@@ -71,6 +71,20 @@ public sealed class SurvivorVerdictTests
         Assert.Contains("> Processes left running were not checked: not on this system.", comment, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TheCommentShowsWhyContainersWereNotCheckedWithoutAnError()
+    {
+        JudgeRun run = CiEvidenceTests.Run() with
+        {
+            Findings = JudgeFindings.None with { Processes = new ProcessesReport(SweepMechanism.Subreaper, "1 Docker container was not checked", 4, [], 0, []) },
+        };
+
+        string comment = CommentRenderer.Render(CiEvidence.Build(run, "0.3.0", "linux-x64", null), CommentRenderer.MaxCommentLength);
+
+        Assert.Contains("> 1 Docker container was not checked.", comment, StringComparison.Ordinal);
+        Assert.DoesNotContain("are ERROR", comment, StringComparison.Ordinal);
+    }
+
     private static JudgeRun Judged(params SweptProcess[] found)
     {
         JudgeRun run = CiEvidenceTests.Run();

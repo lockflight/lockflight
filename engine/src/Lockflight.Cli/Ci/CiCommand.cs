@@ -23,9 +23,9 @@ internal sealed class CiCommand(CliContext context) : ICommand
     /// <summary>The longest command line of a process left running the summary shows; the evidence keeps more.</summary>
     private const int MaxCommandShown = 200;
 
-    /// <summary>The runner sets it to <c>self-hosted</c> on a self-hosted runner (GitHub Actions).</summary>
-    private const string SelfHostedVariable = "RUNNER_ENVIRONMENT";
-    private const string SelfHosted = "self-hosted";
+    /// <summary>GitHub Actions sets it to <c>github-hosted</c> on its own runners, a fresh machine per job; no other platform sets it.</summary>
+    private const string RunnerEnvironmentVariable = "RUNNER_ENVIRONMENT";
+    private const string GitHubHosted = "github-hosted";
 
     /// <summary>A container id as <c>docker ps</c> shows it.</summary>
     private const int ShortContainerId = 12;
@@ -197,6 +197,10 @@ internal sealed class CiCommand(CliContext context) : ICommand
         {
             await context.Output.WriteLineAsync($"  note: processes left running were not checked: {processes.Note}");
         }
+        else if (processes.Note is string note)
+        {
+            await context.Output.WriteLineAsync($"  note: {note}");
+        }
 
         // A process that exited by itself before the sweep (an MSBuild worker node a moment after its build) was only reaped.
         Survivor[] running = [.. processes.Survivors.Where(survivor => survivor.Process.Outcome != SurvivorOutcome.Exited)];
@@ -222,8 +226,7 @@ internal sealed class CiCommand(CliContext context) : ICommand
 
     /// <summary>
     /// Lists the Docker containers that exist before the judge starts anything that builds, so the ones the pull request's code creates
-    /// are found at the end of each part of the run. A local run, or one on a self-hosted runner whose Docker daemon other jobs may
-    /// share, lists them without removing them.
+    /// are found at the end of each part of the run; they are removed only on a GitHub-hosted runner (<see cref="RemovesContainers"/>).
     /// </summary>
     private async Task WatchContainersAsync(ProcessSweep sweep, JudgeInputs inputs, CancellationToken cancellationToken)
     {
@@ -233,12 +236,19 @@ internal sealed class CiCommand(CliContext context) : ICommand
             return;
         }
 
-        bool remove = inputs.Platform != JudgePlatform.Local && context.Environment.Get(SelfHostedVariable) != SelfHosted;
-        if (await DockerContainers.WatchAsync(remove, cancellationToken) is DockerContainers containers)
+        if (await DockerContainers.WatchAsync(RemovesContainers(inputs.Platform, context.Environment), cancellationToken) is DockerContainers containers)
         {
             sweep.Watch(containers);
         }
     }
+
+    /// <summary>
+    /// Whether the judge removes the containers the pull request's code created: only on a GitHub-hosted runner, a machine of the job's
+    /// own. Elsewhere (a local run, a self-hosted runner, another platform's agent) the Docker daemon may be shared with other jobs, whose
+    /// containers must not be removed, so they are listed and left.
+    /// </summary>
+    internal static bool RemovesContainers(JudgePlatform platform, EnvironmentReader environment) =>
+        platform != JudgePlatform.Local && environment.Get(RunnerEnvironmentVariable) == GitHubHosted;
 
     private static string Cut(string text) => text.Length <= MaxCommandShown ? text : $"{text[..MaxCommandShown]}…";
 

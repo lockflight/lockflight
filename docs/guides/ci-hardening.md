@@ -164,7 +164,7 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
 - **A strong guardrail, not a boundary:** the evidence file itself. In 0.3.0 the judge writes its evidence in the same job
   as the pull request's code, so a process that code leaves running could rewrite it before the report jobs read it. On
   Linux and Windows the judge stops every process the pull request's code left running whenever it has no child of its own
-  running, and removes the Docker containers created during the run, before it writes the evidence; one it cannot stop
+  running, and on GitHub-hosted runners removes the Docker containers created during the run, before it writes the evidence; one it cannot stop
   makes the verdict ERROR (see below). One started outside the engine's tree, or with root rights, is not found. Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0.
 - **What the pull request's code can affect in the judge job.** The pull request's code runs as the same user as the engine,
   in the same job, before the judge has finished. On GitHub-hosted runners that user has administrator rights (passwordless
@@ -213,8 +213,11 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
   - Docker containers: the runner's user can start a container without `sudo`, and the Docker daemon, not the engine, is its
     parent. When `docker` is on `PATH` and answers, the judge lists the containers when it starts and, at the end of each part
     of its run (head, base, reds, re-checks, gates) and before it writes the evidence, removes the ones created since and lists
-    them (`kind: container`); one that cannot be removed is not stopped, with the same ERROR. A local run (`ci --platform
-    local`) and a run on a self-hosted runner (whose Docker daemon other jobs may share) list them without removing them.
+    them (`kind: container`); one that cannot be removed is not stopped, with the same ERROR. Only a run on a GitHub-hosted
+    runner (`RUNNER_ENVIRONMENT=github-hosted`, a machine of the job's own) removes them: a local run (`ci --platform local`),
+    a self-hosted runner and the other platforms' agents, whose Docker daemon other jobs may share, list them as `observed`
+    and leave them. When `docker` does not answer a later listing within 30 seconds, those containers are not checked: the
+    summary and the comment say so in a note (`processes.note`), and the verdict does not change.
   - A process that keeps a build's or a test run's output open does not hold up the judge: the engine waits 2 seconds for the
     output to end after the process it started has exited, then stops reading, keeps what was written, and notes the command
     in the summary and in the evidence (`processes.outputHeld`,
