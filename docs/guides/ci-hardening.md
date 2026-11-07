@@ -215,7 +215,8 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
     every one a marker in its environment that their children inherit. A process of the runner's user still in that group, or
     carrying the marker, is stopped, with the processes it started. macOS shows a process's environment only for programs that
     are not part of the system, so a system program (`sh`, `sleep`) that leaves the group (`setsid`, `setpgid`) is not found,
-    nor is one that leaves the group and clears its environment. Where there is no check at all (another operating system, or
+    nor is one that leaves the group and clears its environment, nor one of another user (root's, started through `sudo`), so on
+    macOS such a process does not make the verdict ERROR. Where there is no check at all (another operating system, or
     setting it up failed: `mechanism: none`), the summary and the comment say so, and the verdict does not change.
   - Docker containers: the runner's user can start a container without `sudo`, and the Docker daemon, not the engine, is its
     parent. When `docker` is on `PATH` and answers, the judge lists the containers when it starts and, at the end of each part
