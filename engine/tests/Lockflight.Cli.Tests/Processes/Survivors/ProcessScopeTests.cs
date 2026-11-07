@@ -15,7 +15,7 @@ public sealed class ProcessScopeTests
     public async Task ADaemonAChildLeftRunningIsFoundAndStopped()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsWindows(), "Processes left running are looked for on Linux and Windows.");
-        IProcessScope scope = ProcessScopes.Begin();
+        IProcessScope scope = ProcessScopes.Begin(ci: true);
         Assert.True(scope.Mechanism != SweepMechanism.None, scope.Note);
         scope.Sweep();
 
@@ -35,10 +35,23 @@ public sealed class ProcessScopeTests
     }
 
     [Fact]
+    public void OnMacOSARunOutsideCiKeepsItsCallersProcessGroup()
+    {
+        Assert.SkipUnless(OperatingSystem.IsMacOS(), "Only macOS changes the engine's process group.");
+        int group = MacNative.ProcessGroup();
+
+        IProcessScope scope = ProcessScopes.Begin(ci: false);
+
+        // An agent's ci --platform local must stay where the agent's interrupt and time limit reach it.
+        Assert.Equal(SweepMechanism.Marker, scope.Mechanism);
+        Assert.Equal(group, MacNative.ProcessGroup());
+    }
+
+    [Fact]
     public async Task OnMacOSADaemonLeftRunningIsFoundAndStopped()
     {
         Assert.SkipUnless(OperatingSystem.IsMacOS(), "The process group and the marker are how macOS finds processes left running.");
-        IProcessScope scope = ProcessScopes.Begin();
+        IProcessScope scope = ProcessScopes.Begin(ci: true);
         Assert.True(scope.Mechanism == SweepMechanism.Marker, scope.Note);
         scope.Sweep();
 

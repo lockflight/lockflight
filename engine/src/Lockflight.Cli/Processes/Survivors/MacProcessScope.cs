@@ -9,7 +9,8 @@ namespace Lockflight.Cli.Processes.Survivors;
 
 /// <summary>
 /// macOS, best effort: there is no subreaper or job object, and a process whose parent exits is re-parented to <c>launchd</c>,
-/// losing its link to the engine. Two other links survive it. In CI (input not a terminal) the engine makes itself the leader of a
+/// losing its link to the engine. Two other links survive it. In CI (a CI job's run only: one a person or an agent starts keeps
+/// its caller's process group, so it still gets the caller's interrupt and its time limit) the engine makes itself the leader of a
 /// new process group, which every process it starts joins, and so do theirs unless they leave it (<c>setsid</c>, <c>setpgid</c>);
 /// and every process the engine starts gets a marker in its environment (<see cref="ProcessSweep.MarkerVariable"/>, a value new for
 /// each run), which the processes it starts inherit. A sweep stops every process of the engine's user in that group (but those in it
@@ -40,7 +41,7 @@ internal sealed unsafe class MacProcessScope(int engine, uint engineUid, int gro
     public string? Marker => marker;
 
     /// <summary>A scope with a new marker; one that sweeps nothing, with the reason, when the engine cannot read process information.</summary>
-    public static IProcessScope Begin()
+    public static IProcessScope Begin(bool ci)
     {
         try
         {
@@ -54,10 +55,9 @@ internal sealed unsafe class MacProcessScope(int engine, uint engineUid, int gro
                 return new NoProcessScope($"the engine could not read a process's environment (errno {Marshal.GetLastPInvokeError()})");
             }
 
-            if (Console.IsInputRedirected)
+            if (ci)
             {
-                // Fails for a session leader, which leads its own group already. At a terminal the engine stays in the shell's job,
-                // so Ctrl+C still reaches it.
+                // Fails for a session leader, which leads its own group already.
                 MacNative.SetProcessGroup(0, 0);
             }
 

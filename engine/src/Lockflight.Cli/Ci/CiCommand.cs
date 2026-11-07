@@ -38,7 +38,7 @@ internal sealed class CiCommand(CliContext context) : ICommand
         }
 
         // Before the judge starts anything, so every process it starts, and every one those leave running, is in the sweep's reach.
-        using ProcessSweep sweep = ProcessSweep.Start(context.ProcessScope());
+        using ProcessSweep sweep = ProcessSweep.Start(context.ProcessScope(JudgeInputsReader.InCi(options)));
         DateTimeOffset startedAt = context.Time.GetUtcNow();
         JudgeInputsReading reading = await JudgeInputsReader.ReadAsync(options, context.WorkingDirectory, cancellationToken);
         if (reading.Inputs is not JudgeInputs inputs)

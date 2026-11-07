@@ -25,6 +25,14 @@ internal static class JudgeInputsReader
 
     private const string DefaultTarget = "main";
 
+    /// <summary>
+    /// Whether <paramref name="options"/> name a CI platform (not <c>--platform local</c>, the default), read before anything starts; an
+    /// unknown platform is not CI, and <see cref="ReadAsync"/> refuses it.
+    /// </summary>
+    public static bool InCi(CommandOptions options) =>
+        JudgePlatformNames.Parse(options.Value(PlatformOption) ?? JudgePlatformNames.ToName(JudgePlatform.Local)) is JudgePlatform platform
+        && platform != JudgePlatform.Local;
+
     public static async Task<JudgeInputsReading> ReadAsync(CommandOptions options, string workingDirectory, CancellationToken cancellationToken)
     {
         ProcessResult top = await ProcessRunner.RunAsync("git", ["rev-parse", "--show-toplevel"], workingDirectory, cancellationToken);

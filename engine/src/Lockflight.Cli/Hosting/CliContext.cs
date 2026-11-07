@@ -26,7 +26,8 @@ internal sealed record CliContext(TextReader Input, TextWriter Output, TextWrite
     /// Sets up the CI judge's sweep for processes left running (<see cref="ProcessScopes.Begin"/>). Off unless the host turns it on:
     /// it changes the process it runs in for good (a Linux subreaper, a Windows job), which a test host must not have.
     /// </summary>
-    public Func<IProcessScope> ProcessScope { get; init; } = ProcessScopes.Off;
+    /// <remarks>The argument says whether the run is a CI job's (<see cref="ProcessScopes.Begin"/>).</remarks>
+    public Func<bool, IProcessScope> ProcessScope { get; init; } = ProcessScopes.Off;
 
     /// <summary>Whether <see cref="Output"/> is a terminal a person reads (not a pipe or a file); false unless the host says so.</summary>
     public bool OutputIsTerminal { get; init; }
