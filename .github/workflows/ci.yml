@@ -758,6 +758,8 @@ jobs:
           grep -q 'ENGINE_LOCK_REFUSED' "$RUNNER_TEMP/lockflight-verdict/comment.md"
       # The report as the generated workflow runs it (verify-artifacts): the honest evidence, downloaded by the id the judge step
       # output, hashes to the digest it output, and the report passes.
+      - name: Clear the folders the reports above downloaded into
+        run: rm -rf "$RUNNER_TEMP/lockflight-evidence" "$RUNNER_TEMP/lockflight-review" "$RUNNER_TEMP/lockflight-verdict"
       - name: The verified report of the honest pull request
         id: honest-verified
         continue-on-error: true
