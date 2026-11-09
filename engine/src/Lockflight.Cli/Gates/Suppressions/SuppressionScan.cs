@@ -37,7 +37,7 @@ internal static partial class SuppressionScan
         }
 
         List<FileDiff> files = [.. UnifiedDiff.FilesOf(diff).Where(file => SuppressionPatterns.CanHoldSuppressions(file.File))];
-        foreach (string path in untracked.Where(path => SuppressionPatterns.CanHoldSuppressions(path) && !InBuildOutput(path)))
+        foreach (string path in untracked.Where(path => SuppressionPatterns.CanHoldSuppressions(path) && !InBuildOutput(projectRoot, path)))
         {
             files.Add(new FileDiff(path, AllLines(projectRoot, path), []));
         }
@@ -52,8 +52,26 @@ internal static partial class SuppressionScan
         return new SuppressionScanResult([.. found.OrderBy(item => item.File, StringComparer.Ordinal).ThenBy(item => item.Line)], files.Count, Problem: null);
     }
 
-    private static bool InBuildOutput(string path) =>
-        path.Split('/')[..^1].Any(directory => BuildOutputDirectories.Contains(directory, StringComparer.OrdinalIgnoreCase));
+    /// <summary>
+    /// Whether an untracked file is under a project's build output: a <c>bin</c> or <c>obj</c> folder right beside a project file. A
+    /// folder of that name anywhere else (<c>src/Shop/Feature/bin/</c>) is source the project compiles, so its files are scanned.
+    /// </summary>
+    private static bool InBuildOutput(string root, string path)
+    {
+        string[] segments = path.Split('/');
+        for (int index = 1; index < segments.Length - 1; index++)
+        {
+            string projectDirectory = Path.Combine([root, .. segments[..index]]);
+            if (BuildOutputDirectories.Contains(segments[index], StringComparer.OrdinalIgnoreCase)
+                && Directory.Exists(projectDirectory)
+                && Directory.EnumerateFiles(projectDirectory, "*.*proj").Any())
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static IEnumerable<Suppression> InFile(string root, FileDiff file, IReadOnlySet<string> changed)
     {
