@@ -6,7 +6,7 @@ namespace Lockflight.Cli.Init;
 /// Brings the CI judge's GitHub workflow to this engine's template, whatever changed in it: the action pin, a step, a job. The
 /// file is recognised as Lockflight's when, after the line edits <see cref="CiStepMigration"/> makes, it is this release's
 /// template or one of <see cref="ReleasedJudgeWorkflows"/> rendered with the file's own .NET channels, trigger, runners and
-/// workspace shell clone, and with any action pin (each release pins its own). The replacement keeps those, and the line endings.
+/// workspace shell clone, and with an action pin some engine of this repository wrote (each release pins its own). The replacement keeps those, and the line endings.
 /// Any other difference is a person's edit, and the file is only compared: the caller shows the replacement and leaves the file.
 /// </summary>
 internal static partial class JudgeWorkflowRefresh
@@ -97,8 +97,13 @@ internal static partial class JudgeWorkflowRefresh
             ? (CiTrigger.Manual, workflow.Contains(DevelopmentBuildNote, StringComparison.Ordinal))
             : (CiTrigger.PullRequest, false);
 
-    /// <summary>The text with every action pin the same, without trailing blank lines (an editor may add or drop the last newline).</summary>
-    private static string Normalised(string text) => ActionPin().Replace(text, ActionPlaceholder).TrimEnd('\n');
+    /// <summary>
+    /// The text with every action pin an engine of this repository wrote the same (<see cref="ReleasedActionCommits"/>), without
+    /// trailing blank lines (an editor may add or drop the last newline). Any other pin stays as it is, so a file whose pin a person
+    /// moved (raised to a newer action, say) is an edit, never brought back to this engine's pin without a word.
+    /// </summary>
+    private static string Normalised(string text) =>
+        ActionPin().Replace(text, pin => ReleasedActionCommits.IsKnown(pin.Groups["commit"].Value) ? ActionPlaceholder : pin.Value).TrimEnd('\n');
 
     /// <summary>The .NET channels of the first <c>dotnet-version:</c> (the judge job's): its value, or the lines of its block list.</summary>
     private static string[]? Channels(string text)
@@ -122,6 +127,6 @@ internal static partial class JudgeWorkflowRefresh
         return channels.Length == 0 ? null : channels;
     }
 
-    [GeneratedRegex(@"lockflight/lockflight/action@[0-9a-f]{40} # v\S+")]
+    [GeneratedRegex(@"lockflight/lockflight/action@(?<commit>[0-9a-f]{40}) # v\S+")]
     private static partial Regex ActionPin();
 }

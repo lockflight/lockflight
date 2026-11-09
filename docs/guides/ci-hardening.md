@@ -288,8 +288,9 @@ The generated workflow ties each artifact to the action's own upload step instea
   skipped, or a job stopped before the step) is not read at all, so a review the judge job's code uploaded under the review's
   name is never joined.
 - **The policy commit.** The report jobs check out the event's base and work out the policy commit themselves. On a pull
-  request they use the judge job's `policy` output only when it is a commit of the target branch at or after the event's base
-  (the judge reads the tip when it runs, which may have moved since); anything else is replaced by the event's base, with an
+  request they use the judge job's `policy` output only when the target branch's tip has been at that commit since the event's
+  base, that is, a commit on the branch's first-parent chain from the base to its tip (the judge reads the tip when it runs,
+  which may have moved since; a commit of a branch merged into it never was the tip); anything else is replaced by the event's base, with an
   error annotation, and the report then refuses evidence judged with another policy. On a push it is the previous commit, or
   the pushed one, as the judge works it out. The engine the report installs and the policy it re-plans with therefore come
   from the target branch, whatever the judge job outputs.
@@ -302,6 +303,12 @@ which a *different* step or job (the review job's code, or a substitute uploaded
 policy check closes the path by which the judge job's outputs could make the report install another engine or read another
 policy. The workflow file itself is the pull request's copy on `pull_request`, so all of this holds against a hostile pull
 request only with a required code-owner review of `.github/workflows/**`, as below.
+
+`update --project` brings a workflow it recognises as one Lockflight wrote to these report jobs. A workflow someone edited by
+hand is never replaced: `update` prints the difference and writes the proposal to
+`.lockflight/local/migration/.github/workflows/lockflight-gates.yml`, and the report jobs keep reading artifacts by name and
+trusting the judge job's `policy` output until a person merges the change by hand. `lockflight doctor` warns while the report
+jobs lack `verify-artifacts: "true"` or still take their policy from `needs.judge.outputs.policy`.
 
 `gates` keeps its meaning (the `pr` gates and green at head), so a ruleset that requires it keeps working; make
 `lockflight/judge` required when the team produces red commits.
@@ -420,6 +427,14 @@ Then make it binding:
 1. Open a branch ruleset (or classic branch protection) on `main`.
 2. Turn on **Require review from Code Owners**.
 3. Turn on **Require status checks: `gates`**.
+
+**The action pin.** On `pull_request` GitHub runs the pull request's own copy of the workflow, so the pinned action *is* the
+judge: a pull request that moves `lockflight/lockflight/action@<commit>` to another commit replaces every check, including any
+check of the pin itself, and the report jobs sit in the same file. The judge lists the move under `policy.protected`, but it
+cannot refuse it. What stops it is outside the pull request: a required code-owner review of `.github/workflows/**` (above), or,
+where the organisation's plan offers it, an organisation ruleset that requires the workflow (**Require workflows to pass before
+merging**) from a repository the pull request cannot change, so the copy that runs is the organisation's. `lockflight doctor` warns when the pin is not a commit
+a Lockflight engine writes, and `update` never replaces a workflow whose pin was moved by hand: it shows the difference.
 
 ## Approvals of record: the platform's review
 
