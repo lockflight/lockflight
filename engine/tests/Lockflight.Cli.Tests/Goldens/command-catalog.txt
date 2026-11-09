@@ -38,5 +38,4 @@ ci review: [--head --base --branch --platform --out]
 ci explain: [--json] arguments
 route show: [--base --head --json]
 route record: [--feature --base]
-workspace sync: [--check]
 workspace clone: [--into]

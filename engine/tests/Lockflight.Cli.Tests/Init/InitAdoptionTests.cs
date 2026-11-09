@@ -94,18 +94,6 @@ public sealed class InitAdoptionTests : IDisposable
     }
 
     [Fact]
-    public async Task AVendoredUnitRepositoryGetsNoFeatureMarked()
-    {
-        await CreateSetupAsync();
-        Write(Manifest.UnitFileName, "version: 2\n");
-
-        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--no-link"], string.Empty, root.FullName);
-
-        Assert.True(exitCode == ExitCode.Pass, error);
-        Assert.Empty(new AdoptedFeatures(root.FullName).Load());
-    }
-
-    [Fact]
     public async Task ExistingLockflightStateWithoutAManifestGetsNoFeatureMarked()
     {
         await CreateSetupAsync();

@@ -324,7 +324,7 @@ internal static class Templates
             : workflow;
     }
 
-    /// <summary>The unit repository workflow; setup-dotnet installs every channel given.</summary>
+    /// <summary>The unit repository workflow the removed <c>workspace sync</c> wrote; setup-dotnet installs every channel given. Kept for tests of the move to the shell pointer.</summary>
     public static string UnitWorkflow(IReadOnlyList<string> dotnetChannels) => WithChannels(UnitWorkflowTemplate, dotnetChannels);
 
     /// <summary>The engine install step of the GitHub workflow as Lockflight 0.2 wrote it, which <c>update</c> replaces.</summary>

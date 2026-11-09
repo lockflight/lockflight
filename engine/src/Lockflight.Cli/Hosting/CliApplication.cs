@@ -2,6 +2,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
 using Lockflight.Cli.Linking;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Updating;
 
 namespace Lockflight.Cli.Hosting;
 
@@ -49,8 +50,6 @@ internal static class CliApplication
           update [--source <feed>]                      you: install the newest Lockflight (from its checkout or a
                                                         package feed), re-pin this project and move its manifest to
                                                         version 2; update --project --dry-run shows the change
-          workspace sync [--check]                      vendor each unit repository's CI policy (lockflight.unit.yaml,
-                                                        engine pin, baselines, workflow); --check reports drift
           workspace clone --into <dir>                  in a unit repository (shell: in lockflight.yaml): clone its
                                                         workspace shell read-only for CI (token in
                                                         LOCKFLIGHT_SHELL_TOKEN, or a deploy key)
@@ -213,8 +212,10 @@ internal static class CliApplication
         }
     }
 
+    // A unit that still holds the vendored lockflight.unit.yaml is its own project for update, though the shell's manifest is above it.
     private static string ProjectDirectory(CliContext context) =>
-        ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory;
+        VendoredUnit.Find(context.WorkingDirectory)
+        ?? (ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory);
 
     /// <summary>The project's linked engine when there is one: it runs whatever the install mode; else how this engine was started.</summary>
     private static string EngineFor(CliContext context) =>

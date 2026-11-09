@@ -340,8 +340,8 @@ release is pinned; a project pinned to a development build gets the workflow tha
 `gates` keeps its name and meaning. `update` replaces the file only when it is a gates-only workflow as Lockflight wrote it,
 apart from the lines Lockflight itself moves (the header, the engine install step between its markers, the policy restore). A
 file with other edits is refused and nothing is written: delete it, run `lockflight init` to write the CI judge's workflow, and
-add your edits back. A unit repository's workflow, which `workspace sync` writes, runs the gates alone by design and is left to
-it. Azure Pipelines and GitLab CI/CD have no judge pipeline yet, so their files are not moved.
+add your edits back. A unit repository's workflow that the removed `workspace sync` wrote moves with the rest of that unit
+([moving a vendored unit](#moving-a-vendored-unit-to-the-pointer)). Azure Pipelines and GitLab CI/CD have no judge pipeline yet, so their files are not moved.
 
 ## What you add: CODEOWNERS for the protected paths
 
@@ -521,38 +521,27 @@ Treat the token as readable by every writer of the unit repository, and give it 
 
 **Boundary.** As for any repository: only where the unit's check is required and CODEOWNERS routes `lockflight.yaml` and the
 CI file to a person. The shell's own policy is a boundary for the unit only as far as the shell repository protects it.
-`workspace sync` skips a unit whose `lockflight.yaml` points at the shell, and `doctor` in the shell accepts such a manifest.
+`doctor` in the shell accepts a unit's `lockflight.yaml` that points at the shell.
 
-### Vendored policy (`workspace sync`)
+### Moving a vendored unit to the pointer
 
-> **Deprecated in 0.3.1, removed in 0.4.** Point each unit at the shell instead
-> ([the shell pointer](#the-shell-pointer-preferred)); `lockflight update` in 0.4 moves a vendored unit to the pointer.
+Before the pointer, `workspace sync` vendored the shell's policy into each unit repository: `lockflight.unit.yaml`, the engine
+pin, the unit's baselines and a `lockflight-gates.yml` workflow that ran the gates alone. It was deprecated in 0.3.1 and is
+removed: the command now says what replaced it and exits `4`, and the engine no longer reads `lockflight.unit.yaml`, so a unit
+that still holds it has no manifest for this engine. `doctor` in the shell names such units.
 
-`lockflight workspace sync`, run in the shell, vendors into every .NET unit that is its own repository (and has no pointer)
-what its CI needs:
+To move one, a person runs `lockflight update --project` in the unit repository, checked out inside its shell. Update finds the
+shell above it that lists the unit, takes the shell's URL from its `origin` remote, deletes `lockflight.unit.yaml` and the
+workflow `workspace sync` wrote (it names itself so in its first line), and runs `init --unit-of <url> --unit-path <path>`,
+which writes the unit's own `lockflight.yaml` with `shell:`, the engine pin and the CI judge's workflow that clones the shell.
+If init fails, the deleted files are put back. `--dry-run` prints the move and writes nothing. A unit outside its shell, or a
+shell without an `origin`, is refused with nothing changed: run `init --unit-of` yourself there and delete
+`lockflight.unit.yaml`. The unit's own baselines stay. Review the result and commit it in the unit repository; a private shell
+needs the clone access in the table above.
 
-| File | What it is |
-|---|---|
-| `lockflight.unit.yaml` | The shell's policy for the unit, and the shell commit it came from. Every protected path that can match inside the unit is re-based, read as the guard reads it: `services/*/Migrations/**` becomes `Migrations/**`, and a `**` that can reach into the unit is kept, also inside a segment (`services/**.cs` becomes `**.cs`). A path can become more than one glob (`services/**/orders/*.cs` becomes `**/orders/*.cs` and `*.cs`); the result is wider, never narrower, than the shell's rule. It also carries the unit's `build:` file and test framework. |
-| `dotnet-tools.json` (or `.config/`) | The engine pin. |
-| `.lockflight/baselines/` | The unit's baselines, copied from the shell's `.lockflight/baselines/<unit>/`. |
-| `.github/workflows/lockflight-gates.yml` | Generated policy too: an edited copy is drift, and sync rewrites it. |
-
-The workflow restores the policy, the pin, the baselines and the code-style config from the unit's base branch, as the
-single-repository workflow does, so a pull request in the unit is judged by its base branch's rules. That holds as a
-boundary only where the check is required and the workflow is under code-owner review; the verdict itself is a strong
-guardrail, and it blocks a merge only where the platform requires the check.
-
-- **Engine install:** as in the single-repository workflow, the engine is installed with `dotnet tool install --tool-path`
-  outside the repository and run directly. A `global.json` that pins SDK 8 cannot restore the engine package.
-- **Package sources:** `nuget.config` comes from the base branch, in this workflow and in the single-repository one. A pull
-  request that adds a package source cannot make CI install an engine of its own choosing.
-- **Policy lookup:** the engine reads `lockflight.unit.yaml` only when no `lockflight.yaml` is found above. Inside the shell,
-  the shell's manifest always wins.
-- **Drift:** `workspace sync --check` and `doctor` report a unit whose vendored policy is behind the shell's. Commit the synced
-  files in each unit after a policy change. The pointer has no drift: CI reads the shell's current policy.
-- **Boundary:** it is a boundary only where the unit's `lockflight-gates` check is required, and `lockflight.unit.yaml`, the pin
-  and the workflow are routed to a human by CODEOWNERS in the unit repository. The guard also protects them in sessions.
+The pull request that makes the move is judged with the target branch's engine pin and policy, and that branch has no
+`lockflight.yaml` yet, so its own CI judge cannot pass it: a person reviews and merges it, and the pull requests after it are
+judged with the shell's policy.
 
 ## Next
 
