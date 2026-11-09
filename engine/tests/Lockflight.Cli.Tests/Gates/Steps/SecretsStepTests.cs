@@ -63,7 +63,6 @@ public sealed class SecretsStepTests : IDisposable
 
         Assert.Equal(Verdict.Pass, step.Verdict);
         Assert.Contains("1 untracked files scanned", step.Detail, StringComparison.Ordinal);
-        Assert.Contains("gitleaks exited: --pre-commit 0, --staged 0, untracked files 0", step.Detail, StringComparison.Ordinal);
     }
 
     [Fact]

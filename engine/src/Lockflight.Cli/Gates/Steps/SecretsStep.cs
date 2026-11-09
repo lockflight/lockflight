@@ -141,9 +141,9 @@ internal sealed class SecretsStep : IGateStep
     private static GateStep Judge(GateRunContext run, GitleaksScan scan, int untrackedCount)
     {
         SecretLeak[] distinct = [.. scan.Leaks.Distinct()];
-        string scanned = $"uncommitted changes and {untrackedCount} untracked files scanned (pass --base to scan the branch's commits); {scan.Exits}";
+        string scanned = $"uncommitted changes and {untrackedCount} untracked files scanned (pass --base to scan the branch's commits)";
         return distinct.Length == 0
-            ? new GateStep(StepName, 0, Verdict.Pass, ReasonCode.None, scan.DurationMs, run.BaseRef is null ? scanned : scan.Exits)
+            ? new GateStep(StepName, 0, Verdict.Pass, ReasonCode.None, scan.DurationMs, run.BaseRef is null ? scanned : string.Empty)
             : new GateStep(StepName, LeaksFoundExitCode, Verdict.Fail, ReasonCode.SecretFound, scan.DurationMs,
                 $"{distinct.Length} possible secrets: {string.Join("; ", distinct.Take(MaxLeaksListed).Select(leak => leak.Describe()))}; rotate them, or accept a false positive in .gitleaksignore (human review)");
     }
@@ -245,8 +245,6 @@ internal sealed class SecretsStep : IGateStep
 
         private readonly string reportPath = Path.Combine(reportDirectory.FullName, ReportFileName);
 
-        private readonly List<string> exits = [];
-
         public GateRunContext Run => run;
 
         public List<SecretLeak> Leaks { get; } = [];
@@ -254,9 +252,6 @@ internal sealed class SecretsStep : IGateStep
         public long DurationMs { get; private set; }
 
         public DirectoryInfo Directory => reportDirectory;
-
-        /// <summary>Each scan's exit code, as <c>gitleaks exited: --pre-commit 0, --staged 0</c>, so a verdict names what it read.</summary>
-        public string Exits => $"gitleaks exited: {string.Join(", ", exits)}";
 
         public string[] ReportArguments =>
             ["--no-banner", "--report-format", "json", "--report-path", reportPath, "--exit-code", $"{LeaksFoundExitCode}"];
@@ -271,7 +266,6 @@ internal sealed class SecretsStep : IGateStep
             File.Delete(reportPath);
             ProcessResult scan = await run.Processes(gitleaks, arguments, workingDirectory, run.TimeLeft(), cancellationToken);
             DurationMs += scan.DurationMs;
-            exits.Add($"{label} {scan.ExitCode}");
             if (StepHealth.Unhealthy(StepName, scan, run) is GateStep unhealthy)
             {
                 return unhealthy;
