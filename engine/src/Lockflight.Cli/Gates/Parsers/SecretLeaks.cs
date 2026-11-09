@@ -9,6 +9,19 @@ namespace Lockflight.Cli.Gates.Parsers;
 /// </summary>
 internal static class SecretLeaks
 {
+    /// <summary>How many findings the report lists before any is left out; 0 for an empty report.</summary>
+    /// <exception cref="JsonException">The report is not JSON.</exception>
+    public static int Reported(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return 0;
+        }
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        return document.RootElement.ValueKind == JsonValueKind.Array ? document.RootElement.GetArrayLength() : 0;
+    }
+
     public static IReadOnlyList<SecretLeak> Parse(string json)
     {
         if (string.IsNullOrWhiteSpace(json))

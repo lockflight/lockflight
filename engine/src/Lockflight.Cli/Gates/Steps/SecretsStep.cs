@@ -1,5 +1,7 @@
 using Lockflight.Cli.Gates.Parsers;
+using System.Text.Json;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Paths;
 using Lockflight.Cli.Processes;
 using Lockflight.Cli.Reasons;
 
@@ -77,7 +79,7 @@ internal sealed class SecretsStep : IGateStep
             VerifiedExecutable verified = await ExecutableHash.CopyAndVerifyAsync(gitleaks, expected, scanDirectory, cancellationToken);
             if (verified.Path is null)
             {
-                scanDirectory.Delete(recursive: true);
+                await ScratchDirectories.TryDeleteAsync(scanDirectory, run.Time, cancellationToken);
                 return verified.ReplacedWhy is string replaced
                     ? new GateStep(StepName, 0, Verdict.Error, ReasonCode.ScannerReplaced, 0, $"gitleaks was not run: {replaced}")
                     : new GateStep(StepName, 0, Verdict.Error, ReasonCode.ToolError, 0, $"gitleaks was not run: {verified.UnreadableWhy}");
@@ -125,8 +127,12 @@ internal sealed class SecretsStep : IGateStep
         }
         finally
         {
-            scan.Delete();
-            staging?.Delete(recursive: true);
+            // The scan's verdict stands whether or not its temporary folders go: one Windows still holds is left behind.
+            await ScratchDirectories.TryDeleteAsync(scan.Directory, run.Time, CancellationToken.None);
+            if (staging is not null)
+            {
+                await ScratchDirectories.TryDeleteAsync(staging, run.Time, CancellationToken.None);
+            }
         }
 
         return Judge(run, scan, untracked.Length);
@@ -135,9 +141,9 @@ internal sealed class SecretsStep : IGateStep
     private static GateStep Judge(GateRunContext run, GitleaksScan scan, int untrackedCount)
     {
         SecretLeak[] distinct = [.. scan.Leaks.Distinct()];
-        string scanned = $"uncommitted changes and {untrackedCount} untracked files scanned (pass --base to scan the branch's commits)";
+        string scanned = $"uncommitted changes and {untrackedCount} untracked files scanned (pass --base to scan the branch's commits); {scan.Exits}";
         return distinct.Length == 0
-            ? new GateStep(StepName, 0, Verdict.Pass, ReasonCode.None, scan.DurationMs, run.BaseRef is null ? scanned : string.Empty)
+            ? new GateStep(StepName, 0, Verdict.Pass, ReasonCode.None, scan.DurationMs, run.BaseRef is null ? scanned : scan.Exits)
             : new GateStep(StepName, LeaksFoundExitCode, Verdict.Fail, ReasonCode.SecretFound, scan.DurationMs,
                 $"{distinct.Length} possible secrets: {string.Join("; ", distinct.Take(MaxLeaksListed).Select(leak => leak.Describe()))}; rotate them, or accept a false positive in .gitleaksignore (human review)");
     }
@@ -239,11 +245,18 @@ internal sealed class SecretsStep : IGateStep
 
         private readonly string reportPath = Path.Combine(reportDirectory.FullName, ReportFileName);
 
+        private readonly List<string> exits = [];
+
         public GateRunContext Run => run;
 
         public List<SecretLeak> Leaks { get; } = [];
 
         public long DurationMs { get; private set; }
+
+        public DirectoryInfo Directory => reportDirectory;
+
+        /// <summary>Each scan's exit code, as <c>gitleaks exited: --pre-commit 0, --staged 0</c>, so a verdict names what it read.</summary>
+        public string Exits => $"gitleaks exited: {string.Join(", ", exits)}";
 
         public string[] ReportArguments =>
             ["--no-banner", "--report-format", "json", "--report-path", reportPath, "--exit-code", $"{LeaksFoundExitCode}"];
@@ -254,8 +267,11 @@ internal sealed class SecretsStep : IGateStep
         /// </summary>
         public async Task<GateStep?> RunAsync(string[] arguments, string workingDirectory, string label, string pathPrefix, CancellationToken cancellationToken)
         {
+            // A report left by the scan before is never read as this one's.
+            File.Delete(reportPath);
             ProcessResult scan = await run.Processes(gitleaks, arguments, workingDirectory, run.TimeLeft(), cancellationToken);
             DurationMs += scan.DurationMs;
+            exits.Add($"{label} {scan.ExitCode}");
             if (StepHealth.Unhealthy(StepName, scan, run) is GateStep unhealthy)
             {
                 return unhealthy;
@@ -266,12 +282,25 @@ internal sealed class SecretsStep : IGateStep
                 return new GateStep(StepName, scan.ExitCode, Verdict.Error, ReasonCode.ToolError, DurationMs, $"gitleaks ({label}) exited {scan.ExitCode}: {LastLine(scan.Combined)}");
             }
 
-            Leaks.AddRange(SecretLeaks.Parse(File.Exists(reportPath) ? await File.ReadAllTextAsync(reportPath, cancellationToken) : string.Empty)
-                .Select(leak => leak with { File = pathPrefix + leak.File }));
+            string report = File.Exists(reportPath) ? await File.ReadAllTextAsync(reportPath, cancellationToken) : string.Empty;
+            try
+            {
+                if (scan.ExitCode == LeaksFoundExitCode && SecretLeaks.Reported(report) == 0)
+                {
+                    // gitleaks found something the report does not show: passing would vouch for a scan nobody can read.
+                    return new GateStep(StepName, scan.ExitCode, Verdict.Error, ReasonCode.ToolError, DurationMs,
+                        $"gitleaks ({label}) exited {scan.ExitCode}, which reports leaks, but its report lists none; re-run the check");
+                }
+
+                Leaks.AddRange(SecretLeaks.Parse(report).Select(leak => leak with { File = pathPrefix + leak.File }));
+            }
+            catch (JsonException exception)
+            {
+                return new GateStep(StepName, scan.ExitCode, Verdict.Error, ReasonCode.ToolError, DurationMs, $"gitleaks ({label}) wrote a report that could not be read: {exception.Message}");
+            }
+
             return null;
         }
-
-        public void Delete() => reportDirectory.Delete(recursive: true);
 
         private static string LastLine(string output) =>
             output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? string.Empty;

@@ -63,6 +63,7 @@ public sealed class SecretsStepTests : IDisposable
 
         Assert.Equal(Verdict.Pass, step.Verdict);
         Assert.Contains("1 untracked files scanned", step.Detail, StringComparison.Ordinal);
+        Assert.Contains("gitleaks exited: --pre-commit 0, --staged 0, untracked files 0", step.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -271,6 +272,43 @@ public sealed class SecretsStepTests : IDisposable
             Assert.Equal(Path.GetFileName(gitleaks), Path.GetFileName(fileName));
             Assert.False(File.Exists(fileName), "the verified copy is deleted with the scan");
         });
+    }
+
+    [Fact]
+    public async Task GitleaksReportingLeaksWithAnEmptyReportIsAnErrorNotAPass()
+    {
+        await InitRepositoryAsync();
+        GateRunContext run = Context() with
+        {
+            Processes = (fileName, arguments, directory, limit, cancellationToken) =>
+                Task.FromResult(new ProcessResult(99, string.Empty, string.Empty, 5, TimedOut: false)),
+        };
+
+        GateStep step = (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
+
+        Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Equal(ReasonCode.ToolError, step.Reason);
+        Assert.Contains("exited 99, which reports leaks, but its report lists none", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AGitleaksReportThatIsNotJsonIsAnError()
+    {
+        await InitRepositoryAsync();
+        GateRunContext run = Context() with
+        {
+            Processes = async (fileName, arguments, directory, limit, cancellationToken) =>
+            {
+                string report = arguments[arguments.ToList().IndexOf("--report-path") + 1];
+                await File.WriteAllTextAsync(report, "[{\"RuleID\": \"slack", cancellationToken);
+                return new ProcessResult(0, string.Empty, string.Empty, 5, TimedOut: false);
+            },
+        };
+
+        GateStep step = (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
+
+        Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Equal(ReasonCode.ToolError, step.Reason);
     }
 
     [Fact]
