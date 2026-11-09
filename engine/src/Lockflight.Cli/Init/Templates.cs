@@ -316,9 +316,16 @@ internal static class Templates
     /// The CI workflow with its trigger: <see cref="CiTrigger.Manual"/> runs only when started by hand, and its comment says why —
     /// the option, or, with <paramref name="developmentPin"/>, an engine pin that no package feed has.
     /// </summary>
-    public static string Workflow(IReadOnlyList<string> dotnetChannels, CiTrigger trigger, bool developmentPin)
+    public static string Workflow(IReadOnlyList<string> dotnetChannels, CiTrigger trigger, bool developmentPin) =>
+        WorkflowOf(WorkflowTemplate, dotnetChannels, trigger, developmentPin);
+
+    /// <summary>
+    /// A CI judge workflow template (this release's, or one of <see cref="ReleasedJudgeWorkflows"/>) rendered as
+    /// <see cref="Workflow(IReadOnlyList{string}, CiTrigger, bool)"/> renders this release's.
+    /// </summary>
+    public static string WorkflowOf(string template, IReadOnlyList<string> dotnetChannels, CiTrigger trigger, bool developmentPin)
     {
-        string workflow = WithChannels(WorkflowTemplate, dotnetChannels);
+        string workflow = WithChannels(template, dotnetChannels);
         return trigger == CiTrigger.Manual
             ? workflow.Replace(PullRequestTrigger, developmentPin ? PreviewTrigger : ManualTrigger, StringComparison.Ordinal)
             : workflow;

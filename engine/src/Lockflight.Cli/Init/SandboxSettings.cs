@@ -47,7 +47,10 @@ internal static class SandboxSettings
     /// development lock are listed (written by <c>init</c>, <c>update</c> and a person's <c>link</c> only): evidence, the ledger and the Stop cache are written by the
     /// commands the agent runs (gate and test runs). Run <c>init</c> again to add files created since.
     /// </summary>
-    public static IReadOnlyList<string> DenyWrite(string root, IEnumerable<string> protectedGlobs)
+    public static IReadOnlyList<string> DenyWrite(string root, IEnumerable<string> protectedGlobs) => DenyWrite(root, protectedGlobs, []);
+
+    /// <summary>The entries of <see cref="DenyWrite(string, IEnumerable{string})"/>, counting <paramref name="planned"/> files as present (<see cref="PlannedFiles"/>).</summary>
+    public static IReadOnlyList<string> DenyWrite(string root, IEnumerable<string> protectedGlobs, IReadOnlyCollection<string> planned)
     {
         // The settings file is being written as this list is, and the engine is linked after it.
         SortedSet<string> paths = new(StringComparer.Ordinal) { LinkedEngine, ClaudeSettingsMerger.RelativePath };
@@ -57,11 +60,11 @@ internal static class SandboxSettings
             if (glob.EndsWith(LockflightTree, StringComparison.Ordinal))
             {
                 string unit = glob[..^LockflightTree.Length];
-                paths.UnionWith(new[] { unit + LinkedEngine, unit + Baselines, unit + EngineLock, unit + VendoredScripts, unit + LocalLock }.Where(path => Exists(root, path) || path == LinkedEngine));
+                paths.UnionWith(new[] { unit + LinkedEngine, unit + Baselines, unit + EngineLock, unit + VendoredScripts, unit + LocalLock }.Where(path => Exists(root, path, planned) || path == LinkedEngine));
             }
             else if (glob.EndsWith(TreeSuffix, StringComparison.Ordinal) && !PathWildcards.HasWildcard(glob[..^TreeSuffix.Length]))
             {
-                AddIfPresent(root, glob[..^TreeSuffix.Length], paths);
+                AddIfPresent(root, glob[..^TreeSuffix.Length], paths, planned);
             }
             else if (PathWildcards.HasWildcard(glob))
             {
@@ -69,13 +72,14 @@ internal static class SandboxSettings
             }
             else
             {
-                AddIfPresent(root, glob, paths);
+                AddIfPresent(root, glob, paths, planned);
             }
         }
 
         if (patterns.Count > 0)
         {
             paths.UnionWith(FilesMatching(root, patterns));
+            paths.UnionWith(planned.Where(file => patterns.Any(pattern => PathRules.Matches(pattern, file))));
         }
 
         return [.. paths.Select(path => ProjectRelative + path)];
@@ -138,16 +142,16 @@ internal static class SandboxSettings
         return added;
     }
 
-    private static void AddIfPresent(string root, string relativePath, SortedSet<string> paths)
+    private static void AddIfPresent(string root, string relativePath, SortedSet<string> paths, IReadOnlyCollection<string> planned)
     {
-        if (Exists(root, relativePath))
+        if (Exists(root, relativePath, planned))
         {
             paths.Add(relativePath);
         }
     }
 
-    private static bool Exists(string root, string relativePath) =>
-        File.Exists(Path.Combine(root, relativePath)) || Directory.Exists(Path.Combine(root, relativePath));
+    private static bool Exists(string root, string relativePath, IReadOnlyCollection<string> planned) =>
+        File.Exists(Path.Combine(root, relativePath)) || Directory.Exists(Path.Combine(root, relativePath)) || PlannedFiles.Covers(planned, relativePath);
 
     /// <summary>The files under the root that match one of the patterns, '/'-separated; build output and git internals are skipped.</summary>
     private static IEnumerable<string> FilesMatching(string root, IReadOnlyList<string> patterns)

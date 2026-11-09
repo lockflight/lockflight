@@ -67,6 +67,19 @@ internal static partial class JudgeRunner
         return string.Join('\n', lines);
     }
 
+    /// <summary>The workflow with the job's <c>runs-on</c> set to <paramref name="label"/>; as it is when the job names no runner.</summary>
+    public static string WithRunsOn(string workflow, string job, string label)
+    {
+        List<string> lines = [.. workflow.Split('\n')];
+        if (RunsOnLine(lines, job) is not int index)
+        {
+            return workflow;
+        }
+
+        lines[index] = $"{JobIndent}runs-on: {label}{(lines[index].EndsWith('\r') ? "\r" : string.Empty)}";
+        return string.Join('\n', lines);
+    }
+
     /// <summary>Whether a label is a Windows runner by its name (<c>windows-latest</c>, <c>windows-2025</c>, <c>[self-hosted, windows]</c>).</summary>
     public static bool IsWindows(string label) => label.Contains("windows", StringComparison.OrdinalIgnoreCase);
 

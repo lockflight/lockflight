@@ -3,7 +3,7 @@
 What Lockflight works with, how much of that each release tests, and how long something that is going away keeps working.
 Where a row says "not tested", read it as "expected to work, and nothing in the repository proves it".
 
-**On this page:** [What is public](#what-is-public) · [Deprecations](#deprecations) · [.NET SDKs](#net-sdks) ·
+**On this page:** [What is public](#what-is-public) · [Deprecations](#deprecations) · [Upgrading a project](#upgrading-a-project) · [.NET SDKs](#net-sdks) ·
 [Claude Code](#claude-code) · [Operating systems and CI runners](#operating-systems-and-ci-runners)
 
 ## What is public
@@ -37,6 +37,23 @@ What has gone this way:
 | Manifest version 1 (`version: 1`, or no `version`) | 0.3.0: read with migration defaults, named at session start and by `doctor` | 0.4: refused, with the one-line fix | `lockflight update --project` migrates it; the migration stays through 1.x |
 | `workspace sync` and the vendored `lockflight.unit.yaml` | 0.3.1: a warning on every run | 0.4: the command says what replaced it | the shell pointer, `init --unit-of`; `lockflight update --project` in a unit repository moves it |
 | `doctor --canaries` | renamed to `doctor --self-test` | not yet removed | `doctor --self-test` |
+
+## Upgrading a project
+
+`lockflight update` installs the newest engine, and in a project `lockflight update --project` (which `update` runs for you) brings
+what Lockflight generated there to what this release's `init` writes, in one step and with no edit by hand: the engine pin, the
+engine lock and the vendored install script, the GitHub workflow (its action pin, steps and jobs, keeping its .NET channels,
+trigger, runners and workspace shell clone), the native level's hooks and hook shim, the `CLAUDE.md` block, the `Edit` deny rules
+and sandbox write denials, the `.gitignore` entries, and a manifest that needs a migration. `--dry-run` shows the diff and writes
+nothing.
+
+- **A workflow you edited is never overwritten.** When the GitHub workflow differs from every template a release wrote,
+  `update` leaves it, prints the diff to the current one and writes that to `.lockflight/local/migration/` for you to merge.
+  The settings and `.gitignore` are only added to, never pruned. The `CLAUDE.md` block (between its markers) and the hook shim
+  are Lockflight's own and are replaced.
+- **GitHub only.** The Azure Pipelines, Bitbucket Pipelines and GitLab files are not migrated: `update` moves only the lines it
+  always has there (the engine install step, the policy restore and the pull request's base) and says so; compare the rest
+  with the templates in [CI on other platforms](ci-other-platforms.md).
 
 ## .NET SDKs
 

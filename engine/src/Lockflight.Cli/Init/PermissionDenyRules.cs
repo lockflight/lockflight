@@ -41,7 +41,10 @@ internal static class PermissionDenyRules
     /// sandbox holds a denial on a missing file with an empty read-only placeholder while a command runs, which would break a
     /// build that reads <c>global.json</c> or <c>Directory.Build.props</c>. Run <c>init</c> again to add files created since.
     /// </summary>
-    public static IReadOnlyList<string> For(string root, IEnumerable<string> protectedGlobs)
+    public static IReadOnlyList<string> For(string root, IEnumerable<string> protectedGlobs) => For(root, protectedGlobs, []);
+
+    /// <summary>The rules of <see cref="For(string, IEnumerable{string})"/>, counting <paramref name="planned"/> files as present (<see cref="PlannedFiles"/>).</summary>
+    public static IReadOnlyList<string> For(string root, IEnumerable<string> protectedGlobs, IReadOnlyCollection<string> planned)
     {
         SortedSet<string> rules = new(StringComparer.Ordinal) { UserInstallRule };
         foreach (string glob in protectedGlobs.Select(glob => glob.Replace('\\', '/').TrimStart('/')))
@@ -49,9 +52,9 @@ internal static class PermissionDenyRules
             if (glob.EndsWith(LockflightTree, StringComparison.Ordinal))
             {
                 string unit = glob[..^LockflightTree.Length];
-                rules.UnionWith(LockflightParts.Select(part => unit + part).Where(part => Applies(root, part)).Select(Rule));
+                rules.UnionWith(LockflightParts.Select(part => unit + part).Where(part => Applies(root, part, planned)).Select(Rule));
             }
-            else if (Applies(root, glob))
+            else if (Applies(root, glob, planned))
             {
                 rules.Add(Rule(glob));
             }
@@ -115,11 +118,11 @@ internal static class PermissionDenyRules
     /// Whether a rule for the glob is written: always for a pattern, else when the path exists. The settings file counts as present
     /// (the rules are being written into it), and so does the linked engine, which init links next.
     /// </summary>
-    private static bool Applies(string root, string glob)
+    private static bool Applies(string root, string glob, IReadOnlyCollection<string> planned)
     {
         string fixedPart = glob.EndsWith(TreeSuffix, StringComparison.Ordinal) ? glob[..^TreeSuffix.Length] : glob;
         return PathWildcards.HasWildcard(fixedPart) || fixedPart is ClaudeSettingsMerger.RelativePath or LinkedEngine
-            || File.Exists(Path.Combine(root, fixedPart)) || Directory.Exists(Path.Combine(root, fixedPart));
+            || File.Exists(Path.Combine(root, fixedPart)) || Directory.Exists(Path.Combine(root, fixedPart)) || PlannedFiles.Covers(planned, fixedPart);
     }
 
     /// <summary>The project-anchored <c>Edit</c> rule for a root-relative glob: <c>global.json</c> becomes <c>Edit(/global.json)</c>.</summary>

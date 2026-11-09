@@ -409,6 +409,130 @@ public sealed class UpdateCommandTests : IDisposable
         Assert.Contains("a runner chosen by hand", output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AProjectUpdateBringsAReleasedJudgeWorkflowToThisEnginesTemplateWithTheDiffFirst()
+    {
+        string workflow = JudgeProject(ReleasedWorkflow());
+
+        (ExitCode exitCode, string output, string error) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Equal(Templates.Workflow(["10.0.x"]), File.ReadAllText(workflow));
+        Assert.Contains("is a CI judge's workflow as Lockflight wrote it", output, StringComparison.Ordinal);
+        Assert.Contains("-      - run: npm install -g @anthropic-ai/claude-code@2.1.309", output, StringComparison.Ordinal);
+        Assert.Matches(@"updated [^\n]*\.github/workflows/lockflight-gates\.yml", output);
+    }
+
+    [Fact]
+    public async Task ADryRunShowsTheWorkflowsNewTemplateAndWritesNothing()
+    {
+        string workflow = JudgeProject(ReleasedWorkflow());
+        string before = File.ReadAllText(workflow);
+
+        (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["update", "--project", "--dry-run"], "", root.FullName, Home());
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Contains($"--- {Templates.WorkflowPath}", output, StringComparison.Ordinal);
+        Assert.Contains("+      # The action installs Claude Code with npm ci", output, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllText(workflow));
+    }
+
+    [Fact]
+    public async Task AJudgeWorkflowAPersonEditedIsLeftWithTheDiffAndThisEnginesVersionBesideIt()
+    {
+        string edited = ReleasedWorkflow().Replace("timeout-minutes: 55", "timeout-minutes: 90", StringComparison.Ordinal);
+        string workflow = JudgeProject(edited);
+
+        (ExitCode exitCode, string output, string error) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Equal(edited, File.ReadAllText(workflow));
+        Assert.Contains("was edited outside the lines Lockflight writes, so update leaves it as it is", output, StringComparison.Ordinal);
+        Assert.Contains("+    timeout-minutes: 55", output, StringComparison.Ordinal);
+        string proposal = Path.Combine(root.FullName, ".lockflight", "local", "migration", ".github", "workflows", "lockflight-gates.yml");
+        Assert.Equal(Templates.Workflow(["10.0.x"]), File.ReadAllText(proposal));
+    }
+
+    [Fact]
+    public async Task AProjectUpdateAddsTheDenyRulesAndSandboxDenialsInitWritesNow()
+    {
+        JudgeProject();
+        string settings = Path.Combine(root.FullName, ".claude", "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(settings)!);
+        File.WriteAllText(settings, """
+            {
+              "enabledPlugins": { "lockflight@lockflight": true },
+              "permissions": { "deny": [ "Edit(/lockflight.yaml)", "Bash(rm -rf:*)" ] },
+              "sandbox": { "filesystem": { "denyWrite": [ "./lockflight.yaml" ] } }
+            }
+            """);
+        File.WriteAllText(Path.Combine(root.FullName, "CLAUDE.md"), ClaudeMdBlock.Upsert(string.Empty));
+
+        (ExitCode exitCode, _, string error) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Manifest manifest = ManifestLocator.Discover(root.FullName).Manifest!;
+        string merged = File.ReadAllText(settings);
+        IReadOnlyList<string> globs = DefaultProtectedPaths.For(manifest);
+        Assert.All(PermissionDenyRules.For(root.FullName, globs), rule => Assert.Contains($"\"{rule}\"", merged, StringComparison.Ordinal));
+        Assert.All(SandboxSettings.DenyWrite(root.FullName, globs), entry => Assert.Contains($"\"{entry}\"", merged, StringComparison.Ordinal));
+        Assert.Contains("\"Bash(rm -rf:*)\"", merged, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SettingsWithNothingLockflightWroteAreLeftAlone()
+    {
+        JudgeProject();
+        string settings = Path.Combine(root.FullName, ".claude", "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(settings)!);
+        const string ours = "{ \"permissions\": { \"deny\": [ \"Bash(rm -rf:*)\" ] } }\n";
+        File.WriteAllText(settings, ours);
+
+        (ExitCode exitCode, _, string error) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Equal(ours, File.ReadAllText(settings));
+    }
+
+    [Fact]
+    public async Task AProjectUpdateAddsTheGitIgnoreEntriesInitWritesAndKeepsTheTeams()
+    {
+        JudgeProject();
+        string gitIgnore = Path.Combine(root.FullName, ".gitignore");
+        File.WriteAllText(gitIgnore, "bin/\n.lockflight/ledger/\n");
+
+        (ExitCode exitCode, _, string error) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        string[] lines = File.ReadAllLines(gitIgnore);
+        Assert.Equal("bin/", lines[0]);
+        Assert.All(Templates.GitIgnoreEntries, entry => Assert.Single(lines, line => line == entry));
+    }
+
+    [Fact]
+    public async Task AnotherPlatformsPipelineIsNamedAsNotMigrated()
+    {
+        JudgeProject();
+        File.Delete(Path.Combine(root.FullName, Templates.WorkflowPath.Replace('/', Path.DirectorySeparatorChar)));
+        string pipeline = Path.Combine(root.FullName, AzurePipelinesTemplate.Path.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(pipeline)!);
+        string written = AzurePipelinesTemplate.Pipeline(["10.0.x"], CiTrigger.PullRequest, developmentPin: false);
+        File.WriteAllText(pipeline, written);
+
+        (ExitCode exitCode, string output, string error) = await ProjectUpdateAsync(NativeEngine());
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Equal(written, File.ReadAllText(pipeline));
+        Assert.Contains($"note: {AzurePipelinesTemplate.Path} (Azure Pipelines) is not migrated", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>The CI judge's workflow as Lockflight 0.3.1 wrote it, with its action pin.</summary>
+    private static string ReleasedWorkflow() =>
+        Templates.WorkflowOf(ReleasedJudgeWorkflows.All[^1], ["10.0.x"], CiTrigger.PullRequest, developmentPin: false).Replace(
+            $"lockflight/lockflight/action@{Templates.ActionCommit} # {Templates.ActionVersion}",
+            "lockflight/lockflight/action@6960ea75096a0754fed65038d5557d690526172d # v0.3.1",
+            StringComparison.Ordinal);
+
     private async Task<(ExitCode ExitCode, string Output, string Error)> RunAsync(string[] args, FakeToolFeed feed)
     {
         using StringWriter output = new();

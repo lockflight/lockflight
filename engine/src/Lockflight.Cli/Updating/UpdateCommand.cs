@@ -29,6 +29,15 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
     private const string ProjectOption = "--project";
     private const string JudgeWorkflowOption = "--judge-workflow";
 
+    /// <summary>The CI files <c>init</c> writes for the platforms other than GitHub, which <c>update</c> does not migrate.</summary>
+    private static readonly (string Path, string Platform)[] OtherCiFiles =
+    [
+        (AzurePipelinesTemplate.Path, "Azure Pipelines"),
+        (BitbucketPipelinesTemplate.Path, "Bitbucket Pipelines"),
+        (BitbucketPipelinesTemplate.FragmentPath, "Bitbucket Pipelines"),
+        (GitLabCiTemplate.Path, "GitLab CI/CD"),
+    ];
+
     public async Task<ExitCode> RunAsync(CommandArguments arguments, CancellationToken cancellationToken)
     {
         string[] options = arguments.RestArray;
@@ -268,14 +277,17 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             writes.Add(new PlannedWrite(NativeHookShim.RelativePath, shim, shimText, NativeHookShim.Text));
         }
 
-        // And the native hooks in the settings follow the engine too, when the project has them and they can be merged into.
-        string settingsPath = Path.Combine(root, ClaudeSettingsMerger.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-        if (File.Exists(settingsPath) && await File.ReadAllTextAsync(settingsPath, cancellationToken) is string settingsText
-            && ClaudeSettingsMerger.Problem(settingsText, nativeHooks: true) is null
-            && JsonNode.Parse(settingsText) is JsonObject settings && NativeHooks.AnyPresent(settings) && NativeHooks.Merge(settings))
+        string gitIgnorePath = Path.Combine(root, ".gitignore");
+        string? gitIgnore = File.Exists(gitIgnorePath) ? await File.ReadAllTextAsync(gitIgnorePath, cancellationToken) : null;
+        if (GitIgnoreUpdater.Update(gitIgnore) is (string ignored, true))
         {
-            writes.Add(new PlannedWrite(ClaudeSettingsMerger.RelativePath, settingsPath, settingsText, JsonFiles.Format(settings)));
+            writes.Add(new PlannedWrite(".gitignore", gitIgnorePath, gitIgnore, ignored));
         }
+
+        await NoteOtherCiPlatformsAsync(root, cancellationToken);
+
+        // Last, so the deny rules and the sandbox write denials cover the protected files this update is about to write.
+        await PlanClaudeSettingsAsync(root, manifest, writes, cancellationToken);
 
         if (dryRun)
         {
@@ -508,6 +520,14 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
                     $"note: {Templates.WorkflowPath} runs the gates only and was edited outside the lines Lockflight wrote; to move to the CI judge's workflow, delete it in a branch, run `lockflight init`, and add your edits back");
                 return JudgeWorkflowUpdate.Unchanged;
             default:
+                switch (await PlanWorkflowRefreshAsync(root, path, text, writes, dryRun, cancellationToken))
+                {
+                    case JudgeWorkflowRefreshStatus.Outdated:
+                        return JudgeWorkflowUpdate.Planned;
+                    case JudgeWorkflowRefreshStatus.Current:
+                        return JudgeWorkflowUpdate.Unchanged;
+                }
+
                 if (!lockCommitted && CiStepMigration.Migrate(text) is string renamed && renamed != text && text.Contains("mode: judge", StringComparison.Ordinal))
                 {
                     writes.Add(new PlannedWrite(Templates.WorkflowPath, path, text, renamed));
@@ -515,6 +535,111 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
                 }
 
                 return JudgeWorkflowUpdate.Unchanged;
+        }
+    }
+
+    /// <summary>
+    /// The CI judge's workflow brought to this engine's template (<see cref="JudgeWorkflowRefresh"/>), with the diff shown first. A
+    /// workflow edited outside what Lockflight writes is left as it is: the diff to this engine's is shown, and outside a dry run
+    /// written to <c>.lockflight/local/migration/</c> for a person to merge.
+    /// </summary>
+    private async Task<JudgeWorkflowRefreshStatus> PlanWorkflowRefreshAsync(
+        string root, string path, string text, List<PlannedWrite> writes, bool dryRun, CancellationToken cancellationToken)
+    {
+        JudgeWorkflowRefreshPlan refresh = JudgeWorkflowRefresh.Plan(text);
+        switch (refresh.Status)
+        {
+            case JudgeWorkflowRefreshStatus.Outdated:
+                PlannedWrite write = new(Templates.WorkflowPath, path, text, refresh.Replacement);
+                writes.Add(write);
+                await context.Output.WriteLineAsync(
+                    $"CI workflow: {Templates.WorkflowPath} is a CI judge's workflow as Lockflight wrote it, so update writes this engine's (its action pin, steps and jobs), keeping its .NET channels, trigger, runners and workspace shell clone{(dryRun ? "." : ":")}");
+                if (!dryRun)
+                {
+                    await context.Output.WriteLineAsync(await write.DiffAsync(cancellationToken));
+                }
+
+                break;
+            case JudgeWorkflowRefreshStatus.Edited:
+                string current = CiStepMigration.Migrate(text) ?? text;
+                string proposal = Path.Combine(root, ".lockflight", "local", "migration", Templates.WorkflowPath.Replace('/', Path.DirectorySeparatorChar));
+                string where = dryRun ? string.Empty : $"; this engine's version is in {Path.GetRelativePath(root, proposal).Replace('\\', '/')}";
+                await context.Output.WriteLineAsync(
+                    $"note: {Templates.WorkflowPath} was edited outside the lines Lockflight writes, so update leaves it as it is{where}. Merge what you need by hand; it would change so:");
+                await context.Output.WriteLineAsync(await new PlannedWrite(Templates.WorkflowPath, path, current, refresh.Replacement).DiffAsync(cancellationToken));
+                if (!dryRun)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(proposal)!);
+                    await File.WriteAllTextAsync(proposal, refresh.Replacement, cancellationToken);
+                }
+
+                break;
+        }
+
+        return refresh.Status;
+    }
+
+    /// <summary>
+    /// The Claude Code settings Lockflight wrote into, brought to what <c>init</c> writes now: the native level's hooks, an
+    /// <c>Edit</c> deny rule for every protected path (counting the files this update writes), and, where the sandbox write
+    /// denials are listed (not <c>init --no-sandbox</c>), the missing ones. Rules are only added, never removed; the plugin's entries
+    /// are left as they are (a person may have turned the plugin off). Settings that hold nothing Lockflight writes (the CI-only
+    /// level) and settings that cannot be merged into are left alone.
+    /// </summary>
+    private async Task PlanClaudeSettingsAsync(string root, Manifest manifest, List<PlannedWrite> writes, CancellationToken cancellationToken)
+    {
+        string settingsPath = Path.Combine(root, ClaudeSettingsMerger.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(settingsPath))
+        {
+            return;
+        }
+
+        string settingsText = await File.ReadAllTextAsync(settingsPath, cancellationToken);
+        bool native = ClaudeSettingsMerger.Problem(settingsText, nativeHooks: false) is null && NativeHooks.AnyPresent(JsonNode.Parse(settingsText));
+        if (ClaudeSettingsMerger.Problem(settingsText, native) is string problem)
+        {
+            await context.Output.WriteLineAsync($"note: {ClaudeSettingsMerger.RelativePath} {problem}, so update leaves it as it is; fix it and run update --project again");
+            return;
+        }
+
+        JsonObject settings = JsonNode.Parse(settingsText)!.AsObject();
+        IReadOnlyList<string> globs = DefaultProtectedPaths.For(manifest);
+        string[] planned = [.. writes.Where(write => write.NewText is not null).Select(write => write.RelativePath)];
+        IReadOnlyList<string> denyRules = PermissionDenyRules.For(root, globs, planned);
+        bool lockflights = native || ClaudeSettingsMerger.PluginEnabled(settings) || PermissionDenyRules.Entries(settings).Any(denyRules.Contains);
+        if (!lockflights)
+        {
+            return;
+        }
+
+        bool changed = native && NativeHooks.Merge(settings);
+        changed |= PermissionDenyRules.Merge(settings, denyRules);
+        if (SandboxSettings.Entries(settings, SandboxSettings.DenyWriteKey).Count > 0)
+        {
+            changed |= SandboxSettings.Merge(settings, SandboxSettings.DenyWrite(root, globs, planned));
+        }
+
+        if (changed)
+        {
+            writes.Add(new PlannedWrite(ClaudeSettingsMerger.RelativePath, settingsPath, settingsText, JsonFiles.Format(settings)));
+        }
+    }
+
+    /// <summary>
+    /// The pipelines <c>init --ci-platform</c> writes for Azure Pipelines, Bitbucket Pipelines and GitLab are not brought to the
+    /// current template: only the GitHub workflow is. <see cref="CiStepMigration"/> still moves the lines it moves there (the engine
+    /// install step, the policy restore, the base). Each file Lockflight wrote is named, with where the current template is.
+    /// </summary>
+    private async Task NoteOtherCiPlatformsAsync(string root, CancellationToken cancellationToken)
+    {
+        foreach ((string relative, string platform) in OtherCiFiles)
+        {
+            string path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(path) && (await File.ReadAllTextAsync(path, cancellationToken)).Contains("lockflight", StringComparison.Ordinal))
+            {
+                await context.Output.WriteLineAsync(
+                    $"note: {relative} ({platform}) is not migrated: update brings only the GitHub workflow to this engine's template. Here it updates only the lines it has always moved (the engine install step between its markers, the policy restore and the pull request's base); compare the rest with the current template: {CiPipeline.GuideUrl}");
+            }
         }
     }
 

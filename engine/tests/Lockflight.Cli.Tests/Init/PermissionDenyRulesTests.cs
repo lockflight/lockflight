@@ -22,6 +22,17 @@ public sealed class PermissionDenyRulesTests : IDisposable
     }
 
     [Fact]
+    public void AFileAboutToBeWrittenCountsAsPresent()
+    {
+        IReadOnlyList<string> rules = PermissionDenyRules.For(root.FullName, DefaultProtectedPaths.Globs, [".lockflight/engine.lock", ".lockflight/ci/install.sh", "global.json"]);
+
+        Assert.Contains("Edit(/.lockflight/engine.lock)", rules);
+        Assert.Contains("Edit(/.lockflight/ci/**)", rules);
+        Assert.Contains("Edit(/global.json)", rules);
+        Assert.DoesNotContain("Edit(/.lockflight/baselines/**)", rules);
+    }
+
+    [Fact]
     public void APatternIsWrittenAsItIsAndAnExistingDirectoryAsATree()
     {
         Write(".claude/hooks/guard.sh", "exit 0");
