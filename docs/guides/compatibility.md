@@ -34,7 +34,7 @@ What has gone this way:
 
 | What | Deprecated | Removed | Replacement |
 |---|---|---|---|
-| Manifest version 1 (`version: 1`, or no `version`) | 0.3.0: read with migration defaults, named at session start and by `doctor` | 0.4: refused, with the one-line fix | `lockflight update --project` migrates it; the migration stays through 1.x |
+| Manifest version 1 (`version: 1`, or no `version`) | 0.3.0: read with migration defaults, named at session start and by `doctor` | 0.4: refused, with the one-line fix | `lockflight update --project` migrates it; the migration stays through 1.x. In a workspace, migrate the shell before its units: a unit's CI judge reads the shell's policy with the unit's engine, which refuses a version 1 shell |
 | `workspace sync` and the vendored `lockflight.unit.yaml` | 0.3.1: a warning on every run | 0.4: the command says what replaced it | the shell pointer, `init --unit-of`; `lockflight update --project` in a unit repository moves it |
 | `doctor --canaries` | renamed to `doctor --self-test` | not yet removed | `doctor --self-test` |
 

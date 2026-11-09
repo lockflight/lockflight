@@ -79,6 +79,60 @@ public sealed class VendoredUnitMoveTests : IDisposable
         Assert.True(File.Exists(Workflow));
     }
 
+    [Fact]
+    public async Task AShellStillOnVersion1IsNamedAsTheStepToTakeFirst()
+    {
+        await CreateWorkspaceAsync(withOrigin: true);
+        File.WriteAllText(Path.Combine(shell.FullName, Manifest.FileName), "version: 1\nunits:\n  - path: services/orders\n");
+
+        (ExitCode exitCode, _, string error) = await UpdateAsync(Orders);
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("is still version 1", error, StringComparison.Ordinal);
+        Assert.Contains("migrate the shell first", error, StringComparison.Ordinal);
+        Assert.Equal(VendoredPolicy, File.ReadAllText(Path.Combine(Orders, Manifest.UnitFileName)));
+    }
+
+    [Fact]
+    public async Task AHandEditedUnitWorkflowIsLeftAndNamed()
+    {
+        await CreateWorkspaceAsync(withOrigin: true);
+        File.WriteAllText(Workflow, "# edited by hand\njobs:\n  gates:\n    steps:\n      - run: lockflight gate run --profile pr\n");
+
+        (ExitCode exitCode, string output, string error) = await UpdateAsync(Orders);
+
+        Assert.True(exitCode == ExitCode.Pass, error);
+        Assert.Contains($"note: {Templates.WorkflowPath} was edited by hand", output, StringComparison.Ordinal);
+        Assert.StartsWith("# edited by hand", File.ReadAllText(Workflow), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnInitThatStopsWithAnErrorPutsTheDeletedFilesBack()
+    {
+        await CreateWorkspaceAsync(withOrigin: true);
+        Directory.CreateDirectory(Path.Combine(Orders, Manifest.FileName));
+
+        (ExitCode exitCode, _, string error) = await UpdateAsync(Orders);
+
+        Assert.NotEqual(ExitCode.Pass, exitCode);
+        Assert.Contains("init stopped with an error, so", error, StringComparison.Ordinal);
+        Assert.Equal(VendoredPolicy, File.ReadAllText(Path.Combine(Orders, Manifest.UnitFileName)));
+        Assert.True(File.Exists(Workflow));
+    }
+
+    [Fact]
+    public async Task UpdatingAPointerUnitInsideAVersion1ShellWarnsToMigrateTheShellFirst()
+    {
+        await CreateWorkspaceAsync(withOrigin: true);
+        File.WriteAllText(Path.Combine(shell.FullName, Manifest.FileName), "version: 1\nunits:\n  - path: services/orders\n");
+        File.Delete(Path.Combine(Orders, Manifest.UnitFileName));
+        File.WriteAllText(Path.Combine(Orders, Manifest.FileName), $"version: 2\nshell:\n  url: {ShellUrl}\n  unit: services/orders\n");
+
+        (_, _, string error) = await UpdateAsync(Orders, "--dry-run");
+
+        Assert.Contains($"warning: the workspace shell at {shell.FullName} still has a version 1 {Manifest.FileName}", error, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("workspace", "sync")]
     [InlineData("workspace", "sync", "--check")]

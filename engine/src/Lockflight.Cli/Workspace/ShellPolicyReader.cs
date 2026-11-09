@@ -1,5 +1,6 @@
 using Lockflight.Cli.Ci;
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Workspace;
@@ -38,7 +39,9 @@ internal static class ShellPolicyReader
         ManifestLoadResult parsed = new ManifestParser(shellDirectory, $"the workspace shell's {Manifest.FileName} at {CommitIds.Short(commit)}").Parse(show.Output);
         if (parsed.Manifest is not Manifest manifest)
         {
-            return Failed($"the workspace shell's {Manifest.FileName} at {CommitIds.Short(commit)} is invalid: {parsed.Error?.Describe()}");
+            return Failed(IsVersion1(shellDirectory, show.Output)
+                ? $"the workspace shell's {Manifest.FileName} at {CommitIds.Short(commit)} is a version 1 manifest, which this engine no longer reads: in a workspace, migrate the shell before its units (a person runs `{EngineCommand.Name} update --project` in the shell and merges it), then run this again"
+                : $"the workspace shell's {Manifest.FileName} at {CommitIds.Short(commit)} is invalid: {parsed.Error?.Describe()}");
         }
 
         if (manifest.Units.FirstOrDefault(unit => unit.Path.Equals(pointer.Unit, StringComparison.OrdinalIgnoreCase)) is not Unit unit)
@@ -49,6 +52,9 @@ internal static class ShellPolicyReader
 
         return new ShellPolicyReading(new ShellPolicy(shellDirectory, commit, manifest, unit), Error: null);
     }
+
+    private static bool IsVersion1(string root, string text) =>
+        new ManifestParser(root, Manifest.FileName) { ReadsVersion1 = true }.Parse(text).Manifest is { Version: ManifestVersions.Legacy };
 
     /// <summary>Whether two clone URLs name the same repository: host and path, without scheme, user, port separator form or <c>.git</c>.</summary>
     public static bool SameRepository(string? first, string second) =>
