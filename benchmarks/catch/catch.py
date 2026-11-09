@@ -133,6 +133,11 @@ def record(args):
             protected = [m for m in re.findall(r"[\w./-]+", json.dumps(step.get("details") or step.get("why") or ""))
                          if "/" in m or "." in m][:10]
     lockflight = verdict.get("verdict") or evidence.get("verdict") or "ERROR"
+    try:
+        with open(os.path.join(os.path.dirname(args.verdict), "comment.md"), encoding="utf-8") as comment:
+            assertion_free = len(set(re.findall(r"`([^`]+) \(assertion-free\)`", comment.read())))
+    except OSError:
+        assertion_free = 0
     result = {
         "sample": args.sample, "case": args.case, "category": args.category, "kind": args.kind, "what": args.what,
         "lockflight": {
@@ -142,6 +147,7 @@ def record(args):
             "advisory": [c for c in checks if c["requirement"] != "required"],
             "gateSteps": steps,
             "policyLoosened": (evidence.get("policy") or {}).get("loosened") or [],
+            "assertionFreeTests": assertion_free,
             "exitCode": judge.get("exitCode"), "elapsedMs": judge.get("elapsedMs"),
         },
         "baseline": base,
@@ -168,7 +174,10 @@ def reasons(side):
 
 
 def advisories(side):
-    return ", ".join(f"{c['id']}:{c.get('reason') or c['verdict']}" for c in side.get("advisory", [])) or "-"
+    flags = [f"{c['id']}:{c.get('reason') or c['verdict']}" for c in side.get("advisory", [])]
+    if side.get("assertionFreeTests"):
+        flags.append(f"{side['assertionFreeTests']} assertion-free test(s) marked in the trace")
+    return ", ".join(flags) or "-"
 
 
 def line(_):
@@ -272,7 +281,7 @@ def summarize(args):
         md.append(f"| {c['category']} | {c['cheats']} | {c['lockflight']} | {c['review']} | {c['plain']} | "
                   f"{c['lockflightOfPlainPassed']} of {c['plainPassed']} |")
     md += ["", "## Every pull request", "",
-           "| Sample | Case | Kind | Lockflight | Blocking reasons | Advisory | Plain CI | Why | Judge s | Plain s |",
+           "| Sample | Case | Kind | Lockflight | Blocking reasons | Shown for review | Plain CI | Why | Judge s | Plain s |",
            "|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         lf, pl = r["lockflight"], r["baseline"]
