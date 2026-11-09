@@ -1,0 +1,13 @@
+{
+  "schema": "lockflight.approval/v2",
+  "feature": "001-shipping",
+  "phase": "spec",
+  "artifacts": {
+    "spec.md": "6ec17785f2ddd4d126573278fc8b1c7939cad6c453479dbcb59be39267ee0327"
+  },
+  "state": "person",
+  "approvedBy": "unknown",
+  "at": "2026-11-09T11:42:33Z",
+  "engineVersion": "0.3.1",
+  "rule": null
+}

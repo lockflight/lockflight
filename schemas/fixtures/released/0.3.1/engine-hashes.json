@@ -1,0 +1,31 @@
+{
+  "schema": "lockflight.engine-hashes/v1",
+  "package": "Lockflight.Cli",
+  "version": "0.3.1",
+  "commit": "98497a3d3a99cac8f1fa29030eef8473cc01b000",
+  "binaries": {
+    "linux-arm64": {
+      "sha256": "3fb476777a65de14f8c78d686c646101b5475071350a20532ece86a4ac159961",
+      "path": "tools/any/linux-arm64/lockflight"
+    },
+    "linux-x64": {
+      "sha256": "5a9bbf329e428704db16dcc0d979fcc4c0f2f0829b74299d86a14ac5a2a893fb",
+      "path": "tools/any/linux-x64/lockflight"
+    },
+    "osx-arm64": {
+      "sha256": "21e5dbf2f8db34bfcc554ca574a93e9a30b21374fcee832cb463090dfe06e62a",
+      "path": "tools/any/osx-arm64/lockflight"
+    },
+    "osx-x64": {
+      "sha256": "28528edcc2f5f6e76e2bbd43a42d495fbbb310c102cafa71ec1f435f6996059f",
+      "path": "tools/any/osx-x64/lockflight"
+    },
+    "win-x64": {
+      "sha256": "6d7670f48c0206b45258c706abdd1820f1740bf3837cc3f43b439f2640954c81",
+      "path": "tools/any/win-x64/lockflight.exe"
+    }
+  },
+  "installScript": {
+    "sha256": "7df3ec3e7b9cddc80bfd199ef8aa5f5544b52c420ede7744ed2b5647eb537330"
+  }
+}

@@ -1,0 +1,39 @@
+# Lockflight project manifest — https://github.com/lockflight/lockflight
+# Built-in protected paths always apply: this file, the tool pin, .lockflight/, Claude settings, .NET build-control files
+# (Directory.Build.*, Directory.Packages.props, global.json, NuGet.config), code-style and analyzer policy (.editorconfig,
+# .globalconfig, *.ruleset, stylecop.json, BannedSymbols.txt, CodeMetricsConfig.txt), .gitattributes, gitleaks policy and the
+# Lockflight CI files.
+# The full list: https://github.com/lockflight/lockflight/blob/main/docs/guides/configuration.md
+# yaml-language-server: $schema=https://raw.githubusercontent.com/lockflight/lockflight/main/lockflight.schema.json
+version: 2
+
+# Extra paths the agent must not change.
+protected: []
+
+# Stop gate: run build + tests when the agent ends a turn (at most 540 s, below the plugin's Stop hook timeout).
+# Off at first in the standard profile too: turn it on once you know how long your build and tests take and the
+# known-failing tests are accepted (a person runs '.lockflight/bin/lockflight baseline tests').
+stop:
+  gate: false
+  target: .
+approvals:                      # the approval of record is the platform's review of the pull request
+  check: fail
+  default: same-pr
+  specFirstFrom: none
+  specFirstPaths: []
+  specPaths: ["specs/**"]
+
+routing:                        # how a pull request's change class is computed and what each class must prove
+  preset: default
+  floor: fix
+  fix: { maxLines: 20, maxFiles: 2 }
+  largeLines: 400
+  structural: critical
+  critical: []                  # globs of critical paths, such as "src/Payments/**"
+  coverage: { fix: 80, behaviour: 80, feature: 80, critical: 90 }
+  require:
+    specFrom: feature
+    reviewFrom: behaviour
+    reviewKeyFrom: critical
+    architectureFrom: feature
+    architectureDeclaredFrom: none

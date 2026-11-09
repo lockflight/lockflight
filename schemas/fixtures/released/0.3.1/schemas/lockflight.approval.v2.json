@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lockflight/lockflight/main/schemas/lockflight.approval.v2.json",
+  "title": "lockflight.approval/v2",
+  "description": "A local approval record, .lockflight/features/<id>/approvals/<phase>.json, written by lockflight approve. A guardrail for the agent loop: the approval of record is the platform's review. Readers ignore unknown properties; an unknown state approves nothing. Rules the engine checks beyond this schema: the feature and phase must be the record's own, and skipped-by-policy approves nothing in 0.3.x.",
+  "type": "object",
+  "required": ["schema", "feature", "phase", "artifacts", "state"],
+  "properties": {
+    "schema": { "const": "lockflight.approval/v2" },
+    "feature": { "type": "string", "minLength": 1 },
+    "phase": { "type": "string", "description": "spec or tasks." },
+    "artifacts": {
+      "type": "object",
+      "description": "Artifact file name to the SHA-256 of its content (line endings normalised), or absent.",
+      "additionalProperties": { "type": "string", "pattern": "^([0-9a-f]{64}|absent)$" }
+    },
+    "state": { "type": "string", "description": "person (a person ran approve) or skipped-by-policy (reserved for the autonomous mode). Another value approves nothing." },
+    "approvedBy": { "type": ["string", "null"], "description": "The git user name: a label, not an identity. Null for skipped-by-policy." },
+    "at": { "type": "string", "format": "date-time" },
+    "engineVersion": { "type": "string" },
+    "rule": { "type": ["string", "null"], "description": "For skipped-by-policy: the manifest rule that allowed it." }
+  },
+  "if": { "properties": { "state": { "const": "skipped-by-policy" } } },
+  "then": { "required": ["rule"], "properties": { "rule": { "type": "string", "minLength": 1 } } }
+}

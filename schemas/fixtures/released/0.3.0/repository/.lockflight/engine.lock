@@ -1,0 +1,14 @@
+{
+  "schema": "lockflight.engine-lock/v1",
+  "package": "Lockflight.Cli",
+  "version": "0.3.0",
+  "channel": "release",
+  "installScript": { "sha256": "7df3ec3e7b9cddc80bfd199ef8aa5f5544b52c420ede7744ed2b5647eb537330" },
+  "binaries": {
+    "linux-arm64": { "sha256": "31c9ec84440d80c307a309e8122f688bf5184a45ec135e868a010486ccda211d" },
+    "linux-x64": { "sha256": "4d57b7176ffc9d17ad885d0139fac4e1c9a61fc19ae47eeed10c277e8950c405" },
+    "osx-arm64": { "sha256": "cb692771a3c2fc8dbf948c8496059944b5292d4224d4ba58b50f6ff803c52ecd" },
+    "osx-x64": { "sha256": "06de884328d16630026491785822330396a0754584ba3cb3db7487e9896a6af1" },
+    "win-x64": { "sha256": "5ae76321e145a5b2915a155baf9e1ca2439741cf5498743cb4f9f5b696e404c1" }
+  }
+}

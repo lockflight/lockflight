@@ -10,3 +10,5 @@
 *.tsv text eol=lf
 # The migration test of a CRLF manifest with a byte-order mark keeps its bytes.
 engine/tests/Lockflight.Cli.Tests/Config/Migration/Cases/crlf-bom/* -text
+# Fixtures a released engine wrote keep its bytes.
+schemas/fixtures/released/*/** -text
