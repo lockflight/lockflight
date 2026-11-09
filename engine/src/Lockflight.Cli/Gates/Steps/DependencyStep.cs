@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Lockflight.Cli.Gates.Baselines;
 using Lockflight.Cli.Gates.Parsers;
 using Lockflight.Cli.Processes;
@@ -30,11 +31,11 @@ internal sealed class DependencyStep : IGateStep
     /// </summary>
     public static async Task<DependencyScan> ScanAsync(GateRunContext run, CancellationToken cancellationToken)
     {
-        ProcessResult listing = await run.Processes("dotnet", NounFirstArguments(run), run.Target, run.TimeLeft(), cancellationToken);
+        ProcessResult listing = await CompleteOutput.RunAsync(() => run.Processes("dotnet", NounFirstArguments(run), run.Target, run.TimeLeft(), cancellationToken));
         string noReport = $"dotnet package list exited {listing.ExitCode} without a report";
-        if (!listing.TimedOut && !HasReport(listing))
+        if (!listing.TimedOut && !listing.OutputHeld && !HasReport(listing))
         {
-            ProcessResult olderSdkListing = await run.Processes("dotnet", VerbFirstArguments(run), run.Target, run.TimeLeft(), cancellationToken);
+            ProcessResult olderSdkListing = await CompleteOutput.RunAsync(() => run.Processes("dotnet", VerbFirstArguments(run), run.Target, run.TimeLeft(), cancellationToken));
             noReport = $"dotnet package list exited {listing.ExitCode} and dotnet list package exited {olderSdkListing.ExitCode}, both without a report";
             listing = olderSdkListing with { DurationMs = listing.DurationMs + olderSdkListing.DurationMs };
         }
@@ -44,13 +45,28 @@ internal sealed class DependencyStep : IGateStep
             return new DependencyScan(unhealthy, []);
         }
 
+        if (listing.OutputHeld)
+        {
+            return new DependencyScan(new GateStep(StepName, listing.ExitCode, Verdict.Error, ReasonCode.ToolError, listing.DurationMs, CompleteOutput.Problem("the package listing")), []);
+        }
+
         if (!HasReport(listing))
         {
             return new DependencyScan(new GateStep(StepName, listing.ExitCode, Verdict.Error, ReasonCode.ToolError, listing.DurationMs, noReport), []);
         }
 
         int jsonStart = listing.Output.IndexOf('{', StringComparison.Ordinal);
-        IReadOnlyList<VulnerablePackage> found = VulnerablePackages.Parse(listing.Output[jsonStart..]);
+        IReadOnlyList<VulnerablePackage> found;
+        try
+        {
+            found = VulnerablePackages.Parse(listing.Output[jsonStart..]);
+        }
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            return new DependencyScan(
+                new GateStep(StepName, listing.ExitCode, Verdict.Error, ReasonCode.ToolError, listing.DurationMs, $"the package listing's report could not be read: {exception.Message}"), []);
+        }
+
         IReadOnlySet<string> accepted = new AcceptedAdvisories(run.ProjectRoot, run.UnitPath).Load();
         List<VulnerablePackage> blocking = [.. found.Where(package => package.IsBlocking && !accepted.Contains(package.Fingerprint))];
         int reportedOnly = found.Count(package => !package.IsBlocking && !accepted.Contains(package.Fingerprint));

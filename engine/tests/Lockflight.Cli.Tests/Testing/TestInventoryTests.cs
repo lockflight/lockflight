@@ -94,4 +94,12 @@ public sealed class TestInventoryTests
         Assert.Equal([true, false], tests.Select(test => test.IsExplicit));
         Assert.Equal(["FR-009"], tests[0].Requirements);
     }
+
+    [Fact]
+    public void AJsonListingCutShortIsNoListing()
+    {
+        const string output = """[{"Assembly":"/x/Shop.Tests.dll","Class":"Shop.Tests.ProbeTests","Method":"Stub"},{"Assembly":"/x/Sh""";
+
+        Assert.Null(TestInventory.Parse("Shop.Tests", output));
+    }
 }

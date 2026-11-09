@@ -44,7 +44,12 @@ internal static class TestApps
 
     private static async Task<ProjectEvaluation> FindOneAsync(string root, string project, string? preferredFramework, TimeBudget budget, CancellationToken cancellationToken)
     {
-        ProcessResult properties = await ProcessRunner.RunAsync("dotnet", ["msbuild", project, .. Properties], root, budget.Left, cancellationToken);
+        if (budget.IsSpent)
+        {
+            return ProjectEvaluation.Of(new UnevaluatedProject(project, ProjectEvaluationFailure.TimedOut, string.Empty));
+        }
+
+        ProcessResult properties = await CompleteOutput.RunAsync(() => ProcessRunner.RunAsync("dotnet", ["msbuild", project, .. Properties], root, budget.Left, cancellationToken));
         if (Unevaluated(root, project, properties) is UnevaluatedProject unevaluated)
         {
             return ProjectEvaluation.Of(unevaluated);
@@ -60,8 +65,8 @@ internal static class TestApps
         if (targetPath.Length == 0 && ChooseFramework(frameworks, preferredFramework) is string framework)
         {
             chosenFramework = framework;
-            ProcessResult single = await ProcessRunner.RunAsync(
-                "dotnet", ["msbuild", project, $"-p:TargetFramework={framework}", .. Properties], root, budget.Left, cancellationToken);
+            ProcessResult single = await CompleteOutput.RunAsync(() => ProcessRunner.RunAsync(
+                "dotnet", ["msbuild", project, $"-p:TargetFramework={framework}", .. Properties], root, budget.Left, cancellationToken));
             if (Unevaluated(root, project, single) is UnevaluatedProject unevaluatedFramework)
             {
                 return ProjectEvaluation.Of(unevaluatedFramework);
@@ -137,6 +142,11 @@ internal static class TestApps
         if (evaluation.ExitCode != 0)
         {
             return new UnevaluatedProject(project, ProjectEvaluationFailure.Failed, FirstLine(root, evaluation.Combined, $"dotnet msbuild exited {evaluation.ExitCode}"));
+        }
+
+        if (evaluation.OutputHeld)
+        {
+            return new UnevaluatedProject(project, ProjectEvaluationFailure.Failed, CompleteOutput.Problem("dotnet msbuild"));
         }
 
         return IsReadable(evaluation.Output) ? null : new UnevaluatedProject(project, ProjectEvaluationFailure.Failed, "dotnet msbuild printed no properties to read");

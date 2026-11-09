@@ -175,7 +175,7 @@ internal sealed class CiCommand(CliContext context) : ICommand
         {
             await context.Output.WriteLineAsync(
                 $"  note: '{Printable(command)}' exited, but a process it started kept its output open; Lockflight stopped waiting for it after "
-                + $"{ProcessRunner.OutputDrainTime.TotalSeconds:0} s");
+                + $"{ProcessRunner.OutputDrainTime.TotalSeconds:0} s without new output");
         }
 
         if (held.Count > 0 && ReasonCatalogue.ConsoleLine(ReasonCode.SurvivorOutputHeld) is string heldNext)

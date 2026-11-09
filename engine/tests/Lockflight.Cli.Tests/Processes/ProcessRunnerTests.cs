@@ -158,6 +158,63 @@ public sealed class ProcessRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task OutputThatKeepsArrivingAfterTheProcessExitsIsReadToItsEnd()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Uses the POSIX sh command.");
+
+        // The child exits at once; what it started writes for longer than one drain window, in pieces closer together than one.
+        string writer = "echo start; (for piece in 1 2 3 4; do sleep 1; echo piece$piece; done) &";
+        ProcessResult result = await ProcessRunner.RunAsync("sh", ["-c", writer], directory.FullName, TestContext.Current.CancellationToken)
+            .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.False(result.OutputHeld);
+        Assert.Equal(["start", "piece1", "piece2", "piece3", "piece4"], result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    [Fact]
+    public async Task ALargeOutputWrittenInManyFlushesIsKeptWhole()
+    {
+        const int Lines = 5_000;
+        ProcessResult result = OperatingSystem.IsWindows()
+            ? await ProcessRunner.RunAsync("cmd.exe", ["/d", "/c", $"for /l %i in (1,1,{Lines}) do @echo line %i"], directory.FullName, TestContext.Current.CancellationToken)
+            : await ProcessRunner.RunAsync("sh", ["-c", $"i=1; while [ $i -le {Lines} ]; do echo line $i; i=$((i+1)); done"], directory.FullName, TestContext.Current.CancellationToken);
+
+        string[] lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        Assert.False(result.OutputHeld);
+        Assert.Equal(Lines, lines.Length);
+        Assert.Equal($"line {Lines}", lines[^1]);
+    }
+
+    [Fact]
+    public async Task HeldOutputIsReadAgainOnceAndNeverMore()
+    {
+        int runs = 0;
+        ProcessResult held = new(0, "[{\"Cl", string.Empty, 10, TimedOut: false) { OutputHeld = true };
+
+        ProcessResult result = await CompleteOutput.RunAsync(() =>
+        {
+            runs++;
+            return Task.FromResult(held);
+        });
+
+        Assert.Equal(2, runs);
+        Assert.True(result.OutputHeld);
+    }
+
+    [Fact]
+    public async Task OutputHeldOnlyOnceIsReadFromTheSecondRun()
+    {
+        Queue<ProcessResult> answers = new([
+            new ProcessResult(0, "cut", string.Empty, 10, TimedOut: false) { OutputHeld = true },
+            new ProcessResult(0, "whole", string.Empty, 10, TimedOut: false)]);
+
+        ProcessResult result = await CompleteOutput.RunAsync(() => Task.FromResult(answers.Dequeue()));
+
+        Assert.False(result.OutputHeld);
+        Assert.Equal("whole", result.Output);
+    }
+
+    [Fact]
     public async Task AMissingExecutableIsReportedAsNotOnPath()
     {
         ExecutableNotFoundException exception = await Assert.ThrowsAsync<ExecutableNotFoundException>(() =>

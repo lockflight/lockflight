@@ -497,7 +497,10 @@ ways around it ([CI hardening](ci-hardening.md#what-the-ci-judge-shows-and-what-
 ### SURVIVOR_OUTPUT_HELD
 
 **Means:** A note, not a verdict: a build or test run exited, but a process it started kept its output open, so the engine
-stopped waiting for that output after 2 seconds and kept what was written. The process is stopped like any other left running.
+stopped waiting for that output once 2 seconds passed without any (30 seconds at most) and kept what was written. The process
+is stopped like any other left running. When the engine parses that output (a test listing, MSBuild's properties, the package
+report), it runs the tool once more instead of reading it; held again, the step is an ERROR (`TOOL_ERROR`, or a test listing
+that could not be read), never a verdict on output that may be cut.
 
 **Why:** Without the limit a process that inherits the output would hold the judge until the CI job's own time limit, and no
 evidence would be written.

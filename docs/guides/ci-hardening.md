@@ -235,10 +235,12 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
     a self-hosted runner and the other platforms' agents, whose Docker daemon other jobs may share, list them as `observed`
     and leave them. When `docker` does not answer a later listing within 30 seconds, those containers are not checked: the
     summary and the comment say so in a note (`processes.note`), and the verdict does not change.
-  - A process that keeps a build's or a test run's output open does not hold up the judge: the engine waits 2 seconds for the
-    output to end after the process it started has exited, then stops reading, keeps what was written, and notes the command
-    in the summary and in the evidence (`processes.outputHeld`,
-    [`SURVIVOR_OUTPUT_HELD`](reasons.md#survivor_output_held)); the process holding it is stopped like any other.
+  - A process that keeps a build's or a test run's output open does not hold up the judge: after the process it started has
+    exited, the engine reads the output while it still arrives, stops once 2 seconds pass without any (30 seconds at most),
+    keeps what was written, and notes the command in the summary and in the evidence (`processes.outputHeld`,
+    [`SURVIVOR_OUTPUT_HELD`](reasons.md#survivor_output_held)); the process holding it is stopped like any other. Output the
+    engine parses (a test listing, MSBuild's properties, the package report) is never read cut short: the tool runs once more,
+    and when its output is held again the step is an ERROR, never a verdict on a partial listing.
   - The CI files that run the gates alone (GitLab CI/CD, Azure Pipelines, a unit repository's workflow) run
     `gate run --profile pr` with `CI` set, which sweeps the same way and adds a `processes` row that is ERROR for a process it
     cannot stop; they list no containers, since an agent's Docker daemon may be shared with other jobs.

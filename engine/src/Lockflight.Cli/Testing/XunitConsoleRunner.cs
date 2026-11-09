@@ -9,7 +9,13 @@ internal sealed class XunitConsoleRunner(TimeProvider time) : ITestRunner
 
     public async Task<TestListing> ListAsync(TestApp app, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
-        ProcessResult native = await ProcessRunner.RunAsync("dotnet", [app.AssemblyPath, "-list", "full/json", "-noColor"], app.OutputDirectory, timeLimit, app.Environment, cancellationToken);
+        ProcessResult native = await CompleteOutput.RunAsync(() =>
+            ProcessRunner.RunAsync("dotnet", [app.AssemblyPath, "-list", "full/json", "-noColor"], app.OutputDirectory, timeLimit, app.Environment, cancellationToken));
+        if (native.OutputHeld)
+        {
+            return TestListing.Unavailable(CompleteOutput.Problem("the test app's listing"));
+        }
+
         return native.ExitCode == 0 && TestInventory.Parse(app.AssemblyName, native.Output) is IReadOnlyList<TestCase> tests
             ? TestListing.Of(tests, RunnerMode.Native)
             : TestListing.NotListed;

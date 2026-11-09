@@ -10,8 +10,14 @@ internal static class ProcessRunner
     /// <summary>Exit code reported for a process killed at its time limit (128 + SIGKILL, as shells do).</summary>
     public const int TimedOutExitCode = 137;
 
-    /// <summary>How long the runner waits for a process's output to end after the process has exited.</summary>
+    /// <summary>
+    /// How long the runner waits, after a process has exited, for its output to end once nothing more arrives: a wait that sees new
+    /// output starts again, up to <see cref="OutputDrainLimit"/>.
+    /// </summary>
     public static readonly TimeSpan OutputDrainTime = TimeSpan.FromSeconds(2);
+
+    /// <summary>The longest the runner keeps reading a process's output after the process has exited, however steadily it arrives.</summary>
+    public static readonly TimeSpan OutputDrainLimit = TimeSpan.FromSeconds(30);
 
     private static readonly IReadOnlyDictionary<string, string?> NoVariables = new Dictionary<string, string?>(StringComparer.Ordinal);
 
@@ -261,22 +267,37 @@ internal static class ProcessRunner
     }
 
     /// <summary>
-    /// Waits briefly for the output streams to end once the process has exited, then gives them up: a process it started (a build
-    /// server, a daemon a test forgot) may have inherited them and hold them open until the job's own timeout. Returns whether they
-    /// were given up.
+    /// Waits for the output streams to end once the process has exited, then gives them up: a process it started (a build server, a
+    /// daemon a test forgot) may have inherited them and hold them open until the job's own timeout. The wait goes on while output
+    /// still arrives, so a slow writer is read to its end; it stops after <see cref="OutputDrainTime"/> without new output or
+    /// <see cref="OutputDrainLimit"/> in all. Returns whether the streams were given up: then the output may be cut, and a caller
+    /// that parses it must not read it as complete.
     /// </summary>
     private static async Task<bool> DrainAsync(ProcessStartInfo startInfo, OutputCapture standardOutput, OutputCapture standardError)
     {
         Task streamsEnded = Task.WhenAll(standardOutput.Completion, standardError.Completion);
-        if (await Task.WhenAny(streamsEnded, Task.Delay(OutputDrainTime, CancellationToken.None)) == streamsEnded)
+        Stopwatch draining = Stopwatch.StartNew();
+        long seen = standardOutput.Received + standardError.Received;
+        while (await Task.WhenAny(streamsEnded, Task.Delay(OutputDrainTime, CancellationToken.None)) != streamsEnded)
         {
-            return false;
+            if (streamsEnded.IsCompleted)
+            {
+                return false;
+            }
+
+            long received = standardOutput.Received + standardError.Received;
+            if (received == seen || draining.Elapsed >= OutputDrainLimit)
+            {
+                standardOutput.Abandon();
+                standardError.Abandon();
+                HeldOutputs.Record(Command(startInfo.FileName, startInfo.ArgumentList));
+                return true;
+            }
+
+            seen = received;
         }
 
-        standardOutput.Abandon();
-        standardError.Abandon();
-        HeldOutputs.Record(Command(startInfo.FileName, startInfo.ArgumentList));
-        return true;
+        return false;
     }
 
     /// <summary>A process's program and first argument, as reports name it.</summary>

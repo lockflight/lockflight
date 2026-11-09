@@ -77,6 +77,7 @@ internal static class TestInventory
         return [.. tests.DistinctBy(test => test.Key)];
     }
 
+    /// <summary>xUnit's <c>-list full/json</c> listing; null when the output holds no listing or one that is not whole JSON.</summary>
     public static IReadOnlyList<TestCase>? Parse(string assembly, string output)
     {
         string? json = output.Split('\n').Select(line => line.Trim()).FirstOrDefault(line => line.StartsWith('['));
@@ -85,6 +86,18 @@ internal static class TestInventory
             return null;
         }
 
+        try
+        {
+            return ParseJson(assembly, json);
+        }
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static TestCase[] ParseJson(string assembly, string json)
+    {
         using JsonDocument document = JsonDocument.Parse(json);
         return [.. document.RootElement.EnumerateArray()
             .Select(test => new TestCase(
