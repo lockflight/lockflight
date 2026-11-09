@@ -425,6 +425,17 @@ run; the detail names the failed check.
 
 **Next:** Fix what the engine lock check names (the failed check is in the detail): a lock must match the release's attested hashes. A first lock is checked with the workflow's token: keep the judge's `github-token` input at its default with `contents: read` in the job's permissions, then re-run.
 
+### ARTIFACT_MISMATCH
+
+**Means:** The report refused the judge's evidence or the review's result: its files do not hash to the digest the job that
+uploads it output after the upload (FAIL), or it is gone although that job named files (ERROR). The generated workflow passes
+each job's digest and artifact id to the report jobs; the detail names the artifact and both digests.
+
+**Why:** An artifact's name says nothing about who uploaded it. A step that runs the pull request's code, in the judge or the
+review job, can upload or replace an artifact of the same name; the digest ties the artifact to the action's own upload step.
+
+**Next:** Re-run the whole workflow. If it repeats, do not merge: a step other than the action's upload wrote or removed the artifact (the detail names it and both digests), so look in the pull request for code that uploads or deletes `lockflight-*` artifacts, in its build, tests or workflow files.
+
 ### EVIDENCE_INVALID
 
 **Means:** The judge's evidence or the review's result is about another head, does not have the expected shape, or disagrees with what the report works out from git.

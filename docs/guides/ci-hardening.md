@@ -266,6 +266,36 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
   two report jobs replaces the workflow's own sticky comment (a marker comment anyone else posted is ignored). A failed post
   is a warning, never the verdict.
 
+### Which artifacts and which policy the report reads
+
+An artifact's name says what it should hold, not who uploaded it. The judge and review jobs run the pull request's code with the
+job's runtime token, so that code can upload an artifact named `lockflight-evidence` or `lockflight-review`, or replace one.
+The generated workflow ties each artifact to the action's own upload step instead:
+
+- **Digests.** After the judge (or the review) has run, the action takes the SHA-256 digest of the files it is about to upload
+  (`action/artifacts.sh digest`: each file's hash and path, hashed as a whole) and outputs it with the upload's artifact id:
+  `evidence-sha256` and `evidence-artifact-id`, `review-sha256` and `review-artifact-id`. The jobs pass them on as job outputs.
+- **The report checks them** (`verify-artifacts: "true"`): it downloads each artifact by that id, not by name, and refuses one
+  whose files hash to anything else (FAIL) or that is gone although its job named files (ERROR), with the reason
+  `ARTIFACT_MISMATCH` ([reasons](reasons.md#artifact_mismatch)). An artifact whose job output no digest (the review job was
+  skipped, or a job stopped before the step) is not read at all, so a review the judge job's code uploaded under the review's
+  name is never joined.
+- **The policy commit.** The report jobs check out the event's base and work out the policy commit themselves. On a pull
+  request they use the judge job's `policy` output only when it is a commit of the target branch at or after the event's base
+  (the judge reads the tip when it runs, which may have moved since); anything else is replaced by the event's base, with an
+  error annotation, and the report then refuses evidence judged with another policy. On a push it is the previous commit, or
+  the pushed one, as the judge works it out. The engine the report installs and the policy it re-plans with therefore come
+  from the target branch, whatever the judge job outputs.
+
+What this does not do: the digest and the outputs are written by steps of the same job that ran the pull request's code, as
+the same user (root through `sudo` on GitHub-hosted runners). Code that keeps a process running after its step can rewrite the
+evidence before the digest is taken or the job's output files as later steps write them, so the evidence stays as trustworthy
+as the judge job, a strong guardrail, and the report's re-plan from git stays the check on it. The digests close the path by
+which a *different* step or job (the review job's code, or a substitute uploaded after the judge's) supplies the evidence; the
+policy check closes the path by which the judge job's outputs could make the report install another engine or read another
+policy. The workflow file itself is the pull request's copy on `pull_request`, so all of this holds against a hostile pull
+request only with a required code-owner review of `.github/workflows/**`, as below.
+
 `gates` keeps its meaning (the `pr` gates and green at head), so a ruleset that requires it keeps working; make
 `lockflight/judge` required when the team produces red commits.
 

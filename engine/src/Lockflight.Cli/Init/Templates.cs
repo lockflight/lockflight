@@ -75,7 +75,7 @@ internal static class Templates
     /// A commit whose <c>action/</c> is this tree's; the release needs it on main. <c>scripts/action-pin.sh</c> fails CI while
     /// <c>action/</c> differs from this commit's, and the release while it is not in the release commit's history.
     /// </summary>
-    public const string ActionCommit = "ad1778453619e848f073620a502cb2948fcf2b6e";
+    public const string ActionCommit = "94f7e1a1007a3e17537c431837d9e63e4b2b9da4";
 
     /// <summary>The pin's label: this engine's version (the release sets it with <c>-p:Version</c>), so a release writes <c># vX.Y.Z</c>.</summary>
     public static string ActionVersion => "v" + ToolPin.RunningVersion;
@@ -108,6 +108,8 @@ internal static class Templates
             outputs:
               verdict: ${{ steps.judge.outputs.verdict }}
               policy: ${{ steps.judge.outputs.policy }}
+              evidence-sha256: ${{ steps.judge.outputs.evidence-sha256 }}
+              evidence-artifact-id: ${{ steps.judge.outputs.evidence-artifact-id }}
             steps:
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
                 with:
@@ -140,6 +142,9 @@ internal static class Templates
             if: ${{ !cancelled() && github.event_name == 'pull_request' && vars.LOCKFLIGHT_REVIEW == 'true' && github.event.pull_request.head.repo.full_name == github.repository && needs.judge.outputs.verdict != 'FAIL' }}
             runs-on: ubuntu-latest
             environment: lockflight-review
+            outputs:
+              review-sha256: ${{ steps.review.outputs.review-sha256 }}
+              review-artifact-id: ${{ steps.review.outputs.review-artifact-id }}
             steps:
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
                 with:
@@ -159,6 +164,7 @@ internal static class Templates
                   node-version: 22
               # The action installs Claude Code with npm ci from its own lockfile: every package pinned by version and hash.
               - uses: {ActionReference}
+                id: review
                 env:
                   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
                 with:
@@ -177,9 +183,19 @@ internal static class Templates
             steps:
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
                 with:
-                  ref: ${{ needs.judge.outputs.policy || github.event.pull_request.base.sha || github.sha }}
+                  ref: ${{ github.event.pull_request.base.sha || github.sha }}
                   fetch-depth: 0
                   persist-credentials: false
+              - name: The policy commit, on the target branch
+                id: policy
+                env:
+                  LF_CLAIMED: ${{ needs.judge.outputs.policy }}
+                  LF_TARGET: ${{ github.base_ref }}
+                  LF_EVENT_BASE: ${{ github.event.pull_request.base.sha }}
+                  LF_BEFORE: ${{ github.event.before }}
+                  LF_SHA: ${{ github.sha }}
+                run: |
+        {ReportPolicy}
               - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
                 with:
                   dotnet-version: 10.0.x
@@ -187,12 +203,17 @@ internal static class Templates
                 with:
                   mode: report
                   head: ${{ github.event.pull_request.head.sha || github.sha }}
-                  base: ${{ needs.judge.outputs.policy || github.event.pull_request.base.sha || github.sha }}
+                  base: ${{ steps.policy.outputs.sha }}
                   branch: ${{ github.head_ref }}
                   event: ${{ github.event_name == 'pull_request' && 'pr' || 'push' }}
                   replan: "true"
                   context: gates
                   comment: "true"
+                  verify-artifacts: "true"
+                  evidence-sha256: ${{ needs.judge.outputs.evidence-sha256 }}
+                  evidence-artifact-id: ${{ needs.judge.outputs.evidence-artifact-id }}
+                  review-sha256: ${{ needs.review.outputs.review-sha256 }}
+                  review-artifact-id: ${{ needs.review.outputs.review-artifact-id }}
 
           judge-report:
             name: lockflight/judge
@@ -202,9 +223,19 @@ internal static class Templates
             steps:
               - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
                 with:
-                  ref: ${{ needs.judge.outputs.policy || github.event.pull_request.base.sha || github.sha }}
+                  ref: ${{ github.event.pull_request.base.sha || github.sha }}
                   fetch-depth: 0
                   persist-credentials: false
+              - name: The policy commit, on the target branch
+                id: policy
+                env:
+                  LF_CLAIMED: ${{ needs.judge.outputs.policy }}
+                  LF_TARGET: ${{ github.base_ref }}
+                  LF_EVENT_BASE: ${{ github.event.pull_request.base.sha }}
+                  LF_BEFORE: ${{ github.event.before }}
+                  LF_SHA: ${{ github.sha }}
+                run: |
+        {ReportPolicy}
               - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
                 with:
                   dotnet-version: 10.0.x
@@ -212,11 +243,16 @@ internal static class Templates
                 with:
                   mode: report
                   head: ${{ github.event.pull_request.head.sha || github.sha }}
-                  base: ${{ needs.judge.outputs.policy || github.event.pull_request.base.sha || github.sha }}
+                  base: ${{ steps.policy.outputs.sha }}
                   branch: ${{ github.head_ref }}
                   event: ${{ github.event_name == 'pull_request' && 'pr' || 'push' }}
                   replan: "true"
                   context: lockflight/judge
+                  verify-artifacts: "true"
+                  evidence-sha256: ${{ needs.judge.outputs.evidence-sha256 }}
+                  evidence-artifact-id: ${{ needs.judge.outputs.evidence-artifact-id }}
+                  review-sha256: ${{ needs.review.outputs.review-sha256 }}
+                  review-artifact-id: ${{ needs.review.outputs.review-artifact-id }}
 
         """;
 
@@ -346,12 +382,42 @@ internal static class Templates
     /// <summary>The indentation of a <c>run: |</c> body in the GitHub workflow.</summary>
     public const int WorkflowScriptIndent = 10;
 
+    /// <summary>
+    /// The report jobs' policy commit, worked out from the event and git, never from what a job that ran the pull request's code
+    /// says alone. On a pull request the judge's <c>policy</c> output counts only when it is a commit of the target branch at or
+    /// after the event's base (the judge fetched the tip when it ran, which may have moved since); anything else is replaced by the
+    /// event's base, and the report then refuses evidence judged with another policy. On a push it is the previous commit when the
+    /// clone has it, else the pushed commit, as the judge works it out. The commit is checked out for the report and written to
+    /// the step's <c>sha</c> output. Reads <c>LF_CLAIMED</c>, <c>LF_TARGET</c>, <c>LF_EVENT_BASE</c>, <c>LF_BEFORE</c> and
+    /// <c>LF_SHA</c>.
+    /// </summary>
+    public const string ReportPolicyScript = """
+        commit() { printf '%s' "$1" | grep -Eq '^([0-9a-f]{40}|[0-9a-f]{64})$' && git cat-file -e "$1^{commit}" 2>/dev/null; }
+        if [ -n "$LF_TARGET" ]; then
+          sha="$LF_EVENT_BASE"
+          tip=$(git rev-parse --verify --quiet "refs/remotes/origin/$LF_TARGET^{commit}" || true)
+          if commit "$LF_CLAIMED" && [ -n "$tip" ] && git merge-base --is-ancestor "$LF_EVENT_BASE" "$LF_CLAIMED" \
+            && git merge-base --is-ancestor "$LF_CLAIMED" "$tip"; then
+            sha="$LF_CLAIMED"
+          elif [ -n "$LF_CLAIMED" ]; then
+            claimed=$(printf '%s' "$LF_CLAIMED" | tr -cd '0-9a-f' | cut -c 1-64)
+            echo "::error::the judge job names the policy commit '$claimed', which is not on $LF_TARGET between the pull request's base and its tip; the report reads the policy of $LF_EVENT_BASE"
+          fi
+        else
+          sha="$LF_SHA"
+          if [ -n "$LF_BEFORE" ] && commit "$LF_BEFORE"; then sha="$LF_BEFORE"; fi
+        fi
+        git -c advice.detachedHead=false checkout --quiet --detach "$sha"
+        echo "sha=$(git rev-parse "$sha^{commit}")" >> "$GITHUB_OUTPUT"
+        """;
+
     private static string WithChannels(string template, IReadOnlyList<string> dotnetChannels) =>
         template.Replace("{ActionReference}", ActionReference, StringComparison.Ordinal)
             .Replace("{ActionCommit}", ActionCommit, StringComparison.Ordinal)
             .Replace("{ActionVersion}", ActionVersion, StringComparison.Ordinal)
             .Replace("{RestorePolicy}", CiShellScripts.Indent(CiShellScripts.RestorePolicy, WorkflowScriptIndent), StringComparison.Ordinal)
             .Replace("{InstallEngine}", CiShellScripts.Indent(CiShellScripts.InstallEngine, WorkflowScriptIndent), StringComparison.Ordinal)
+            .Replace("{ReportPolicy}", CiShellScripts.Indent(ReportPolicyScript, WorkflowScriptIndent), StringComparison.Ordinal)
             .Replace(
             DotnetVersionsPlaceholder,
             dotnetChannels.Count == 1 ? dotnetChannels[0] : "|\n" + string.Join('\n', dotnetChannels.Select(channel => DotnetVersionIndent + channel)),

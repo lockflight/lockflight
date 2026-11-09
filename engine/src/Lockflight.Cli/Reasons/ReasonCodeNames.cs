@@ -79,6 +79,7 @@ internal static class ReasonCodeNames
         (ReasonCode.StructuralChangeNewTest, "STRUCTURAL_CHANGE_NEW_TEST"),
         (ReasonCode.SurvivorNotStopped, "SURVIVOR_NOT_STOPPED"),
         (ReasonCode.SurvivorOutputHeld, "SURVIVOR_OUTPUT_HELD"),
+        (ReasonCode.ArtifactMismatch, "ARTIFACT_MISMATCH"),
     ];
 
     /// <summary>Every code that has a contract name: all but <see cref="ReasonCode.None"/> and <see cref="ReasonCode.Unknown"/>.</summary>
