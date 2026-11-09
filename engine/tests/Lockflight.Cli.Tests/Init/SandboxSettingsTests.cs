@@ -11,7 +11,7 @@ public sealed class SandboxSettingsTests : IDisposable
     [Fact]
     public void OnlyProtectedPathsThatExistAreDenied()
     {
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
         Write("dotnet-tools.json", "{}");
 
         IReadOnlyList<string> denied = SandboxSettings.DenyWrite(root.FullName, DefaultProtectedPaths.Globs);

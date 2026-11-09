@@ -14,8 +14,8 @@ public sealed class WorkspaceChecksTests : IDisposable
     public async Task AWorkspaceIsCheckedUnitByUnit()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        Write(Manifest.FileName, "version: 1\nunits:\n  - path: services/orders\n  - path: services/billing\n  - path: services/missing\n");
-        Write("services/billing/lockflight.yaml", "version: 1\n");
+        Write(Manifest.FileName, "version: 2\nunits:\n  - path: services/orders\n  - path: services/billing\n  - path: services/missing\n");
+        Write("services/billing/lockflight.yaml", "version: 2\n");
         Write("services/orders/global.json", """{ "sdk": { "version": "8.0.416", "rollForward": "latestFeature" } }""");
         await GitAsync(root.FullName, ["init", "-q"]);
         await GitAsync(Path.Combine(root.FullName, "services", "orders"), ["init", "-q"]);
@@ -37,7 +37,7 @@ public sealed class WorkspaceChecksTests : IDisposable
     public async Task AUserScopePluginAndAnIgnoredChildPass()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        Write(Manifest.FileName, "version: 1\nunits:\n  - path: services/orders\n");
+        Write(Manifest.FileName, "version: 2\nunits:\n  - path: services/orders\n");
         Write(".gitignore", "services/\n");
         Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
         File.WriteAllText(Path.Combine(home.FullName, ".claude", "settings.json"), """{ "enabledPlugins": { "lockflight@lockflight": true } }""");

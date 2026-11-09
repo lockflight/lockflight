@@ -8,7 +8,7 @@ standin="$here/../_fixtures/facts-standin.sh"
 [ -f "$standin" ] || { echo "scaffold: engine stand-in not found at $standin" >&2; exit 1; }
 mkdir -p .lockflight/bin .lockflight/ledger src/Shop
 cp "$standin" .lockflight/bin/lockflight && chmod +x .lockflight/bin/lockflight
-printf 'version: 1\n' > lockflight.yaml
+printf 'version: 2\n' > lockflight.yaml
 printf '.lockflight/\n' > .gitignore
 printf 'namespace Shop;\n\npublic sealed record Order(string Id);\n' > src/Shop/Order.cs
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)

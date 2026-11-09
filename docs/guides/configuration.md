@@ -18,7 +18,7 @@ branch's** copy.
 > required review is what protects it.
 
 ```yaml
-version: 1                      # optional; when present it must be 1
+version: 2                      # required: a manifest without it, or with version: 1, is refused
 
 protected:                      # extra globs the agent must not change (the built-in list always applies)
   - "src/Payments/**"
@@ -232,16 +232,17 @@ profile is capped; `baseline tests` and the `pr` profile use the full `gates.tim
 
 ### Manifest version 2
 
-`version: 2` adds the sections below. A manifest without `version`, or with `version: 1`, is read as version 2 with
-**migration defaults**: the checks version 2 added (`gates.quality.suppressions`, `gates.docs.references`,
-`approvals.check`) only report, so a new
-engine never turns a green repository red by itself. In a version 2 manifest they default to `fail`. A version 1 manifest that
-holds a version 2 section is an error naming the version it needs.
+`version: 2` adds the sections below, and it is the only version the engine reads. A manifest without `version`, or with
+`version: 1`, is refused with one line that names the fix: every command and hook that reads the manifest stops there (a
+hook still allows reading, as for any invalid manifest), and the CI judge exits `4` when the target branch's manifest is
+version 1. The fix is a person's: `lockflight update --project` migrates the file by editing its text (see
+[`update`](commands.md)), keeping every setting it had. The checks version 2 added (`gates.quality.suppressions`,
+`gates.docs.references`, `approvals.check`) are written as `report`, so the migration turns no green repository red; in a
+version 2 manifest written by hand they default to `fail`. `update --project --dry-run` shows the change first. The migration
+stays in `update` through the 1.x releases.
 
-`lockflight init` writes version 2. A version 1 manifest is named to the person at session start and by `doctor`
-(warn), and `lockflight update` migrates it (see [`update`](commands.md)); `update --project --dry-run` shows the change
-first. A Lockflight engine before version 2 refuses a version 2 manifest ("'version' must be 1"): update every clone's
-engine (`~/.lockflight/bin/lockflight update`) when the migration is merged.
+`lockflight init` writes version 2. A Lockflight engine before version 2 refuses a version 2 manifest ("'version' must be
+1"): update every clone's engine (`~/.lockflight/bin/lockflight update`) when the migration is merged.
 
 The published JSON Schema, [`lockflight.schema.json`](../../lockflight.schema.json) (a copy of
 [`schemas/lockflight.manifest.v2.json`](../../schemas/lockflight.manifest.v2.json)), gives an editor completion and checks.

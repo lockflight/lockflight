@@ -49,7 +49,7 @@ public sealed class DatabaseTests
 }
 CS
   git init -q; git config user.email dev@example.com
-  printf 'version: 1\ngates:\n  test:\n    stopFilter: "TestCategory!=Integration"\n' > lockflight.yaml
+  printf 'version: 2\ngates:\n  test:\n    stopFilter: "TestCategory!=Integration"\n  quality:\n    suppressions: report\n  docs:\n    references: report\napprovals:\n  check: report\n' > lockflight.yaml
   printf 'bin/\nobj/\n.lockflight/ledger/\n' > .gitignore; git add -A; git commit -qm base
   F=specs/20261014-120000-loans; mkdir -p $F
   cat > $F/spec.md <<'MD'

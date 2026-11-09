@@ -23,7 +23,7 @@ public sealed class StructuralChangePlanTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         repository = await GitHistoryFixture.CreateAsync(cancellationToken);
-        repository.Write("lockflight.yaml", "version: 1\n").Write("src/Shop/Shop.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n")
+        repository.Write("lockflight.yaml", "version: 2\n").Write("src/Shop/Shop.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n")
             .Write("src/Shop/Price.cs", "namespace Shop;\n\npublic sealed class Price\n{\n    public decimal Total(decimal net) => net * 1.2m;\n}\n");
         await repository.CommitAsync("init", cancellationToken);
     }

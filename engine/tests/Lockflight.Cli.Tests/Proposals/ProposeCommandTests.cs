@@ -13,7 +13,7 @@ public sealed class ProposeCommandTests : IDisposable
     private readonly DirectoryInfo scratch = Directory.CreateTempSubdirectory("lockflight-scratch-");
 
     public ProposeCommandTests() =>
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
 
     [Fact]
     public async Task AModifiedProtectedFileBecomesAPatchThatGitAppliesToTheNewContent()

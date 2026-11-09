@@ -46,7 +46,7 @@ public sealed class SuppressionsBaselineTests : IDisposable
     private async Task InitRepositoryAsync()
     {
         await GitAsync(["init", "-q", "-b", "main"]);
-        Write("lockflight.yaml", "version: 1\n");
+        Write("lockflight.yaml", "version: 2\n");
         Write(".gitignore", ".lockflight/\n");
         Write("src/Order.cs", "class Order { }\n");
         await CommitAsync("init");

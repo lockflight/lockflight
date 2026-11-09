@@ -51,12 +51,12 @@ public sealed class InputsHashTests : IDisposable
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await GitAsync(["init", "-q"]);
         await File.WriteAllTextAsync(Path.Combine(repository.FullName, ".gitignore"), "lockflight.yaml\n", cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(repository.FullName, "lockflight.yaml"), "version: 1\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(repository.FullName, "lockflight.yaml"), "version: 2\n", cancellationToken);
         await GitAsync(["add", "."]);
         await GitAsync(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"]);
 
         string? before = await InputsHash.ComputeAsync(repository.FullName, cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(repository.FullName, "lockflight.yaml"), "version: 1\ngates:\n  timeoutSeconds: 120\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(repository.FullName, "lockflight.yaml"), "version: 2\ngates:\n  timeoutSeconds: 120\n", cancellationToken);
         string? after = await InputsHash.ComputeAsync(repository.FullName, cancellationToken);
 
         Assert.NotNull(before);

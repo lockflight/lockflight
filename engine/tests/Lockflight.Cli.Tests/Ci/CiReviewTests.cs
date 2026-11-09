@@ -20,10 +20,10 @@ public sealed class CiReviewTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         repository = await GitHistoryFixture.CreateAsync(cancellationToken);
-        main = await repository.Write("lockflight.yaml", "version: 1\nreview:\n  model: opus\n  maxUsd: 1.50\n")
+        main = await repository.Write("lockflight.yaml", "version: 2\nreview:\n  model: opus\n  maxUsd: 1.50\n")
             .Write($"specs/{Feature}/spec.md", "- **FR-001**: The total applies the discount.\n").Write("src/Orders.cs", "namespace Shop;\n").CommitAsync("start", cancellationToken);
         await repository.CheckoutNewAsync(Feature, cancellationToken);
-        head = await repository.Write("lockflight.yaml", "version: 1\nreview:\n  model: haiku\n  maxUsd: 0.10\n")
+        head = await repository.Write("lockflight.yaml", "version: 2\nreview:\n  model: haiku\n  maxUsd: 0.10\n")
             .Write("src/Orders.cs", "namespace Shop;\n\npublic static class Orders { public static decimal Total(decimal price) => price; }\n")
             .Write($".lockflight/features/{Feature}/reviews/20260101-000000.json", """{"schema":"lockflight.review/v2","at":"2026-01-01T00:00:00Z","model":"opus","base":{"ref":"main","target":"main"},"notOfRecord":[],"findings":[{"id":"abc123abc123","severity":"major","outcome":"confirmed","state":"open","file":"src/Orders.cs","line":3,"title":"Planted","evidence":"x"}]}""")
             .CommitAsync("total", cancellationToken);

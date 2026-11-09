@@ -6,7 +6,7 @@
 set -u
 REPO=$(cd "$(dirname "$0")/../.." && pwd); MODEL="${1:-haiku}"
 WORK=$(mktemp -d); PROJ="$WORK/proj"; mkdir -p "$PROJ/.lockflight/bin" "$PROJ/src"
-printf 'version: 1\nprotected:\n  - "secrets/**"\n' > "$PROJ/lockflight.yaml"
+printf 'version: 2\nprotected:\n  - "secrets/**"\n' > "$PROJ/lockflight.yaml"
 printf '{ "sdk": { "version": "10.0.100" } }\n' > "$PROJ/global.json"
 cp "${ENGINE:?set ENGINE to a lockflight binary}" "$PROJ/.lockflight/bin/"
 "$PROJ/.lockflight/bin/$(basename "$ENGINE")" version > /dev/null 2>&1 || { echo "the engine does not run as a single file: $ENGINE"; exit 1; }

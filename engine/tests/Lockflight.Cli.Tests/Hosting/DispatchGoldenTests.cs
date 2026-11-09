@@ -106,7 +106,7 @@ public sealed class DispatchGoldenTests : IDisposable
             usage = await RenderAsync(rendered, args, new Dictionary<string, string> { [EnvironmentVariables.ClaudeCode] = "1" }, usage);
         }
 
-        File.WriteAllText(Path.Combine(directory.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(directory.FullName, Manifest.FileName), "version: 2\n");
         foreach (string[] args in InProject)
         {
             usage = await RenderAsync(rendered, args, new Dictionary<string, string>(), usage);

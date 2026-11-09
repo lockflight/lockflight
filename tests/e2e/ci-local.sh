@@ -17,7 +17,7 @@ PY="$(command -v python3 || command -v python)"
 cd "$W/repo" || exit 1
 export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
 git init -q -b main; git config commit.gpgsign false
-printf 'version: 1\n' > lockflight.yaml
+printf 'version: 2\ngates:\n  quality:\n    suppressions: report\n  docs:\n    references: report\napprovals:\n  check: report\n' > lockflight.yaml
 printf 'bin/\nobj/\n.lockflight/ledger/\n.lockflight/local/\n' > .gitignore
 git add -A; git commit -qm base; main=$(git rev-parse HEAD)
 calc=src/Shop.Api/PriceCalculator.cs; tests=tests/Shop.Tests/PriceCalculatorTests.cs

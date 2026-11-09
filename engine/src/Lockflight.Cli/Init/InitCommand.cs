@@ -163,14 +163,15 @@ internal sealed class InitCommand(CliContext context) : ICommand
 
         string manifestPath = Path.Combine(root, Manifest.FileName);
         string? existingManifestText = File.Exists(manifestPath) ? await File.ReadAllTextAsync(manifestPath, cancellationToken) : null;
-        Manifest? existingManifest = existingManifestText is null ? null : ManifestLocator.Discover(root).Manifest;
+        ManifestLoadResult existingLoad = existingManifestText is null ? ManifestLoadResult.NotFound : ManifestLocator.Discover(root);
+        Manifest? existingManifest = existingLoad.Manifest;
         // Only the very first init marks features: no manifest of either kind and no Lockflight state yet. A later init (which the
         // agent may run) must never exempt a feature from approval.
         bool firstInit = existingManifestText is null && ManifestLocator.Discover(root).Status == ManifestLoadStatus.NotFound
             && !Directory.Exists(Path.Combine(root, ".lockflight"));
         if (existingManifestText is not null && existingManifest is null)
         {
-            return await RefuseAsync($"{Manifest.FileName} does not load; fix it first (lockflight doctor shows the error); nothing was written");
+            return await RefuseAsync($"{Manifest.FileName} does not load ({existingLoad.Error?.Describe()}); fix it first; nothing was written");
         }
 
         if (InitAdoption.ShellProblem(existingManifest, init.Shell) is string shellProblem)

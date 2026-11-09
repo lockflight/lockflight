@@ -21,6 +21,9 @@ internal sealed class ManifestParser(string root, string path)
     /// <summary>The engine version reading the manifest, named in errors and compared with <c>requiresEngine</c>.</summary>
     public string Engine { get; init; } = ToolPin.RunningVersion;
 
+    /// <summary>Whether a version 1 manifest is read (with migration defaults) instead of refused: only the migration reads one.</summary>
+    public bool ReadsVersion1 { get; init; }
+
     public ManifestLoadResult Parse(string text)
     {
         YamlStream stream = new();
@@ -51,6 +54,13 @@ internal sealed class ManifestParser(string root, string path)
         if (ReadVersion(rootNode, out int version) is ManifestError versionError)
         {
             return ManifestLoadResult.Invalid(versionError);
+        }
+
+        if (version == ManifestVersions.Legacy && !ReadsVersion1)
+        {
+            return ManifestLoadResult.Invalid(Value(rootNode, "version") is YamlNode versionNode
+                ? errors.At(versionNode.Start, ManifestVersions.Version1Refusal)
+                : errors.AtStart(ManifestVersions.Version1Refusal));
         }
 
         if (ReadRequiresEngine(rootNode, version, out string? requiresEngine) is ManifestError engineError)

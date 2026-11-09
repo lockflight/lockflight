@@ -129,7 +129,7 @@ public sealed class StopPendingApprovalTests : IDisposable
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await ProcessRunner.RunAsync("git", ["init", "-q"], root.FullName, cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 1\nstop:\n  gate: true\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 2\nstop:\n  gate: true\n", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(root.FullName, ".gitignore"), ".lockflight/local/\n.lockflight/ledger/\n", cancellationToken);
         Directory.CreateDirectory(Feature.SpecDirectory);
         await File.WriteAllTextAsync(Feature.SpecPath, "- **FR-001**: A\n", cancellationToken);

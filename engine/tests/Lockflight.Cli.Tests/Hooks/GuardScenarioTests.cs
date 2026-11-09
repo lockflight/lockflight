@@ -11,7 +11,7 @@ public sealed class GuardScenarioTests : IDisposable
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-guard-");
 
     public GuardScenarioTests() =>
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
 
     [Theory]
     [InlineData("global.json")]

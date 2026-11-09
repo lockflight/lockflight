@@ -49,7 +49,7 @@ public sealed class GreenStepTests : IDisposable
     [Fact]
     public async Task ResettingAFeatureWithoutEvidenceSaysSo()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         Directory.CreateDirectory(Path.Combine(root.FullName, "specs", "f1"));
         using StringWriter output = new();
         using StringWriter error = new();

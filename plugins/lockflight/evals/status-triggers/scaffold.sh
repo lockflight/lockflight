@@ -6,7 +6,7 @@
 # the person.
 set -euo pipefail
 mkdir -p src/Shop.Api specs/001-shipping .lockflight/bin
-printf 'version: 1\nprotected: []\nstop:\n  gate: false\n  target: .\n' > lockflight.yaml
+printf 'version: 2\nprotected: []\nstop:\n  gate: false\n  target: .\n' > lockflight.yaml
 printf '.lockflight/\n' > .gitignore
 cat > src/Shop.Api/ShippingCalculator.cs <<'CS'
 namespace Shop.Api;

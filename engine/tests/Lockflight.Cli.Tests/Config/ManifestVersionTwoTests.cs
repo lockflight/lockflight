@@ -6,8 +6,9 @@ public sealed class ManifestVersionTwoTests
 {
     private const string Engine = "0.3.0";
 
+    // Version 1 is read here as the migration in update reads it; every other command refuses it (ManifestParserTests).
     private static ManifestLoadResult Parse(string yaml, string engine = Engine) =>
-        new ManifestParser("/repo", "/repo/lockflight.yaml") { Engine = engine }.Parse(yaml);
+        new ManifestParser("/repo", "/repo/lockflight.yaml") { Engine = engine, ReadsVersion1 = true }.Parse(yaml);
 
     private static Manifest Load(string yaml)
     {
@@ -41,7 +42,7 @@ public sealed class ManifestVersionTwoTests
     [Theory]
     [InlineData("version: 1\n")]
     [InlineData("protected: []\n")]
-    public void AVersionOneManifestIsReadWithMigrationDefaultsThatOnlyReport(string yaml)
+    public void TheMigrationReadsAVersionOneManifestWithDefaultsThatOnlyReport(string yaml)
     {
         Manifest manifest = Load(yaml);
 

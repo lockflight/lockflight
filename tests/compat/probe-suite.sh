@@ -40,7 +40,7 @@ checkexp() { # $1=name $2=expected exit $3=entrypoint $4=attended $5=json [$6=te
 
 plain="$WORK/plain"; mkdir -p "$plain"
 proj="$WORK/proj"; mkdir -p "$proj/src"
-printf 'protected:\n  - "secrets/**"\n  - "lockflight.yaml"\n' > "$proj/lockflight.yaml"
+printf 'version: 2\nprotected:\n  - "secrets/**"\n  - "lockflight.yaml"\n' > "$proj/lockflight.yaml"
 version=$("$ENGINE" version)
 printf '{"version":1,"isRoot":true,"tools":{"lockflight.cli":{"version":"%s","commands":["lockflight"]}}}' "$version" > "$proj/dotnet-tools.json"
 
@@ -127,7 +127,7 @@ check "linked: malformed JSON"            2 "$proj"  '{"cwd":"'"$proj"'","tool_n
 checktask "linked, stop gate off: task completed" 0 "$proj"
 # With the stop gate on, a task is completed only after the gate passed for the tree; nothing has passed here.
 gated="$WORK/gated"; mkdir -p "$gated/.lockflight/bin"
-printf 'stop:\n  gate: true\n' > "$gated/lockflight.yaml"; cp "$proj/dotnet-tools.json" "$gated/"
+printf 'version: 2\nstop:\n  gate: true\n' > "$gated/lockflight.yaml"; cp "$proj/dotnet-tools.json" "$gated/"
 cp "$linked" "$proj/.lockflight/bin/lockflight.sha256" "$gated/.lockflight/bin/"
 printf '.lockflight/\n' > "$gated/.gitignore"
 git -C "$gated" init -q && git -C "$gated" add -A && git -C "$gated" -c user.email=p@p -c user.name=p commit -qm probe

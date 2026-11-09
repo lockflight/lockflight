@@ -21,7 +21,7 @@ public sealed class ApprovalLedgerTests : IDisposable
         await ProcessRunner.RunAsync("git", ["init", "-q"], root.FullName, cancellationToken);
         await ProcessRunner.RunAsync("git", ["config", "user.email", ApproverEmail], root.FullName, cancellationToken);
         await ProcessRunner.RunAsync("git", ["config", "user.name", ApproverName], root.FullName, cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n", cancellationToken);
         string specDirectory = Path.Combine(root.FullName, "specs", "001-orders");
         Directory.CreateDirectory(specDirectory);
         string spec = Path.Combine(specDirectory, "spec.md");
@@ -49,7 +49,7 @@ public sealed class ApprovalLedgerTests : IDisposable
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await ProcessRunner.RunAsync("git", ["init", "-q"], root.FullName, cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n", cancellationToken);
         string specDirectory = Path.Combine(root.FullName, "specs", "001-orders");
         Directory.CreateDirectory(specDirectory);
         await File.WriteAllTextAsync(Path.Combine(specDirectory, "spec.md"), ApprovableArtifacts.Spec, cancellationToken);

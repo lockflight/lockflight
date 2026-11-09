@@ -12,11 +12,11 @@ public sealed class AgentWorktreeGuardTests : IDisposable
 
     public AgentWorktreeGuardTests()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         worktree = Path.Combine(root.FullName, ".claude", "worktrees", "agent-1");
         Directory.CreateDirectory(worktree);
         File.WriteAllText(Path.Combine(worktree, ".git"), "gitdir: ../../../.git/worktrees/agent-1\n");
-        File.WriteAllText(Path.Combine(worktree, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(worktree, Manifest.FileName), "version: 2\n");
     }
 
     [Theory]

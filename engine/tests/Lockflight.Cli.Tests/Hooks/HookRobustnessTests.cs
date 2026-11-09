@@ -12,7 +12,7 @@ public sealed class HookRobustnessTests : IDisposable
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-robust-");
 
     public HookRobustnessTests() =>
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
 
     [Theory]
     [InlineData("pre-tool-use", true)]
@@ -120,7 +120,7 @@ public sealed class HookRobustnessTests : IDisposable
     public async Task TheSessionBannerStaysShortWithAHugeManifest()
     {
         string globs = string.Concat(Enumerable.Range(0, 2000).Select(index => $"  - generated/{index}/**\n"));
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n" + globs);
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n" + globs);
 
         (_, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName);
 
@@ -209,14 +209,6 @@ public sealed class HookRobustnessTests : IDisposable
         (_, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName, environment);
 
         Assert.False(JsonDocument.Parse(output).RootElement.TryGetProperty("systemMessage", out _));
-    }
-
-    [Fact]
-    public async Task AVersionOneManifestIsNamedToThePersonAtSessionStart()
-    {
-        (_, string output, _) = await TestConsole.RunAsync(["hook", "session-start"], BashPayload("true"), projectRoot.FullName);
-
-        Assert.Contains("lockflight.yaml is version 1", JsonDocument.Parse(output).RootElement.GetProperty("systemMessage").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

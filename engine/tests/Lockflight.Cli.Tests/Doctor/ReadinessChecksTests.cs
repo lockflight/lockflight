@@ -83,7 +83,7 @@ public sealed class ReadinessChecksTests : IDisposable
     [Fact]
     public async Task ACoverageCollectorWithoutItsPackageInATestProjectFails()
     {
-        Write(Manifest.FileName, "version: 1\ngates:\n  coverage:\n    collector: microsoft\n");
+        Write(Manifest.FileName, "version: 2\ngates:\n  coverage:\n    collector: microsoft\n");
         Write("global.json", """{ "test": { "runner": "Microsoft.Testing.Platform" } }""");
         Write("tests/A.Tests/A.Tests.csproj", """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit.v3.mtp-v2" Version="4.0.2" /></ItemGroup></Project>""");
         Write("tests/B.Tests/B.Tests.csproj", """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit.v3.mtp-v2" Version="4.0.2" /></ItemGroup></Project>""");
@@ -100,7 +100,7 @@ public sealed class ReadinessChecksTests : IDisposable
     [Fact]
     public async Task OnVSTestTheCoverletCollectorIsTheExpectedPackage()
     {
-        Write(Manifest.FileName, "version: 1\ngates:\n  coverage:\n    collector: coverlet\n");
+        Write(Manifest.FileName, "version: 2\ngates:\n  coverage:\n    collector: coverlet\n");
         Write("tests/A.Tests/A.Tests.csproj", """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit" Version="2.9.2" /><PackageReference Include="coverlet.collector" Version="6.0.2" /></ItemGroup></Project>""");
         Write("tests/B.Tests/B.Tests.csproj", """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit" Version="2.9.2" /></ItemGroup></Project>""");
 
@@ -125,7 +125,7 @@ public sealed class ReadinessChecksTests : IDisposable
     [Fact]
     public async Task NoCoverageCheckRunsWithoutACollector()
     {
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
 
         IReadOnlyList<DoctorCheck> checks = await ReadinessChecks.RunAsync(root.FullName, userHome: null, nugetPackages: null, gitleaks: null, EnvironmentReader.Of(new Dictionary<string, string>()), TimeProvider.System, NoNetwork, TestContext.Current.CancellationToken);
 

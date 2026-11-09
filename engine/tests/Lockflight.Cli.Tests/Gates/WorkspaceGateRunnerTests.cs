@@ -137,7 +137,7 @@ public sealed class WorkspaceGateRunnerTests : IDisposable
     public async Task AMonorepoUnitsFingerprintIgnoresCommitsOutsideItAndFollowsCommitsInsideIt()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await File.WriteAllTextAsync(Path.Combine(shell.FullName, Manifest.FileName), "version: 1\nunits:\n  - path: svc/a\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, Manifest.FileName), "version: 2\nunits:\n  - path: svc/a\n", cancellationToken);
         Directory.CreateDirectory(Path.Combine(shell.FullName, "svc", "a"));
         await File.WriteAllTextAsync(Path.Combine(shell.FullName, "svc", "a", "A.cs"), "class A {}\n", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(shell.FullName, "NOTES.md"), "notes\n", cancellationToken);
@@ -188,7 +188,7 @@ public sealed class WorkspaceGateRunnerTests : IDisposable
 
     private async Task<Manifest> CreateWorkspaceAsync(string extraUnits, CancellationToken cancellationToken)
     {
-        await File.WriteAllTextAsync(Path.Combine(shell.FullName, Manifest.FileName), $"version: 1\nunits:\n  - path: web/admin\n{extraUnits}", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, Manifest.FileName), $"version: 2\nunits:\n  - path: web/admin\n{extraUnits}", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(shell.FullName, ".gitignore"), "web/\nservices/\n.lockflight/\n", cancellationToken);
         await GitAsync(shell.FullName, ["init", "-q"]);
         await CommitAllAsync("shell");

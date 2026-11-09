@@ -80,7 +80,7 @@ public sealed partial class ShimSyncTests
         DirectoryInfo project = Directory.CreateTempSubdirectory("lockflight-shim-api-");
         try
         {
-            File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 1\n");
+            File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 2\n");
 
             (_, _, string error) = await TestConsole.RunAsync(
                 ["hook", "pre-tool-use"], "{}", project.FullName, new Dictionary<string, string> { [EnvironmentVariables.PluginApi] = "99" });
@@ -101,7 +101,7 @@ public sealed partial class ShimSyncTests
         DirectoryInfo project = Directory.CreateTempSubdirectory("lockflight-shim-event-");
         try
         {
-            File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 1\n");
+            File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 2\n");
 
             (_, _, string error) = await TestConsole.RunAsync(["hook", "not-an-event"], "{}", project.FullName);
 

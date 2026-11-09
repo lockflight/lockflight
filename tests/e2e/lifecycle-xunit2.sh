@@ -23,7 +23,7 @@ expect() { # expect <exit code> <description> [<text the output must contain>] -
 }
 human() { env -u CLAUDECODE "$E" "$@"; }
 cd "$W" || exit 1; export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
-git init -q; git config user.email dev@example.com; printf 'version: 1\n' > lockflight.yaml
+git init -q; git config user.email dev@example.com; printf 'version: 2\ngates:\n  quality:\n    suppressions: report\n  docs:\n    references: report\napprovals:\n  check: report\n' > lockflight.yaml
 printf 'bin/\nobj/\n.lockflight/ledger/\n' > .gitignore; git add -A; git commit -qm base
 F=specs/20261012-120000-line-count; mkdir -p $F
 cat > $F/spec.md <<'MD'

@@ -18,7 +18,7 @@ public sealed class SessionResetTests : IDisposable
 
     public SessionResetTests()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         Directory.CreateDirectory(Path.Combine(root.FullName, "specs", "f1"));
     }
 

@@ -13,7 +13,7 @@ public sealed class ProposePathEdgeCaseTests : IDisposable
     private readonly DirectoryInfo scratch = Directory.CreateTempSubdirectory("lockflight-scratch-edge-");
 
     public ProposePathEdgeCaseTests() =>
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
 
     [Fact]
     public async Task AParentSegmentThatStaysInsideTheProjectProposesTheFileItReaches()

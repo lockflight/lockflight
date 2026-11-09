@@ -199,10 +199,9 @@ internal static class ReadinessChecks
 
     private static DoctorCheck CheckManifest(string root) => ManifestLocator.Discover(root) switch
     {
-        { Manifest: Manifest { Version: ManifestVersions.Legacy } } =>
-            new("manifest", CheckStatus.Warn, $"{Manifest.FileName} is version 1, read with migration defaults (the newer checks only report)",
-                $"a person runs {EngineCommand.UserInstall} update in a separate terminal (update --project --dry-run shows the change first)"),
         { Status: ManifestLoadStatus.Loaded } => new("manifest", CheckStatus.Pass, $"{Manifest.FileName} is valid (version 2)", null),
+        { Error: { Message: string message } error } when message == ManifestVersions.Version1Refusal =>
+            new("manifest", CheckStatus.Fail, error.Describe(), $"a person runs {EngineCommand.Name} update --project in a separate terminal (--dry-run shows the change first)"),
         { Error: ManifestError error } => new("manifest", CheckStatus.Fail, error.Describe(), $"fix {Manifest.FileName} (a human edit; it is protected)"),
         _ => new("manifest", CheckStatus.Fail, $"no {Manifest.FileName}", $"{EngineCommand.Name} init"),
     };

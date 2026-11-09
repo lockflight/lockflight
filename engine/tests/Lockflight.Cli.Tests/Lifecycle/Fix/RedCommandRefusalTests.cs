@@ -6,7 +6,7 @@ namespace Lockflight.Cli.Tests.Lifecycle.Fix;
 /// <summary>The refusals that need no build: each exits with its code before anything is built, and HEAD does not move.</summary>
 public sealed class RedCommandRefusalTests : RedCommandScenario
 {
-    private protected override string ManifestText => "version: 1\nci:\n  maxRedCommits: 1\n";
+    private protected override string ManifestText => "version: 2\nci:\n  maxRedCommits: 1\n";
 
     [Fact]
     public async Task ARedOverTheBaseBranchsCapIsRefused()
@@ -14,7 +14,7 @@ public sealed class RedCommandRefusalTests : RedCommandScenario
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         string head = await repository.WriteCode(Buggy, RoundingTest).CommitAsync("test: red", cancellationToken, null, "Lockflight-Red: 1");
         // The working tree's manifest raises the cap: the base branch's value counts.
-        repository.Write("lockflight.yaml", "version: 1\nci:\n  maxRedCommits: 5\n");
+        repository.Write("lockflight.yaml", "version: 2\nci:\n  maxRedCommits: 5\n");
 
         (ExitCode exitCode, _, string error) = await RedAsync();
 

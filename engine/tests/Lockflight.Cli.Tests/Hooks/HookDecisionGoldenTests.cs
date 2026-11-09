@@ -18,7 +18,7 @@ namespace Lockflight.Cli.Tests.Hooks;
 public sealed partial class HookDecisionGoldenTests
 {
     private const string ManifestText = """
-        version: 1
+        version: 2
         protected:
           - "secrets/**"
         stop:
@@ -57,8 +57,8 @@ public sealed partial class HookDecisionGoldenTests
         new("a write to a prompt queue file", "pre-tool-use", root => ToolCall(root, "Write", ".claude/scheduled_tasks.json")),
         new("a protected file in an agent worktree", "pre-tool-use", root => ToolCall(root, "Edit", ".claude/worktrees/w/lockflight.yaml"), Setup: AddWorktree),
         new("input that is not JSON", "pre-tool-use", _ => "not json"),
-        new("an invalid manifest, then a write", "pre-tool-use", root => ToolCall(root, "Edit", "src/A.cs"), Setup: root => File.WriteAllText(Path.Combine(root, Manifest.FileName), "nonsense: 1\n")),
-        new("an invalid manifest, then a read", "pre-tool-use", root => ToolCall(root, "Read", "src/A.cs"), Setup: root => File.WriteAllText(Path.Combine(root, Manifest.FileName), "nonsense: 1\n")),
+        new("an invalid manifest, then a write", "pre-tool-use", root => ToolCall(root, "Edit", "src/A.cs"), Setup: root => File.WriteAllText(Path.Combine(root, Manifest.FileName), "version: 2\nnonsense: 1\n")),
+        new("an invalid manifest, then a read", "pre-tool-use", root => ToolCall(root, "Read", "src/A.cs"), Setup: root => File.WriteAllText(Path.Combine(root, Manifest.FileName), "version: 2\nnonsense: 1\n")),
         new("another plugin API, an edit", "pre-tool-use", root => ToolCall(root, "Edit", "src/A.cs"), Environment: OtherPluginApi),
         new("another plugin API, a read", "pre-tool-use", root => ToolCall(root, "Read", "src/A.cs"), Environment: OtherPluginApi),
         new("another plugin API, Stop", "stop", root => Event(root, "Stop"), Environment: OtherPluginApi),

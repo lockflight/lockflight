@@ -10,7 +10,7 @@ public sealed class PathSpellingGuardTests : IDisposable
 
     public PathSpellingGuardTests()
     {
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n  - \"docs/caf\u00e9.md\"\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n  - \"docs/caf\u00e9.md\"\n");
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".lockflight", "local"));
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "docs"));
     }

@@ -13,7 +13,7 @@ public sealed class RedBaseTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         repository = await GitHistoryFixture.CreateAsync(cancellationToken);
-        first = await repository.Write("lockflight.yaml", "version: 1\n").CommitAsync("init", cancellationToken);
+        first = await repository.Write("lockflight.yaml", "version: 2\n").CommitAsync("init", cancellationToken);
     }
 
     public ValueTask DisposeAsync()

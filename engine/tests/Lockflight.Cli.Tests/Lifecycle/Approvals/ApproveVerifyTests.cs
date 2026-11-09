@@ -10,7 +10,7 @@ public sealed class ApproveVerifyTests : IDisposable
 {
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-verify-");
 
-    public ApproveVerifyTests() => File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+    public ApproveVerifyTests() => File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
     [Theory]
     [InlineData("bogus")]

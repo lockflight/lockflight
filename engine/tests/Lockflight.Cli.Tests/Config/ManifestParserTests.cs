@@ -4,7 +4,21 @@ namespace Lockflight.Cli.Tests.Config;
 
 public sealed class ManifestParserTests
 {
-    private static ManifestLoadResult Parse(string yaml) => new ManifestParser("/repo", "/repo/lockflight.yaml").Parse(yaml);
+    // The section readers are the same for both versions; version 1 is read here as the migration in update reads it.
+    private static ManifestLoadResult Parse(string yaml) => new ManifestParser("/repo", "/repo/lockflight.yaml") { ReadsVersion1 = true }.Parse(yaml);
+
+    [Theory]
+    [InlineData("version: 1\nprotected:\n  - a/**\n", 1, 10)]
+    [InlineData("# old\nprotected:\n  - a/**\n", 1, 1)]
+    public void AVersionOneManifestIsRefusedWithTheMigrationCommand(string yaml, int line, int column)
+    {
+        ManifestLoadResult result = new ManifestParser("/repo", "/repo/lockflight.yaml").Parse(yaml);
+
+        Assert.Equal(ManifestLoadStatus.Invalid, result.Status);
+        Assert.Equal((line, column), (result.Error!.Line, result.Error.Column));
+        Assert.Equal(ManifestVersions.Version1Refusal, result.Error.Message);
+        Assert.Contains("update --project", result.Error.Message, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void AValidManifestYieldsProtectedGlobsAndTheStopGate()
@@ -225,7 +239,7 @@ public sealed class ManifestParserTests
         DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-manifest-");
         try
         {
-            File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "protected:\n  - a/**\n");
+            File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\nprotected:\n  - a/**\n");
             DirectoryInfo nested = Directory.CreateDirectory(Path.Combine(root.FullName, "src", "deep"));
 
             ManifestLoadResult result = ManifestLocator.Discover(nested.FullName);

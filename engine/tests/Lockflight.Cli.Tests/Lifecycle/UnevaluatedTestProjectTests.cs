@@ -12,7 +12,7 @@ public sealed class UnevaluatedTestProjectTests : IDisposable
 
     public UnevaluatedTestProjectTests()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         File.WriteAllText(Path.Combine(root.FullName, "Shop.slnx"), "<Solution />\n");
         Directory.CreateDirectory(Path.Combine(root.FullName, "tests", "Broken.Tests"));
         File.WriteAllText(

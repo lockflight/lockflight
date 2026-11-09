@@ -16,7 +16,7 @@ internal static class TaskCompletedCanaries
 {
     public const string Name = "task completed: a task marked done without a stop-gate PASS for the tree is refused";
 
-    private const string ManifestText = "version: 1\nstop:\n  gate: true\nunits:\n  - path: web\n    kind: none\n";
+    private const string ManifestText = "version: 2\nstop:\n  gate: true\nunits:\n  - path: web\n    kind: none\n";
     private const string PageFile = "web/index.html";
 
     public static async Task<CanaryReport> RunAsync(TimeProvider time, CancellationToken cancellationToken)

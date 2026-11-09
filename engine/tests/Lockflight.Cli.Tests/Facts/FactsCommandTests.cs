@@ -13,7 +13,7 @@ public sealed class FactsCommandTests : IDisposable
     [Fact]
     public async Task TheJsonNamesItsSchemaAndTheEffectiveProtectedPaths()
     {
-        Write(Manifest.FileName, "protected:\n  - secrets/**\n");
+        Write(Manifest.FileName, "version: 2\nprotected:\n  - secrets/**\n");
         await CommitAsync();
 
         using JsonDocument facts = await FactsAsync();
@@ -55,7 +55,7 @@ public sealed class FactsCommandTests : IDisposable
     [Fact]
     public async Task EachProfileListsItsStepsWithTheirModes()
     {
-        Write(Manifest.FileName, "gates:\n  quality:\n    suppressions: fail\n");
+        Write(Manifest.FileName, "version: 2\ngates:\n  quality:\n    suppressions: fail\n");
         await CommitAsync();
 
         using JsonDocument facts = await FactsAsync();
@@ -98,7 +98,7 @@ public sealed class FactsCommandTests : IDisposable
     [Fact]
     public async Task InstructionFilesArchitectureTestsAndTheLedgerAreListed()
     {
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
         Write("CLAUDE.md", "- Never edit generated code.\n");
         Write(".claude/skills/release/SKILL.md", "- Always tag.\n");
         Write("docs/guide.md", "- Not an instruction file.\n");
@@ -126,7 +126,7 @@ public sealed class FactsCommandTests : IDisposable
     [InlineData("tests/Shop.UnitTests/ArchitectureTests.cs")]
     public async Task TestsInAnArchitectureTestProjectCountWithoutAnArchitectureLibrary(string path)
     {
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
         Write(path, "public sealed class SourceLayoutTests\n{\n    [Fact]\n    public void NoFileInDomainReadsTheDatabase() { }\n}\n");
         Write($"{path[..path.LastIndexOf('/')]}/SourceFiles.cs", "internal static class SourceFiles { }\n");
         Write("tests/Shop.Tests/PriceTests.cs", "public sealed class PriceTests\n{\n    [Fact]\n    public void Rounds() { }\n}\n");
@@ -142,7 +142,7 @@ public sealed class FactsCommandTests : IDisposable
     [Fact]
     public async Task AnNUnitTestInAnArchitectureTestProjectCounts()
     {
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
         Write("tests/Shop.ArchitectureTests/SourceLayoutTests.cs", "public sealed class SourceLayoutTests\n{\n    [Test]\n    public void NoFileInDomainReadsTheDatabase() { }\n}\n");
         await CommitAsync();
 
@@ -159,7 +159,7 @@ public sealed class FactsCommandTests : IDisposable
     [InlineData("tests/Shop.Search.Tests/SourceLayoutTests.cs")]
     public async Task TestsOutsideAnArchitectureTestProjectNeedAnArchitectureLibrary(string path)
     {
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
         Write(path, "public sealed class SourceLayoutTests\n{\n    [Fact]\n    public void NoFileInDomainReadsTheDatabase() { }\n}\n");
         await CommitAsync();
 
@@ -171,7 +171,7 @@ public sealed class FactsCommandTests : IDisposable
     [Fact]
     public async Task TheSameTreeGivesTheSameBytes()
     {
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
         Write(".editorconfig", "dotnet_diagnostic.CA1506.severity = warning\n");
         await CommitAsync();
 
@@ -193,7 +193,7 @@ public sealed class FactsCommandTests : IDisposable
     [Fact]
     public async Task WithoutJsonItPrintsASummary()
     {
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
         await CommitAsync();
 
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["facts"], string.Empty, root.FullName);
