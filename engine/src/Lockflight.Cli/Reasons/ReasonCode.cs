@@ -258,4 +258,10 @@ internal enum ReasonCode
     /// so the engine stopped waiting for it (<c>SURVIVOR_OUTPUT_HELD</c>).
     /// </summary>
     SurvivorOutputHeld = 75,
+
+    /// <summary>
+    /// The report refused an artifact of the judge or the review: its files do not hash to the digest the job that uploads it
+    /// named after the upload, or it is gone although that job named files (<c>ARTIFACT_MISMATCH</c>).
+    /// </summary>
+    ArtifactMismatch = 76,
 }

@@ -37,8 +37,9 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
     public const string ReviewFileName = "review-result.json";
 
     /// <summary>
-    /// The short evidence the CI action's engine lock check leaves beside the judge's when it refuses the pin and the judge never
-    /// runs: <c>lockflight.ci-evidence/v1</c> with <c>judge</c> <c>refused</c> and the failed check as the reason and why.
+    /// The short evidence the CI action leaves when it refuses: its engine lock check beside the judge's evidence, when the judge
+    /// never runs; its artifact check in place of the artifacts, when they are not the ones their jobs uploaded.
+    /// <c>lockflight.ci-evidence/v1</c> with <c>judge</c> <c>refused</c> and the failed check as the reason and why.
     /// </summary>
     public const string RefusalFileName = "refused.json";
 
@@ -321,9 +322,10 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
             : ReasonCodeNames.Parse(node?["reason"] is JsonValue value && value.TryGetValue(out string? name) ? name : null);
 
     /// <summary>
-    /// The verdict of record when the judge never ran because the action's engine lock check refused the pin: FAIL (or ERROR, when
-    /// the refusal says so) with the refusal's reason and why. Null when there is no readable refusal about this head, so a missing
-    /// judge stays "did not finish". A refusal can never pass: any other verdict it names is read as ERROR.
+    /// The verdict of record when the CI action refused what the report would read: the engine pin, before the judge ran
+    /// (<c>ENGINE_LOCK_REFUSED</c>), or an artifact that is not the one its job uploaded (<c>ARTIFACT_MISMATCH</c>). FAIL (or
+    /// ERROR, when the refusal says so) with the refusal's reason and why. Null when there is no readable refusal about this head,
+    /// so a missing judge stays "did not finish". A refusal can never pass: any other verdict it names is read as ERROR.
     /// </summary>
     public static JsonObject? Refused(CiArtifactReading refusal, string head)
     {
@@ -335,7 +337,7 @@ internal sealed class CiReportCommand(CliContext context) : ICommand
 
         CheckVerdict verdict = CheckVerdictNames.Parse(Text(check, "verdict") ?? string.Empty) is CheckVerdict.Fail ? CheckVerdict.Fail : CheckVerdict.Error;
         ReasonCode reason = ReasonCodeNames.Parse(Text(check, "reason"));
-        string why = CiEvidence.Cap(Text(check, "why") is { Length: > 0 } stated ? stated : "the engine lock check refused the engine pin before the judge ran");
+        string why = CiEvidence.Cap(Text(check, "why") is { Length: > 0 } stated ? stated : "the CI action refused the engine pin or an artifact before the report read it");
         return ShortForm(head, JudgeRefused, verdict, reason, why);
     }
 
