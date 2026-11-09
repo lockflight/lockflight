@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lockflight/lockflight/main/schemas/lockflight.engine-lock.v1.json",
+  "title": "lockflight.engine-lock/v1",
+  "description": "The engine pin by hash, .lockflight/engine.lock, written by lockflight init and update. Policy a person commits: the engine reads it strictly. Rules the engine checks beyond this schema: the version is compared with the engine reading it, and the git-ignored local lock is the only place a development lock is accepted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "package", "version", "channel", "installScript", "binaries"],
+  "properties": {
+    "schema": { "const": "lockflight.engine-lock/v1" },
+    "package": { "type": "string", "pattern": "^[Ll][Oo][Cc][Kk][Ff][Ll][Ii][Gg][Hh][Tt]\\.[Cc][Ll][Ii]$", "description": "Lockflight.Cli, in any letter case." },
+    "version": { "$ref": "#/$defs/version" },
+    "channel": { "enum": ["release", "development"], "description": "A committed lock is always release; development only in .lockflight/local/engine.lock." },
+    "installScript": { "$ref": "#/$defs/hash", "description": "The SHA-256 of the vendored .lockflight/ci/install.sh." },
+    "binaries": {
+      "type": "object",
+      "description": "Platform (runtime identifier) to the SHA-256 of the extracted executable. A release lock names linux-arm64, linux-x64, osx-arm64, osx-x64 and win-x64; readers ignore a platform they do not know.",
+      "additionalProperties": { "$ref": "#/$defs/hash" },
+      "minProperties": 1
+    }
+  },
+  "if": { "properties": { "channel": { "const": "release" } } },
+  "then": { "properties": { "binaries": { "required": ["linux-arm64", "linux-x64", "osx-arm64", "osx-x64", "win-x64"] } } },
+  "$defs": {
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$",
+      "description": "SemVer 2.0 without build metadata."
+    },
+    "hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": { "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+    }
+  }
+}

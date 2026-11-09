@@ -27,7 +27,7 @@ public sealed class ContractSchemaSyncTests : IDisposable
     private const string CiEvidenceId = "lockflight.ci-evidence.v1";
     private const string CiReviewId = "lockflight.ci-review.v1";
 
-    /// <summary>The frozen list (contracts-0.3.md §4.5), the referenced schemas before the one that references them; the trailer is plain text.</summary>
+    /// <summary>The public JSON contracts (docs/guides/contracts.md), the referenced schemas before the one that references them.</summary>
     private static readonly string[] Frozen = ["lockflight.manifest.v2", EngineLockId, EngineHashesId, Approval, Result, Blocked, CiEvidenceId, CiReviewId];
 
     private static readonly Dictionary<string, JsonSchema> Schemas = Load();

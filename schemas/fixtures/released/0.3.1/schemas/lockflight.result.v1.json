@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/lockflight/lockflight/main/schemas/lockflight.result.v1.json",
+  "title": "lockflight.result/v1",
+  "description": "The gate result envelope (gate run --result <file>, and the gates section of the CI evidence). Evidence the engine writes: readers ignore unknown properties. Consumers key on steps[].id, never on the display name.",
+  "type": "object",
+  "required": [
+    "schema",
+    "engineVersion",
+    "at",
+    "target",
+    "profile",
+    "base",
+    "head",
+    "verdict",
+    "steps"
+  ],
+  "properties": {
+    "schema": {
+      "const": "lockflight.result/v1"
+    },
+    "engineVersion": {
+      "type": "string"
+    },
+    "at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "target": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string",
+      "description": "edit, stop or pr."
+    },
+    "base": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The commit --base named; null without --base."
+    },
+    "head": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The commit HEAD pointed at; null outside a repository."
+    },
+    "verdict": {
+      "$ref": "#/$defs/verdict"
+    },
+    "testsTotal": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "unit",
+          "mode",
+          "toolExitCode",
+          "verdict",
+          "durationMs",
+          "detail"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable step id. Known: build, test, format, coverage.patch, policy.protected, projects.affected, security.deps, security.secrets, quality.suppressions, docs.references, ef.pendingModelChanges; a workspace run's per-unit rows carry the unit's path. More may be added."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name; may change between versions."
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The unit of a workspace row; null outside a workspace."
+          },
+          "mode": {
+            "type": "string",
+            "description": "fail, report, off or auto; more may be added."
+          },
+          "toolExitCode": {
+            "type": "integer"
+          },
+          "verdict": {
+            "$ref": "#/$defs/verdict"
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "verdict": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT-EARNED",
+        "ERROR",
+        "N/A"
+      ]
+    }
+  }
+}

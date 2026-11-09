@@ -48,7 +48,7 @@ see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
 | **Plugin** | The local assistant: Claude Code skills (`/lockflight:*`) and hooks that call the engine. It holds no policy of its own and is never of record. It is one of three [install levels](guides/install-levels.md); the others are CI only and CI with Claude Code's native settings. | [`plugins/lockflight/`](../plugins/lockflight/) |
 | **Crew (optional)** | A second plugin with agents briefed for the lifecycle: a spec writer, a planner and a test author. Each runs an engine check as its verdict; none is a judge. | [`plugins/lockflight-crew/`](../plugins/lockflight-crew/) |
 | **Spec Kit preset (optional)** | Templates and commands layered over [Spec Kit](https://github.com/github/spec-kit) so that its output follows the [spec contract](guides/spec-contract.md): requirement IDs, test-first tasks. A preset, not a fork. | [`plugins/lockflight/speckit-preset/`](../plugins/lockflight/speckit-preset/) |
-| **Project files** | `lockflight.yaml` (the policy, version 2, with a published [JSON Schema](../lockflight.schema.json)), the engine pin (`.lockflight/engine.lock`, the version and SHA-256 per platform, with the version also in `dotnet-tools.json` during 0.3), `.lockflight/` (approvals, evidence, baselines, ledger), the CI workflow. | your repository |
+| **Project files** | `lockflight.yaml` (the policy, version 2, with a published [JSON Schema](../lockflight.schema.json)), the engine pin (`.lockflight/engine.lock`, the version and SHA-256 per platform, with the version also in `dotnet-tools.json` during 0.3), `.lockflight/` (approvals, evidence, baselines, ledger), the CI workflow. Which of these formats are public, and what stays stable across releases: [public contracts](guides/contracts.md). | your repository |
 
 ## The CI judge
 
@@ -111,8 +111,8 @@ names, those paths, the command, the session and the working directory. The Clau
 names: an unknown tool is `other` and is judged like any unknown tool, and one whose input names a file path (an MCP tool's
 `path`) is guarded as a file write. `LOCKFLIGHT_HOOK_ADAPTER` picks the adapter (unset: Claude Code); it is never a
 command-line argument, because an older engine refuses any argument after `hook <event>`. `neutral` reads the request JSON
-itself, for tests and outside adapters. The request format is experimental, not a frozen contract, until a second client's
-adapter exists. The shim keeps Claude Code's names for its own recovery decisions, and a test keeps them in sync with the
+itself, for tests and outside adapters. The request format is internal, not a public contract
+([public contracts](guides/contracts.md#internal-formats)), until a second client's adapter exists. The shim keeps Claude Code's names for its own recovery decisions, and a test keeps them in sync with the
 adapter's table.
 
 The contract with Claude Code: a block is **exit 2 with the reason on stderr**; structured answers go to stdout as JSON.
@@ -242,7 +242,8 @@ are changes a person reviews. The ledger is local and fail-open: it is
 a learning aid, not an audit log.
 
 Each line has a `type`, a `signature` (the fingerprint incidents are grouped by), a `summary` and an optional `detail`; some
-types add fields, and readers ignore fields they do not know:
+types add fields, and readers ignore fields they do not know. The line format (`lockflight.ledger/v1`) is internal and may
+change in any release ([public contracts](guides/contracts.md#internal-formats)):
 
 | Type | Extra fields |
 |---|---|

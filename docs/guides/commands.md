@@ -66,7 +66,8 @@ Any project gets a warning about a <code>global.json</code> that pins an SDK old
 
 `lockflight facts --json` prints one JSON object, `"schema": "lockflight.facts/v1"`. Properties come in this order and every
 list is sorted (by path, or by id then file), so the same tree gives the same bytes. Paths are relative to the project root
-with forward slashes. Within `v1`, properties are only added; a removed, renamed or re-meant property is a new id.
+with forward slashes. The format is internal, for the crew's skills, and may change in any release
+([public contracts](contracts.md#internal-formats)).
 
 | Property | Type | What it holds |
 |---|---|---|

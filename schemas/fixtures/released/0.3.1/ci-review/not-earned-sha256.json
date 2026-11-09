@@ -1,0 +1,6 @@
+{
+  "schema": "lockflight.ci-review/v1",
+  "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "verdict": "NOT-EARNED",
+  "why": "the review was cut short"
+}
