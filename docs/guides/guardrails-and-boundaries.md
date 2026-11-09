@@ -422,5 +422,6 @@ agent safe on your machine. For that, run the agent in an isolated environment w
 ## Next
 
 - [CI hardening](ci-hardening.md): make CI's policy and check a boundary with CODEOWNERS and required checks
+- [What the judge catches](what-the-judge-catches.md): agent cheats on scripted pull requests, judged by the CI judge and by plain CI
 - [Troubleshooting](troubleshooting.md): when the guard blocks a command you expected to run
 - [Security policy](../../SECURITY.md): how to report a way around a control

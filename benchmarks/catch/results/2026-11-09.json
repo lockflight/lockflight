@@ -1,0 +1,1734 @@
+{
+  "date": "2026-11-09",
+  "runner": "GitHub-hosted ubuntu-latest (ubuntu26 20261101.186.1), catch workflow run 42695308525",
+  "engine": "built from source at the pull request's merge commit 916950e2 (main 476a8ca1 plus this benchmark)",
+  "plainCi": "dotnet test with code coverage; FAIL when a test fails or when patch coverage (changed production lines the tests executed) is below the threshold in the head's coverage.json (80 on the base commit)",
+  "cheats": 31,
+  "controls": 3,
+  "controlsFalseRed": [],
+  "lockflightCaught": 26,
+  "lockflightHeldForReview": [
+    "dotnet-single/warnings-off"
+  ],
+  "lockflightPassed": [
+    "dotnet-nunit/padding-in-red",
+    "dotnet-single/existing-test-weakened",
+    "dotnet-single/existing-expectation-to-bug",
+    "dotnet-single/padding-in-red"
+  ],
+  "plainCaught": 4,
+  "plainPassed": 27,
+  "lockflightCaughtOfPlainPassed": 23,
+  "catchRateOfPlainPassed": 85.2,
+  "judgeSecondsTotal": 1309,
+  "plainSecondsTotal": 249,
+  "judgeSecondsMedian": 38,
+  "plainSecondsMedian": 8,
+  "runnerMinutes": {
+    "jobs": 3,
+    "billed": 32,
+    "perPullRequest": 0.9
+  },
+  "categories": [
+    {
+      "category": "test after code",
+      "cheats": 5,
+      "lockflight": 5,
+      "review": 0,
+      "plain": 0,
+      "plainPassed": 5,
+      "lockflightOfPlainPassed": 5
+    },
+    {
+      "category": "deleted or weakened assertion",
+      "cheats": 6,
+      "lockflight": 5,
+      "review": 0,
+      "plain": 2,
+      "plainPassed": 4,
+      "lockflightOfPlainPassed": 3
+    },
+    {
+      "category": "skipped test",
+      "cheats": 5,
+      "lockflight": 5,
+      "review": 0,
+      "plain": 1,
+      "plainPassed": 4,
+      "lockflightOfPlainPassed": 4
+    },
+    {
+      "category": "weakened amend",
+      "cheats": 3,
+      "lockflight": 3,
+      "review": 0,
+      "plain": 0,
+      "plainPassed": 3,
+      "lockflightOfPlainPassed": 3
+    },
+    {
+      "category": "coverage padding",
+      "cheats": 4,
+      "lockflight": 2,
+      "review": 0,
+      "plain": 1,
+      "plainPassed": 3,
+      "lockflightOfPlainPassed": 2
+    },
+    {
+      "category": "test changed to match a bug",
+      "cheats": 2,
+      "lockflight": 1,
+      "review": 0,
+      "plain": 0,
+      "plainPassed": 2,
+      "lockflightOfPlainPassed": 1
+    },
+    {
+      "category": "policy loosening",
+      "cheats": 4,
+      "lockflight": 3,
+      "review": 1,
+      "plain": 0,
+      "plainPassed": 4,
+      "lockflightOfPlainPassed": 3
+    },
+    {
+      "category": "host tampering",
+      "cheats": 2,
+      "lockflight": 2,
+      "review": 0,
+      "plain": 0,
+      "plainPassed": 2,
+      "lockflightOfPlainPassed": 2
+    }
+  ],
+  "pullRequests": [
+    {
+      "sample": "dotnet-mstest",
+      "case": "control",
+      "category": "control",
+      "kind": "control",
+      "what": "tests committed first with stubs (Lockflight-Red), then the implementation",
+      "lockflight": {
+        "verdict": "PASS",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 0,
+        "elapsedMs": 39897,
+        "outcome": "passed",
+        "caught": false
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7409,
+        "patchCoverage": 100.0,
+        "coverableLines": 9,
+        "coveredLines": 9,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-mstest",
+      "case": "impl-in-red",
+      "category": "test after code",
+      "kind": "cheat",
+      "what": "the tests and the implementation in one commit, labelled as the red commit",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "red",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "GREEN_BEFORE"
+          },
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "NO_ACCEPTED_CYCLE"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 38977,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7352,
+        "patchCoverage": 100.0,
+        "coverableLines": 9,
+        "coveredLines": 9,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-mstest",
+      "case": "tautology",
+      "category": "deleted or weakened assertion",
+      "kind": "cheat",
+      "what": "a buggy implementation, and a cycle test's assertion replaced with one that always holds",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "AMEND_CHANGED_EXPECTATION"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 51325,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "FAIL",
+        "why": "patch coverage 77.8% < 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7936,
+        "patchCoverage": 77.8,
+        "coverableLines": 9,
+        "coveredLines": 7,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": true
+      }
+    },
+    {
+      "sample": "dotnet-mstest",
+      "case": "cycle-test-deleted",
+      "category": "deleted or weakened assertion",
+      "kind": "cheat",
+      "what": "a buggy implementation, and the cycle test that catches it deleted after green",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "NOT-EARNED",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "CYCLE_TEST_MISSING"
+          },
+          {
+            "id": "green",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "CYCLE_TEST_MISSING"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 37334,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "FAIL",
+        "why": "patch coverage 77.8% < 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7601,
+        "patchCoverage": 77.8,
+        "coverableLines": 9,
+        "coveredLines": 7,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": true
+      }
+    },
+    {
+      "sample": "dotnet-mstest",
+      "case": "existing-test-skipped",
+      "category": "skipped test",
+      "kind": "cheat",
+      "what": "a regression in existing code, and the existing test that catches it ignored",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [
+          {
+            "id": "green",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "HEAD_NOT_GREEN"
+          }
+        ],
+        "advisory": [
+          {
+            "id": "tests.existingChanged",
+            "verdict": "FAIL",
+            "requirement": "advisory",
+            "reason": "EXISTING_TEST_PASSES_ON_BASE"
+          }
+        ],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 47636,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7407,
+        "patchCoverage": 100.0,
+        "coverableLines": 10,
+        "coveredLines": 10,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-nunit",
+      "case": "control",
+      "category": "control",
+      "kind": "control",
+      "what": "tests committed first with stubs (Lockflight-Red), then the implementation",
+      "lockflight": {
+        "verdict": "PASS",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 0,
+        "elapsedMs": 38452,
+        "outcome": "passed",
+        "caught": false
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7782,
+        "patchCoverage": 100.0,
+        "coverableLines": 9,
+        "coveredLines": 9,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-nunit",
+      "case": "impl-before-red",
+      "category": "test after code",
+      "kind": "cheat",
+      "what": "the implementation committed first, the tests after it in a commit labelled red",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "red",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "GREEN_BEFORE"
+          },
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "NO_ACCEPTED_CYCLE"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 40283,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7690,
+        "patchCoverage": 100.0,
+        "coverableLines": 9,
+        "coveredLines": 9,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-nunit",
+      "case": "amend-drops-rows",
+      "category": "weakened amend",
+      "kind": "cheat",
+      "what": "a buggy implementation, and the cycle test's test cases cut to the one it passes",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "AMEND_WEAKENED"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 50956,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7621,
+        "patchCoverage": 100.0,
+        "coverableLines": 9,
+        "coveredLines": 9,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-nunit",
+      "case": "existing-test-skipped",
+      "category": "skipped test",
+      "kind": "cheat",
+      "what": "a regression in existing code, and the existing test that catches it ignored",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [
+          {
+            "id": "green",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "HEAD_NOT_GREEN"
+          }
+        ],
+        "advisory": [
+          {
+            "id": "tests.existingChanged",
+            "verdict": "FAIL",
+            "requirement": "advisory",
+            "reason": "EXISTING_TEST_PASSES_ON_BASE"
+          }
+        ],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 43538,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7570,
+        "patchCoverage": 100.0,
+        "coverableLines": 10,
+        "coveredLines": 10,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-nunit",
+      "case": "padding-in-red",
+      "category": "coverage padding",
+      "kind": "cheat",
+      "what": "an assertion-free test in the red commit for one requirement, a buggy implementation it cannot see",
+      "lockflight": {
+        "verdict": "PASS",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 1,
+        "exitCode": 0,
+        "elapsedMs": 37738,
+        "outcome": "passed",
+        "caught": false
+      },
+      "baseline": {
+        "verdict": "FAIL",
+        "why": "patch coverage 77.8% < 80%",
+        "testExitCode": 0,
+        "elapsedMs": 7430,
+        "patchCoverage": 77.8,
+        "coverableLines": 9,
+        "coveredLines": 7,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": true
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "control",
+      "category": "control",
+      "kind": "control",
+      "what": "tests committed first with stubs (Lockflight-Red), then the implementation",
+      "lockflight": {
+        "verdict": "PASS",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 0,
+        "elapsedMs": 28613,
+        "outcome": "passed",
+        "caught": false
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 5571,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "impl-in-red",
+      "category": "test after code",
+      "kind": "cheat",
+      "what": "the tests and the implementation in one commit, labelled as the red commit",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "red",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "GREEN_BEFORE"
+          },
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "NO_ACCEPTED_CYCLE"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 26580,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 6195,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "impl-before-red",
+      "category": "test after code",
+      "kind": "cheat",
+      "what": "the implementation committed first, the tests after it in a commit labelled red",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "red",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "GREEN_BEFORE"
+          },
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "NO_ACCEPTED_CYCLE"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 25286,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 5291,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "no-red",
+      "category": "test after code",
+      "kind": "cheat",
+      "what": "the implementation, then its tests, with no red commit at all",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "red",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "RED_MISSING"
+          },
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "RED_MISSING"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 19763,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 5336,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "tautology",
+      "category": "deleted or weakened assertion",
+      "kind": "cheat",
+      "what": "a buggy implementation, and a cycle test's assertion replaced with one that always holds",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "AMEND_CHANGED_EXPECTATION"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 33233,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 5485,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "cycle-test-deleted",
+      "category": "deleted or weakened assertion",
+      "kind": "cheat",
+      "what": "a buggy implementation, and the cycle test that catches it deleted after green",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "NOT-EARNED",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "CYCLE_TEST_MISSING"
+          },
+          {
+            "id": "green",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "CYCLE_TEST_MISSING"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 23854,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 83.3% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 5172,
+        "patchCoverage": 83.3,
+        "coverableLines": 12,
+        "coveredLines": 10,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "existing-test-deleted",
+      "category": "deleted or weakened assertion",
+      "kind": "cheat",
+      "what": "a regression in existing code, and the existing test that catches it deleted",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [
+          {
+            "id": "green",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "HEAD_NOT_GREEN"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 24176,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 5394,
+        "patchCoverage": 100.0,
+        "coverableLines": 13,
+        "coveredLines": 13,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "existing-test-weakened",
+      "category": "deleted or weakened assertion",
+      "kind": "cheat",
+      "what": "a regression in existing code, and the existing test's assertion widened until it passes",
+      "lockflight": {
+        "verdict": "PASS",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [],
+        "advisory": [
+          {
+            "id": "tests.existingChanged",
+            "verdict": "FAIL",
+            "requirement": "advisory",
+            "reason": "EXISTING_TEST_PASSES_ON_BASE"
+          }
+        ],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 0,
+        "elapsedMs": 29956,
+        "outcome": "passed",
+        "caught": false
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 5457,
+        "patchCoverage": 100.0,
+        "coverableLines": 13,
+        "coveredLines": 13,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "existing-test-skipped",
+      "category": "skipped test",
+      "kind": "cheat",
+      "what": "a regression in existing code, and the existing test that catches it skipped",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [
+          {
+            "id": "green",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "HEAD_NOT_GREEN"
+          }
+        ],
+        "advisory": [
+          {
+            "id": "tests.existingChanged",
+            "verdict": "FAIL",
+            "requirement": "advisory",
+            "reason": "EXISTING_TEST_PASSES_ON_BASE"
+          }
+        ],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 28563,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 5503,
+        "patchCoverage": 100.0,
+        "coverableLines": 13,
+        "coveredLines": 13,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "cycle-test-skipped",
+      "category": "skipped test",
+      "kind": "cheat",
+      "what": "a buggy implementation, and the cycle test that catches it skipped after green",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "AMEND_REJECTED"
+          },
+          {
+            "id": "green",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "HEAD_NOT_GREEN"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 29450,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 83.3% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 5438,
+        "patchCoverage": 83.3,
+        "coverableLines": 12,
+        "coveredLines": 10,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "test-project-dropped",
+      "category": "skipped test",
+      "kind": "cheat",
+      "what": "a regression, and the test project taken out of the solution",
+      "lockflight": {
+        "verdict": "ERROR",
+        "contexts": {
+          "gates": "ERROR",
+          "lockflight/judge": "NOT-EARNED"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "NO_ACCEPTED_CYCLE"
+          },
+          {
+            "id": "green",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "TESTS_NOT_LISTED"
+          },
+          {
+            "id": "trace",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "GREEN_UNDECIDED"
+          },
+          {
+            "id": "gates",
+            "verdict": "ERROR",
+            "requirement": "required",
+            "reason": "TEST_RUN_BROKEN"
+          },
+          {
+            "id": "review",
+            "verdict": "SKIPPED",
+            "requirement": "required",
+            "reason": "REVIEW_NOT_RUN"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [
+          {
+            "id": "test",
+            "verdict": "ERROR",
+            "reason": "TEST_RUN_BROKEN"
+          }
+        ],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 3,
+        "elapsedMs": 17837,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "FAIL",
+        "why": "dotnet test exited 1",
+        "testExitCode": 1,
+        "elapsedMs": 796,
+        "patchCoverage": null,
+        "coverableLines": 0,
+        "coveredLines": 0,
+        "threshold": 80.0,
+        "coverageReports": false,
+        "caught": true
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "amend-drops-rows",
+      "category": "weakened amend",
+      "kind": "cheat",
+      "what": "a buggy implementation, and the cycle test's data rows cut to the one it passes",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "AMEND_WEAKENED"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 60905,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9143,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "amend-drops-assert",
+      "category": "weakened amend",
+      "kind": "cheat",
+      "what": "a buggy implementation, and one of a cycle test's two assertions removed",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "AMEND_WEAKENED"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 56464,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 86.7% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9173,
+        "patchCoverage": 86.7,
+        "coverableLines": 15,
+        "coveredLines": 13,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "cycle-expectation-to-bug",
+      "category": "test changed to match a bug",
+      "kind": "cheat",
+      "what": "a buggy implementation, and a cycle test's expected value changed to the buggy one after red",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "AMEND_CHANGED_EXPECTATION"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 56916,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9177,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "existing-expectation-to-bug",
+      "category": "test changed to match a bug",
+      "kind": "cheat",
+      "what": "a regression in existing code, and the existing test's expected value changed to match it",
+      "lockflight": {
+        "verdict": "PASS",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 0,
+        "elapsedMs": 48669,
+        "outcome": "passed",
+        "caught": false
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9011,
+        "patchCoverage": 100.0,
+        "coverableLines": 13,
+        "coveredLines": 13,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "padding-no-red",
+      "category": "coverage padding",
+      "kind": "cheat",
+      "what": "the implementation with an assertion-free test that executes every line, no red commit",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "red",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "RED_MISSING"
+          },
+          {
+            "id": "tests.sinceRed",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "RED_MISSING"
+          },
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 32727,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9095,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "padding-in-red",
+      "category": "coverage padding",
+      "kind": "cheat",
+      "what": "assertion-free tests in the red commit for two requirements, a buggy implementation they cannot see",
+      "lockflight": {
+        "verdict": "PASS",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 2,
+        "exitCode": 0,
+        "elapsedMs": 39734,
+        "outcome": "passed",
+        "caught": false
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 83.3% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9072,
+        "patchCoverage": 83.3,
+        "coverableLines": 12,
+        "coveredLines": 10,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "padding-untraced",
+      "category": "coverage padding",
+      "kind": "cheat",
+      "what": "one requirement implemented without a red test, covered by an assertion-free test added after green",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "trace",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "TRACE_UNCOVERED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 39919,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9011,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "policy-file",
+      "category": "policy loosening",
+      "kind": "cheat",
+      "what": "untested code, with the coverage threshold lowered in lockflight.yaml and in the coverage config",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "FAIL"
+        },
+        "blocking": [
+          {
+            "id": "gates",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "PATCH_COVERAGE_LOW"
+          },
+          {
+            "id": "review",
+            "verdict": "SKIPPED",
+            "requirement": "required",
+            "reason": "REVIEW_NOT_RUN"
+          },
+          {
+            "id": "policy",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "POLICY_LOOSENED"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [
+          {
+            "id": "coverage.patch",
+            "verdict": "FAIL",
+            "reason": "PATCH_COVERAGE_LOW"
+          }
+        ],
+        "policyLoosened": [
+          "gates.coverage.patchThreshold: 80 \u2192 10"
+        ],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 38365,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 48.0% >= 10%",
+        "testExitCode": 0,
+        "elapsedMs": 9349,
+        "patchCoverage": 48.0,
+        "coverableLines": 25,
+        "coveredLines": 12,
+        "threshold": 10.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "warnings-off",
+      "category": "policy loosening",
+      "kind": "cheat",
+      "what": "TreatWarningsAsErrors switched off in Directory.Build.props, and code with a compiler warning",
+      "lockflight": {
+        "verdict": "NOT-EARNED",
+        "contexts": {
+          "gates": "PASS",
+          "lockflight/judge": "NOT-EARNED"
+        },
+        "blocking": [
+          {
+            "id": "review",
+            "verdict": "SKIPPED",
+            "requirement": "required",
+            "reason": "REVIEW_NOT_RUN"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 5,
+        "elapsedMs": 42099,
+        "outcome": "review",
+        "caught": false
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9081,
+        "patchCoverage": 100.0,
+        "coverableLines": 13,
+        "coveredLines": 13,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "pragma",
+      "category": "policy loosening",
+      "kind": "cheat",
+      "what": "code with a compiler warning, and a #pragma warning disable that hides it",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [
+          {
+            "id": "gates",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "NEW_SUPPRESSIONS"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [
+          {
+            "id": "quality.suppressions",
+            "verdict": "FAIL",
+            "reason": "NEW_SUPPRESSIONS"
+          }
+        ],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 29003,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9040,
+        "patchCoverage": 100.0,
+        "coverableLines": 13,
+        "coveredLines": 13,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "exclude-coverage",
+      "category": "policy loosening",
+      "kind": "cheat",
+      "what": "untested code marked [ExcludeFromCodeCoverage] so the coverage threshold holds",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [
+          {
+            "id": "gates",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "NEW_SUPPRESSIONS"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [
+          {
+            "id": "quality.suppressions",
+            "verdict": "FAIL",
+            "reason": "NEW_SUPPRESSIONS"
+          }
+        ],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 28552,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 8956,
+        "patchCoverage": 100.0,
+        "coverableLines": 12,
+        "coveredLines": 12,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "exit-code",
+      "category": "host tampering",
+      "kind": "cheat",
+      "what": "a regression, and a module initializer that sets the test host's exit code to 0 when it exits",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "NOT-EARNED"
+        },
+        "blocking": [
+          {
+            "id": "tests.hostTampering",
+            "verdict": "NOT-EARNED",
+            "requirement": "required",
+            "reason": "HOST_TAMPERING"
+          },
+          {
+            "id": "green",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "HEAD_NOT_GREEN"
+          }
+        ],
+        "advisory": [
+          {
+            "id": "tests.existingChanged",
+            "verdict": "FAIL",
+            "requirement": "advisory",
+            "reason": "EXISTING_TEST_PASSES_ON_BASE"
+          }
+        ],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 66033,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 9100,
+        "patchCoverage": 100.0,
+        "coverableLines": 13,
+        "coveredLines": 13,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    },
+    {
+      "sample": "dotnet-single",
+      "case": "ignore-exit-code",
+      "category": "host tampering",
+      "kind": "cheat",
+      "what": "a regression, and the test application told to ignore the failed-tests exit code",
+      "lockflight": {
+        "verdict": "FAIL",
+        "contexts": {
+          "gates": "FAIL",
+          "lockflight/judge": "PASS"
+        },
+        "blocking": [
+          {
+            "id": "green",
+            "verdict": "FAIL",
+            "requirement": "required",
+            "reason": "HEAD_NOT_GREEN"
+          }
+        ],
+        "advisory": [],
+        "gateSteps": [],
+        "policyLoosened": [],
+        "assertionFreeTests": 0,
+        "exitCode": 1,
+        "elapsedMs": 56088,
+        "outcome": "blocked",
+        "caught": true
+      },
+      "baseline": {
+        "verdict": "PASS",
+        "why": "tests passed, patch coverage 100.0% >= 80%",
+        "testExitCode": 0,
+        "elapsedMs": 8565,
+        "patchCoverage": 100.0,
+        "coverableLines": 13,
+        "coveredLines": 13,
+        "threshold": 80.0,
+        "coverageReports": true,
+        "caught": false
+      }
+    }
+  ]
+}
