@@ -20,14 +20,14 @@ service's `lockflight.yaml` and a CI job that clones the shell read-only and jud
 private shell needs a read-only token in the `LOCKFLIGHT_SHELL_TOKEN` CI secret (or a deploy key for an SSH URL), and to
 review and commit in each service repository. Suggest a CODEOWNERS entry in each service for `lockflight.yaml` and the CI file.
 
-The older way still works for GitHub: `.lockflight/bin/lockflight workspace sync` in the shell writes into each .NET service
-repository that has no pointer `lockflight.unit.yaml`, the engine pin, the service's baselines and the workflow. Do not mix
-the two in one service.
+A service that an older release set up with `workspace sync` (removed) holds `lockflight.unit.yaml`, which the engine no longer
+reads. Tell the user to run `lockflight update --project` in that service, checked out inside the shell, in their own terminal:
+it moves the service to the pointer. `doctor` in the shell names such services.
 
 ## Verify and hand over
 
 In a workspace, `doctor` also checks that each unit is cloned, has no `lockflight.yaml` of its own other than a `shell:` pointer
-to this shell, is ignored by the shell and carries the current vendored CI policy; and that the plugin is enabled at user scope and no SDK pin keeps the engine from
+to this shell, is ignored by the shell and holds no vendored `lockflight.unit.yaml`; and that the plugin is enabled at user scope and no SDK pin keeps the engine from
 running.
 
 - The Stop gate builds and tests only the changed services, at most two at a time. `doctor` names services that are slow at

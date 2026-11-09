@@ -8,7 +8,7 @@ internal sealed record Manifest(string Root, IReadOnlyList<string> ProtectedGlob
 {
     public const string FileName = "lockflight.yaml";
 
-    /// <summary>The policy <c>workspace sync</c> vendors into a unit repository for its CI.</summary>
+    /// <summary>The policy the removed <c>workspace sync</c> vendored into a unit repository; only <c>update --project</c> looks for it, to move the unit to the shell pointer.</summary>
     public const string UnitFileName = "lockflight.unit.yaml";
 
     public IReadOnlyList<Unit> Units { get; init; } = [];

@@ -37,7 +37,7 @@ internal static partial class EfToolAdvice
     /// </summary>
     public static EfToolState Inspect(Manifest manifest, string root)
     {
-        if (manifest.Gates.EfPendingModelChanges != GateMode.Auto || manifest.Shell is not null || File.Exists(Path.Combine(root, Manifest.UnitFileName)))
+        if (manifest.Gates.EfPendingModelChanges != GateMode.Auto || manifest.Shell is not null)
         {
             return EfToolState.None;
         }

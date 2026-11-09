@@ -224,7 +224,8 @@ One model, the **unit**, covers a single repository, a monorepo and a workspace 
 per changed unit and each unit keeps its own baselines. A unit repository is judged on its own with the shell's policy through
 a pointer, not a copy: `init --unit-of <shell url>` writes a `shell:` section, and the unit's CI clones the shell read-only and
 applies the stricter of the shell's policy and the unit's own ([CI hardening](guides/ci-hardening.md#workspace-shells-unit-repositories)).
-The older `workspace sync`, which copies the policy into each unit, still works; it is deprecated and goes in 0.4.
+The older `workspace sync`, which copied the policy into each unit (`lockflight.unit.yaml`), was removed; `lockflight update
+--project` in such a unit moves it to the pointer.
 
 ## Adoption
 

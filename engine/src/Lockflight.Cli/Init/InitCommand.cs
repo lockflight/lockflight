@@ -4,6 +4,7 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.EngineLocks;
 using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Baselines;
+using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 using Lockflight.Cli.Linking;
@@ -154,7 +155,7 @@ internal sealed class InitCommand(CliContext context) : ICommand
         // The pin init writes is this engine's version: a newer pin is refused below and an older one is raised to it.
         bool developmentPin = EngineVersion.IsDevelopmentBuild(ToolPin.RunningVersion);
         CiTrigger ci = init.RequestedCi ?? CiTriggerDefault.For(ToolPin.RunningVersion);
-        string root = ProjectRoot();
+        string root = ProjectRoot(init);
         bool write = !init.DryRun;
         if (await PreflightProblemAsync(root, init.Level, cancellationToken) is string problem)
         {
@@ -571,9 +572,13 @@ internal sealed class InitCommand(CliContext context) : ICommand
             : null;
     }
 
-    /// <summary>The nearest existing Lockflight project, else the current directory.</summary>
-    private string ProjectRoot() =>
-        ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory;
+    /// <summary>
+    /// The nearest existing Lockflight project, else the current directory. A unit of a workspace shell (<c>--unit-of</c>) is its
+    /// own repository, also when it is checked out inside the shell, whose manifest would come first.
+    /// </summary>
+    private string ProjectRoot(InitOptions init) => init.Shell is not null && CoverageStep.RepositoryRootOf(context.WorkingDirectory) is string repository
+        ? repository
+        : ManifestLocator.Discover(context.WorkingDirectory) is { Manifest: Manifest manifest } ? manifest.Root : context.WorkingDirectory;
 
     /// <param name="write">False for <c>--dry-run</c>: the outcome is worked out and nothing is written.</param>
     private static async Task<InitStep> WriteIfMissingAsync(string root, string relativePath, string content, bool write, CancellationToken cancellationToken)

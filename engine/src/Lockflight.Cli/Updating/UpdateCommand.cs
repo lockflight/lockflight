@@ -154,14 +154,15 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
 
     private async Task<ExitCode> HandOverAsync(string home, string? feed, CancellationToken cancellationToken)
     {
-        if (ManifestLocator.DiscoverForMigration(context.WorkingDirectory) is not { Manifest: Manifest manifest })
+        string? projectRoot = VendoredUnit.Find(context.WorkingDirectory) ?? ManifestLocator.DiscoverForMigration(context.WorkingDirectory).Manifest?.Root;
+        if (projectRoot is null)
         {
             await context.Output.WriteLineAsync("Not in a Lockflight project: run `lockflight update` in each project to re-pin it.");
             return ExitCode.Pass;
         }
 
         ProcessResult project = await context.Processes(
-            UserInstall.Engine(home), feed is null ? ["update", ProjectOption] : ["update", ProjectOption, SourceOption, feed], manifest.Root, cancellationToken);
+            UserInstall.Engine(home), feed is null ? ["update", ProjectOption] : ["update", ProjectOption, SourceOption, feed], projectRoot, cancellationToken);
         await context.Output.WriteAsync(project.Output);
         await context.Error.WriteAsync(project.Error);
         if (project.ExitCode != 0)
@@ -179,6 +180,11 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
     /// <param name="judgeWorkflow">Replace a gates-only GitHub workflow Lockflight wrote with the CI judge's (<see cref="JudgeWorkflowMigration"/>).</param>
     private async Task<ExitCode> UpdateProjectAsync(bool dryRun, string? feed, bool judgeWorkflow, CancellationToken cancellationToken)
     {
+        if (VendoredUnit.Find(context.WorkingDirectory) is string unitRoot)
+        {
+            return await MoveVendoredUnitAsync(unitRoot, dryRun, cancellationToken);
+        }
+
         ManifestLoadResult loaded = ManifestLocator.DiscoverForMigration(context.WorkingDirectory);
         if (loaded.Error is ManifestError invalid)
         {
@@ -271,12 +277,6 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             writes.Add(new PlannedWrite(ClaudeSettingsMerger.RelativePath, settingsPath, settingsText, JsonFiles.Format(settings)));
         }
 
-        if (File.Exists(Path.Combine(root, Manifest.UnitFileName)))
-        {
-            await context.Output.WriteLineAsync(
-                $"note: this repository holds {Manifest.UnitFileName}, a vendored unit policy. Make it a unit of its shell with `{EngineCommand.Name} init --unit-of <shell url> --unit-path <path>`, then delete {Manifest.UnitFileName}; update does not do it (the file names no shell URL).");
-        }
-
         if (dryRun)
         {
             return await ReportDryRunAsync(writes, migration, cancellationToken);
@@ -301,6 +301,73 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             : $"Lockflight {ToolPin.RunningVersion}: updated {string.Join(", ", writes.Select(write => write.RelativePath))}. Review them and commit them in one commit.");
         await MascotDisplay.DrawAsync(context, MascotPose.Pass, $"Up to date: {ToolPin.RunningVersion}");
         return ExitCode.Pass;
+    }
+
+    /// <summary>
+    /// Moves a unit repository from the policy the removed <c>workspace sync</c> vendored into it to the shell pointer: the shell it
+    /// is checked out in names its path and, through its <c>origin</c>, its URL; the vendored file and the unit workflow sync wrote
+    /// are deleted, and <c>init --unit-of</c> writes the unit's own <c>lockflight.yaml</c>, its pin and the CI judge's workflow that
+    /// clones the shell; then the engine is linked, as after any update. If init refuses (it writes nothing then), the deleted files
+    /// are put back.
+    /// </summary>
+    private async Task<ExitCode> MoveVendoredUnitAsync(string unitRoot, bool dryRun, CancellationToken cancellationToken)
+    {
+        string fallback = $"`{EngineCommand.Name} init --unit-of <shell url> --unit-path <path>` there, then delete {Manifest.UnitFileName}";
+        if (VendoredUnit.EnclosingShell(unitRoot) is not (string shell, string unitPath))
+        {
+            await context.Error.WriteLineAsync(
+                $"lockflight: {unitRoot} holds {Manifest.UnitFileName}, the policy the removed workspace sync vendored, which this engine no longer reads. No {Manifest.FileName} above it lists this repository among its units, so update cannot tell which shell it belongs to: check it out inside its shell and run update there, or run {fallback}; nothing was changed");
+            return ExitCode.Config;
+        }
+
+        ProcessResult origin = await context.Processes("git", ["-C", shell, "remote", "get-url", "origin"], shell, cancellationToken);
+        string url = origin.Output.Trim();
+        if (origin.ExitCode != 0 || url.Length == 0)
+        {
+            await context.Error.WriteLineAsync(
+                $"lockflight: the workspace shell at {shell} has no origin remote, so update cannot tell the unit where to clone it from: run {fallback}; nothing was changed");
+            return ExitCode.Config;
+        }
+
+        string workflowPath = Path.Combine(unitRoot, Templates.WorkflowPath.Replace('/', Path.DirectorySeparatorChar));
+        string? workflow = File.Exists(workflowPath) ? await File.ReadAllTextAsync(workflowPath, cancellationToken) : null;
+        List<(string Path, string Text)> removed = [(Path.Combine(unitRoot, Manifest.UnitFileName), await File.ReadAllTextAsync(Path.Combine(unitRoot, Manifest.UnitFileName), cancellationToken))];
+        if (workflow is not null && JudgeWorkflowMigration.IsVendoredUnitWorkflow(workflow))
+        {
+            removed.Add((workflowPath, workflow));
+        }
+
+        string[] init = ["--unit-of", url, "--unit-path", unitPath];
+        string deletes = string.Join(" and ", removed.Select(file => Path.GetRelativePath(unitRoot, file.Path).Replace('\\', '/')));
+        await context.Output.WriteLineAsync(
+            $"{Manifest.UnitFileName} is the policy the removed workspace sync vendored. Moving this repository to the shell pointer (shell {url}, unit {unitPath}): {(dryRun ? "update would delete" : "deleting")} {deletes}, then {(dryRun ? "run" : "running")} init {string.Join(' ', init)}.");
+        if (dryRun)
+        {
+            await context.Output.WriteLineAsync("update --dry-run: nothing was written; run init with --dry-run after deleting those files to see the rest.");
+            return ExitCode.Pass;
+        }
+
+        foreach ((string path, _) in removed)
+        {
+            File.Delete(path);
+        }
+
+        CommandDescriptor initCommand = CommandRegistry.Match(["init"])!;
+        ExitCode initialized = await new InitCommand(context with { WorkingDirectory = unitRoot }).RunAsync(new CommandArguments(initCommand, [.. init, "--no-link"]), cancellationToken);
+        if (initialized != ExitCode.Pass)
+        {
+            foreach ((string path, string text) in removed)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await File.WriteAllTextAsync(path, text, cancellationToken);
+            }
+
+            await context.Error.WriteLineAsync($"lockflight: init did not finish, so {deletes} {(removed.Count == 1 ? "was" : "were")} put back");
+            return initialized;
+        }
+
+        await context.Output.WriteLineAsync($"Moved to the shell pointer: {deletes} deleted. Review the changes and commit them in one commit.");
+        return await new LinkCommand(context with { WorkingDirectory = unitRoot }).RunAsync(cancellationToken);
     }
 
     /// <summary>

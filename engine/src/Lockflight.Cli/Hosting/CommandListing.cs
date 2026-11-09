@@ -11,4 +11,10 @@ internal enum CommandListing
     /// gives its own error, but never a valid command line for a document.
     /// </summary>
     Unlisted = 1,
+
+    /// <summary>
+    /// A command that was removed (<c>workspace sync</c>): dispatched only to say in one line what replaced it, never a valid
+    /// command line for a document.
+    /// </summary>
+    Removed = 2,
 }

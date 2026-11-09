@@ -78,7 +78,10 @@ internal static class CommandRegistry
         new(["ci", "explain"], CommandAudience.Anyone, [], [CiExplainCommand.JsonFlag], CommandOperands.Any, OptionParsing.Own, context => new CiExplainCommand(context)),
         new(["route", "show"], CommandAudience.Anyone, [RouteShowCommand.BaseOption, RouteShowCommand.HeadOption], [RouteShowCommand.JsonFlag], CommandOperands.Options, OptionParsing.Shared, context => new RouteShowCommand(context)),
         new(["route", "record"], CommandAudience.Anyone, [RouteRecordCommand.FeatureOption, RouteRecordCommand.BaseOption], [], CommandOperands.Options, OptionParsing.Shared, context => new RouteRecordCommand(context)),
-        new(["workspace", "sync"], CommandAudience.Anyone, [], ["--check"], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceSyncCommand(context)),
+        new(["workspace", "sync"], CommandAudience.Anyone, [], [], CommandOperands.Any, OptionParsing.Own, context => new WorkspaceSyncRemoved(context))
+        {
+            Listing = CommandListing.Removed,
+        },
         new(["workspace", "clone"], CommandAudience.Anyone, [WorkspaceCloneCommand.IntoOption], [], CommandOperands.Options, OptionParsing.Shared, context => new WorkspaceCloneCommand(context)),
     ];
 

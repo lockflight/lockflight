@@ -17,6 +17,7 @@ public sealed class WorkspaceChecksTests : IDisposable
         Write(Manifest.FileName, "version: 2\nunits:\n  - path: services/orders\n  - path: services/billing\n  - path: services/missing\n");
         Write("services/billing/lockflight.yaml", "version: 2\n");
         Write("services/orders/global.json", """{ "sdk": { "version": "8.0.416", "rollForward": "latestFeature" } }""");
+        Write($"services/orders/{Manifest.UnitFileName}", "version: 1\n");
         await GitAsync(root.FullName, ["init", "-q"]);
         await GitAsync(Path.Combine(root.FullName, "services", "orders"), ["init", "-q"]);
 
@@ -31,6 +32,9 @@ public sealed class WorkspaceChecksTests : IDisposable
         Assert.Contains("services/orders/", checks["child repositories"].Detail, StringComparison.Ordinal);
         Assert.Equal(CheckStatus.Warn, checks["plugin scope"].Status);
         Assert.Contains("services/orders", checks["sdk pin"].Detail, StringComparison.Ordinal);
+        Assert.Equal(CheckStatus.Warn, checks["unit CI policy"].Status);
+        Assert.Contains("services/orders", checks["unit CI policy"].Detail, StringComparison.Ordinal);
+        Assert.Contains("update --project", checks["unit CI policy"].Fix!, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -50,6 +54,7 @@ public sealed class WorkspaceChecksTests : IDisposable
 
         Assert.Equal(CheckStatus.Pass, checks["child repositories"].Status);
         Assert.Equal(CheckStatus.Pass, checks["plugin scope"].Status);
+        Assert.Equal(CheckStatus.Pass, checks["unit CI policy"].Status);
         Assert.False(checks.ContainsKey("sdk pin"));
     }
 

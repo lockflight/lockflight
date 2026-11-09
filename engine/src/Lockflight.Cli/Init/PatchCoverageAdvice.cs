@@ -22,12 +22,11 @@ internal static class PatchCoverageAdvice
 
     /// <summary>
     /// Whether the advice applies to a project with this manifest: no collector, and not a unit of a workspace shell, whose CI
-    /// gates take the shell's collector when the unit sets none (with a shell pointer or a vendored <c>lockflight.unit.yaml</c>).
+    /// gates take the shell's collector when the unit sets none (with a shell pointer).
     /// </summary>
     public static bool AppliesTo(Manifest manifest, string root) =>
         manifest.Gates.Coverage.Collector == CoverageCollector.None
-        && manifest.Shell is null
-        && !File.Exists(Path.Combine(root, Manifest.UnitFileName));
+        && manifest.Shell is null;
 
     /// <summary>What to do: the setting, and the package for the test runner the project's <c>global.json</c> picks.</summary>
     public static string Fix(string root)

@@ -176,17 +176,11 @@ public sealed class ReadinessChecksTests : IDisposable
         Assert.Contains(BitbucketPipelinesTemplate.Path, coverage.Detail, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("version: 2\nshell:\n  url: https://example.com/shell.git\n  unit: services/orders\n", null)]
-    [InlineData("version: 2\n", Manifest.UnitFileName)]
-    public async Task AUnitOfAWorkspaceShellGetsNoPatchCoverageWarningBecauseItsCiTakesTheShellsCollector(string manifest, string? vendoredPolicy)
+    [Fact]
+    public async Task AUnitOfAWorkspaceShellGetsNoPatchCoverageWarningBecauseItsCiTakesTheShellsCollector()
     {
-        Write(Manifest.FileName, manifest);
+        Write(Manifest.FileName, "version: 2\nshell:\n  url: https://example.com/shell.git\n  unit: services/orders\n");
         Write(Templates.WorkflowPath, Templates.Workflow(["10.0.x"]));
-        if (vendoredPolicy is not null)
-        {
-            Write(vendoredPolicy, "version: 2\n");
-        }
 
         Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "coverage collector");
     }
@@ -316,9 +310,8 @@ public sealed class ReadinessChecksTests : IDisposable
     [Fact]
     public async Task AUnitOfAWorkspaceShellGetsNoDotnetEfCheck()
     {
-        Write(Manifest.FileName, "version: 2\n");
+        Write(Manifest.FileName, "version: 2\nshell:\n  url: https://example.com/shell.git\n  unit: services/orders\n");
         WriteCiWorkflow();
-        Write(Manifest.UnitFileName, "shell: ../shell\n");
         WriteEfProject("""<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4" />""");
 
         Assert.DoesNotContain(await AllChecksAsync(), check => check.Name == "dotnet-ef pin");

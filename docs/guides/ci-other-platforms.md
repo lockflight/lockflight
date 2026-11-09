@@ -91,7 +91,6 @@ Where they differ from the GitHub workflow:
   artifact where the service keeps artifacts of a failed job.
 - A unit repository of a workspace shell: `init --unit-of <shell url> --unit-path <path> --ci-platform <service>` writes the
   job with the shell clone and `--shell`, on every service (see [the shell pointer](ci-hardening.md#the-shell-pointer-preferred)).
-  `lockflight workspace sync` vendors GitHub workflows only.
 
 A file `init` writes is never overwritten later, so a template fixed in a newer engine reaches an existing project only when
 you delete the file and run `init` again.

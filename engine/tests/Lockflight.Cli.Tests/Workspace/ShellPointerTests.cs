@@ -161,18 +161,16 @@ public sealed class ShellPointerTests : IDisposable
     }
 
     [Fact]
-    public async Task AUnitThatPointsAtTheShellIsNotVendoredAndItsManifestIsExpected()
+    public async Task AUnitThatPointsAtTheShellIsRecognisedByItsPath()
     {
         await CreateShellAsync();
         Directory.CreateDirectory(Orders);
         await GitAsync(Orders, ["init", "-q"]);
-        File.WriteAllText(Path.Combine(Orders, "Orders.sln"), string.Empty);
         Manifest shellManifest = new ManifestParser(Shell, Manifest.FileName).Parse(ShellManifest).Manifest!;
-        Assert.Single(WorkspaceSyncCommand.Vendored(shellManifest));
+        Assert.False(UnitPointer.PointsToShell(Orders, shellManifest.Units[0]));
 
         File.WriteAllText(Path.Combine(Orders, Manifest.FileName), "version: 2\nshell:\n  url: https://example.com/shell.git\n  unit: services/orders\n");
 
-        Assert.Empty(WorkspaceSyncCommand.Vendored(shellManifest));
         Assert.True(UnitPointer.PointsToShell(Orders, shellManifest.Units[0]));
         Assert.False(UnitPointer.PointsToShell(Orders, shellManifest.Units[0] with { Path = "services/billing" }));
     }

@@ -36,10 +36,11 @@ internal static class WorkspaceChecks
                 : new("unit manifests", CheckStatus.Fail, $"units with their own {Manifest.FileName}: {List(policies)}; a session started there would follow that file instead of the workspace's", $"remove {Manifest.FileName} from those units (one policy per workspace)"));
 
             checks.Add(await IgnoredChildrenAsync(root, units, cancellationToken));
-            IReadOnlyList<string> drift = Workspace.WorkspaceSyncCommand.Drift(manifest!);
-            checks.Add(drift.Count == 0
-                ? new("unit CI policy", CheckStatus.Pass, "every .NET unit repository carries the shell's current policy", null)
-                : new("unit CI policy", CheckStatus.Warn, $"unit repositories behind the shell's policy: {List(drift)}; their CI judges with the old one", $"{EngineCommand.Linked} workspace sync, then commit in each unit"));
+            string[] vendored = [.. units.Where(unit => File.Exists(Path.Combine(UnitDirectory(root, unit), Manifest.UnitFileName))
+                && !File.Exists(Path.Combine(UnitDirectory(root, unit), Manifest.FileName))).Select(unit => unit.Path)];
+            checks.Add(vendored.Length == 0
+                ? new("unit CI policy", CheckStatus.Pass, $"no unit repository holds a vendored {Manifest.UnitFileName}", null)
+                : new("unit CI policy", CheckStatus.Warn, $"unit repositories that still hold the vendored {Manifest.UnitFileName}, which this engine no longer reads: {List(vendored)}", $"in each, a person runs {EngineCommand.Name} update --project, which points it at this shell, then commits there"));
             checks.Add(UserScopePlugin(userHome));
             if (StopTimings.Slow(root, now.AddDays(-14)) is { Count: > 0 } slow)
             {

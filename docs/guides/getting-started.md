@@ -317,8 +317,9 @@ cd services/orders
 ```
 
 Commit in the shell, and in each service repository. A private shell needs a read-only token or deploy key in each service's
-CI ([the shell pointer](ci-hardening.md#the-shell-pointer-preferred)); `workspace sync` in the shell, which vendors the policy
-into each service instead, still works until 0.4 (deprecated). Start Claude Code at the shell root. With an
+CI ([the shell pointer](ci-hardening.md#the-shell-pointer-preferred)); a service that still holds the vendored
+`lockflight.unit.yaml` of the removed `workspace sync` moves to the pointer with `lockflight update --project`
+([moving a vendored unit](ci-hardening.md#moving-a-vendored-unit-to-the-pointer)). Start Claude Code at the shell root. With an
 existing setup in the shell, run `init --dry-run` first (see
 [above](#a-repository-with-an-existing-claude-code-or-spec-kit-setup)). [CI hardening](ci-hardening.md#workspace-shells-unit-repositories)
 describes the unit repositories' CI.

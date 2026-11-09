@@ -31,11 +31,14 @@ internal static class JudgeWorkflowMigration
 
     /// <summary>
     /// Whether the workflow runs the gates alone: it runs <c>lockflight gate run</c> and not the CI judge's action. A unit repository's
-    /// workflow, which <c>workspace sync</c> writes and rewrites, runs the gates alone by design and is not counted.
+    /// workflow, which the removed <c>workspace sync</c> wrote, is not counted: <c>update --project</c> moves that unit to the shell pointer.
     /// </summary>
     public static bool IsGatesOnly(string text) =>
         text.Contains("lockflight gate run", StringComparison.Ordinal) && !text.Contains("mode: judge", StringComparison.Ordinal)
         && !text.Contains(UnitWorkflowMark, StringComparison.Ordinal);
+
+    /// <summary>Whether the workflow is one the removed <c>workspace sync</c> wrote into a unit repository (it named itself so, and sync rewrote any edit).</summary>
+    public static bool IsVendoredUnitWorkflow(string text) => text.Contains(UnitWorkflowMark, StringComparison.Ordinal);
 
     /// <summary>Whether the project's GitHub workflow (<see cref="Templates.WorkflowPath"/>) exists and runs the gates alone.</summary>
     public static bool IsGatesOnlyAt(string root)
