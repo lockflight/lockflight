@@ -24,7 +24,7 @@ internal static class BasePolicyReader
         if (parsed.Manifest is not Manifest manifest)
         {
             return new BasePolicyReading(null, new ManifestParser(root, label) { ReadsVersion1 = true }.Parse(text).Manifest is { Version: ManifestVersions.Legacy }
-                ? $"the target branch's {Manifest.FileName} is a version 1 manifest, which this engine no longer reads: a pull request that migrates it is judged by the engine the target branch pins (CI does this), not by this one"
+                ? $"the target branch's {Manifest.FileName} is invalid: {parsed.Error?.Describe()}; a pull request that migrates it is judged by the engine the target branch pins (CI does this), not by this one"
                 : $"the target branch's {Manifest.FileName} is invalid: {parsed.Error?.Describe()}");
         }
 
