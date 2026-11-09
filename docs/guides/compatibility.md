@@ -51,6 +51,10 @@ nothing.
   `update` leaves it, prints the diff to the current one and writes that to `.lockflight/local/migration/` for you to merge.
   The settings and `.gitignore` are only added to, never pruned. The `CLAUDE.md` block (between its markers) and the hook shim
   are Lockflight's own and are replaced.
+- **Tested from every release since 0.3.0.** The upgrade matrix
+  ([`tests/e2e/upgrade-matrix.sh`](../../tests/e2e/upgrade-matrix.sh)) sets a sample up with each published release at the
+  three install levels and both profiles, runs one `update --project`, and requires `doctor` to report no FAIL and every file to
+  match what a fresh `init` writes. CI runs it on Linux and Windows for every pull request.
 - **GitHub only.** The Azure Pipelines, Bitbucket Pipelines and GitLab files are not migrated: `update` moves only the lines it
   always has there (the engine install step, the policy restore and the pull request's base) and says so; compare the rest
   with the templates in [CI on other platforms](ci-other-platforms.md).
