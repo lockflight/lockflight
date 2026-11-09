@@ -43,6 +43,7 @@ CI judge), then <a href="guides/getting-started.md">getting started</a>, and rea
 | [How it works](architecture.md) | You want the parts and how they fit: the engine, the plugin, the guard, gates, the lifecycle and where the trust comes from. |
 | [Risk routing](guides/risk-routing.md) | You want to know how a pull request's change class is computed from its diff: file roles, size, moves, and what each class requires in CI. |
 | [Guardrails and boundaries](guides/guardrails-and-boundaries.md) | You need to know what Lockflight can and cannot guarantee, and what the shell write detection sees. |
+| [What the judge catches](guides/what-the-judge-catches.md) | You want to know which agent cheats the CI judge blocks, measured against a plain `dotnet test` with a coverage threshold, and which it leaves to review. |
 | [Performance](guides/performance.md) | You want to know what the hooks, the Stop gate and the CI judge cost in time on each system, and how to measure them. |
 | [Public contracts](guides/contracts.md) | You build on a Lockflight file, output or CI name and need what stays stable across releases, and what is internal. |
 | [Compatibility](guides/compatibility.md) | You need which .NET SDKs, Claude Code versions, operating systems and CI runners are supported and tested, or how long a deprecated feature keeps working. |

@@ -236,7 +236,7 @@ def summarize(args):
     summary = {
         "date": args.date, "runner": args.runner, "engine": args.engine,
         "plainCi": "dotnet test with code coverage; FAIL when a test fails or when patch coverage (changed production lines "
-                   "the tests executed) is below the threshold in the head's coverage.json (80 on main)",
+                   "the tests executed) is below the threshold in the head's coverage.json (80 on the base commit)",
         "cheats": len(cheats), "controls": len(controls),
         "controlsFalseRed": [f"{r['sample']}/{r['case']}" for r in controls if r["lockflight"]["caught"] or r["baseline"]["caught"]],
         "lockflightCaught": sum(r["lockflight"]["caught"] for r in cheats),
