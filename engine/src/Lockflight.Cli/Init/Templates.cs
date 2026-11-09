@@ -384,8 +384,9 @@ internal static class Templates
 
     /// <summary>
     /// The report jobs' policy commit, worked out from the event and git, never from what a job that ran the pull request's code
-    /// says alone. On a pull request the judge's <c>policy</c> output counts only when it is a commit of the target branch at or
-    /// after the event's base (the judge fetched the tip when it ran, which may have moved since); anything else is replaced by the
+    /// says alone. On a pull request the judge's <c>policy</c> output counts only when it is a commit the target branch's tip has been
+    /// at or after the event's base, on the branch's first-parent chain (the judge fetched the tip when it ran, which may have moved
+    /// since; a commit of a branch merged into it never was the tip); anything else is replaced by the
     /// event's base, and the report then refuses evidence judged with another policy. On a push it is the previous commit when the
     /// clone has it, else the pushed commit, as the judge works it out. The commit is checked out for the report and written to
     /// the step's <c>sha</c> output. Reads <c>LF_CLAIMED</c>, <c>LF_TARGET</c>, <c>LF_EVENT_BASE</c>, <c>LF_BEFORE</c> and
@@ -396,12 +397,12 @@ internal static class Templates
         if [ -n "$LF_TARGET" ]; then
           sha="$LF_EVENT_BASE"
           tip=$(git rev-parse --verify --quiet "refs/remotes/origin/$LF_TARGET^{commit}" || true)
-          if commit "$LF_CLAIMED" && [ -n "$tip" ] && git merge-base --is-ancestor "$LF_EVENT_BASE" "$LF_CLAIMED" \
-            && git merge-base --is-ancestor "$LF_CLAIMED" "$tip"; then
+          if commit "$LF_CLAIMED" && [ -n "$tip" ] \
+            && git rev-list --first-parent "$tip" --not "$LF_EVENT_BASE^@" | grep -x "$(git rev-parse "$LF_CLAIMED^{commit}")" > /dev/null; then
             sha="$LF_CLAIMED"
           elif [ -n "$LF_CLAIMED" ]; then
             claimed=$(printf '%s' "$LF_CLAIMED" | tr -cd '0-9a-f' | cut -c 1-64)
-            echo "::error::the judge job names the policy commit '$claimed', which is not on $LF_TARGET between the pull request's base and its tip; the report reads the policy of $LF_EVENT_BASE"
+            echo "::error::the judge job names the policy commit '$claimed', which $LF_TARGET has not been at between the pull request's base and its tip; the report reads the policy of $LF_EVENT_BASE"
           fi
         else
           sha="$LF_SHA"

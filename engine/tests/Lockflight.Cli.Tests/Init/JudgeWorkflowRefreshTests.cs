@@ -109,6 +109,29 @@ public sealed class JudgeWorkflowRefreshTests
     }
 
     [Fact]
+    public void APinRaisedByHandIsAnEditNeverLowered()
+    {
+        string raised = Templates.Workflow(TwoChannels).Replace(
+            $"action@{Templates.ActionCommit} ", $"action@{new string('e', 40)} ", StringComparison.Ordinal);
+
+        JudgeWorkflowRefreshPlan plan = JudgeWorkflowRefresh.Plan(raised);
+
+        Assert.Equal(JudgeWorkflowRefreshStatus.Edited, plan.Status);
+    }
+
+    [Fact]
+    public void TheWorkflowBeforeTheFirstParentPolicyCheckGetsThisEnginesTemplate()
+    {
+        string before = Templates.WorkflowOf(ReleasedJudgeWorkflows.All[0], TwoChannels, CiTrigger.PullRequest, developmentPin: false);
+
+        JudgeWorkflowRefreshPlan plan = JudgeWorkflowRefresh.Plan(before);
+
+        Assert.Contains("merge-base --is-ancestor", before, StringComparison.Ordinal);
+        Assert.Equal(JudgeWorkflowRefreshStatus.Outdated, plan.Status);
+        Assert.Equal(Templates.Workflow(TwoChannels), plan.Replacement);
+    }
+
+    [Fact]
     public void AWorkflowThatRunsTheGatesAloneIsNotTheJudges()
     {
         Assert.Equal(JudgeWorkflowRefreshStatus.NotJudge, JudgeWorkflowRefresh.Plan(Templates.UnitWorkflow(TwoChannels)).Status);

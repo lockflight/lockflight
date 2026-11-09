@@ -7,7 +7,7 @@ namespace Lockflight.Cli.Tests.Init;
 /// The report jobs' policy step of the GitHub workflow, run as the runner runs it (bash) in a scratch clone whose target branch
 /// is <c>origin/main</c>: base, then two commits after it, and a pull request commit off the base. The judge job's
 /// <c>policy</c> output is what the pull request's code could set; the step takes it only when it is on the target branch between
-/// the event's base and the tip.
+/// the event's base and the tip, on its first-parent chain.
 /// </summary>
 public sealed class ReportPolicyStepTests : IDisposable
 {
@@ -53,6 +53,29 @@ public sealed class ReportPolicyStepTests : IDisposable
 
         Assert.Equal(commits.Middle, run.Sha);
         Assert.Contains("::error::", run.Process.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ACommitOfABranchMergedIntoTheTargetIsReplacedByTheEventsBase()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The report jobs run on Linux.");
+        await GitAsync("init", "-q", "-b", "main");
+        string baseCommit = await CommitAsync("base");
+        await GitAsync("checkout", "-q", "-b", "side");
+        string side = await CommitAsync("loosen the policy");
+        await CommitAsync("restore the policy");
+        await GitAsync("checkout", "-q", "main");
+        await GitAsync("-c", "user.email=t@t", "-c", "user.name=t", "merge", "-q", "--no-ff", "-m", "merge side", "side");
+        string merge = await HeadAsync();
+        await GitAsync("update-ref", "refs/remotes/origin/main", merge);
+        await GitAsync("checkout", "-q", "--detach", baseCommit);
+
+        StepRun sideRun = await RunAsync(claimed: side, target: "main", eventBase: baseCommit);
+        StepRun mergeRun = await RunAsync(claimed: merge, target: "main", eventBase: baseCommit);
+
+        Assert.Equal(baseCommit, sideRun.Sha);
+        Assert.Contains("::error::the judge job names the policy commit", sideRun.Process.Output, StringComparison.Ordinal);
+        Assert.Equal(merge, mergeRun.Sha);
     }
 
     [Theory]

@@ -132,7 +132,10 @@ A pull request that changes `action/` pins its own action in two commits: the fi
 `ActionCommit` to the first (do not rebase or squash the branch afterwards, or the pinned commit disappears from it). Once it
 is squash-merged, that commit is on no branch, but GitHub still serves it by SHA, so CI on `main` stays green. Before the
 release, after the last change to `action/` has merged, set `ActionCommit` to its commit on `main` in a pull request of its
-own: the release refuses a pin outside the tagged commit's history.
+own: the release refuses a pin outside the tagged commit's history. The pull request that moves `ActionCommit` off a commit of
+`main` adds that commit to
+[`ReleasedActionCommits`](../../engine/src/Lockflight.Cli/Init/ReleasedActionCommits.cs): `update` replaces only workflows
+pinned to one of those or to `ActionCommit`, and `doctor` warns about any other pin.
 
 1. Raise the version in both `plugin.json` files (the crew's while it has no release of its own: Claude Code replaces an
    installed plugin only when its version changes) and in the Spec Kit preset's `preset.yml`, raise
