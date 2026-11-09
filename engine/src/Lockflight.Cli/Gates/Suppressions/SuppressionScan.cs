@@ -10,13 +10,17 @@ namespace Lockflight.Cli.Gates.Suppressions;
 /// Suppressions already in the code are not judged, and a suppression moved within a file is not new: per file, rule and kind, only the
 /// added ones beyond those the change removes count. An analyzer config line counts when it sets a severity below warning or below
 /// what the same setting said before. Generated files are left out by path and shape (<see cref="GeneratedFiles"/>: lock files,
-/// EF Core model snapshots and migration designers), and so is the <c>#nullable disable</c> that EF Core writes above the namespace
+/// EF Core model snapshots and migration designers), an untracked file under a <c>bin</c> or <c>obj</c> directory is build output
+/// that no <c>.gitignore</c> hides (a committed one is still read), and so is the <c>#nullable disable</c> that EF Core writes above the namespace
 /// of a migration whose designer file is EF Core's, or which carries EF Core's migration attributes itself.
 /// </summary>
 internal static partial class SuppressionScan
 {
     private const string MigrationsDirectory = "Migrations";
     private const string DesignerSuffix = ".Designer.cs";
+
+    /// <summary>The directories the .NET SDK writes its output and generated sources to by default.</summary>
+    private static readonly string[] BuildOutputDirectories = ["bin", "obj"];
 
     public static async Task<SuppressionScanResult> FindAsync(string projectRoot, string? baseRef, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
@@ -33,7 +37,7 @@ internal static partial class SuppressionScan
         }
 
         List<FileDiff> files = [.. UnifiedDiff.FilesOf(diff).Where(file => SuppressionPatterns.CanHoldSuppressions(file.File))];
-        foreach (string path in untracked.Where(SuppressionPatterns.CanHoldSuppressions))
+        foreach (string path in untracked.Where(path => SuppressionPatterns.CanHoldSuppressions(path) && !InBuildOutput(path)))
         {
             files.Add(new FileDiff(path, AllLines(projectRoot, path), []));
         }
@@ -47,6 +51,9 @@ internal static partial class SuppressionScan
 
         return new SuppressionScanResult([.. found.OrderBy(item => item.File, StringComparer.Ordinal).ThenBy(item => item.Line)], files.Count, Problem: null);
     }
+
+    private static bool InBuildOutput(string path) =>
+        path.Split('/')[..^1].Any(directory => BuildOutputDirectories.Contains(directory, StringComparer.OrdinalIgnoreCase));
 
     private static IEnumerable<Suppression> InFile(string root, FileDiff file, IReadOnlySet<string> changed)
     {
