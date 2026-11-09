@@ -7,8 +7,9 @@ namespace Lockflight.Cli.Processes;
 internal sealed record ProcessResult(int ExitCode, string Output, string Error, long DurationMs, bool TimedOut)
 {
     /// <summary>
-    /// The process exited, but something it started kept its output open, so the runner stopped waiting after a short drain;
-    /// <see cref="Output"/> and <see cref="Error"/> hold what was written until then.
+    /// The process exited, but something it started kept its output open, so the runner stopped waiting after a drain;
+    /// <see cref="Output"/> and <see cref="Error"/> hold what was written until then, which may be cut anywhere. A caller that parses
+    /// the output reads it through <see cref="CompleteOutput"/>, never as it is.
     /// </summary>
     public bool OutputHeld { get; init; }
 

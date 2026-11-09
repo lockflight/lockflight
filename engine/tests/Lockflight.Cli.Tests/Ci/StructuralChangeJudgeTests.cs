@@ -49,7 +49,8 @@ public sealed class StructuralChangeJudgeTests : IAsyncLifetime
 
         JsonNode document = await JudgeAsync(head);
 
-        Assert.Equal("PASS", document["verdict"]!.GetValue<string>());
+        // On a failure the checks name the one that did not pass, and why.
+        Assert.True(document["verdict"]!.GetValue<string>() == "PASS", document["checks"]!.ToJsonString());
         Assert.Equal("N/A", Check(document, "red")["verdict"]!.GetValue<string>());
         Assert.Equal(JudgeChecks.StructuralLaneWhy, Check(document, "red")["why"]!.GetValue<string>());
         Assert.Equal("PASS", Check(document, "trace")["verdict"]!.GetValue<string>());

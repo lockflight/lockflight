@@ -86,6 +86,30 @@ public sealed class DependencyStepTests : IDisposable
         Assert.Single(calls);
     }
 
+    [Fact]
+    public async Task AListingWhoseOutputStaysHeldIsAToolErrorNotAVerdict()
+    {
+        ProcessResult held = Answer(0, "{ \"version\": 1, \"projects\": [ { \"path\"") with { OutputHeld = true };
+
+        GateStep step = await RunAsync(nounFirst: held, verbFirst: Answer(0, NoAdvisories));
+
+        Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Equal(ReasonCode.ToolError, step.Reason);
+        Assert.Contains("kept its output open", step.Detail, StringComparison.Ordinal);
+        Assert.Equal(2, calls.Count);
+        Assert.All(calls, call => Assert.StartsWith("dotnet package list", call, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AReportThatIsNotWholeJsonIsAToolError()
+    {
+        GateStep step = await RunAsync(nounFirst: Answer(0, "{ \"version\": 1, \"projects\": [ { \"path\""), verbFirst: Answer(0, NoAdvisories));
+
+        Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Equal(ReasonCode.ToolError, step.Reason);
+        Assert.StartsWith("the package listing's report could not be read", step.Detail, StringComparison.Ordinal);
+    }
+
     public void Dispose() => TempDirectories.DeleteRecursively(project);
 
     private static ProcessResult Answer(int exitCode, string output) => new(exitCode, output, string.Empty, 10, TimedOut: false);

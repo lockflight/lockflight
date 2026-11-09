@@ -48,7 +48,7 @@ public sealed class TestAppsTests : IDisposable
     {
         WriteProject("src/Shop/Shop.csproj", "<PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>");
 
-        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeSpan.FromMilliseconds(1), TimeProvider.System, TestContext.Current.CancellationToken);
+        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeSpan.Zero, TimeProvider.System, TestContext.Current.CancellationToken);
 
         UnevaluatedProject unevaluated = Assert.Single(discovery.Unevaluated);
         Assert.Equal(ProjectEvaluationFailure.TimedOut, unevaluated.Failure);

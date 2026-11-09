@@ -16,8 +16,14 @@ internal sealed class MtpRunner(TimeProvider time) : ITestRunner
     public async Task<TestListing> ListAsync(TestApp app, TimeSpan timeLimit, CancellationToken cancellationToken)
     {
         // MTP's --xunit-list has no JSON format; its "full" listing is text.
-        ProcessResult mtp = await ProcessRunner.RunAsync(
-            "dotnet", [app.AssemblyPath, "--xunit-list", "full", "--no-ansi", "--no-progress"], app.OutputDirectory, timeLimit, app.Environment, cancellationToken);
+        ProcessResult mtp = await CompleteOutput.RunAsync(() => ProcessRunner.RunAsync(
+            "dotnet", [app.AssemblyPath, "--xunit-list", "full", "--no-ansi", "--no-progress"], app.OutputDirectory, timeLimit, app.Environment, cancellationToken));
+        if (mtp.OutputHeld)
+        {
+            // A text listing cut short still parses, as fewer tests: never read it.
+            return TestListing.Unavailable(CompleteOutput.Problem("the test app's listing"));
+        }
+
         return mtp.ExitCode is 0 or ZeroTests ? TestListing.Of(TestInventory.ParseText(app.AssemblyName, mtp.Output), RunnerMode.Mtp) : TestListing.NotListed;
     }
 
