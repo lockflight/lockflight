@@ -293,6 +293,13 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/redteam/inputs.sh "$RUNNER_TEMP/redteam-inputs"
+      - name: Red-team cases against the judge (host tampering through a package, committed git code, loosened policy, markers, a hang)
+        if: matrix.part != '1'
+        shell: bash
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/redteam/judge.sh "$RUNNER_TEMP/redteam-judge"
       # Runs inside a required job but only on Linux, to keep the added time to about half a minute.
       - name: QUICKSTART on samples/dotnet-single (init --ci-only, red, green, PASS; then FAIL), time to first green
         if: runner.os == 'Linux' && matrix.part != '1'

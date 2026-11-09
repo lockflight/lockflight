@@ -43,7 +43,10 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
   nested `NuGet.config` files, `global.json` and `Directory.Packages.props`. A PR can change these, and the gates then build with the
   changed version. For example, a PR could set `<TreatWarningsAsErrors>false</TreatWarningsAsErrors>` in
   `Directory.Build.props`. `policy.protected` lists these files for review. **CODEOWNERS is what protects them.**
-- **Pinned tools.** The action is referenced by commit SHA. gitleaks is downloaded at a fixed version and verified against its
+- **Pinned tools.** The action is referenced by commit SHA. The judge does not check which commit the pin names: a pull
+  request that moves it to another commit (GitHub also serves a commit of a fork under this repository's name) shows only as a
+  change to the protected workflow file in `policy.protected`, so the required code-owner review of `.github/workflows/**` is
+  what stands against it. gitleaks is downloaded at a fixed version and verified against its
   SHA-256 before use. The engine is the one the target branch pins, read from that commit with `git show` (never from the pull
   request's tree) and installed outside the repository, so a `global.json` that pins SDK 8 or 9 does not matter:
   - **With `.lockflight/engine.lock`:** the vendored `.lockflight/ci/install.sh` is checked against the hash the lock names,
@@ -172,7 +175,9 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
   in the same job, before the judge has finished. On GitHub-hosted runners that user has administrator rights (passwordless
   `sudo` on Linux and macOS, an administrator account on Windows), so the code can act as root on the runner's VM:
   - leftovers in `obj/` and `bin/` carry from one build to the next in the judge's worktree;
-  - git hooks the pull request's code installs can run when the judge checks out paths;
+  - git hooks the pull request's code installs can run when the judge checks out paths. Hooks, filters and settings committed
+    in the pull request's tree are never run: git takes hook directories, filter commands and settings from its configuration,
+    never from a file in the tree, and the judge moves its worktree with `reset --hard`, which runs no checkout hook;
   - the policy and baselines are laid over the worktree from the target branch before each build, but are read there after
     the pull request's code has built and run in it;
   - the secrets scan runs before any of it: the judge checks out the head with the target branch's `.gitleaks.toml` and
@@ -194,7 +199,9 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
     `DOTNET_CLI_USE_MSBUILD_SERVER=0` and `MSBUILDDISABLENODEREUSE=1`. A tool that builds by itself (`dotnet ef`) has only
     the environment variables, which a project can override, and an `<Exec>` can start any process it likes;
   - test-framework extension points (an xUnit v3 `TestFramework`, an NUnit `IWrapTestMethod` attribute, a custom runner)
-    run inside the test host;
+    run inside the test host; a `.runsettings` data collector, or a test platform extension package, rewrites outcomes without
+    code in the test assembly: neither is scanned for host tampering or named in the comment, so read the pull request's runner
+    settings and package references in its diff;
   - an MSBuild `<Exec>` task or inline task in a project, props or targets file runs arbitrary code at build time;
   - the host-tampering scan reads the test assemblies only: production code and MSBuild files are not scanned;
   - processes the pull request's code starts and leaves running (a daemon an `<Exec>` starts, a child a source generator

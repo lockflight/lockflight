@@ -3,6 +3,8 @@
 # own steps (run from action/action.yml, with the engine under test or a stand-in), the engine lock and the package feed it is
 # checked against. Each case plants one attack, checks the outcome, and checks that the guide states the same behaviour.
 #   - evidence too large, nested too deep, or naming a property twice: the report refuses it (ERROR), naming the limit;
+#   - the judge's evidence replaced after the action took its digest, and a review from a job that named none: the report's
+#     artifact check refuses the first (ARTIFACT_MISMATCH, FAIL) and never reads the second;
 #   - a pull request that commits artifacts/lockflight/ (a result of its own, a symlink to it): the action uploads the
 #     engine's result as the gates' result, never the pull request's;
 #   - a first engine lock with no token to check it, and a pull request that removes the lock: the action refuses both;
@@ -81,6 +83,21 @@ else
   echo "skip a symlinked gates result: this platform made no symlink"
 fi
 guide_says ci-hardening.md "copied from the engine's evidence outside the checkout, so a pull request that commits \`artifacts/lockflight/\` cannot replace it"
+
+# ---------------------------------------------------------------------------------------------------------------------------
+case_start "the judge's evidence replaced after its digest was taken, and a review uploaded by a job that ran no review"
+mkdir -p "$W/digest/evidence" "$W/digest/review"
+printf '{ "schema": "lockflight.ci-evidence/v1", "head": "%s", "verdict": "FAIL" }\n' "$head" > "$W/digest/evidence/evidence.json"
+sum=$(bash "$ROOT/action/artifacts.sh" digest "$W/digest/evidence")
+printf '{ "schema": "lockflight.ci-evidence/v1", "head": "%s", "verdict": "PASS" }\n' "$head" > "$W/digest/evidence/evidence.json"
+printf '{ "schema": "lockflight.ci-review/v1", "verdict": "PASS" }\n' > "$W/digest/review/review-result.json"
+bash "$ROOT/action/artifacts.sh" verify "$W/digest/evidence" "$sum" "$W/digest/review" "" "$head" "" > "$W/digest.log" 2>&1
+contains "$W/digest.log" "the report refused an artifact" "the replaced evidence is refused"
+contains "$W/digest/evidence/refused.json" '"reason": "ARTIFACT_MISMATCH"' "the refusal names ARTIFACT_MISMATCH"
+if [ -e "$W/digest/review" ]; then bad "a review whose job named no digest is still there to read"; else ok "a review whose job named no digest is not read"; fi
+expect_exit 1 "the report of the refused evidence is FAIL" -- "$E" ci report --evidence "$W/digest/evidence" --head "$head" --out "$W/verdict-digest"
+guide_says ci-hardening.md "refuses one whose files hash to anything else (FAIL)"
+guide_says ci-hardening.md "so a review the judge job's code uploaded under the review's name is never joined"
 
 # ---------------------------------------------------------------------------------------------------------------------------
 # The fixture of the action's own CI job: main pins the engine under test by lock and vendored install script, served from a
