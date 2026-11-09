@@ -16,7 +16,7 @@ public sealed class OpaqueTargetScenarioTests : IDisposable
 
     public OpaqueTargetScenarioTests()
     {
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "secrets"));
         File.WriteAllText(Path.Combine(projectRoot.FullName, "secrets", "key.txt"), "key");
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "src"));

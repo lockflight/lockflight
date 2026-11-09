@@ -8,7 +8,7 @@ standin="$here/../_fixtures/facts-standin.sh"
 [ -f "$standin" ] || { echo "scaffold: engine stand-in not found at $standin" >&2; exit 1; }
 mkdir -p src/Shop.Domain secrets .lockflight/bin
 cp "$standin" .lockflight/bin/lockflight && chmod +x .lockflight/bin/lockflight
-printf 'version: 1\nprotected:\n  - "secrets/**"\n' > lockflight.yaml
+printf 'version: 2\nprotected:\n  - "secrets/**"\n' > lockflight.yaml
 cat > CLAUDE.md <<'MD'
 # Shop
 

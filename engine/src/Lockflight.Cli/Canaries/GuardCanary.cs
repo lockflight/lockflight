@@ -35,5 +35,5 @@ internal static class GuardCanary
     }
 
     private static string FileCall(CanaryScratch scratch, string tool, string path) =>
-        scratch.ToolCall(tool, new JsonObject { ["file_path"] = path, ["old_string"] = "version: 1", ["new_string"] = "version: 1\n# x", ["content"] = "ok\n" });
+        scratch.ToolCall(tool, new JsonObject { ["file_path"] = path, ["old_string"] = "version: 2", ["new_string"] = "version: 2\n# x", ["content"] = "ok\n" });
 }

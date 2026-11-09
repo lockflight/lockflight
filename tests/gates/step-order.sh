@@ -68,7 +68,7 @@ single() {
   local root="$scratch/single"
   rm -rf "$root"
   mkdir -p "$root/src"
-  printf 'version: 1\n' > "$root/lockflight.yaml"
+  printf 'version: 2\n' > "$root/lockflight.yaml"
   printf '<Project Sdk="Microsoft.NET.Sdk" />\n' > "$root/src/Shop.csproj"
   printf 'class Order {}\n' > "$root/src/Order.cs"
   printf '.lockflight/\n' > "$root/.gitignore"
@@ -82,7 +82,7 @@ workspace() {
   rm -rf "$root"
   mkdir -p "$root/services/orders" "$root/services/billing" "$root/web"
   cat > "$root/lockflight.yaml" <<'YAML'
-version: 1
+version: 2
 units:
   - path: services/orders
     kind: dotnet
@@ -106,7 +106,7 @@ layered() {
   local root="$scratch/layered"
   rm -rf "$root"
   mkdir -p "$root/src/Core" "$root/src/Api" "$root/tests/Core.Tests" "$root/tests/Api.Tests"
-  printf 'version: 1\n' > "$root/lockflight.yaml"
+  printf 'version: 2\n' > "$root/lockflight.yaml"
   printf '<Project Sdk="Microsoft.NET.Sdk" />\n' > "$root/src/Core/Core.csproj"
   printf '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><ProjectReference Include="../Core/Core.csproj" /></ItemGroup></Project>\n' > "$root/src/Api/Api.csproj"
   printf '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="xunit" /><ProjectReference Include="../../src/Core/Core.csproj" /></ItemGroup></Project>\n' > "$root/tests/Core.Tests/Core.Tests.csproj"

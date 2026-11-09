@@ -43,7 +43,7 @@ internal static partial class ManifestMigration
         string newline = body.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         string lf = body.Replace("\r\n", "\n", StringComparison.Ordinal);
 
-        ManifestLoadResult loaded = new ManifestParser(root, path).Parse(lf);
+        ManifestLoadResult loaded = new ManifestParser(root, path) { ReadsVersion1 = true }.Parse(lf);
         if (loaded.Error is ManifestError error)
         {
             return new ManifestMigrationResult(ManifestMigrationStatus.Invalid, null, $"{error.Describe()}; fix it first, nothing was changed");
@@ -176,7 +176,7 @@ internal static partial class ManifestMigration
     /// <summary>Why <paramref name="edited"/> does not read as <paramref name="before"/> plus the migration values; null when it does.</summary>
     private static string? Problem(Manifest before, string edited, string root, string path)
     {
-        ManifestLoadResult after = new ManifestParser(root, path).Parse(edited);
+        ManifestLoadResult after = new ManifestParser(root, path) { ReadsVersion1 = true }.Parse(edited);
         if (after.Error is ManifestError error)
         {
             return error.Message;

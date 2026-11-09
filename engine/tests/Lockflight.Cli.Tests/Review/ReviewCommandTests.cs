@@ -51,7 +51,7 @@ public sealed class ReviewCommandTests : IDisposable
     [Fact]
     public async Task TheReviewerRunsWithTheManifestsModelAndBudget()
     {
-        await ProjectAsync("version: 1\nreview:\n  model: opus\n  maxUsd: 1.50\n");
+        await ProjectAsync("version: 2\nreview:\n  model: opus\n  maxUsd: 1.50\n");
         claude.Answers();
 
         (ExitCode exitCode, string output, _) = await RunAsync(["review"]);
@@ -207,7 +207,7 @@ public sealed class ReviewCommandTests : IDisposable
     [Fact]
     public async Task ARaisedDiffLimitInTheManifestLetsALargerDiffBeTheReviewOfRecord()
     {
-        await ProjectAsync("version: 1\nreview:\n  maxDiffCharacters: 250000\n");
+        await ProjectAsync("version: 2\nreview:\n  maxDiffCharacters: 250000\n");
         File.WriteAllText(Path.Combine(root.FullName, "src", "Catalog.cs"), "namespace Shop;\n" + string.Concat(Enumerable.Repeat("// a generated catalog line\n", 6_000)));
         await GitAsync("add", "src/Catalog.cs");
         await GitAsync("commit", "-q", "-m", "catalog");
@@ -499,7 +499,7 @@ public sealed class ReviewCommandTests : IDisposable
     [Fact]
     public async Task TheTargetsMergeBaseOnAFeatureBranchIsOfRecord()
     {
-        await ProjectAsync("version: 1\nreview:\n  target: main\n");
+        await ProjectAsync("version: 2\nreview:\n  target: main\n");
         await GitAsync("checkout", "-q", "-b", "feature");
         await GitAsync("commit", "-q", "--allow-empty", "-m", "feature commit");
         claude.Answers();
@@ -852,7 +852,7 @@ public sealed class ReviewCommandTests : IDisposable
         TempDirectories.DeleteRecursively(tools);
     }
 
-    private async Task ProjectAsync(string manifest = "version: 1\n")
+    private async Task ProjectAsync(string manifest = "version: 2\n")
     {
         await GitAsync("init", "-q", "-b", "main");
         await GitAsync("config", "user.email", Person);

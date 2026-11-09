@@ -118,7 +118,7 @@ internal static class GuardCanaries
     }
 
     private static string FileCall(string tool, string path, CanaryScratch scratch) =>
-        Call(tool, new JsonObject { ["file_path"] = path, ["old_string"] = "version: 1", ["new_string"] = "version: 1\n# x", ["content"] = "ok\n" }, scratch);
+        Call(tool, new JsonObject { ["file_path"] = path, ["old_string"] = "version: 2", ["new_string"] = "version: 3\n# x", ["content"] = "ok\n" }, scratch);
 
     private static string BashCall(string command, CanaryScratch scratch) => Call("Bash", new JsonObject { ["command"] = command }, scratch);
 

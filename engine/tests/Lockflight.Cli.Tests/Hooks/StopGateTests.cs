@@ -18,7 +18,7 @@ public sealed class StopGateTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(unit, "A.slnx"), "<Solution />\n", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(unit, "B.slnx"), "<Solution />\n", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName),
-            "version: 1\nstop:\n  gate: true\n  target: svc/a\nunits:\n  - path: svc/a\n    build: A.slnx\n", cancellationToken);
+            "version: 2\nstop:\n  gate: true\n  target: svc/a\nunits:\n  - path: svc/a\n    build: A.slnx\n", cancellationToken);
         await GitAsync(["init", "-q"]);
         await GitAsync(["add", "."]);
         await GitAsync(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base"]);

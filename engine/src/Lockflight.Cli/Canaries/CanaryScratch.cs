@@ -11,7 +11,7 @@ namespace Lockflight.Cli.Canaries;
 /// </summary>
 internal sealed class CanaryScratch : IDisposable
 {
-    private const string MinimalManifest = "version: 1\n";
+    private const string MinimalManifest = "version: 2\n";
 
     /// <summary>What an agent's shell has: <c>CLAUDECODE=1</c> and nothing that says a person attends the session.</summary>
     private static readonly Dictionary<string, string> AgentSession = new(StringComparer.Ordinal) { [EnvironmentVariables.ClaudeCode] = "1" };

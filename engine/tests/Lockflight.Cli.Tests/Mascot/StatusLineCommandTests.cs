@@ -21,7 +21,7 @@ public sealed class StatusLineCommandTests : IDisposable
     [Fact]
     public async Task WithNoRecentVerdictLeviIsOnDuty()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
         (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
 
@@ -37,7 +37,7 @@ public sealed class StatusLineCommandTests : IDisposable
     [InlineData("review.completed", "review:not-of-record", "001-orders: not of record", "review NOT-EARNED")]
     public async Task TheLastVerdictIsShown(string type, string signature, string summary, string expected)
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         string ledger = Path.Combine(root.FullName, ".lockflight", "ledger");
         Directory.CreateDirectory(ledger);
         string at = time.Now.AddMinutes(-5).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
@@ -58,7 +58,7 @@ public sealed class StatusLineCommandTests : IDisposable
     [InlineData("session-command.answered", "user-prompt-expansion:session-approval:wrong-code", "session-approval:wrong-code")]
     public async Task EventsThatAreNotVerdictsLeaveTheLastVerdictShown(string type, string signature, string summary)
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         string ledger = Path.Combine(root.FullName, ".lockflight", "ledger");
         Directory.CreateDirectory(ledger);
         string earlier = time.Now.AddMinutes(-5).ToString("O", System.Globalization.CultureInfo.InvariantCulture);
@@ -75,7 +75,7 @@ public sealed class StatusLineCommandTests : IDisposable
     [Fact]
     public async Task ACodeWaitingForItsSecondStepShowsTheLineToType()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         new SessionCodes(root.FullName, time, RandomSource.WithCodes("k7m2qx")).Issue("reset", "001-orders", [("redgreen.json", "abc")]);
 
         (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", Plain(), time);
@@ -86,7 +86,7 @@ public sealed class StatusLineCommandTests : IDisposable
     [Fact]
     public async Task AnExpiredCodeIsNotShown()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         new SessionCodes(root.FullName, time, RandomSource.WithCodes("k7m2qx")).Issue("reset", "001-orders", [("redgreen.json", "abc")]);
         time.Advance(SessionCodes.Lifetime);
 
@@ -98,7 +98,7 @@ public sealed class StatusLineCommandTests : IDisposable
     [Fact]
     public async Task InColorItDrawsLevisFaceOnTwoLines()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
         (_, string output, _) = await TestConsole.RunAsync(["statusline"], Session(), "/", time);
 

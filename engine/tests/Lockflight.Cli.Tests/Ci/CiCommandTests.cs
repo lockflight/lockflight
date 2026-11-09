@@ -14,7 +14,7 @@ public sealed class CiCommandTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         repository = await GitHistoryFixture.CreateAsync(cancellationToken);
-        main = await repository.Write("lockflight.yaml", "version: 1\nci:\n  maxRedCommits: 1\n").Write("README.md", "# shop\n").CommitAsync("init", cancellationToken);
+        main = await repository.Write("lockflight.yaml", "version: 2\nci:\n  maxRedCommits: 1\n").Write("README.md", "# shop\n").CommitAsync("init", cancellationToken);
         await repository.CheckoutNewAsync("012-checkout", cancellationToken);
     }
 
@@ -29,7 +29,7 @@ public sealed class CiCommandTests : IAsyncLifetime
     public async Task ThePolicyComesFromTheTargetBranchNotThePullRequest()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await repository.Write("lockflight.yaml", "version: 1\nci:\n  maxRedCommits: 10\n").Write("a.cs", "a").CommitAsync("test: red 1", cancellationToken, null, "Lockflight-Red: 1");
+        await repository.Write("lockflight.yaml", "version: 2\nci:\n  maxRedCommits: 10\n").Write("a.cs", "a").CommitAsync("test: red 1", cancellationToken, null, "Lockflight-Red: 1");
         string head = await repository.Write("b.cs", "b").CommitAsync("test: red 2", cancellationToken, null, "Lockflight-Red: 2");
 
         await RunAsync(head);
@@ -79,7 +79,7 @@ public sealed class CiCommandTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await repository.CheckoutAsync("main", cancellationToken);
-        main = await repository.Write("lockflight.yaml", "version: 1\nci:\n  maxRedCommits: lots\n").CommitAsync("break policy", cancellationToken);
+        main = await repository.Write("lockflight.yaml", "version: 2\nci:\n  maxRedCommits: lots\n").CommitAsync("break policy", cancellationToken);
         await repository.CheckoutAsync("012-checkout", cancellationToken);
         string head = await repository.Write("a.cs", "a").CommitAsync("feat", cancellationToken);
 
@@ -87,6 +87,23 @@ public sealed class CiCommandTests : IAsyncLifetime
 
         Assert.Equal(ExitCode.Config, exitCode);
         Assert.Contains("the target branch's lockflight.yaml is invalid", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AVersionOneManifestOnTheTargetBranchIsAConfigurationErrorThatNamesTheMigration()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        await repository.CheckoutAsync("main", cancellationToken);
+        main = await repository.Write("lockflight.yaml", "version: 1\nci:\n  maxRedCommits: 1\n").CommitAsync("old policy", cancellationToken);
+        await repository.CheckoutAsync("012-checkout", cancellationToken);
+        string head = await repository.Write("a.cs", "a").CommitAsync("feat", cancellationToken);
+
+        (ExitCode exitCode, _, string error) = await RunAsync(head);
+
+        Assert.Equal(ExitCode.Config, exitCode);
+        Assert.Contains("version 1 manifests are no longer read", error, StringComparison.Ordinal);
+        Assert.Contains("update --project", error, StringComparison.Ordinal);
+        Assert.Single(error.Trim().Split('\n'));
     }
 
     [Fact]
@@ -98,7 +115,7 @@ public sealed class CiCommandTests : IAsyncLifetime
         main = await repository.CommitAsync("drop policy", cancellationToken);
         await repository.CheckoutAsync("012-checkout", cancellationToken);
         await repository.MergeAsync("main", cancellationToken);
-        string head = await repository.Write("lockflight.yaml", "version: 1\n").Write("a.cs", "a").CommitAsync("feat", cancellationToken);
+        string head = await repository.Write("lockflight.yaml", "version: 2\n").Write("a.cs", "a").CommitAsync("feat", cancellationToken);
 
         (ExitCode exitCode, _, string error) = await RunAsync(head);
 

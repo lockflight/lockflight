@@ -71,7 +71,7 @@ public sealed class InitAdoptionTests : IDisposable
     public async Task OnlyTheInitThatCreatesTheManifestMarksFeatures()
     {
         await CreateSetupAsync();
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
 
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--no-link"], string.Empty, root.FullName);
 
@@ -84,7 +84,7 @@ public sealed class InitAdoptionTests : IDisposable
     public async Task AnExistingManifestGetsItsUnitsAsLinesForAPersonNotAnEdit()
     {
         await CreateSetupAsync();
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
 
         (ExitCode exitCode, string output, _) = await TestConsole.RunAsync(["init", "--no-link"], string.Empty, root.FullName);
 
@@ -97,7 +97,7 @@ public sealed class InitAdoptionTests : IDisposable
     public async Task AVendoredUnitRepositoryGetsNoFeatureMarked()
     {
         await CreateSetupAsync();
-        Write(Manifest.UnitFileName, "version: 1\n");
+        Write(Manifest.UnitFileName, "version: 2\n");
 
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["init", "--no-link"], string.Empty, root.FullName);
 
@@ -192,7 +192,7 @@ public sealed class InitAdoptionTests : IDisposable
     }
 
     [Fact]
-    public async Task UnitOfOnAVersionOneManifestSaysToMoveToVersionTwo()
+    public async Task UnitOfOnAVersionOneManifestNamesTheMigration()
     {
         Write(Manifest.FileName, "version: 1\n");
 
@@ -200,7 +200,8 @@ public sealed class InitAdoptionTests : IDisposable
             ["init", "--no-link", "--unit-of", "https://example.com/example/shell.git", "--unit-path", "services/orders"], string.Empty, root.FullName);
 
         Assert.Equal(ExitCode.Config, exitCode);
-        Assert.Contains("needs a version 2 manifest", error, StringComparison.Ordinal);
+        Assert.Contains("version 1 manifests are no longer read", error, StringComparison.Ordinal);
+        Assert.Contains("update --project", error, StringComparison.Ordinal);
     }
 
     [Fact]

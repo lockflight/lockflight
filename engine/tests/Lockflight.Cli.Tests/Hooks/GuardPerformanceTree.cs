@@ -11,7 +11,7 @@ public sealed class GuardPerformanceTree : IDisposable
 
     public GuardPerformanceTree()
     {
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
         for (int index = 0; index < PackageCount; index++)
         {
             string package = Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "node_modules", $"p{index}", "lib")).FullName;

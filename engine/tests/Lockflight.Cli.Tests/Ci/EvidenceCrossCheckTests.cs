@@ -20,7 +20,7 @@ public sealed class EvidenceCrossCheckTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         repository = await GitHistoryFixture.CreateAsync(cancellationToken);
-        baseCommit = await repository.Write("lockflight.yaml", "version: 1\n").Write("src/Shop/Shop.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n")
+        baseCommit = await repository.Write("lockflight.yaml", "version: 2\n").Write("src/Shop/Shop.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n")
             .Write("src/Shop/Price.cs", "namespace Shop;\n\npublic sealed class Price\n{\n}\n")
             .Write("tests/Shop.Tests/Shop.Tests.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"xunit.v3\" Version=\"3.0.0\" />\n  </ItemGroup>\n</Project>\n")
             .CommitAsync("init", cancellationToken);

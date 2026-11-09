@@ -11,7 +11,7 @@ E="${ENGINE:?set ENGINE to a lockflight binary}"
 WS="$WORK/ws"; cd "$WS" || exit 1
 export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com CLAUDECODE=1
 git config user.email dev@example.com
-printf 'version: 1\nunits:\n  - path: services/orders\n    build: Orders.sln\n  - path: services/billing\n  - path: web/admin\n    kind: none\n' > lockflight.yaml
+printf 'version: 2\ngates:\n  quality:\n    suppressions: report\n  docs:\n    references: report\napprovals:\n  check: report\nunits:\n  - path: services/orders\n    build: Orders.sln\n  - path: services/billing\n  - path: web/admin\n    kind: none\n' > lockflight.yaml
 printf '.lockflight/ledger/\n.lockflight/local/\n' >> .gitignore
 git add -A && git commit -qm "lockflight"
 

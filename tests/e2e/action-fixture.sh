@@ -52,7 +52,7 @@ for entry in * .[!.]*; do
   case "$entry" in .git|src|tests|Shop.slnx|global.json|Directory.Build.props) ;; *) printf '/%s\n' "$entry" >> .git/info/exclude ;; esac
 done
 printf '/artifacts/\n' >> .git/info/exclude
-printf 'version: 1\n' > lockflight.yaml
+printf 'version: 2\ngates:\n  quality:\n    suppressions: report\n  docs:\n    references: report\napprovals:\n  check: report\n' > lockflight.yaml
 printf 'bin/\nobj/\n.lockflight/ledger/\n.lockflight/local/\n' > .gitignore
 printf '.lockflight/ci/install.sh text eol=lf\n' > .gitattributes
 mkdir -p .lockflight/ci

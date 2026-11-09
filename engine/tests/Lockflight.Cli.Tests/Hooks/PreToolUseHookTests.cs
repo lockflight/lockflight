@@ -10,6 +10,7 @@ public sealed class PreToolUseHookTests : IDisposable
     public PreToolUseHookTests()
     {
         File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), """
+            version: 2
             protected:
               - "secrets/**"
               - "*.lock"

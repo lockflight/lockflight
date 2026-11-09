@@ -6,7 +6,7 @@
 set -euo pipefail
 mkdir -p src/Shop.Api tests/Shop.Tests specs/001-shipping .specify/memory .lockflight/bin
 printf '{"ai": "claude", "speckit_version": "1.1.3"}\n' > .specify/init-options.json
-printf 'version: 1\n' > lockflight.yaml
+printf 'version: 2\n' > lockflight.yaml
 printf '.lockflight/\n' > .gitignore
 cat > src/Shop.Api/Shop.Api.csproj <<'XML'
 <Project Sdk="Microsoft.NET.Sdk">

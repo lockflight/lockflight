@@ -17,7 +17,7 @@ public sealed class FeatureRedirectTests : IAsyncLifetime
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         repository = await GitHistoryFixture.CreateAsync(cancellationToken);
-        await repository.Write("lockflight.yaml", "version: 1\n").Write("specs/001-x/spec.md", "# Spec\n").CommitAsync("init", cancellationToken);
+        await repository.Write("lockflight.yaml", "version: 2\n").Write("specs/001-x/spec.md", "# Spec\n").CommitAsync("init", cancellationToken);
     }
 
     public ValueTask DisposeAsync()

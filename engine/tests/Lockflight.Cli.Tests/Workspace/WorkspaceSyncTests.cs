@@ -74,7 +74,7 @@ public sealed class WorkspaceSyncTests : IDisposable
         Manifest manifest = new(shell.FullName, [], StopGate: false, StopTarget: null, GateSettings.Default);
         string body = UnitPolicy.Body(manifest, new Unit("services/orders", "Orders.sln", UnitKind.Auto, TestFramework: null, StopFilter: null));
 
-        ManifestLoadResult loaded = new ManifestParser(shell.FullName, "lockflight.unit.yaml").Parse(body);
+        ManifestLoadResult loaded = new ManifestParser(shell.FullName, "lockflight.unit.yaml") { ReadsVersion1 = true }.Parse(body);
 
         Assert.Equal("Orders.sln", loaded.Manifest!.Gates.BuildFile);
     }
@@ -133,7 +133,7 @@ public sealed class WorkspaceSyncTests : IDisposable
 
     private async Task CreateWorkspaceAsync()
     {
-        File.WriteAllText(Path.Combine(shell.FullName, Manifest.FileName), "version: 1\nunits:\n  - path: services/orders\n  - path: web/admin\n    kind: none\n");
+        File.WriteAllText(Path.Combine(shell.FullName, Manifest.FileName), "version: 2\nunits:\n  - path: services/orders\n  - path: web/admin\n    kind: none\n");
         await GitAsync(shell.FullName, ["init", "-q"]);
         foreach (string unit in new[] { Orders, Path.Combine(shell.FullName, "web", "admin") })
         {

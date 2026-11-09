@@ -13,7 +13,7 @@ public sealed class BlockLedgerContextTests : IDisposable
     [InlineData("code-reviewer", "code-reviewer")]
     public async Task ABlockRecordsTheToolTheCallTheSessionAndTheAgent(string? agentType, string expectedAgent)
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         Dictionary<string, object?> payload = new()
         {
             ["cwd"] = root.FullName,
@@ -44,7 +44,7 @@ public sealed class BlockLedgerContextTests : IDisposable
     public async Task ABlockedFileWriteRecordsTheToolTheWholePathAndTheSession(string projectFolder)
     {
         DirectoryInfo project = Directory.CreateDirectory(Path.Combine(root.FullName, projectFolder));
-        File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 1\nprotected:\n  - secrets/**\n");
+        File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
         string target = Path.Combine(project.FullName, "secrets", "key.txt");
         Dictionary<string, object?> payload = new()
         {

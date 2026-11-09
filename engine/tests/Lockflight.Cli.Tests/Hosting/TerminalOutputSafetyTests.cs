@@ -110,7 +110,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
     [Fact]
     public async Task AHookBlockNamesTheFileWithoutItsEscapes()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
         string payload = HookPayloads.ToolCall("Write", Path.Combine(root.FullName, "secrets", $"key{Hostile}.txt"), root.FullName);
 
         (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, root.FullName, time);
@@ -207,7 +207,7 @@ public sealed class TerminalOutputSafetyTests : IDisposable
 
     private string Recently() => time.Now.AddMinutes(-5).ToString("O", CultureInfo.InvariantCulture);
 
-    private void WriteManifest() => File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+    private void WriteManifest() => File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
     private void WriteLedger(params string[] lines)
     {

@@ -37,7 +37,7 @@ public abstract class RedCommandScenario : IAsyncLifetime
     }
 
     /// <summary>The target branch's manifest.</summary>
-    private protected virtual string ManifestText => "version: 1\n";
+    private protected virtual string ManifestText => "version: 2\n";
 
     private protected Task<(ExitCode ExitCode, string Output, string Error)> RedAsync(params string[] options) =>
         TestConsole.RunAsync(["red", .. options], string.Empty, repository.Root, new Dictionary<string, string>());

@@ -39,7 +39,7 @@ public sealed class JudgeBudgetTests
         DirectoryInfo evidence = Directory.CreateTempSubdirectory("lockflight-ci-budget-");
         try
         {
-            string main = await repository.Write("lockflight.yaml", "version: 1\nci:\n  timeoutMinutes: 2\n").CommitAsync("init", cancellationToken);
+            string main = await repository.Write("lockflight.yaml", "version: 2\nci:\n  timeoutMinutes: 2\n").CommitAsync("init", cancellationToken);
             await repository.CheckoutNewAsync("001-x", cancellationToken);
             string head = await repository.Write("a.cs", "a").CommitAsync("test: red", cancellationToken, null, "Lockflight-Red: 1");
 

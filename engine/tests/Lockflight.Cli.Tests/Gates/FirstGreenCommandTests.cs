@@ -9,7 +9,7 @@ namespace Lockflight.Cli.Tests.Gates;
 public sealed class FirstGreenCommandTests : IDisposable
 {
     /// <summary>A unit that is guarded but not built: the stop profile passes fast without a build.</summary>
-    private const string GuardedOnly = "version: 1\nstop:\n  gate: true\nunits:\n  - path: web\n    kind: none\n";
+    private const string GuardedOnly = "version: 2\nstop:\n  gate: true\nunits:\n  - path: web\n    kind: none\n";
 
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-first-green-command-");
 

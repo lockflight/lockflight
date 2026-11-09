@@ -14,7 +14,7 @@ internal static class CiSolution
     {
         repository.Write("global.json", """{ "sdk": { "version": "10.0.100", "rollForward": "latestMajor" }, "test": { "runner": "Microsoft.Testing.Platform" } }""" + "\n")
             .Write(".gitignore", "bin/\nobj/\n.lockflight/local/\n.lockflight/ledger/\n")
-            .Write("lockflight.yaml", "version: 1\n")
+            .Write("lockflight.yaml", "version: 2\n")
             .Write("Shop.slnx", """
                 <Solution>
                   <Project Path="src/Shop/Shop.csproj" />

@@ -12,7 +12,7 @@ public sealed class SharedChangesTests : IDisposable
     public async Task OnlyBuildInputsOutsideEveryUnitCountAsSharedChanges()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        Write(Manifest.FileName, "version: 1\nunits:\n  - path: svc/a\n");
+        Write(Manifest.FileName, "version: 2\nunits:\n  - path: svc/a\n");
         Write("libs/shared/Foo.cs", "class Foo {}\n");
         Write("svc/a/A.cs", "class A {}\n");
         Write("specs/001/spec.md", "spec\n");
@@ -40,7 +40,7 @@ public sealed class SharedChangesTests : IDisposable
     public async Task CommittedSharedBuildInputsAreFingerprintedButCommittedSpecsAndUnitFilesAreNot()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        Write(Manifest.FileName, "version: 1\nunits:\n  - path: svc/a\n");
+        Write(Manifest.FileName, "version: 2\nunits:\n  - path: svc/a\n");
         Write("libs/shared/Foo.cs", "class Foo {}\n");
         Write("svc/a/A.cs", "class A {}\n");
         Write("specs/001/spec.md", "spec\n");

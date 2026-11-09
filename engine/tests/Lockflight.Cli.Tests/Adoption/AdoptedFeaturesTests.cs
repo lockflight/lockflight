@@ -12,7 +12,7 @@ public sealed class AdoptedFeaturesTests : IDisposable
     public async Task AChangeToAnAdoptedFeatureNeedsNoApprovalButANewFeatureDoes()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        Write("lockflight.yaml", "version: 1\n");
+        Write("lockflight.yaml", "version: 2\n");
         Write("specs/001-old/spec.md", "old\n");
         new AdoptedFeatures(root.FullName).Save(["001-old"]);
         await GitAsync(["init", "-q", "-b", "main"]);

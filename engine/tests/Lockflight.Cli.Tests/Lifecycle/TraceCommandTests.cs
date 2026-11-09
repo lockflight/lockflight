@@ -10,7 +10,7 @@ public sealed class TraceCommandTests : IDisposable
     [Fact]
     public async Task ASpecWithoutRequirementsHasNothingToTrace()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         Directory.CreateDirectory(Path.Combine(root.FullName, "specs", "001-orders"));
         File.WriteAllText(Path.Combine(root.FullName, "specs", "001-orders", "spec.md"), "# Feature Specification: Orders\n\nNo requirements yet.\n");
 
@@ -24,7 +24,7 @@ public sealed class TraceCommandTests : IDisposable
     [Fact]
     public async Task ASpecWhoseEveryRequirementIsVerifiedOutsideDotNetIsNotApplicableNotAPass()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         Directory.CreateDirectory(Path.Combine(root.FullName, "specs", "001-orders"));
         Directory.CreateDirectory(Path.Combine(root.FullName, "web"));
         File.WriteAllText(Path.Combine(root.FullName, "web", "card.spec.ts"), "it('FR-001 shows the card', () => {});\n");
@@ -41,7 +41,7 @@ public sealed class TraceCommandTests : IDisposable
     [Fact]
     public async Task AnOutsideMarkerPointingAtAFileThatDoesNotNameTheRequirementStillNeedsRedGreen()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         Directory.CreateDirectory(Path.Combine(root.FullName, "specs", "001-orders"));
         Directory.CreateDirectory(Path.Combine(root.FullName, "web"));
         File.WriteAllText(Path.Combine(root.FullName, "web", "card.spec.ts"), "it('shows the card', () => {});\n");

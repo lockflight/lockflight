@@ -30,12 +30,12 @@ trap 'rm -rf "$fixture"' EXIT
 
 project="$fixture/project"
 mkdir -p "$project/src" "$project/.claude/worktrees"
-printf 'version: 1\n' > "$project/lockflight.yaml"
+printf 'version: 2\n' > "$project/lockflight.yaml"
 printf 'class A {}\n' > "$project/src/A.cs"
 for name in alpha beta gamma; do
   mkdir -p "$project/.claude/worktrees/$name/src"
   printf 'gitdir: %s\n' "$project/.git/worktrees/$name" > "$project/.claude/worktrees/$name/.git"
-  printf 'version: 1\n' > "$project/.claude/worktrees/$name/lockflight.yaml"
+  printf 'version: 2\n' > "$project/.claude/worktrees/$name/lockflight.yaml"
 done
 
 # Engines by absolute path: every call runs in a fixture project.
@@ -52,7 +52,7 @@ plains=()
 for index in $(seq 1 "$#"); do
   plain="$fixture/plain$index"
   mkdir -p "$plain/src"
-  printf 'version: 1\n' > "$plain/lockflight.yaml"
+  printf 'version: 2\n' > "$plain/lockflight.yaml"
   printf 'class A {}\n' > "$plain/src/A.cs"
   plains+=("$(native "$plain")")
 done

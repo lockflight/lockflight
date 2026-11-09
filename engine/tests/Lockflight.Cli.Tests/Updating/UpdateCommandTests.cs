@@ -300,7 +300,7 @@ public sealed class UpdateCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task AManifestTheMigrationCannotEditGetsTheSnippetAndStaysAsItIs()
+    public async Task AManifestTheMigrationCannotEditGetsTheSnippetAndNothingIsChanged()
     {
         const string before = "version: 1\ngates: { timeoutSeconds: 600 }\n";
         File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), before);
@@ -309,7 +309,7 @@ public sealed class UpdateCommandTests : IDisposable
 
         (ExitCode exitCode, _, string error) = await ProjectUpdateAsync(new RunningEngine(engine, IsSingleFile: true));
 
-        Assert.Equal(ExitCode.Pass, exitCode);
+        Assert.Equal(ExitCode.Config, exitCode);
         Assert.Contains("Add this by hand", error, StringComparison.Ordinal);
         Assert.Contains("routing:", error, StringComparison.Ordinal);
         Assert.Equal(before, File.ReadAllText(Path.Combine(root.FullName, Manifest.FileName)));

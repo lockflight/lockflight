@@ -27,7 +27,7 @@ public sealed class OtherCheckoutGuardTests : IDisposable
         foreach (string root in new[] { Project, Other })
         {
             Directory.CreateDirectory(Path.Combine(root, "src"));
-            File.WriteAllText(Path.Combine(root, Manifest.FileName), "version: 1\n");
+            File.WriteAllText(Path.Combine(root, Manifest.FileName), "version: 2\n");
         }
 
         Directory.CreateDirectory(Path.Combine(Home, ".lockflight", "bin"));
@@ -72,7 +72,7 @@ public sealed class OtherCheckoutGuardTests : IDisposable
     {
         string nested = Path.Combine(Project, "wt2");
         Directory.CreateDirectory(Path.Combine(nested, ".lockflight"));
-        File.WriteAllText(Path.Combine(nested, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(nested, Manifest.FileName), "version: 2\n");
 
         Assert.Equal(ExitCode.HookBlock, await GuardAsync("Write", Path.Combine(nested, ".lockflight", "engine.lock"), command: null));
     }

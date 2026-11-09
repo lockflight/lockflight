@@ -104,7 +104,7 @@ if [ "$runner" = mtp ]; then
 else
   printf '{\n  "sdk": { "version": "10.0.102", "rollForward": "latestFeature" }\n}\n' > global.json
 fi
-printf 'version: 1\n' > lockflight.yaml
+printf 'version: 2\n' > lockflight.yaml
 printf 'bin/\nobj/\n.lockflight/local/\n' > .gitignore
 git init -q
 git add -A

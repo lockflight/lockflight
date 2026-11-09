@@ -200,7 +200,7 @@ public sealed class ChangeSetReaderTests
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         using RoutingRepository shell = await RoutingRepository.CreateAsync(
-            new Dictionary<string, string> { [Manifest.FileName] = "version: 1\nunits:\n  - path: services/orders\n", [".gitignore"] = "services/\n" }, cancellationToken);
+            new Dictionary<string, string> { [Manifest.FileName] = "version: 2\nunits:\n  - path: services/orders\n", [".gitignore"] = "services/\n" }, cancellationToken);
         string child = Path.Combine(shell.Root, "services", "orders");
         Directory.CreateDirectory(child);
         await File.WriteAllTextAsync(Path.Combine(child, "Order.cs"), "class Order { }\n", cancellationToken);

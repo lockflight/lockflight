@@ -11,7 +11,7 @@ public sealed class HookAdapterTests : IDisposable
 {
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-hook-adapter-");
 
-    public HookAdapterTests() => File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+    public HookAdapterTests() => File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
     [Theory]
     [InlineData("Read", "read", null, false)]

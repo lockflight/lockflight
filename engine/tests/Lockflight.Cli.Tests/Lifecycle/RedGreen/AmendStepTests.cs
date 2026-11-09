@@ -18,7 +18,7 @@ public sealed class AmendStepTests : IDisposable
 
     public AmendStepTests()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         Directory.CreateDirectory(Feature.SpecDirectory);
         File.WriteAllText(Feature.SpecPath, "- **FR-001**: A\n");
         File.WriteAllText(Feature.TasksPath, "- [ ] T001 [US1] (FR-001) Test A\n");

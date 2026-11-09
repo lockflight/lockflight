@@ -792,7 +792,7 @@ public sealed class SessionApprovalTests : IDisposable
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await ProcessRunner.RunAsync("git", ["init", "-q"], root.FullName, cancellationToken);
         await ProcessRunner.RunAsync("git", ["config", "user.email", ApproverEmail], root.FullName, cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n", cancellationToken);
         Directory.CreateDirectory(SpecDirectory);
         await File.WriteAllTextAsync(SpecPath, ApprovableArtifacts.Spec, cancellationToken);
     }

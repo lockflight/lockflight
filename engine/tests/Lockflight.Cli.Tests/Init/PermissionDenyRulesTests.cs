@@ -11,7 +11,7 @@ public sealed class PermissionDenyRulesTests : IDisposable
     [Fact]
     public void APlainProtectedPathGetsAnEditRuleOnlyWhenItExists()
     {
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
 
         IReadOnlyList<string> rules = PermissionDenyRules.For(root.FullName, DefaultProtectedPaths.Globs);
 

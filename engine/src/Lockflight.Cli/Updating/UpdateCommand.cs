@@ -154,7 +154,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
 
     private async Task<ExitCode> HandOverAsync(string home, string? feed, CancellationToken cancellationToken)
     {
-        if (ManifestLocator.Discover(context.WorkingDirectory) is not { Manifest: Manifest manifest })
+        if (ManifestLocator.DiscoverForMigration(context.WorkingDirectory) is not { Manifest: Manifest manifest })
         {
             await context.Output.WriteLineAsync("Not in a Lockflight project: run `lockflight update` in each project to re-pin it.");
             return ExitCode.Pass;
@@ -179,7 +179,7 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
     /// <param name="judgeWorkflow">Replace a gates-only GitHub workflow Lockflight wrote with the CI judge's (<see cref="JudgeWorkflowMigration"/>).</param>
     private async Task<ExitCode> UpdateProjectAsync(bool dryRun, string? feed, bool judgeWorkflow, CancellationToken cancellationToken)
     {
-        ManifestLoadResult loaded = ManifestLocator.Discover(context.WorkingDirectory);
+        ManifestLoadResult loaded = ManifestLocator.DiscoverForMigration(context.WorkingDirectory);
         if (loaded.Error is ManifestError invalid)
         {
             await context.Error.WriteLineAsync($"lockflight: {invalid.Describe()}; fix it first, nothing was changed");
@@ -207,9 +207,10 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
                 writes.Add(new PlannedWrite(Manifest.FileName, manifestPath, manifestText, migration.Text!));
                 break;
             case ManifestMigrationStatus.ManualEdit:
-                await context.Error.WriteLineAsync($"lockflight: {migration.Message}. Add this by hand (a person's edit; the file is protected):");
+                // The manifest stays version 1, which nothing but this migration reads: the rest of the update waits for the edit.
+                await context.Error.WriteLineAsync($"lockflight: {migration.Message}. Add this by hand (a person's edit; the file is protected), then run update --project again; nothing was changed:");
                 await context.Error.WriteLineAsync(migration.Snippet);
-                break;
+                return ExitCode.Config;
         }
 
         string toolManifest = ToolManifestWriter.RelativePathIn(root);

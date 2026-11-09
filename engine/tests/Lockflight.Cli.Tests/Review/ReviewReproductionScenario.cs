@@ -36,7 +36,7 @@ public abstract class ReviewReproductionScenario : IDisposable
         await GitAsync("config", "user.email", "reviewer@example.com");
         await GitAsync("config", "user.name", "Reviewing Person");
         await GitAsync("config", "commit.gpgsign", "false");
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
         Write(".gitignore", "bin/\nobj/\n");
         Write($"specs/{Feature}/spec.md", spec);
         Write("Shop.slnx", "<Solution>\n  <Project Path=\"src/Billing/Billing.csproj\" />\n  <Project Path=\"src/Shop/Shop.csproj\" />\n  <Project Path=\"tests/Billing.Tests/Billing.Tests.csproj\" />\n  <Project Path=\"tests/Shop.Tests/Shop.Tests.csproj\" />\n</Solution>\n");

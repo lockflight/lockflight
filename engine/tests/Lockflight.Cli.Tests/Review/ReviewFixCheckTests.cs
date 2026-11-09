@@ -197,7 +197,7 @@ public sealed class ReviewFixCheckTests : IDisposable
         await GitAsync("config", "user.email", "reviewer@example.com");
         await GitAsync("config", "user.name", "Reviewing Person");
         await GitAsync("config", "commit.gpgsign", "false");
-        Write(Manifest.FileName, "version: 1\n");
+        Write(Manifest.FileName, "version: 2\n");
         Write(".gitignore", "bin/\nobj/\n");
         Write($"specs/{Feature}/spec.md", Spec);
         Write("Quotes.slnx", "<Solution>\n  <Project Path=\"src/Quotes/Quotes.csproj\" />\n  <Project Path=\"tests/Quotes.Tests/Quotes.Tests.csproj\" />\n</Solution>\n");

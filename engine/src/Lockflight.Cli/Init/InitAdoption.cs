@@ -61,7 +61,6 @@ internal static class InitAdoption
     {
         (_, null) => null,
         (null, _) => null,
-        ({ Shell: null, Version: < ManifestVersions.Current }, _) => $"shell: needs a version {ManifestVersions.Current} manifest, and {Config.Manifest.FileName} is version {ManifestVersions.Legacy}; set 'version: {ManifestVersions.Current}' first (or let init write a new one)",
         ({ Units.Count: > 0 }, _) => $"{Config.Manifest.FileName} lists units:, so this repository is a shell or a monorepo; a unit of a shell has none",
         ({ Shell: ShellSettings current }, _) when current.Url != shell.Url => $"{Config.Manifest.FileName} already names the shell {current.Url}; change shell: by hand",
         _ => null,

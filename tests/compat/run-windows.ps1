@@ -83,7 +83,7 @@ if ($gitBash) {
 # ---------------------------------------------------------------- latency
 Log "`n## hook latency (200 calls each)"
 $proj = Join-Path $out "latency-proj"; New-Item -ItemType Directory -Force $proj | Out-Null
-'protected:' + "`n" + '  - "secrets/**"' | Set-Content -NoNewline (Join-Path $proj "lockflight.yaml")
+'version: 2' + "`n" + 'protected:' + "`n" + '  - "secrets/**"' | Set-Content -NoNewline (Join-Path $proj "lockflight.yaml")
 $fixture = (@{ cwd = $proj; tool_name = "Write"; tool_input = @{ file_path = "$proj\src\a.cs" } } | ConvertTo-Json -Compress)
 function Measure-Calls([string]$name, [string]$file, [string[]]$arguments) {
     $times = foreach ($i in 1..200) {
@@ -122,7 +122,7 @@ if (-not $SkipClaude) {
         $id = "$form-$scenario-$onFailure"
         $p = Join-Path $out "proj-$id"; $pl = Join-Path $out "plugin-$id"
         New-Item -ItemType Directory -Force $p, "$pl/.claude-plugin", "$pl/hooks" | Out-Null
-        'protected:' + "`n" + '  - "secrets/**"' | Set-Content -NoNewline (Join-Path $p "lockflight.yaml")
+        'version: 2' + "`n" + 'protected:' + "`n" + '  - "secrets/**"' | Set-Content -NoNewline (Join-Path $p "lockflight.yaml")
         '{"name":"lf-win","version":"0.0.0"}' | Set-Content "$pl/.claude-plugin/plugin.json"
         $hook.onFailure = $onFailure; $hook.timeout = 5
         @{ hooks = @{ PreToolUse = @(@{ matcher = "Write|Edit"; hooks = @($hook) }) } } | ConvertTo-Json -Depth 8 | Set-Content "$pl/hooks/hooks.json"
@@ -199,7 +199,7 @@ if (-not $SkipInstall) {
             Pop-Location
         }
         $blockedBefore = Ledger-Count '"hook.blocked"'
-        Run-Session "edit-manifest" "Use the Edit tool (not Bash) to replace the text 'version: 1' with 'version: 2' in lockflight.yaml. If the edit is refused, do not retry and do not use any other tool; reply REFUSED. Otherwise reply DONE." @("Edit", "Read")
+        Run-Session "edit-manifest" "Use the Edit tool (not Bash) to replace the text 'version: 2' with 'version: 3' in lockflight.yaml. If the edit is refused, do not retry and do not use any other tool; reply REFUSED. Otherwise reply DONE." @("Edit", "Read")
         Log "| guard: Edit lockflight.yaml | unchanged: $((Get-Content -Raw -LiteralPath $yaml) -eq $yamlBefore); blocks logged: $((Ledger-Count '"hook.blocked"') - $blockedBefore) | unchanged: True; blocks >= 1 |"
         $blockedBefore = Ledger-Count '"hook.blocked"'
         Run-Session "bash-redirect" "Use the Bash tool to run exactly this command: echo changed > lockflight.yaml . If it is refused, do not retry and do not use any other tool; reply REFUSED. Otherwise reply DONE." @("Bash")

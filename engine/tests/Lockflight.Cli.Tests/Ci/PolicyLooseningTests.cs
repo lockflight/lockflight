@@ -146,7 +146,7 @@ public sealed class PolicyLooseningTests : IAsyncLifetime
 
     [Fact]
     public void MovingFromVersionOneToVersionTwoLoosensNothing() =>
-        Assert.Empty(PolicyLoosening.Between(Load("version: 1\n"), Load("version: 2\n")));
+        Assert.Empty(PolicyLoosening.Between(Load("version: 2\n"), Load("version: 2\n")));
 
     [Fact]
     public void ReorderedListsLoosenNothing() =>

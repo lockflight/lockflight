@@ -9,7 +9,7 @@ public sealed class SessionCommandRelayTests : IDisposable
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-relay-");
 
     public SessionCommandRelayTests() =>
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected: []\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected: []\n");
 
     [Theory]
     [InlineData("CronCreate", """{"cron":"*/1 * * * *","prompt":"/lockflight:approve spec","recurring":false}""")]

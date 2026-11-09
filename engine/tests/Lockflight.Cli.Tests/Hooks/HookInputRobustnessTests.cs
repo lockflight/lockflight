@@ -19,7 +19,7 @@ public sealed class HookInputRobustnessTests : IDisposable
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-hook-input-");
 
     public HookInputRobustnessTests() =>
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "protected:\n  - secrets/**\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\nprotected:\n  - secrets/**\n");
 
     [Fact]
     public async Task NestingDeeperThanTheParserAllowsBlocksTheToolCall()

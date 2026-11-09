@@ -7,7 +7,7 @@ public sealed class CiSectionReaderTests
     [Fact]
     public void WithoutACiSectionTheDefaultsApply()
     {
-        CiSettings ci = Parse("version: 1\n").Manifest!.Ci;
+        CiSettings ci = Parse("version: 2\n").Manifest!.Ci;
 
         Assert.Equal(CiSettings.Default, ci);
         Assert.Equal(10, ci.MaxRedCommits);
@@ -21,7 +21,7 @@ public sealed class CiSectionReaderTests
     public void EveryKeyIsRead()
     {
         CiSettings ci = Parse("""
-            version: 1
+            version: 2
             ci:
               maxRedCommits: 4
               timeoutMinutes: 90
@@ -50,7 +50,7 @@ public sealed class CiSectionReaderTests
     [InlineData("  maxRedCommit: 3\n", "unknown key 'ci.maxRedCommit'")]
     public void AnInvalidValueIsAnErrorWithItsPlace(string line, string message)
     {
-        ManifestLoadResult result = Parse("version: 1\nci:\n" + line);
+        ManifestLoadResult result = Parse("version: 2\nci:\n" + line);
 
         Assert.NotNull(result.Error);
         Assert.Contains(message, result.Error.Message, StringComparison.Ordinal);

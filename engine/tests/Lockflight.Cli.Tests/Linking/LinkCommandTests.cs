@@ -16,7 +16,7 @@ public sealed class LinkCommandTests : IDisposable
     [Fact]
     public async Task ASingleFileEngineIsCopiedIntoTheProject()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
         (ExitCode exitCode, string output, _) = await LinkAsync(new RunningEngine(EngineFile("native engine"), IsSingleFile: true));
 
@@ -32,7 +32,7 @@ public sealed class LinkCommandTests : IDisposable
     [Fact]
     public async Task LinkingRecordsTheHashOfTheEngineItCopied()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
         await LinkAsync(new RunningEngine(EngineFile("native engine"), IsSingleFile: true));
 
@@ -44,7 +44,7 @@ public sealed class LinkCommandTests : IDisposable
     [Fact]
     public async Task AnEngineReplacedAfterItWasLinkedNoLongerMatchesItsRecord()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         await LinkAsync(new RunningEngine(EngineFile("native engine"), IsSingleFile: true));
 
         File.WriteAllText(LinkCommand.BinaryPath(root.FullName), "another program");
@@ -65,7 +65,7 @@ public sealed class LinkCommandTests : IDisposable
     [Fact]
     public async Task AFrameworkDependentEngineIsRefusedAndNothingIsLinked()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
         (ExitCode exitCode, _, string error) = await LinkAsync(new RunningEngine(EngineFile("launcher"), IsSingleFile: false));
 
@@ -78,7 +78,7 @@ public sealed class LinkCommandTests : IDisposable
     [Fact]
     public async Task ARefusedLinkKeepsTheEngineThatIsAlreadyLinked()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         await LinkAsync(new RunningEngine(EngineFile("native engine"), IsSingleFile: true));
 
         (ExitCode exitCode, _, _) = await LinkAsync(new RunningEngine(EngineFile("launcher"), IsSingleFile: false));
@@ -90,7 +90,7 @@ public sealed class LinkCommandTests : IDisposable
     [Fact]
     public async Task AnEngineThatCannotBeLocatedIsAnError()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
         (ExitCode exitCode, _, string error) = await LinkAsync(new RunningEngine(null, IsSingleFile: true));
 

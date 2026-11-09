@@ -10,7 +10,7 @@ ENGINE="${ENGINE:?set ENGINE to a lockflight binary}"
 "$REPO/tests/workspace/make-shell.sh" "$WORK/ws" > /dev/null || exit 1
 WS="$WORK/ws"
 cd "$WS" || exit 1
-printf 'version: 1\nstop:\n  gate: true\nunits:\n  - path: services/orders\n    build: Orders.sln\n  - path: services/billing\n  - path: web/admin\n' > lockflight.yaml
+printf 'version: 2\ngates:\n  quality:\n    suppressions: report\n  docs:\n    references: report\napprovals:\n  check: report\nstop:\n  gate: true\nunits:\n  - path: services/orders\n    build: Orders.sln\n  - path: services/billing\n  - path: web/admin\n' > lockflight.yaml
 printf 'lockflight.yaml\n.lockflight/\n' >> .git/info/exclude
 
 # Hook payloads and CLAUDE_PROJECT_DIR carry native paths; on Windows (Git Bash) use the mixed form D:/a/... (no JSON escaping).

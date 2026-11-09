@@ -89,7 +89,7 @@ public sealed class GateRunLedgerTests : IDisposable
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         await ProcessRunner.RunAsync("git", ["init", "-q"], root.FullName, cancellationToken);
         await File.WriteAllTextAsync(
-            Path.Combine(root.FullName, Manifest.FileName), $"version: 1\nstop:\n  gate: {(stopGate ? "true" : "false")}\n", cancellationToken);
+            Path.Combine(root.FullName, Manifest.FileName), $"version: 2\nstop:\n  gate: {(stopGate ? "true" : "false")}\n", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(root.FullName, ".gitignore"), ".lockflight/local/\n.lockflight/ledger/\n", cancellationToken);
         await ProcessRunner.RunAsync("git", ["add", "-A"], root.FullName, cancellationToken);
         await ProcessRunner.RunAsync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init"], root.FullName, cancellationToken);

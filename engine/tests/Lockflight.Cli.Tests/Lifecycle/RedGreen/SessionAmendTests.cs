@@ -21,7 +21,7 @@ public sealed class SessionAmendTests : IDisposable
 
     public SessionAmendTests()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         Directory.CreateDirectory(Path.Combine(root.FullName, "specs", "f1"));
         Directory.CreateDirectory(Path.Combine(root.FullName, "tests", "Shop.Tests"));
         File.WriteAllText(Path.Combine(root.FullName, ShippingFile), """

@@ -32,7 +32,7 @@ example() {
 }
 cd "$W" || exit 1; export GIT_AUTHOR_NAME=dev GIT_AUTHOR_EMAIL=dev@example.com GIT_COMMITTER_NAME=dev GIT_COMMITTER_EMAIL=dev@example.com
 git init -q; git config user.email dev@example.com; git config user.name dev
-printf 'version: 1\n' > lockflight.yaml
+printf 'version: 2\ngates:\n  quality:\n    suppressions: report\n  docs:\n    references: report\napprovals:\n  check: report\n' > lockflight.yaml
 mkdir -p "specs/$ID"
 for file in spec.md plan.md tasks.md; do
   example "$file" > "specs/$ID/$file"

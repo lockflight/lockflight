@@ -58,7 +58,7 @@ public sealed class WorkspaceGitTests : IDisposable
 
     private async Task CreateWorkspaceAsync(CancellationToken cancellationToken)
     {
-        await File.WriteAllTextAsync(Path.Combine(shell.FullName, Manifest.FileName), "version: 1\nunits:\n  - path: services/orders\n  - path: libs/shared\n", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(shell.FullName, Manifest.FileName), "version: 2\nunits:\n  - path: services/orders\n  - path: libs/shared\n", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(shell.FullName, ".gitignore"), "services/\n", cancellationToken);
         await GitAsync(shell.FullName, ["init", "-q"]);
         await GitAsync(shell.FullName, ["add", "."]);

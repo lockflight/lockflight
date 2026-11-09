@@ -7,7 +7,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 standin="$here/../_fixtures/lockflight-standin.sh"
 [ -f "$standin" ] || { echo "scaffold: engine stand-in not found at $standin" >&2; exit 1; }
 mkdir -p src/Library tests/Library.Tests .lockflight/bin
-printf 'version: 1\n' > lockflight.yaml
+printf 'version: 2\n' > lockflight.yaml
 printf '.lockflight/\n' > .gitignore
 cp "$standin" .lockflight/bin/lockflight && chmod +x .lockflight/bin/lockflight
 cat > src/Library/Library.csproj <<'XML'

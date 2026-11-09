@@ -17,7 +17,7 @@ public sealed class TestFileHashesTests : IDisposable
 
     public TestFileHashesTests()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         Write(ShippingFile, "public sealed class ShippingTests { [Fact] public void FirstKilogramCostsFive() {} }\n");
         Write(HelperFile, "static class Prices {}\n");
         Write("tests/Shop.Tests/Shop.Tests.csproj", "<Project />\n");

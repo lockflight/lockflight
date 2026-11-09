@@ -18,9 +18,9 @@ public sealed class PolicyOverlayTests : IAsyncLifetime
     public async Task TheBasesPolicyFilesBaselinesAndStyleConfigReplaceTheTrees()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        string policy = await repository.Write("lockflight.yaml", "version: 1\n").Write(".lockflight/baselines/tests.json", "base\n").Write("src/.editorconfig", "[*]\nseverity = error\n")
+        string policy = await repository.Write("lockflight.yaml", "version: 2\n").Write(".lockflight/baselines/tests.json", "base\n").Write("src/.editorconfig", "[*]\nseverity = error\n")
             .CommitAsync("base policy", cancellationToken);
-        string tree = await repository.Write("lockflight.yaml", "version: 1\nci:\n  maxRedCommits: 50\n").Write(".lockflight/baselines/tests.json", "accepted my failures\n")
+        string tree = await repository.Write("lockflight.yaml", "version: 2\nci:\n  maxRedCommits: 50\n").Write(".lockflight/baselines/tests.json", "accepted my failures\n")
             .Write("src/.editorconfig", "[*]\nseverity = none\n").Write("src/loose.globalconfig", "is_global = true\n").Write("nuget.config", "<configuration />\n")
             .CommitAsync("pull request loosens it", cancellationToken);
         using GitHistoryFixture target = await GitHistoryFixture.CreateAsync(cancellationToken);
@@ -30,7 +30,7 @@ public sealed class PolicyOverlayTests : IAsyncLifetime
         string? error = await PolicyOverlay.ApplyAsync(repository.Root, worktree, tree, policy, TimeSpan.FromSeconds(60), cancellationToken);
 
         Assert.Null(error);
-        Assert.Equal("version: 1\n", File.ReadAllText(Path.Combine(worktree, "lockflight.yaml")));
+        Assert.Equal("version: 2\n", File.ReadAllText(Path.Combine(worktree, "lockflight.yaml")));
         Assert.Equal("base\n", File.ReadAllText(Path.Combine(worktree, ".lockflight", "baselines", "tests.json")));
         Assert.Equal("[*]\nseverity = error\n", File.ReadAllText(Path.Combine(worktree, "src", ".editorconfig")));
         Assert.False(File.Exists(Path.Combine(worktree, "src", "loose.globalconfig")));

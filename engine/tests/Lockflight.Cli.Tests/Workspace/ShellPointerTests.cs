@@ -102,7 +102,7 @@ public sealed class ShellPointerTests : IDisposable
     public async Task TheShellsCommittedPolicyIsReadFromTheClone()
     {
         string commit = await CreateShellAsync();
-        File.WriteAllText(Path.Combine(Shell, Manifest.FileName), "not: [valid");
+        File.WriteAllText(Path.Combine(Shell, Manifest.FileName), "version: 2\nnot: [valid");
 
         ShellPolicyReading reading = await ShellPolicyReader.ReadAsync(Shell, Pointer, checkOrigin: false, TestContext.Current.CancellationToken);
 

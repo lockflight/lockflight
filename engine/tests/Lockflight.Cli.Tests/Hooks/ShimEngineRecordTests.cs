@@ -16,7 +16,7 @@ public sealed class ShimEngineRecordTests : IDisposable
 
     private readonly DirectoryInfo project = Directory.CreateTempSubdirectory("lockflight-shim-record-");
 
-    public ShimEngineRecordTests() => File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 1\n");
+    public ShimEngineRecordTests() => File.WriteAllText(Path.Combine(project.FullName, Manifest.FileName), "version: 2\n");
 
     [Fact]
     public async Task AnEngineThatMatchesTheHashLinkRecordedRuns()

@@ -9,7 +9,7 @@ public sealed class WorkspaceGuardTests : IDisposable
 
     public WorkspaceGuardTests() =>
         File.WriteAllText(Path.Combine(shell.FullName, Manifest.FileName), """
-            version: 1
+            version: 2
             units:
               - path: services/orders
               - path: web/admin

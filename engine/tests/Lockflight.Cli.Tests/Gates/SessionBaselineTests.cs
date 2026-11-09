@@ -67,7 +67,7 @@ public sealed class SessionBaselineTests : IDisposable
     [Fact]
     public async Task OutsideAGitRepositoryNothingIsShown()
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
         (ExitCode exitCode, _, string error) = await TypeAsync("build");
 
@@ -81,7 +81,7 @@ public sealed class SessionBaselineTests : IDisposable
     [InlineData("build --path ../elsewhere")]
     public async Task APathThatIsNotAUnitIsAUsageRefusal(string arguments)
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
         (ExitCode exitCode, _, string error) = await TypeAsync(arguments);
 
@@ -94,7 +94,7 @@ public sealed class SessionBaselineTests : IDisposable
     [InlineData("everything")]
     public async Task AMissingOrUnknownKindIsAUsageRefusal(string arguments)
     {
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
 
         (ExitCode exitCode, _, string error) = await TypeAsync(arguments);
 
@@ -123,7 +123,7 @@ public sealed class SessionBaselineTests : IDisposable
     private async Task CreateProjectAsync()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(root.FullName, Manifest.FileName), "version: 2\n");
         File.WriteAllText(Path.Combine(root.FullName, "Shop.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>\n");
         File.WriteAllText(Path.Combine(root.FullName, "Shop.cs"), "public class Shop { private int unused; }\n");
         File.WriteAllText(Path.Combine(root.FullName, ".gitignore"), "bin/\nobj/\n.lockflight/ledger/\n.lockflight/local/\n");

@@ -11,7 +11,7 @@ namespace Lockflight.Cli.Tests.Gates;
 public sealed class StopCacheSettingsKeyTests : IDisposable
 {
     private const string Base = """
-        version: 1
+        version: 2
         stop:
           gate: true
           target: services

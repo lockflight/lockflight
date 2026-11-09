@@ -6,8 +6,8 @@ namespace Lockflight.Cli.Tests.Hosting;
 
 public sealed class ManifestRequirementTests : IDisposable
 {
-    private const string InvalidManifest = "protected:\n  - secrets/**\nunknown: 1\n";
-    private const string ParseErrorPosition = "lockflight.yaml:3:1";
+    private const string InvalidManifest = "version: 2\nprotected:\n  - secrets/**\nunknown: 1\n";
+    private const string ParseErrorPosition = "lockflight.yaml:4:1";
 
     private readonly DirectoryInfo projectRoot = Directory.CreateTempSubdirectory("lockflight-manifest-");
 

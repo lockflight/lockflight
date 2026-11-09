@@ -14,7 +14,7 @@ public sealed class AmendedTestGuardTests : IDisposable
 
     public AmendedTestGuardTests()
     {
-        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 1\n");
+        File.WriteAllText(Path.Combine(projectRoot.FullName, Manifest.FileName), "version: 2\n");
         Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "tests", "Shop.Tests"));
         File.WriteAllText(Path.Combine(projectRoot.FullName, Amended), "class ShippingTests;\n");
         File.WriteAllText(Path.Combine(projectRoot.FullName, Other), "class FreeShippingTests;\n");

@@ -98,7 +98,7 @@ internal static class CiJudgeCanaries
     {
         using GitHistoryFixture repository = await GitHistoryFixture.CreateAsync(cancellationToken);
         using TemporaryEvidence evidence = new();
-        string main = await repository.Write("lockflight.yaml", "version: 1\nci:\n  maxRedCommits: 1\n").CommitAsync("init", cancellationToken);
+        string main = await repository.Write("lockflight.yaml", "version: 2\nci:\n  maxRedCommits: 1\n").CommitAsync("init", cancellationToken);
         await repository.CheckoutNewAsync("001-x", cancellationToken);
         string oneRed = await repository.Write("a.cs", "a").CommitAsync("test: red 1", cancellationToken, null, "Lockflight-Red: 1");
         string twin = await RedWhyAsync(repository, oneRed, main, evidence.Folder, cancellationToken);
@@ -107,7 +107,7 @@ internal static class CiJudgeCanaries
             return new CanaryReport(PolicyName, CanaryResult.Broken, $"one red commit under a cap of one was refused too ({twin}), so a refusal proves nothing");
         }
 
-        string planted = await repository.Write("lockflight.yaml", "version: 1\nci:\n  maxRedCommits: 10\n").Write("b.cs", "b").CommitAsync("test: red 2", cancellationToken, null, "Lockflight-Red: 2");
+        string planted = await repository.Write("lockflight.yaml", "version: 2\nci:\n  maxRedCommits: 10\n").Write("b.cs", "b").CommitAsync("test: red 2", cancellationToken, null, "Lockflight-Red: 2");
         string why = await RedWhyAsync(repository, planted, main, evidence.Folder, cancellationToken);
         return why.Contains("more than ci.maxRedCommits (1)", StringComparison.Ordinal)
             ? new CanaryReport(PolicyName, CanaryResult.Caught, why)
@@ -118,7 +118,7 @@ internal static class CiJudgeCanaries
     {
         using GitHistoryFixture repository = await GitHistoryFixture.CreateAsync(cancellationToken);
         using TemporaryEvidence evidence = new();
-        string main = await repository.Write("README.md", "# x\n").Write("lockflight.yaml", "version: 1\n").CommitAsync("init", cancellationToken);
+        string main = await repository.Write("README.md", "# x\n").Write("lockflight.yaml", "version: 2\n").CommitAsync("init", cancellationToken);
         await repository.CheckoutNewAsync("001-x", cancellationToken);
         string head = await repository.Write("a.cs", "a").CommitAsync("feat", cancellationToken);
         string[] args = ["ci", "--platform", "github", "--head", head, "--base", main, "--evidence", evidence.Folder, "--plan"];

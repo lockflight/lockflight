@@ -10,7 +10,7 @@ namespace Lockflight.Cli.Tests.Hooks;
 public sealed class TaskCompletedHookTests : IDisposable
 {
     /// <summary>A unit that is guarded but not built: the stop profile judges it N/A without a build, so a gate run passes fast.</summary>
-    private const string GuardedOnly = "version: 1\nstop:\n  gate: true\nunits:\n  - path: web\n    kind: none\n";
+    private const string GuardedOnly = "version: 2\nstop:\n  gate: true\nunits:\n  - path: web\n    kind: none\n";
 
     private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("lockflight-taskcompleted-");
 
@@ -65,7 +65,7 @@ public sealed class TaskCompletedHookTests : IDisposable
     public async Task TheTaskIsNotBlockedAgainOnATreeTheStopGateAlreadySentBackInThisSession()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await CreateProjectAsync("version: 1\nstop:\n  gate: true\n");
+        await CreateProjectAsync("version: 2\nstop:\n  gate: true\n");
         string inputsHash = (await InputsHash.ComputeAsync(root.FullName, cancellationToken))!;
         await new StopBlockRecord(root.FullName).RememberAsync("s-1", inputsHash, cancellationToken);
 
@@ -80,7 +80,7 @@ public sealed class TaskCompletedHookTests : IDisposable
     public async Task AStopGateBlockIsRecordedForTheSessionAndAPassClearsIt()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await CreateProjectAsync("version: 1\nstop:\n  gate: true\n");
+        await CreateProjectAsync("version: 2\nstop:\n  gate: true\n");
         StopBlockRecord record = new(root.FullName);
 
         (ExitCode stop, _, _) = await TestConsole.RunAsync(["hook", "stop"], Payload("s-1"), root.FullName);
@@ -97,7 +97,7 @@ public sealed class TaskCompletedHookTests : IDisposable
     [Fact]
     public async Task WithTheStopGateOffATaskIsAlwaysCompleted()
     {
-        await CreateProjectAsync("version: 1\n");
+        await CreateProjectAsync("version: 2\n");
 
         (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "task-completed"], Payload("s-1"), root.FullName);
 
