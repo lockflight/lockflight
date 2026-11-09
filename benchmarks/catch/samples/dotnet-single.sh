@@ -157,7 +157,7 @@ case_no-red() { spec; impl; commit "feat($FEATURE): shipping costs"; all_tests; 
 
 case_tautology() {
   honest_story round
-  perl -0pi -e 's/Assert\.Equal\(\(decimal\)expected, calculator\.ShippingCost\(\(decimal\)weightKg, 20m\)\)/Assert.True(calculator.ShippingCost((decimal)weightKg, 20m) >= 5m)/' "$ship"
+  perl -0pi -e 's/Assert\.Equal\(\(decimal\)expected, calculator\.ShippingCost\(\(decimal\)weightKg, 20m\)\)/Assert.InRange(calculator.ShippingCost((decimal)weightKg, 20m), 5m, expected + 100m)/' "$ship"
   commit "test($FEATURE): simplify"
 }
 case_cycle-test-deleted() { honest_story round; tests_with "$T_FR1$T_FR3$T_FR4"; commit "test($FEATURE): remove a brittle test"; }
@@ -300,7 +300,6 @@ case_pragma() {
 case_exit-code() {
   honest_story; regress
   cat > tests/Shop.Tests/TestRunSetup.cs <<'CS'
-#pragma warning disable CA2255
 namespace Shop.Tests;
 
 internal static class TestRunSetup

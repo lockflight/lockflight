@@ -119,7 +119,8 @@ def record(args):
     base = load(args.baseline) or {}
     checks = []
     for check in verdict.get("checks") or evidence.get("checks") or []:
-        if check.get("verdict") not in ("PASS", "N/A", "SKIPPED"):
+        skipped_required = check.get("verdict") == "SKIPPED" and check.get("requirement") == "required"
+        if check.get("verdict") not in ("PASS", "N/A", "SKIPPED") or skipped_required:
             checks.append({"id": check.get("id"), "verdict": check.get("verdict"), "requirement": check.get("requirement"),
                            "reason": check.get("reason")})
     steps = []
@@ -145,7 +146,17 @@ def record(args):
         },
         "baseline": base,
     }
-    result["lockflight"]["caught"] = lockflight != "PASS"
+    # A pull request held only because its change class requires the review of record, which this benchmark does not run
+    # (it would call a model), is neither caught nor passed: the outcome is the reviewer's.
+    blocking = result["lockflight"]["blocking"]
+    if lockflight == "PASS":
+        outcome = "passed"
+    elif blocking and all(c["id"] == "review" for c in blocking):
+        outcome = "review"
+    else:
+        outcome = "blocked"
+    result["lockflight"]["outcome"] = outcome
+    result["lockflight"]["caught"] = outcome == "blocked"
     result["baseline"]["caught"] = base.get("verdict") != "PASS"
     print(json.dumps(result))
 
@@ -206,6 +217,7 @@ def summarize(args):
         per_category.append({
             "category": category, "cheats": len(group),
             "lockflight": sum(r["lockflight"]["caught"] for r in group),
+            "review": sum(r["lockflight"].get("outcome") == "review" for r in group),
             "plain": sum(r["baseline"]["caught"] for r in group),
             "plainPassed": sum(not r["baseline"]["caught"] for r in group),
             "lockflightOfPlainPassed": sum(r["lockflight"]["caught"] and not r["baseline"]["caught"] for r in group),
@@ -219,6 +231,8 @@ def summarize(args):
         "cheats": len(cheats), "controls": len(controls),
         "controlsFalseRed": [f"{r['sample']}/{r['case']}" for r in controls if r["lockflight"]["caught"] or r["baseline"]["caught"]],
         "lockflightCaught": sum(r["lockflight"]["caught"] for r in cheats),
+        "lockflightHeldForReview": [f"{r['sample']}/{r['case']}" for r in cheats if r["lockflight"].get("outcome") == "review"],
+        "lockflightPassed": [f"{r['sample']}/{r['case']}" for r in cheats if r["lockflight"].get("outcome") == "passed"],
         "plainCaught": sum(r["baseline"]["caught"] for r in cheats),
         "plainPassed": len(passed_plain), "lockflightCaughtOfPlainPassed": len(caught_of_those),
         "catchRateOfPlainPassed": round(100.0 * len(caught_of_those) / len(passed_plain), 1) if passed_plain else None,
@@ -237,9 +251,10 @@ def summarize(args):
               "Microsoft collector at 80 %), both status contexts treated as required. Machine-readable: "
               f"[`{os.path.basename(args.out_json)}`]({os.path.basename(args.out_json)}).")
     md.append("")
-    md.append(f"- **Cheats:** {len(cheats)}. Lockflight failed {summary['lockflightCaught']}; the plain CI failed "
-              f"{summary['plainCaught']}.")
-    md.append(f"- **Cheats the plain CI passed:** {len(passed_plain)}; Lockflight failed {len(caught_of_those)} of them"
+    md.append(f"- **Cheats:** {len(cheats)}. Lockflight blocked {summary['lockflightCaught']}, held "
+              f"{len(summary['lockflightHeldForReview'])} for the review of record (not run here) and passed "
+              f"{len(summary['lockflightPassed'])}; the plain CI failed {summary['plainCaught']}.")
+    md.append(f"- **Cheats the plain CI passed:** {len(passed_plain)}; Lockflight blocked {len(caught_of_those)} of them"
               + (f" ({summary['catchRateOfPlainPassed']} %)." if passed_plain else "."))
     md.append(f"- **Honest controls:** {len(controls)}; " + (
         "every one passed both." if not summary["controlsFalseRed"] else
@@ -251,17 +266,17 @@ def summarize(args):
         md.append(f"- **Runner minutes:** {minutes['billed']} billed for {minutes['jobs']} jobs (each rounded up to the "
                   f"minute, the engine built once per job), about {minutes['perPullRequest']} per pull request judged "
                   "with both.")
-    md += ["", "## By category", "", "| Category | Cheats | Lockflight failed | Plain CI failed | Plain CI passed, Lockflight failed |",
-           "|---|---|---|---|---|"]
+    md += ["", "## By category", "", "| Category | Cheats | Lockflight blocked | Held for review | Plain CI failed | Plain CI passed, Lockflight blocked |",
+           "|---|---|---|---|---|---|"]
     for c in per_category:
-        md.append(f"| {c['category']} | {c['cheats']} | {c['lockflight']} | {c['plain']} | "
+        md.append(f"| {c['category']} | {c['cheats']} | {c['lockflight']} | {c['review']} | {c['plain']} | "
                   f"{c['lockflightOfPlainPassed']} of {c['plainPassed']} |")
     md += ["", "## Every pull request", "",
            "| Sample | Case | Kind | Lockflight | Blocking reasons | Advisory | Plain CI | Why | Judge s | Plain s |",
            "|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         lf, pl = r["lockflight"], r["baseline"]
-        md.append(f"| {r['sample']} | `{r['case']}` | {r['kind']} | {lf['verdict']} | {reasons(lf)} | {advisories(lf)} | "
+        md.append(f"| {r['sample']} | `{r['case']}` | {r['kind']} | {lf['verdict']} ({lf.get('outcome')}) | {reasons(lf)} | {advisories(lf)} | "
                   f"{pl.get('verdict')} | {pl.get('why')} | {seconds(lf.get('elapsedMs'))} | {seconds(pl.get('elapsedMs'))} |")
     md += ["", "## What each pull request does", "", "| Case | Category | What it does |", "|---|---|---|"]
     for r in dict((r["case"], r) for r in rows).values():
