@@ -23,6 +23,17 @@ public sealed class SandboxSettingsTests : IDisposable
     }
 
     [Fact]
+    public void AFileAboutToBeWrittenIsDeniedAsIfItWereThere()
+    {
+        IReadOnlyList<string> denied = SandboxSettings.DenyWrite(root.FullName, DefaultProtectedPaths.Globs, [".lockflight/engine.lock", ".lockflight/ci/install.sh", "src/Directory.Build.props"]);
+
+        Assert.Contains("./.lockflight/engine.lock", denied);
+        Assert.Contains("./.lockflight/ci", denied);
+        Assert.Contains("./src/Directory.Build.props", denied);
+        Assert.DoesNotContain("./.lockflight/baselines", denied);
+    }
+
+    [Fact]
     public void APatternIsDeniedAsEachFileItMatchesOutsideBuildOutput()
     {
         Write("Directory.Build.props", "<Project />");

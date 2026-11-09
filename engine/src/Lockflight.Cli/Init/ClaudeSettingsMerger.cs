@@ -62,8 +62,8 @@ internal static class ClaudeSettingsMerger
     }
 
     /// <param name="existingJson">The settings file's text; null when there is none.</param>
-    /// <param name="denyRules">The <c>permissions.deny</c> rules to add (<see cref="PermissionDenyRules.For"/>).</param>
-    /// <param name="denyWrite">The sandbox write denials to add (<see cref="SandboxSettings.DenyWrite"/>); null adds none.</param>
+    /// <param name="denyRules">The <c>permissions.deny</c> rules to add (<see cref="PermissionDenyRules.For(string, IEnumerable{string})"/>).</param>
+    /// <param name="denyWrite">The sandbox write denials to add (<see cref="SandboxSettings.DenyWrite(string, IEnumerable{string})"/>); null adds none.</param>
     /// <param name="level">The plugin level enables the plugin; the native level writes the hooks instead and leaves the plugin entries as they are.</param>
     public static (string Json, bool Changed) Merge(string? existingJson, IReadOnlyList<string> denyRules, IReadOnlyList<string>? denyWrite, InstallLevel level)
     {
