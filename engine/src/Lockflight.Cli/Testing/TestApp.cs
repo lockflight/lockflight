@@ -28,4 +28,10 @@ internal sealed record TestApp(string ProjectDirectory, string AssemblyPath, Run
     /// when <c>dotnet test</c> applies them to this app (<see cref="RunSettingsEnvironment"/>); empty otherwise.
     /// </summary>
     public IReadOnlyDictionary<string, string?> Environment { get; init; } = RunSettingsEnvironment.None;
+
+    /// <summary>
+    /// The MSBuild properties through which <c>dotnet test</c> on VSTest loads more into the run (<see cref="TestApps.VSTestProperties"/>)
+    /// that the project sets, by name; empty when it sets none.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> VSTestProperties { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
 }

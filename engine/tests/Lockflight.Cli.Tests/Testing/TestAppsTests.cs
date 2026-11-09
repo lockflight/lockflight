@@ -105,6 +105,19 @@ public sealed class TestAppsTests : IDisposable
         $"<RunSettings><RunConfiguration><EnvironmentVariables><{name}>{value}</{name}></EnvironmentVariables></RunConfiguration></RunSettings>";
 
     /// <summary>A test project whose build output holds the framework's assembly (an empty stand-in: discovery only looks for the file).</summary>
+    [Fact]
+    public async Task TheVSTestPropertiesATestProjectSetsAreRead()
+    {
+        TestProject("tests/Shop.Tests/Shop.Tests.csproj", onTestingPlatform: false, "xunit.core.dll", "<VSTestCollect>ResultRewriter</VSTestCollect><VSTestLogger>quiet</VSTestLogger>");
+
+        TestAppDiscovery discovery = await TestApps.FindAsync(root.FullName, null, TimeLimit, TimeProvider.System, TestContext.Current.CancellationToken);
+
+        TestApp app = Assert.Single(discovery.Apps);
+        Assert.Equal("ResultRewriter", app.VSTestProperties["VSTestCollect"]);
+        Assert.Equal("quiet", app.VSTestProperties["VSTestLogger"]);
+        Assert.False(app.VSTestProperties.ContainsKey("VSTestTestAdapterPath"));
+    }
+
     private void TestProject(string relativePath, bool onTestingPlatform, string frameworkAssembly, string properties = "")
     {
         WriteProject(relativePath, $"<PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsTestingPlatformApplication>{(onTestingPlatform ? "true" : "false")}</IsTestingPlatformApplication>{properties}</PropertyGroup>");

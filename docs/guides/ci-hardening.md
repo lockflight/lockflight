@@ -199,11 +199,18 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
     `DOTNET_CLI_USE_MSBUILD_SERVER=0` and `MSBUILDDISABLENODEREUSE=1`. A tool that builds by itself (`dotnet ef`) has only
     the environment variables, which a project can override, and an `<Exec>` can start any process it likes;
   - test-framework extension points (an xUnit v3 `TestFramework`, an NUnit `IWrapTestMethod` attribute, a custom runner)
-    run inside the test host; a `.runsettings` data collector, or a test platform extension package, rewrites outcomes without
-    code in the test assembly: neither is scanned for host tampering or named in the comment, so read the pull request's runner
-    settings and package references in its diff;
+    run inside the test host. What a VSTest run loads besides the tests is listed by the host-tampering check, NOT-EARNED when
+    the base did not have it: the data collectors, in-process data collectors, test adapter paths and loggers a test project's
+    `.runsettings` (`RunSettingsFilePath`) names (the `Code Coverage` and `XPlat Code Coverage` collectors named without an
+    assembly or code base excepted), the `VSTestCollect`, `VSTestTestAdapterPath`, `VSTestLogger` and `VSTestSetting`
+    properties a test project sets, and `*.TestAdapter.dll`, `*.TestLogger.dll` and `*Collector.dll` assemblies in a test
+    app's output folder (the supported frameworks' own adapters and collectors excepted, unless a project of the repository
+    builds one of those names). A Microsoft.Testing.Platform extension package, which registers in the test app's generated
+    entry point, rewrites outcomes without code the scan reads: it is not listed, so read the pull request's package
+    references in its diff;
   - an MSBuild `<Exec>` task or inline task in a project, props or targets file runs arbitrary code at build time;
-  - the host-tampering scan reads the test assemblies only: production code and MSBuild files are not scanned;
+  - the host-tampering scan reads the test assemblies, the test projects' run settings and VSTest properties, and the extension
+    assemblies in their output: production code and other MSBuild files are not scanned;
   - processes the pull request's code starts and leaves running (a daemon an `<Exec>` starts, a child a source generator
     starts inside the compiler, a process a test forgets) are stopped. Whenever the engine has none of its own child processes
     running (after each build, test run, git call and gate step), it finds every process its children started that is still

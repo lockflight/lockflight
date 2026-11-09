@@ -12,7 +12,9 @@
 #   - a requirement the base already had marked [outside .NET], and a [structural] requirement with a test that asserts what
 #     holds on both sides: trace passes, and the comment calls both out for review;
 #   - an implementation that hangs at head after a fast red: the test run is stopped at the time limit and the gates are ERROR
-#     with STEP_TIMED_OUT.
+#     with STEP_TIMED_OUT;
+#   - run settings that add a data collector and a logger, and a logger assembly in the test output: the host-tampering
+#     check lists each (NOT-EARNED).
 # Known gaps are listed at the end with the guide's entry for each.
 # Usage: ENGINE=<lockflight binary> judge.sh <workdir>
 set -uo pipefail
@@ -258,7 +260,37 @@ if [ "$code" = 0 ]; then bad "the judge passed a head that hangs"; else ok "the 
 guide_says commands.md "each build or test process is bounded by the time left before that reserve, so the evidence is always written"
 
 # ---------------------------------------------------------------------------------------------------------------------------
+case_start "run settings that add a data collector and a logger, and a test logger assembly copied into the test output"
+git checkout -q -b run-settings "$main"
+cat > tests/Shop.Tests/test.runsettings <<'SETTINGS'
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="ResultRewriter" uri="datacollector://shop/ResultRewriter" />
+      <DataCollector friendlyName="XPlat Code Coverage" />
+    </DataCollectors>
+  </DataCollectionRunSettings>
+  <LoggerRunSettings>
+    <Loggers>
+      <Logger friendlyName="QuietPass" />
+    </Loggers>
+  </LoggerRunSettings>
+</RunSettings>
+SETTINGS
+printf 'not an assembly\n' > tests/Shop.Tests/Shop.Forge.TestLogger.dll
+perl -0pi -e 's#</Project>#  <PropertyGroup>\n    <RunSettingsFilePath>\$(MSBuildProjectDirectory)/test.runsettings</RunSettingsFilePath>\n  </PropertyGroup>\n  <ItemGroup>\n    <None Include="Shop.Forge.TestLogger.dll" CopyToOutputDirectory="PreserveNewest" />\n  </ItemGroup>\n</Project>#' "$project"
+git add -A; git commit -qm "test: run settings"
+judge "$(git rev-parse HEAD)" "$main" run-settings; ran $?
+check "$W/evidence/evidence.json" tests.hostTampering NOT-EARNED
+check_reason "$W/evidence/evidence.json" tests.hostTampering HOST_TAMPERING
+contains "$W/evidence/evidence.json" "ResultRewriter" "the run settings' data collector is listed"
+contains "$W/evidence/evidence.json" "QuietPass" "the run settings' logger is listed"
+contains "$W/evidence/evidence.json" "Shop.Forge.TestLogger.dll" "the logger assembly in the test output is listed"
+guide_says ci-hardening.md "What a VSTest run loads besides the tests is listed by the host-tampering check, NOT-EARNED when the base did not have it"
+
+# ---------------------------------------------------------------------------------------------------------------------------
 case_start "known gaps: what the judge does not catch, and the guide entry that says so"
-guide_says ci-hardening.md "a \`.runsettings\` data collector, or a test platform extension package, rewrites outcomes without code in the test assembly"
+guide_says ci-hardening.md "A Microsoft.Testing.Platform extension package, which registers in the test app's generated entry point, rewrites outcomes without code the scan reads: it is not listed"
 
 finish "Red-team judge"

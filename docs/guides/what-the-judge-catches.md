@@ -101,7 +101,7 @@ review are what make it one ([CI hardening](ci-hardening.md)).
 
 - **Tests that are wrong from the start.** A red test that expects the buggy value goes red and then green honestly; only
   the spec and its review can tell. The judge proves the tests came first, not that they are right.
-- **Deliberate forging beyond the plain forms:** a `.runsettings` data collector, a test platform extension, an `<Exec>` in a
+- **Deliberate forging beyond the plain forms:** a Microsoft.Testing.Platform extension, an `<Exec>` in a
   project file, a process left running, root rights on the runner. [CI hardening](ci-hardening.md#what-the-ci-judge-shows-and-what-it-does-not)
   lists what each can do and which are guardrails; `tests/redteam/` and `tests/e2e/survivors.sh` test the ones the judge
   stops.
