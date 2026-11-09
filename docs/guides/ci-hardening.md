@@ -269,8 +269,8 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
 `gates` keeps its meaning (the `pr` gates and green at head), so a ruleset that requires it keeps working; make
 `lockflight/judge` required when the team produces red commits.
 
-The action runs on Linux (x64, Arm64), Windows (x64) and macOS runners: its scripts run in bash (Git Bash on Windows), it
-installs the gitleaks build for the runner, and the vendored install script installs `lockflight.exe` on Windows. The
+The action runs on Linux x64 and Windows x64 runners, where CI tests it ([compatibility](compatibility.md#operating-systems-and-ci-runners)):
+its scripts run in bash (Git Bash on Windows), it installs the gitleaks build for the runner, and the vendored install script installs `lockflight.exe` on Windows. The
 generated workflow runs its jobs on `ubuntu-latest`, and the jobs that build on `windows-latest` when the solution needs
 Windows (next section). The engine lock pins the install script by hash, so a Windows runner needs a lock from an engine
 release whose `install.sh` knows Windows (released Lockflight 0.3 scripts refuse it); moving the lock to such a release

@@ -34,6 +34,8 @@ The sections below use the plugin level.
 | The `pr` profile's secrets step | [gitleaks](https://github.com/gitleaks/gitleaks) on `PATH` (or `LOCKFLIGHT_GITLEAKS`); without it the step is NOT-EARNED. The generated CI workflow downloads its own. |
 | Spec Kit, if you use it (optional in the standard profile) | `uv` and Python 3 with PyYAML. |
 
+Which of these each release tests, and how long a deprecated feature keeps working: [compatibility](compatibility.md).
+
 ## Install from a package
 
 The released engine, `Lockflight.Cli`, is published on [nuget.org](https://www.nuget.org/packages/Lockflight.Cli). Install it
@@ -458,6 +460,7 @@ Levi, the pixel lock-keeper, shows verdicts to you and never to the agent:
 ## Next
 
 - [Configuration reference](configuration.md): `lockflight.yaml`, gate profiles and protected paths
+- [Compatibility](compatibility.md): which SDKs, Claude Code versions and platforms each release tests
 - [Guardrails and boundaries](guardrails-and-boundaries.md): what Lockflight can and cannot guarantee
 - [CI hardening](ci-hardening.md): CODEOWNERS and required checks
 - [CI on other platforms](ci-other-platforms.md): Azure Pipelines, Bitbucket Pipelines and GitLab CI/CD

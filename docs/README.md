@@ -45,6 +45,7 @@ CI judge), then <a href="guides/getting-started.md">getting started</a>, and rea
 | [Guardrails and boundaries](guides/guardrails-and-boundaries.md) | You need to know what Lockflight can and cannot guarantee, and what the shell write detection sees. |
 | [Performance](guides/performance.md) | You want to know what the hooks, the Stop gate and the CI judge cost in time on each system, and how to measure them. |
 | [Public contracts](guides/contracts.md) | You build on a Lockflight file, output or CI name and need what stays stable across releases, and what is internal. |
+| [Compatibility](guides/compatibility.md) | You need which .NET SDKs, Claude Code versions, operating systems and CI runners are supported and tested, or how long a deprecated feature keeps working. |
 | [Glossary](guides/glossary.md) | A term is unfamiliar: verdicts, profiles, cycles, approvals, the ledger. |
 
 ## Contribute
