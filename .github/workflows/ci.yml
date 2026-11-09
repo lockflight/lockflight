@@ -342,6 +342,43 @@ jobs:
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/desktop.sh "$RUNNER_TEMP/desktop"
 
+  # One `update --project` takes a project set up by each published release since 0.3.0 to this engine, at every install level
+  # that needs no claude CLI, and doctor reports no FAIL (tests/e2e/upgrade-matrix.sh). The engine is built with a release version:
+  # update never lowers a pin, and only a release writes the committed engine lock.
+  upgrade:
+    name: upgrade (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, rid: linux-x64 }
+          - { os: windows-latest, rid: win-x64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
+      - name: Turn off Defender real-time scanning (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try { Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop; "real-time scanning off" } catch { "left as it is: $($_.Exception.Message)" }
+      - name: Native AOT publish with a release version
+        working-directory: engine
+        run: dotnet publish src/Lockflight.Cli -c Release -r ${{ matrix.rid }} -o ../out -nologo -p:Version=99.0.0-ci.1
+      - name: Git identity for the suite's commits
+        run: git config --global user.email ci@example.com && git config --global user.name ci
+      - name: Upgrade matrix (every release since 0.3.0, at every level, reaches this engine with one update)
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/e2e/upgrade-matrix.sh "$RUNNER_TEMP/upgrade"
+
   # The Windows user install: scripts/dev-install.ps1 from a checkout in a folder with spaces, then the installed engine runs
   # init, link and the hook suite, and `lockflight update` replaces the engine it runs from, from source and from a package.
   # Then a developer's install from the package, with no build: scripts/install.ps1 in a home of its own, twice, to doctor.
