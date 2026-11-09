@@ -47,10 +47,10 @@ gates:
     patchThreshold: 80          # % of changed coverable lines that tests must execute
     minChangedLines: 10         # below this many coverable changed lines, coverage is not judged (N/A)
   quality:
-    suppressions: report        # fail | report | off (default report; fail in version 2): whether new suppressions fail the pr profile,
+    suppressions: report        # fail | report | off (default fail; a manifest migrated from version 1 says report): whether new suppressions fail the pr profile,
                                 #   are only listed, or are not checked
   docs:
-    references: report          # fail | report | off (default report; fail in version 2): whether references this change breaks in the
+    references: report          # fail | report | off (default fail; a manifest migrated from version 1 says report): whether references this change breaks in the
                                 #   instruction files fail the pr profile, are only listed, or are not checked
   ef:
     pendingModelChanges: auto   # auto | fail | report | off (default auto): auto runs the check, and can fail, only

@@ -46,7 +46,8 @@ is a bug. Each schema's `$id` is its URL on `main`.
 | Blocked report | the `blocked` property of `verdict.json` | `lockflight.blocked/v1` | [`lockflight.blocked.v1.json`](../../schemas/lockflight.blocked.v1.json) | [reasons](reasons.md) |
 
 In the CI evidence, the `verdict` values (`PASS`, `FAIL`, `NOT-EARNED`, `ERROR`) and the `judge` values of the short form
-(`missing`, `refused`) are closed lists: no value is added to them within a major version. Reason codes, check ids and
+(`missing`, `refused`) are closed lists: no value is added to them within a major version (`refused` was added in 0.4; before
+1.0 the minor version is the major one). Reason codes, check ids and
 change-class signals may gain values; a reader that meets one it does not know shows it as it is.
 
 ### Names and values
@@ -124,7 +125,8 @@ released version:
   level and reason code; its comment marker and status context names are the current ones; git still reads its red commit's
   trailer as cycle 1; and `init` still finds its `CLAUDE.md` block;
 - every JSON Schema it published is still published and only grew: no property removed, none newly required, no type or enum
-  value dropped, no `$ref` or `const` changed, no object closed to unknown properties;
+  value dropped, no `$ref` changed, no `const` narrowed or changed except into an `enum` that holds it, no object closed to unknown
+  properties;
 - every action input it had is still there with the same default and not newly required, every output is still there, and its
   generated workflow passes only inputs the action has;
 - every exit code it listed is still the engine's, with the same meaning.
