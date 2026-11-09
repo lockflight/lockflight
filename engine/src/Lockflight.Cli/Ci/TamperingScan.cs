@@ -5,7 +5,8 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// The host-tampering findings of a built tree (<see cref="HostTamperingScanner"/>): its test applications and the repository's
-/// shared test-helper assemblies next to them (any assembly of a project under the tree that is not production code).
+/// shared test-helper assemblies next to them (any assembly of a project under the tree that is not production code), and what their
+/// runs load besides the tests (<see cref="TestHostExtensions"/>).
 /// </summary>
 internal static class TamperingScan
 {
@@ -26,6 +27,7 @@ internal static class TamperingScan
             }
         }
 
+        findings.AddRange(TestHostExtensions.Find(workspace.Apps, root, projects));
         return findings;
     }
 }

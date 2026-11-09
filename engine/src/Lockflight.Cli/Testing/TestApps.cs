@@ -15,11 +15,17 @@ internal static class TestApps
 {
     private const int MaxDetailLength = 300;
 
+    /// <summary>
+    /// The properties <c>dotnet test</c> on VSTest reads to add data collectors, adapter paths, loggers or another run settings file to
+    /// the run, which the host-tampering check lists.
+    /// </summary>
+    public static readonly string[] VSTestProperties = ["VSTestCollect", "VSTestTestAdapterPath", "VSTestLogger", "VSTestSetting"];
+
     private static readonly string[] MSTestFrameworkAssemblies = ["MSTest.TestFramework.dll", "Microsoft.VisualStudio.TestPlatform.TestFramework.dll"];
 
     private static readonly string[] Properties =
         ["-getProperty:IsTestingPlatformApplication", "-getProperty:IsTestProject", "-getProperty:TargetPath", "-getProperty:TargetFrameworks",
-         "-getProperty:RunSettingsFilePath"];
+         "-getProperty:RunSettingsFilePath", .. VSTestProperties.Select(property => $"-getProperty:{property}")];
 
     /// <summary>
     /// The projects are evaluated in parallel (<c>dotnet msbuild -getProperty</c> only evaluates; it builds nothing), within
@@ -55,7 +61,7 @@ internal static class TestApps
             return ProjectEvaluation.Of(unevaluated);
         }
 
-        if (Parse(properties.Output) is not (true, bool onTestingPlatform, string targetPath, string frameworks, string runSettings))
+        if (Parse(properties.Output) is not (true, bool onTestingPlatform, string targetPath, string frameworks, string runSettings, IReadOnlyDictionary<string, string> vstest))
         {
             return ProjectEvaluation.NotATestApp;
         }
@@ -72,7 +78,9 @@ internal static class TestApps
                 return ProjectEvaluation.Of(unevaluatedFramework);
             }
 
-            (targetPath, runSettings) = Parse(single.Output) is (true, _, string path, _, string settings) ? (path, settings) : (string.Empty, runSettings);
+            (targetPath, runSettings, vstest) = Parse(single.Output) is (true, _, string path, _, string settings, IReadOnlyDictionary<string, string> singleVSTest)
+                ? (path, settings, singleVSTest)
+                : (string.Empty, runSettings, vstest);
         }
 
         if (targetPath.Length == 0)
@@ -82,7 +90,7 @@ internal static class TestApps
 
         string directory = Path.GetDirectoryName(project)!;
         return Kind(Path.GetDirectoryName(targetPath)!, onTestingPlatform) is RunnerMode mode
-            ? ProjectEvaluation.Of(Configured(new TestApp(directory, targetPath, mode) { ProjectFile = project, Framework = chosenFramework }, runSettings))
+            ? ProjectEvaluation.Of(Configured(new TestApp(directory, targetPath, mode) { ProjectFile = project, Framework = chosenFramework, VSTestProperties = vstest }, runSettings))
             : ProjectEvaluation.NotATestApp;
     }
 
@@ -176,7 +184,7 @@ internal static class TestApps
         return line.Length <= MaxDetailLength ? line : line[..MaxDetailLength] + "…";
     }
 
-    private static (bool IsTestApp, bool OnTestingPlatform, string TargetPath, string Frameworks, string RunSettings)? Parse(string output)
+    private static (bool IsTestApp, bool OnTestingPlatform, string TargetPath, string Frameworks, string RunSettings, IReadOnlyDictionary<string, string> VSTest)? Parse(string output)
     {
         int start = output.IndexOf('{', StringComparison.Ordinal);
         if (start < 0)
@@ -190,7 +198,16 @@ internal static class TestApps
         bool isTestApp = onTestingPlatform
             || (properties.TryGetProperty("IsTestProject", out JsonElement testProject) && string.Equals(testProject.GetString(), "true", StringComparison.OrdinalIgnoreCase));
         string runSettings = properties.TryGetProperty("RunSettingsFilePath", out JsonElement settings) ? settings.GetString() ?? string.Empty : string.Empty;
-        return (isTestApp, onTestingPlatform, properties.GetProperty("TargetPath").GetString() ?? string.Empty, properties.GetProperty("TargetFrameworks").GetString() ?? string.Empty, runSettings.Trim());
+        Dictionary<string, string> vstest = new(StringComparer.Ordinal);
+        foreach (string name in VSTestProperties)
+        {
+            if (properties.TryGetProperty(name, out JsonElement value) && value.GetString()?.Trim() is { Length: > 0 } text)
+            {
+                vstest[name] = text;
+            }
+        }
+
+        return (isTestApp, onTestingPlatform, properties.GetProperty("TargetPath").GetString() ?? string.Empty, properties.GetProperty("TargetFrameworks").GetString() ?? string.Empty, runSettings.Trim(), vstest);
     }
 
     /// <summary>The preferred framework when the project targets it, else the newest <c>netN.M</c> (the SDK's own runtime is the likeliest to be installed).</summary>

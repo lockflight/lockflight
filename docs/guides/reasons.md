@@ -199,7 +199,7 @@ The `tests.hostTampering` check: the test assemblies are scanned for the plain w
 
 ### HOST_TAMPERING
 
-**Means:** New code in a test assembly could tamper with the test host: a module initializer, a process-exit handler, `Environment.Exit`, starting a process, a file write outside a temporary folder, reflection over a runner's types, setting CI variables.
+**Means:** New code in a test assembly could tamper with the test host: a module initializer, a process-exit handler, `Environment.Exit`, starting a process, a file write outside a temporary folder, reflection over a runner's types, setting CI variables; or something a VSTest run loads besides the tests: a data collector, adapter path or logger a test project's `.runsettings` names, a `VSTestCollect`, `VSTestTestAdapterPath`, `VSTestLogger` or `VSTestSetting` property, or an adapter, logger or collector assembly in a test app's output folder.
 
 **Why:** The tests run in the judge's job, so code like this could forge the results. Legitimate uses exist (a snapshot store that writes its files); accepting one is a person's decision, made on the target branch.
 
