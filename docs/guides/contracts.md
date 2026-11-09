@@ -53,21 +53,41 @@ change-class signals may gain values; a reader that meets one it does not know s
 |---|---|---|
 | Commit trailer | `Lockflight-Red: <cycle>` on a red commit: a real git trailer, the cycle a positive whole number. The trailer says where to look; the judge never trusts it. | [the CI judge](../architecture.md#the-ci-judge), [fix a bug](fix-a-bug.md) |
 | Exit codes | `0` PASS, `1` FAIL, `2` blocked, `3` ERROR, `4` configuration, `5` NOT-EARNED | [commands](commands.md#exit-codes) |
-| Status contexts | `gates` (the `pr` gates and green at head) and `lockflight/judge` (the rest of the verdict), by name and meaning. Which job, workflow or check type sets them is not part of the contract. | [CI hardening](ci-hardening.md#the-ci-judge-action) |
+| Status contexts | `gates` (the `pr` gates and green at head) and `lockflight/judge` (the rest of the verdict), by name and meaning. Which job, workflow, check type or GitHub app sets them is not part of the contract, nor whether they are set on a pull request's head or on a merge queue's commit. | [CI hardening](ci-hardening.md#the-ci-judge-action) |
 | CI action | [`action/action.yml`](../../action/action.yml): its `mode` values (`judge`, `review`, `report`), every input with its default, and the outputs `verdict` and `policy`. Inputs, outputs and modes may be added; an existing input never becomes required. | [CI hardening](ci-hardening.md#the-ci-judge-action) |
-| Generated workflow | The `judge` job's outputs `verdict` and `policy`. Job ids are not part of the contract. | [CI hardening](ci-hardening.md) |
-| Artifact names | `lockflight-evidence` (the judge), `lockflight-review` (the review), `lockflight-verdict` (the report), and `lockflight-result` (the gate result under its earlier name) | [CI hardening](ci-hardening.md#the-ci-judge-action) |
+| Generated workflows | The workflow `init` writes for a repository: the `judge` job's outputs `verdict` and `policy`. A unit repository of a workspace shell runs the same workflow with the action's `shell-clone` input; the workflow `workspace sync` writes into a unit repository runs the gates alone, in its `gates` job, and uploads the `lockflight-result` artifact. Other job ids and step names are not part of the contract. | [CI hardening](ci-hardening.md#workspace-shells-unit-repositories) |
+| Artifact names | `lockflight-evidence` (the judge), `lockflight-review` (the review), `lockflight-verdict` (the report), and `lockflight-result` (the gate result). A name says what an artifact should hold, not who wrote it: do not take an artifact's name alone as proof of which job uploaded it. | [CI hardening](ci-hardening.md#the-ci-judge-action) |
 | Comment markers | `<!-- lockflight:ci:v1 head=<sha> -->`, the first line of the pull request comment the report finds its own comment by; `<!-- lockflight:begin -->` and `<!-- lockflight:end -->` around the block `init` writes into `CLAUDE.md`; `<!-- lockflight: drift-ignore -->` on a line `docs check` skips | [commands](commands.md) (`ci report`, `docs check`), [troubleshooting](troubleshooting.md) |
 
 `ci.timeoutMinutes` in the manifest is the judge's whole time budget, for everything it runs, not the timeout of one job.
-Lockflight does not need Docker to judge a pull request; a team's own tests may.
+Lockflight does not need Docker to judge a pull request; a team's own tests may. The environment the judge runs the tests in
+(network, services, Docker, the file system layout) is described in [CI hardening](ci-hardening.md), not promised.
+
+### The action and the engine
+
+The action installs the engine the target branch pins (`.lockflight/engine.lock`, exactly that version) and calls it. What it
+calls is part of the contract, so an action and an engine from different releases keep working together as far as both only
+added:
+
+- the commands and options `ci --platform github --event --head --evidence [--base] [--branch] [--no-review-expected]
+  [--shell]`, `ci review --platform github --head --base --out [--branch]`, `ci report --evidence --review --head --context
+  --out [--base --event --platform --branch]`, `engine verify-lock <file> --base <file> --script <file> [--attestation]` and
+  `workspace clone --into <dir>`;
+- the exit codes above, and the first line `engine verify-lock` prints on a failure (`engine lock: FAIL <check>: …`);
+- the file names `evidence.json`, `gates-result.json` and `refused.json` (the judge's folder), `review-result.json` (the
+  review's), and `verdict.json`, `comment.md` and `summary.md` (the report's).
+
+The action does not check which engine version it was given. The workflow `init` writes pins the action of the engine's own
+release, and that pairing is the one tested; an action with an engine of another release works only through the additions-only
+rule above.
 
 ## Reserved names
 
 These names are taken for later additions, so nothing else should use them:
 
 - the workflow job ids `judge-*` and `lockflight-*`, and the artifact name prefix `lockflight-`;
-- the CI evidence property `isolation`, reserved for future use;
+- the CI evidence property `isolation` and the manifest key `ci.isolation`, reserved for future use;
+- the reason code `ISOLATION_INCOMPATIBLE`, reserved for future use;
 - the commit trailer `Lockflight-Amend`.
 
 ## Internal formats
