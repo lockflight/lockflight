@@ -286,6 +286,13 @@ jobs:
           engine="$PWD/out/lockflight"
           [ -f "$engine.exe" ] && engine="$engine.exe"
           ENGINE="$engine" bash tests/e2e/ci-local.sh "$RUNNER_TEMP/ci-local"
+      - name: Red-team cases with nothing built (the report's limits, the action's steps, the engine lock and its feed)
+        if: matrix.part != '2'
+        shell: bash
+        run: |
+          engine="$PWD/out/lockflight"
+          [ -f "$engine.exe" ] && engine="$engine.exe"
+          ENGINE="$engine" bash tests/redteam/inputs.sh "$RUNNER_TEMP/redteam-inputs"
       # Runs inside a required job but only on Linux, to keep the added time to about half a minute.
       - name: QUICKSTART on samples/dotnet-single (init --ci-only, red, green, PASS; then FAIL), time to first green
         if: runner.os == 'Linux' && matrix.part != '1'
