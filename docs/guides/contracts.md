@@ -23,6 +23,8 @@ Since 0.3.0 every contract on this page changes only by addition:
   needs that release's engine.
 - **Committed records stay readable.** A later engine reads the approval records, engine locks and manifests that any release
   since 0.3.0 wrote.
+- **What goes away is deprecated first.** It keeps working with a warning for at least one minor release and is removed no
+  earlier than the next major release (before 1.0, the next minor); see [deprecations](compatibility.md#deprecations).
 
 The published JSON Schemas under [`schemas/`](../../schemas/) mirror the engine's readers and are named after the id
 (`lockflight.approval.v2.json` for `lockflight.approval/v2`). Where they disagree, the engine is the authority and the schema
@@ -129,6 +131,7 @@ released version:
 
 ## Next
 
+- [Compatibility](compatibility.md): the deprecation window, and the SDKs, Claude Code versions and platforms each release tests
 - [Configuration](configuration.md): the manifest and the engine lock in full
 - [CI hardening](ci-hardening.md): the workflow, the action and the status contexts
 - [Commands](commands.md): every command and its exit codes
