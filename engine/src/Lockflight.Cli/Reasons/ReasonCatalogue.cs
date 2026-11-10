@@ -91,7 +91,7 @@ internal static class ReasonCatalogue
         ReasonCode.StructuralChangeNewTest => "A structural-only change adds only tests that name its structural requirements: move the new test to a pull request of its own with a red commit, or name a structural requirement in it if it pins behaviour the change keeps.",
         ReasonCode.SurvivorNotStopped => "Do not re-run: a process the pull request's build or tests started could not be stopped (it runs as another user, typically through `sudo`), so this run's verdict cannot be trusted. Remove the code that starts it; the evidence's `processes` names its command line and the step it outlived.",
         ReasonCode.SurvivorOutputHeld => "Nothing blocks: a process the step started kept its output open after it exited, and Lockflight stopped waiting for it. Stop that process in the build or in the test's teardown (dispose it, or kill it); the evidence's `processes` lists it.",
-        ReasonCode.ArtifactMismatch => "Re-run the whole workflow. If it repeats, do not merge: a step other than the action's upload wrote or removed the artifact (the detail names it and both digests), so look in the pull request for code that uploads or deletes `lockflight-*` artifacts, in its build, tests or workflow files.",
+        ReasonCode.ArtifactMismatch => "Re-run the whole workflow. If it repeats, do not merge: a step other than the action's upload wrote or removed the artifact (the detail names it and both digests), so look in the pull request for code that uploads or deletes `lockflight-*` artifacts, in its build, tests or workflow files, or that leaves a symbolic link in the judge's evidence folder (the upload follows it; the digest counts regular files only).",
         _ => string.Empty,
     };
 

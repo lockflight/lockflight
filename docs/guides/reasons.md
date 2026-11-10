@@ -434,7 +434,7 @@ each job's digest and artifact id to the report jobs; the detail names the artif
 **Why:** An artifact's name says nothing about who uploaded it. A step that runs the pull request's code, in the judge or the
 review job, can upload or replace an artifact of the same name; the digest ties the artifact to the action's own upload step.
 
-**Next:** Re-run the whole workflow. If it repeats, do not merge: a step other than the action's upload wrote or removed the artifact (the detail names it and both digests), so look in the pull request for code that uploads or deletes `lockflight-*` artifacts, in its build, tests or workflow files.
+**Next:** Re-run the whole workflow. If it repeats, do not merge: a step other than the action's upload wrote or removed the artifact (the detail names it and both digests), so look in the pull request for code that uploads or deletes `lockflight-*` artifacts, in its build, tests or workflow files, or that leaves a symbolic link in the judge's evidence folder (the upload follows it; the digest counts regular files only).
 
 ### EVIDENCE_INVALID
 
