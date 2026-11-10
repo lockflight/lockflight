@@ -783,7 +783,7 @@ jobs:
           python=$(command -v python3 || command -v python)
           "$python" -I -c 'import json, sys
           verdict = json.load(open(sys.argv[1]))
-          assert verdict["judge"] != "refused" and verdict["verdict"] == "PASS", verdict' \
+          assert verdict.get("judge") != "refused" and verdict["verdict"] == "PASS", verdict' \
             "$RUNNER_TEMP/lockflight-verdict/verdict.json"
           [ "$VERDICT" = PASS ]
           rm -rf "$RUNNER_TEMP/lockflight-evidence" "$RUNNER_TEMP/lockflight-review" "$RUNNER_TEMP/lockflight-verdict"
