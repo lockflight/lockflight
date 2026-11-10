@@ -171,7 +171,7 @@ jobs:
           fi
           # link copies the engine into a project; the copy must run on its own, as the hooks run it.
           project="$temp/link-project"
-          mkdir -p "$project" && printf 'version: 1\n' > "$project/lockflight.yaml"
+          mkdir -p "$project" && printf 'version: 2\n' > "$project/lockflight.yaml"
           (cd "$project" && "$tool" link)
           linked="$project/.lockflight/bin/lockflight$exe"
           [ -f "$linked" ] || { echo "::error::link did not write $linked"; exit 1; }
