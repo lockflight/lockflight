@@ -150,6 +150,20 @@ public sealed class ShellPointerTests : IDisposable
     }
 
     [Fact]
+    public async Task AShellStillOnVersion1SaysToMigrateTheShellFirst()
+    {
+        Directory.CreateDirectory(Shell);
+        await GitAsync(Shell, ["init", "-q"]);
+        File.WriteAllText(Path.Combine(Shell, Manifest.FileName), "version: 1\nunits:\n  - path: services/orders\n");
+        await CommitAllAsync(Shell);
+
+        ShellPolicyReading reading = await ShellPolicyReader.ReadAsync(Shell, Pointer, checkOrigin: false, TestContext.Current.CancellationToken);
+
+        Assert.Contains("is a version 1 manifest", reading.Error, StringComparison.Ordinal);
+        Assert.Contains("migrate the shell before its units", reading.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AUnitCheckedOutInsideItsShellFindsIt()
     {
         await CreateShellAsync();

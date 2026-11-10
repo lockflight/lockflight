@@ -103,6 +103,7 @@ public sealed class CiCommandTests : IAsyncLifetime
         Assert.Equal(ExitCode.Config, exitCode);
         Assert.Contains("version 1 manifests are no longer read", error, StringComparison.Ordinal);
         Assert.Contains("update --project", error, StringComparison.Ordinal);
+        Assert.Contains("judged by the engine the target branch pins", error, StringComparison.Ordinal);
         Assert.Single(error.Trim().Split('\n'));
     }
 

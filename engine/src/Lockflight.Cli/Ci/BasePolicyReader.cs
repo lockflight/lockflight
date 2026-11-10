@@ -23,7 +23,9 @@ internal static class BasePolicyReader
         ManifestLoadResult parsed = new ManifestParser(root, label).Parse(text);
         if (parsed.Manifest is not Manifest manifest)
         {
-            return new BasePolicyReading(null, $"the target branch's {Manifest.FileName} is invalid: {parsed.Error?.Describe()}");
+            return new BasePolicyReading(null, new ManifestParser(root, label) { ReadsVersion1 = true }.Parse(text).Manifest is { Version: ManifestVersions.Legacy }
+                ? $"the target branch's {Manifest.FileName} is invalid: {parsed.Error?.Describe()}; a pull request that migrates it is judged by the engine the target branch pins (CI does this), not by this one"
+                : $"the target branch's {Manifest.FileName} is invalid: {parsed.Error?.Describe()}");
         }
 
         string sha256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));

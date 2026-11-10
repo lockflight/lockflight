@@ -208,6 +208,11 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         }
 
         string root = manifest.Root;
+        if (manifest.Shell is not null && VendoredUnit.EnclosingShellOf(root) is { Version1: true } enclosingShell)
+        {
+            await context.Error.WriteLineAsync(
+                $"warning: the workspace shell at {enclosingShell.Directory} still has a version 1 {Manifest.FileName}. This unit's CI judge and `gate run --shell` read the shell's policy with this engine, which refuses version 1, so every pull request of the unit is ERROR until the shell is migrated: migrate the shell first (a person runs `{EngineCommand.Name} update --project` there) and merge it before this update.");
+        }
         // Every file is computed first and written last, so an error leaves the project as it was.
         List<PlannedWrite> writes = [];
         string manifestPath = Path.Combine(root, Manifest.FileName);
@@ -325,10 +330,18 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
     private async Task<ExitCode> MoveVendoredUnitAsync(string unitRoot, bool dryRun, CancellationToken cancellationToken)
     {
         string fallback = $"`{EngineCommand.Name} init --unit-of <shell url> --unit-path <path>` there, then delete {Manifest.UnitFileName}";
-        if (VendoredUnit.EnclosingShell(unitRoot) is not (string shell, string unitPath))
+        if (VendoredUnit.EnclosingShellOf(unitRoot) is not EnclosingShell enclosing)
         {
             await context.Error.WriteLineAsync(
                 $"lockflight: {unitRoot} holds {Manifest.UnitFileName}, the policy the removed workspace sync vendored, which this engine no longer reads. No {Manifest.FileName} above it lists this repository among its units, so update cannot tell which shell it belongs to: check it out inside its shell and run update there, or run {fallback}; nothing was changed");
+            return ExitCode.Config;
+        }
+
+        (string shell, string unitPath) = (enclosing.Directory, enclosing.UnitPath);
+        if (enclosing.Version1)
+        {
+            await context.Error.WriteLineAsync(
+                $"lockflight: the workspace shell at {shell} lists this repository, but its {Manifest.FileName} is still version 1, which this engine reads only to migrate: migrate the shell first (a person runs `{EngineCommand.Name} update --project` in {shell} and merges it), then run update here again; nothing was changed");
             return ExitCode.Config;
         }
 
@@ -344,7 +357,8 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
         string workflowPath = Path.Combine(unitRoot, Templates.WorkflowPath.Replace('/', Path.DirectorySeparatorChar));
         string? workflow = File.Exists(workflowPath) ? await File.ReadAllTextAsync(workflowPath, cancellationToken) : null;
         List<(string Path, string Text)> removed = [(Path.Combine(unitRoot, Manifest.UnitFileName), await File.ReadAllTextAsync(Path.Combine(unitRoot, Manifest.UnitFileName), cancellationToken))];
-        if (workflow is not null && JudgeWorkflowMigration.IsVendoredUnitWorkflow(workflow))
+        bool editedWorkflow = workflow is not null && !JudgeWorkflowMigration.IsVendoredUnitWorkflow(workflow);
+        if (workflow is not null && !editedWorkflow)
         {
             removed.Add((workflowPath, workflow));
         }
@@ -359,27 +373,49 @@ internal sealed class UpdateCommand(CliContext context) : ICommand
             return ExitCode.Pass;
         }
 
-        foreach ((string path, _) in removed)
+        ExitCode initialized;
+        try
         {
-            File.Delete(path);
-        }
-
-        CommandDescriptor initCommand = CommandRegistry.Match(["init"])!;
-        ExitCode initialized = await new InitCommand(context with { WorkingDirectory = unitRoot }).RunAsync(new CommandArguments(initCommand, [.. init, "--no-link"]), cancellationToken);
-        if (initialized != ExitCode.Pass)
-        {
-            foreach ((string path, string text) in removed)
+            foreach ((string path, _) in removed)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await File.WriteAllTextAsync(path, text, cancellationToken);
+                File.Delete(path);
             }
 
+            CommandDescriptor initCommand = CommandRegistry.Match(["init"])!;
+            initialized = await new InitCommand(context with { WorkingDirectory = unitRoot }).RunAsync(new CommandArguments(initCommand, [.. init, "--no-link"]), cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Whatever stopped init, the unit keeps the files it had: the exception is reported as usual after they are back.
+            await RestoreAsync(removed);
+            await context.Error.WriteLineAsync($"lockflight: init stopped with an error, so {deletes} {(removed.Count == 1 ? "was" : "were")} put back");
+            throw;
+        }
+
+        if (initialized != ExitCode.Pass)
+        {
+            await RestoreAsync(removed);
             await context.Error.WriteLineAsync($"lockflight: init did not finish, so {deletes} {(removed.Count == 1 ? "was" : "were")} put back");
             return initialized;
         }
 
         await context.Output.WriteLineAsync($"Moved to the shell pointer: {deletes} deleted. Review the changes and commit them in one commit.");
+        if (editedWorkflow)
+        {
+            await context.Output.WriteLineAsync(
+                $"note: {Templates.WorkflowPath} was edited by hand, so update left it: it still runs the gates alone, without {Manifest.UnitFileName} or the shell's clone. Delete it, or merge it by hand with the CI judge's workflow for a unit, which `{EngineCommand.Name} init --unit-of {url} --unit-path {unitPath}` writes in a clone without it.");
+        }
         return await new LinkCommand(context with { WorkingDirectory = unitRoot }).RunAsync(cancellationToken);
+    }
+
+    /// <summary>Writes back the files the move deleted, as they were; never cancelled, so a stopped move cannot lose them.</summary>
+    private static async Task RestoreAsync(IReadOnlyList<(string Path, string Text)> removed)
+    {
+        foreach ((string path, string text) in removed)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, text, CancellationToken.None);
+        }
     }
 
     /// <summary>

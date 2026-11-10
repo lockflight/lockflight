@@ -29,9 +29,10 @@ internal static class VendoredUnit
 
     /// <summary>
     /// The workspace shell the unit is checked out in, and the unit's path among its units: the nearest directory above the unit
-    /// whose <c>lockflight.yaml</c> lists it. Null when none does.
+    /// whose <c>lockflight.yaml</c> lists it, a version 1 manifest included (so the person is told to migrate the shell, not that
+    /// no shell lists the unit). Null when none does.
     /// </summary>
-    public static (string Shell, string UnitPath)? EnclosingShell(string unitRoot)
+    public static EnclosingShell? EnclosingShellOf(string unitRoot)
     {
         string unit = Path.GetFullPath(unitRoot).TrimEnd(Path.DirectorySeparatorChar);
         for (DirectoryInfo? candidate = Directory.GetParent(unit); candidate is not null; candidate = candidate.Parent)
@@ -42,11 +43,11 @@ internal static class VendoredUnit
                 continue;
             }
 
-            Manifest? shell = new ManifestParser(candidate.FullName, manifestPath).Parse(File.ReadAllText(manifestPath)).Manifest;
+            Manifest? shell = new ManifestParser(candidate.FullName, manifestPath) { ReadsVersion1 = true }.Parse(File.ReadAllText(manifestPath)).Manifest;
             string relative = Path.GetRelativePath(candidate.FullName, unit).Replace('\\', '/');
             if (shell?.Units.FirstOrDefault(listed => listed.Path.Equals(relative, StringComparison.OrdinalIgnoreCase)) is Unit listedUnit)
             {
-                return (candidate.FullName, listedUnit.Path);
+                return new EnclosingShell(candidate.FullName, listedUnit.Path, shell.Version == ManifestVersions.Legacy);
             }
         }
 
