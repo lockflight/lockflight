@@ -97,6 +97,8 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
   5. `security.deps` — no new High/Critical advisories;
   6. `security.secrets` — gitleaks over the PR's commits, uncommitted changes, and untracked files that git does not ignore.
      False positives go to `.gitleaksignore`, reviewed by a human. An added inline `gitleaks:allow` comment fails the step.
+     gitleaks reporting leaks with a report that lists none, or a report that is not JSON, is an ERROR (`TOOL_ERROR`), never a
+     pass.
      In the CI judge this scan runs first, before anything of the pull request is built (see
      [what the CI judge shows](#what-the-ci-judge-shows-and-what-it-does-not)), and the gates report
      its result here.

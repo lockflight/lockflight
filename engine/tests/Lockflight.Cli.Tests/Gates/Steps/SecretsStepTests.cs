@@ -274,6 +274,43 @@ public sealed class SecretsStepTests : IDisposable
     }
 
     [Fact]
+    public async Task GitleaksReportingLeaksWithAnEmptyReportIsAnErrorNotAPass()
+    {
+        await InitRepositoryAsync();
+        GateRunContext run = Context() with
+        {
+            Processes = (fileName, arguments, directory, limit, cancellationToken) =>
+                Task.FromResult(new ProcessResult(99, string.Empty, string.Empty, 5, TimedOut: false)),
+        };
+
+        GateStep step = (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
+
+        Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Equal(ReasonCode.ToolError, step.Reason);
+        Assert.Contains("exited 99, which reports leaks, but its report lists none", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AGitleaksReportThatIsNotJsonIsAnError()
+    {
+        await InitRepositoryAsync();
+        GateRunContext run = Context() with
+        {
+            Processes = async (fileName, arguments, directory, limit, cancellationToken) =>
+            {
+                string report = arguments[arguments.ToList().IndexOf("--report-path") + 1];
+                await File.WriteAllTextAsync(report, "[{\"RuleID\": \"slack", cancellationToken);
+                return new ProcessResult(0, string.Empty, string.Empty, 5, TimedOut: false);
+            },
+        };
+
+        GateStep step = (await new SecretsStep().RunAsync(run, GateRunFacts.None, TestContext.Current.CancellationToken)).Step;
+
+        Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Equal(ReasonCode.ToolError, step.Reason);
+    }
+
+    [Fact]
     public async Task TheSecretsScanTheJudgeRanFirstIsReportedWithoutScanningAgain()
     {
         await InitRepositoryAsync();
