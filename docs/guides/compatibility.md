@@ -34,8 +34,8 @@ What has gone this way:
 
 | What | Deprecated | Removed | Replacement |
 |---|---|---|---|
-| Manifest version 1 (`version: 1`, or no `version`) | 0.3.0: read with migration defaults, named at session start and by `doctor` | 0.4: refused, with the one-line fix | `lockflight update --project` migrates it; the migration stays through 1.x. In a workspace, migrate the shell before its units: a unit's CI judge reads the shell's policy with the unit's engine, which refuses a version 1 shell |
-| `workspace sync` and the vendored `lockflight.unit.yaml` | 0.3.1: a warning on every run | 0.4: the command says what replaced it | the shell pointer, `init --unit-of`; `lockflight update --project` in a unit repository moves it |
+| Manifest version 1 (`version: 1`, or no `version`) | 0.3.0: read with migration defaults, named at session start and by `doctor` | 0.5: refused, with the one-line fix | `lockflight update --project` migrates it; the migration stays through 1.x. In a workspace, migrate the shell before its units: a unit's CI judge reads the shell's policy with the unit's engine, which refuses a version 1 shell |
+| `workspace sync` and the vendored `lockflight.unit.yaml` | 0.3.1: a warning on every run | 0.5: the command says what replaced it | the shell pointer, `init --unit-of`; `lockflight update --project` in a unit repository moves it |
 | `doctor --canaries` | renamed to `doctor --self-test` | not yet removed | `doctor --self-test` |
 
 ## Upgrading a project
@@ -75,7 +75,7 @@ The test runners and frameworks each supports are in [getting started](getting-s
 |---|---|
 | Minimum | 2.1.295: from that version a guard hook that times out blocks the tool call. `doctor` warns on an older one. |
 | Tested | 2.1.309: CI validates both plugins and the marketplace with it on every pull request, and the real-hook canary (a headless session that must allow a write and block two protected changes) runs with it on demand. The engine's hook decisions are tested on every run with recorded hook input, without Claude Code. Versions between 2.1.295 and 2.1.309, and later ones, are not tested until the pinned version is raised. |
-| Plugin and engine | The plugin and the engine speak hook API 1. The plugin names the oldest engine it works with (`min-engine-version`, 0.3.1 for the 0.3.1 plugin), and a session in a project that pins an older one is told to update it. |
+| Plugin and engine | The plugin and the engine speak hook API 1. The plugin names the oldest engine it works with (`min-engine-version`, 0.5.0 for the 0.5.0 plugin), and a session in a project that pins an older one is told to update it. |
 
 ## Operating systems and CI runners
 

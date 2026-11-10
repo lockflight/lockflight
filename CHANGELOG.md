@@ -5,6 +5,142 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-10
+
+0.5.0 hardens the CI judge against the pull request it judges, runs it on Windows for desktop solutions, and makes every
+refusal say what to do next. A bug fix gets its red commit without a spec (`lockflight red` and the `fix` skill), a
+behaviour-preserving refactoring can pass without one, and `lockflight update --project` now brings a project's generated
+files to what this release's `init` writes. The judge still builds and runs the pull request's code in the same job as
+itself: the changes here close specific ways for that code to influence the verdict, and its results stay a strong
+guardrail, not a boundary ([guardrails and boundaries](docs/guides/guardrails-and-boundaries.md)). Version 1 manifests and
+`workspace sync`, deprecated in 0.3.x, are removed.
+
+### Breaking changes
+- **Version 1 manifests are refused.** A `lockflight.yaml` with `version: 1`, or no `version`, stops every command and hook
+  that reads it with one line naming the fix: hooks block everything but reading, the lifecycle commands and the CI judge
+  exit `4`, and `doctor` fails the manifest check. `lockflight update --project` still migrates it, keeping its settings,
+  and the migration stays through 1.x. In a workspace, migrate the shell before its units: a unit's CI judge reads the
+  shell's policy with the unit's engine, and a version 1 shell is now named as such instead of "invalid" (#309, #324).
+- **`workspace sync` is removed**, and `lockflight.unit.yaml` is no longer read. The command prints its replacement and exits
+  `4`. In a unit repository that still holds the vendored file, checked out inside its shell, `update --project` moves it to
+  the shell pointer (`init --unit-of`): it deletes `lockflight.unit.yaml` and the workflow sync wrote, runs `init --unit-of`
+  with the shell's `origin` URL, and puts the files back if that init refuses. `doctor` in a shell names the units still to
+  move (#310, #324).
+- **The first engine lock fails closed without a token.** A workflow that passes an empty `github-token` to the judge's
+  action now fails (`engine lock: FAIL unattested`) on the pull request that adds the first engine lock, instead of
+  accepting it with a warning. Leave `github-token` at its default (#271).
+- **The plugin needs engine 0.5.0** (`min-engine-version`): a session in a project that pins an older engine is told to
+  update it.
+
+### What to do after upgrading
+- **Update the engine, then each project.** In a separate terminal (not with `!` in Claude Code), from the project root, run
+  `~/.lockflight/bin/lockflight update`, which installs engine 0.5.0 and runs `lockflight update --project`; commit what it
+  lists in one commit, through a pull request a person reviews. It migrates a version 1 manifest, moves a vendored workspace
+  unit to the shell pointer, and brings the engine pin and lock, the vendored install script, the GitHub workflow (action
+  pin, steps, jobs and runner), the native hooks, the `CLAUDE.md` block, the `Edit` deny rules and sandbox write denials and
+  the `.gitignore` entries to what `init` writes now. `--dry-run` shows the diff and writes nothing.
+- **A workflow you edited is not overwritten.** `update` prints the diff to the current workflow and writes it to
+  `.lockflight/local/migration/` for you to merge; a pin you raised by hand is kept. Until it is merged, your workflow does
+  not verify the judge's artifacts or check the policy commit as the new one does.
+- **In a workspace, migrate the shell first**, then each unit.
+- **Azure Pipelines, Bitbucket Pipelines and GitLab** get only the line edits `update` always made there (the engine
+  install, the policy restore, the base, and now the gitleaks hash); compare the rest with the templates in
+  [CI on other platforms](docs/guides/ci-other-platforms.md).
+- **A solution with a Windows test project** (WPF, Windows Forms, a `net*-windows` target): `update --project` moves the
+  GitHub workflow's judge and review jobs to `windows-latest`. Until then the judge refuses to build it on Linux
+  (`NEEDS_WINDOWS_RUNNER`).
+
+### Added
+- **`lockflight red`: a fix's red commit without a spec.** It commits the working tree's failing test with the
+  `Lockflight-Red` trailer after judging it with the CI judge's own planner and per-red code, against the fork point and the
+  target branch's policy, without touching your index or branch. It refuses inside a feature's lifecycle and where the
+  routed class needs a spec; `--redo <n>` supersedes a red the judge rejected (#281, #282).
+- **The `fix` skill** and the [fix a bug](docs/guides/fix-a-bug.md) guide: reproduce the bug in a test, `lockflight red`, a
+  minimal fix, the gates, the local judge, and a hand-over to `/lockflight:feature` when the class needs a spec. It never
+  hand-types a red trailer (#283).
+- **The `check-pr` skill**: before a push, the agent commits, runs the local judge (`ci --platform local`) and, on anything
+  but PASS, explains it, fixes what is its own to fix and hands the rest to the person. A suite shows that the local judge
+  gives the same verdict, contexts and reason codes as the GitHub one on the same commits (#296).
+- **A reason code and a Next line for every refusal.** Every check and gate step that does not pass carries a stable reason
+  code (an additive `reason` in the CI evidence, `verdict.json` and the gate result), and a short Next line in the PR
+  comment, the job summary and the console, linked to its entry in the new [reasons](docs/guides/reasons.md) guide. A
+  **What to do** list under the checks table gives each refused check its code and next step; `redgreen` refusals for an
+  approval print it too (#266, #269, #277, #280).
+- **`lockflight ci explain`** explains a verdict, evidence, refusal, gate result or the local judge's last run, check by
+  check, with each reason and next step; given a GitHub Actions run, it downloads its artifacts with `gh`. It reads them as
+  untrusted data: control characters are shown, never sent to the terminal, and only the two exact artifact names the action
+  uploads are read (a workflow that sets the action's `artifact-suffix` downloads its artifact by name and passes the
+  folder) (#295, #304).
+- **Structural-only changes pass without a red commit.** A pull request whose spec is all `[structural]`, reviewed by a code
+  owner, with no signal of behaviour a structural test cannot pin, has `red` and `tests since red` N/A; instead trace must
+  cover every requirement with structural tests that pass before and after, and the base's version of every existing test
+  it changed must pass on the head's code. The comment says the claim is accepted by review, not proved (#297, #302).
+- **The judge runs on Windows for desktop solutions.** The action and `scripts/install.sh` run on Windows runners;
+  `init` writes the judge and review jobs on `windows-latest` when a test project needs Windows, `doctor` warns about a
+  runner that does not fit, and a judge off Windows says so with `NEEDS_WINDOWS_RUNNER` instead of a wrong FAIL (#261,
+  #289, #306). A WPF and ASP.NET Core sample on .NET 8 is judged on Windows in CI (#286).
+- **Local gates off Windows** build a solution with Windows projects (`EnableWindowsTargeting`) and leave its Windows test
+  projects out, naming them; `doctor` explains it at every install level (#290, #292).
+- **XAML is its own file role** in risk routing, for WPF, .NET MAUI and WinUI views: a visual change stays in its size class,
+  while a change that wires behaviour (an event handler, `x:Code`) still counts as configuration. A red that fails while
+  loading XAML gets advice that fits (#288, #305).
+- **Processes the pull request's code leaves running are stopped and listed** by the judge and by the `pr` gates in CI:
+  through a subreaper on Linux, a job object on Windows, and best effort on macOS (a process group and an environment
+  marker, which a process that leaves both escapes). On GitHub-hosted runners the judge also removes Docker containers
+  created during the run. A process it cannot stop (another user's, through `sudo`) makes `green` and `gates` ERROR
+  (`SURVIVOR_NOT_STOPPED`); the PR comment lists what was left running (#294, #298, #299, #300, #301).
+- **The Windows install script completes a user install**: `install.ps1` puts the checked engine in `~\.lockflight\bin`,
+  adds it to the user `PATH` and prints the next steps, as the package install does on macOS and Linux (#268).
+- **New guides:** [public contracts](docs/guides/contracts.md), the formats and names you can build on, checked against
+  every release's output (#307, #325); [compatibility](docs/guides/compatibility.md), what each release supports and tests
+  and how long a deprecation lasts (#311); [what the judge catches](docs/guides/what-the-judge-catches.md), a benchmark of
+  scripted cheats judged by the CI judge and by a plain CI with a coverage threshold, with what it does not catch and the
+  cost (#318); [performance](docs/guides/performance.md), hook latency and gate and judge times measured weekly on Linux,
+  Windows and macOS (#291).
+
+### Changed
+- **`update --project` brings generated files to what `init` writes now.** It recognises a GitHub workflow written by any
+  earlier release and replaces it with the current template, keeping its .NET channels, trigger, runners and workspace
+  shell clone, after printing the diff; it adds the current settings deny rules and `.gitignore` entries. Every release
+  since 0.3.0 is upgraded in CI at all three install levels and both profiles (#312, #313).
+- **The report reads only artifacts and a policy it can vouch for.** The generated workflow passes the judge's and the
+  review's artifact ids and digests to the report jobs, which download by id and refuse an artifact whose files differ
+  (`ARTIFACT_MISMATCH`); the policy commit counts only when it is on the target branch's first-parent chain between the
+  event's base and its tip (#314, #315, #321, #323).
+- **The judge scans for secrets before it builds anything**, with the target branch's gitleaks configuration, and checks
+  the gitleaks binary's hash before using its result; a replaced scanner is `SCANNER_REPLACED`, not a tool error. The
+  generated GitLab, Bitbucket and Azure Pipelines files pass the hash too. Builds the engine starts no longer use the shared
+  compiler server, so local gate builds may take a little longer (#265, #267, #278, #280).
+- **The action uploads only the engine's result**, staged outside the checkout, and installs a pinned `claude` for the
+  review (#271).
+- **A refused engine lock is reported as such**: the PR comment says FAIL with `ENGINE_LOCK_REFUSED` and the failed check,
+  instead of NOT-EARNED "re-run the workflow" (#284).
+- **Host tampering lists run settings.** Data collectors, loggers and test adapters a test project's run settings or
+  properties load, and adapter, logger and collector assemblies in its output, are findings like any other: NOT-EARNED when
+  a pull request adds one, until a person accepts it in the baseline (#322).
+- **The `CLAUDE.md` block** tells the agent to keep scratch files and experiments in a directory outside the project; `init`
+  and `update --project` rewrite the block (#276).
+- **`init` names the command** that moves a 0.2 gates-only workflow to the judge's (#275).
+- **`lockflight facts --json` (`lockflight.facts/v1`) is documented as internal**: its only reader is the crew plugin,
+  which ships with the same release (#307).
+- **The README** is rewritten for first-time visitors, and the engine installs from nuget.org without `--prerelease`
+  (#260, #263).
+- **Building the engine needs .NET SDK 10.0.114** or newer (10.0.403 or newer in the 4xx band); older SDKs fail restore on a
+  compiler advisory (#272).
+
+### Fixed
+- **Gates:** the vulnerable-packages step works in a repository whose `global.json` pins SDK 8 or 9 (#285); the
+  suppressions scan skips untracked build output beside a project, and still scans other untracked `bin` folders (#308,
+  #326); a tool's output is read to its end before it is parsed, which removes intermittent false ERRORs on Windows (#319);
+  the secrets scan keeps its verdict when its temporary folder cannot be deleted on Windows, and an empty report with the
+  "leaks found" exit code is ERROR, not PASS (#320).
+- **CI judge:** a process that holds the engine's output open no longer stalls the judge until the job times out (#293);
+  the review check's reason follows its verdict when the review result cannot be read (#280).
+- **`redgreen red`** before `redgreen start` names a missing tasks approval first (#264).
+- **The ledger** records a blocked write's file path without masking it as a credential (#274).
+- **`doctor` on Windows** finds Git Bash by its full path instead of WSL's `bash.exe`, and `update` takes the engine from a
+  tool path that `engine install` or `install.ps1` wrote (#268).
+
 ## [0.3.1] — 2026-11-04
 
 0.3.1 comes from running the whole lifecycle on real projects, including a large behaviour-preserving refactoring. Approving
@@ -584,7 +720,8 @@ The first public release. Earlier versions were private previews; this entry sum
 - Levi, the pixel lock-keeper, in your terminal and, if you like, in Claude Code's status line (`lockflight statusline`). Only
   people see him.
 
-[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/lockflight/lockflight/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/lockflight/lockflight/compare/v0.3.1...v0.5.0
 [0.3.1]: https://github.com/lockflight/lockflight/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.9...v0.3.0
 [0.2.0-alpha.9]: https://github.com/lockflight/lockflight/compare/v0.2.0-alpha.8...v0.2.0-alpha.9

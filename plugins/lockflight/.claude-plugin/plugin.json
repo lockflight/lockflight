@@ -1,6 +1,6 @@
 {
   "name": "lockflight",
-  "version": "0.3.1",
+  "version": "0.5.0",
   "description": "Test-first guardrails for AI coding agents on .NET: new behaviour goes red → green, the build and tests can run before an agent says \"done\", and a CI judge re-checks that evidence on every pull request.",
   "author": { "name": "Bohdan Ivaniichuk" },
   "repository": "https://github.com/lockflight/lockflight",

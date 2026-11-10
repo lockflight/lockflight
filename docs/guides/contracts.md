@@ -46,7 +46,7 @@ is a bug. Each schema's `$id` is its URL on `main`.
 | Blocked report | the `blocked` property of `verdict.json` | `lockflight.blocked/v1` | [`lockflight.blocked.v1.json`](../../schemas/lockflight.blocked.v1.json) | [reasons](reasons.md) |
 
 In the CI evidence, the `verdict` values (`PASS`, `FAIL`, `NOT-EARNED`, `ERROR`) and the `judge` values of the short form
-(`missing`, `refused`) are closed lists: no value is added to them within a major version (`refused` was added in 0.4; before
+(`missing`, `refused`) are closed lists: no value is added to them within a major version (`refused` was added in 0.5; before
 1.0 the minor version is the major one). Reason codes, check ids and
 change-class signals may gain values; a reader that meets one it does not know shows it as it is.
 

@@ -410,7 +410,7 @@ the pull request (the `explain-ci` skill).
 
 The workflow `init` writes installs the engine version the project pins, from nuget.org or the package sources in the
 repository's `nuget.config`. A project set up from a package pins a release that nuget.org has, so its workflow runs on every
-pull request. An engine built from source is a development build (`0.3.2-0.dev.<commit time>` after the 0.3.1 release) that exists only in
+pull request. An engine built from source is a development build (`0.5.1-0.dev.<commit time>` after the 0.5.0 release) that exists only in
 your local feed (`~/.lockflight/feed`), so a workflow that ran on every pull request would fail at the engine install every
 time. So:
 
