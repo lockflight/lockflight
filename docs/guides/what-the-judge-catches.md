@@ -26,7 +26,9 @@ Each pull request is judged twice:
   apart, as **held for review**.
 - **Plain CI:** `dotnet test` with code coverage, failing when a test fails or when the tests execute less than 80 % of the
   production lines the pull request added or changed. The threshold is read from the pull request's own config file, as a
-  plain CI reads its `codecov.yml`.
+  plain CI reads its `codecov.yml` or a threshold written into its workflow. A plain CI with a required code-owner review of
+  that file would also stop the one cheat that lowers it, as the judge's own protection of its threshold rests on code-owner
+  review of the workflow.
 
 ## Results
 

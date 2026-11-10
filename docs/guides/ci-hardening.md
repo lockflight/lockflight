@@ -80,7 +80,8 @@ CI/CD and Azure Pipelines, `init --ci-platform gitlab|azure` writes a job that r
   1. `policy.protected` — lists protected files the PR changes (never fails; the list goes to the job summary);
   2. `format`, then `quality.suppressions` — suppressions the PR adds (`#pragma warning disable`, `[SuppressMessage]`,
      `<NoWarn>`, a lowered `.editorconfig` severity, `#nullable disable`, `[ExcludeFromCodeCoverage]` …), by file, line and
-     rule; it fails only with `gates.quality.suppressions: fail` (the default, `report`, lists them). A needed one is accepted
+     rule; it fails with `gates.quality.suppressions: fail`, the default (a manifest migrated from version 1 carries an
+     explicit `report`, which only lists them). A needed one is accepted
      with `baseline suppressions`, merged in its own pull request like every baseline. With the manifest and the baseline taken
      from the base branch and the check required, a PR cannot switch the step off or accept its own suppressions;
      then `docs.references` — links, anchors, code-span paths and command lines in `CLAUDE.md`, `AGENTS.md` and `.claude/`
