@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Lockflight.Cli.Init;
 using Lockflight.Cli.Processes;
 
@@ -35,7 +37,36 @@ internal static class RedSnapshots
         StringComparer.OrdinalIgnoreCase);
 
     public static string RefFor(string featureId, int cycle, string commit) =>
-        $"{RefPrefix}{featureId}/{cycle}/{commit[..Math.Min(RefCommitLength, commit.Length)]}";
+        $"{RefPrefix}{RefSegment(featureId)}/{cycle}/{commit[..Math.Min(RefCommitLength, commit.Length)]}";
+
+    /// <summary>
+    /// The feature id as one ref name segment: what <c>git check-ref-format</c> refuses (a control character, a space, <c>~</c>,
+    /// <c>^</c>, <c>:</c>, <c>?</c>, <c>*</c>, <c>[</c>, <c>\</c>, <c>@{</c>, a leading dot, <c>..</c>, a trailing dot or
+    /// <c>.lock</c>) becomes <c>%XX</c>, so the snapshot is kept rather than dropped. Every id git accepted is unchanged.
+    /// </summary>
+    public static string RefSegment(string featureId)
+    {
+        const string LockSuffix = ".lock";
+        StringBuilder segment = new();
+        for (int index = 0; index < featureId.Length; index++)
+        {
+            char character = featureId[index];
+            bool refused = character < ' ' || character is '\x7f' or ' ' or '~' or '^' or ':' or '?' or '*' or '[' or '\\'
+                || (character == '@' && index + 1 < featureId.Length && featureId[index + 1] == '{')
+                || (character == '.' && (index == 0 || featureId[index - 1] == '.' || index == featureId.Length - 1
+                    || (index == featureId.Length - LockSuffix.Length && featureId.EndsWith(LockSuffix, StringComparison.Ordinal))));
+            if (refused)
+            {
+                segment.Append(CultureInfo.InvariantCulture, $"%{(int)character:X2}");
+            }
+            else
+            {
+                segment.Append(character);
+            }
+        }
+
+        return segment.ToString();
+    }
 
     /// <summary>
     /// Writes the snapshot commit of the repository that holds <paramref name="root"/> (no ref yet: <see cref="KeepAsync"/>); skipped,

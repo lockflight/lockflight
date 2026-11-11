@@ -62,6 +62,19 @@ public sealed class RedCommitterTests : IAsyncLifetime
         Assert.Contains("HEAD is detached", await RedCommitter.RefusalAsync(repository.Root, TimeLimit, cancellationToken), StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("CHERRY_PICK_HEAD", "a cherry-pick is in progress")]
+    [InlineData("REVERT_HEAD", "a revert is in progress")]
+    [InlineData("MERGE_HEAD", "a merge is in progress")]
+    public async Task AnOperationInProgressIsRefusedByItsName(string state, string expected)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string head = await repository.HeadAsync(cancellationToken);
+        repository.Write($".git/{state}", head + "\n");
+
+        Assert.Contains(expected, await RedCommitter.RefusalAsync(repository.Root, TimeLimit, cancellationToken), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ProjectFilesSpecsAndRecordsAreNoReasonToRefuse()
     {
@@ -114,10 +127,10 @@ public sealed class RedCommitterTests : IAsyncLifetime
         RedSnapshot snapshot = await RedSnapshots.TakeAsync(repository.Root, [repository.Root], TimeLimit, cancellationToken);
         repository.Write("src/Shop/Price.cs", "class Price { /* written after the red */ }\n");
 
-        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "test(001-shipping): red for cycle 1", 1, TimeLimit, cancellationToken);
+        RedCommitOutcome outcome = await RedCommitter.CommitAsync(repository.Root, snapshot.Commit!, "test(001 \"shipping\" $x): red for cycle 1", 1, TimeLimit, cancellationToken);
 
         Assert.Null(outcome.Commit);
-        Assert.Contains($"git read-tree {snapshot.Commit} && git commit --allow-empty --no-verify", outcome.Message, StringComparison.Ordinal);
+        Assert.Contains($"git read-tree {snapshot.Commit} && git commit --allow-empty --no-verify -m 'test(001 \"shipping\" $x): red for cycle 1' -m 'Lockflight-Red: 1'", outcome.Message, StringComparison.Ordinal);
         await repository.GitAsync(["read-tree", snapshot.Commit!], cancellationToken);
         await repository.GitAsync(["commit", "-q", "--no-verify", "-m", "red"], cancellationToken);
         Assert.Equal(await repository.CommitOfAsync($"{snapshot.Commit}^{{tree}}", cancellationToken), await repository.CommitOfAsync("HEAD^{tree}", cancellationToken));
