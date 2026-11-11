@@ -2,14 +2,19 @@ using System.Text.Json.Nodes;
 using Lockflight.Cli.Canaries;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hooks;
+using Lockflight.Cli.Hooks.Adapters;
 using Lockflight.Cli.Hooks.Guard;
+using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
+using Lockflight.Cli.Paths;
 
 namespace Lockflight.Cli.Tests.Canaries;
 
 /// <summary>
 /// Tool calls the PreToolUse guard must block, sent through <c>lockflight hook pre-tool-use</c> as Claude Code sends them. Each has
-/// a harmless twin that must be allowed: a guard that blocks everything would otherwise look as if it caught every canary.
+/// a harmless twin that must be allowed: a guard that blocks everything would otherwise look as if it caught every canary. A block
+/// counts only when the guard rule the canary names is the one that blocked and the hook printed that rule's reason: a rule that
+/// never fires is not masked by another rule blocking the same call, nor by the hook failing closed on an internal error.
 /// </summary>
 internal static class GuardCanaries
 {
@@ -91,10 +96,33 @@ internal static class GuardCanaries
     private static async Task<CanaryReport> BlockedAsync(CanaryScratch scratch, string name, string payload, string control, CancellationToken cancellationToken)
     {
         CanaryRun run = await scratch.RunAsAgentAsync(["hook", PreToolUse], payload, cancellationToken);
-        CanaryReport report = run.ExitCode == ExitCode.HookBlock
-            ? new CanaryReport(name, CanaryResult.Caught, run.FirstLine)
-            : new CanaryReport(name, CanaryResult.Missed, $"the hook exited {(int)run.ExitCode} instead of blocking (2)");
+        if (run.ExitCode != ExitCode.HookBlock)
+        {
+            return new CanaryReport(name, CanaryResult.Missed, $"the hook exited {(int)run.ExitCode} instead of blocking (2)") { Control = control };
+        }
+
+        HookDecision decision = await GuardDecisionAsync(scratch, payload, cancellationToken);
+        CanaryReport report = decision.Rule != control
+            ? new CanaryReport(name, CanaryResult.Missed, $"blocked by {decision.Rule ?? "no guard rule"} ({decision.Code ?? "allowed"}), not by {control}: {run.FirstLine}")
+            : decision.Reason is not string reason || !run.Error.Contains(reason, StringComparison.Ordinal)
+                ? new CanaryReport(name, CanaryResult.Missed, $"the hook's block is not {control}'s ({decision.Code}): {run.FirstLine}")
+                : new CanaryReport(name, CanaryResult.Caught, run.FirstLine);
         return report with { Control = control };
+    }
+
+    /// <summary>The guard's decision on the call, made in-process with the environment the hook ran in, naming the rule that blocked.</summary>
+    private static async Task<HookDecision> GuardDecisionAsync(CanaryScratch scratch, string payload, CancellationToken cancellationToken)
+    {
+        Dictionary<string, string> variables = new(StringComparer.Ordinal)
+        {
+            [EnvironmentVariables.ClaudeCode] = "1",
+            [EnvironmentVariables.Home] = scratch.Home,
+            [EnvironmentVariables.UserProfile] = scratch.Home,
+        };
+        CliContext context = new(new StringReader(string.Empty), TextWriter.Null, TextWriter.Null, scratch.Project, scratch.Time) { Environment = EnvironmentReader.Of(variables) };
+        HookRequest request = ClaudeCodeAdapter.Parse(payload, scratch.Project)!;
+        Manifest manifest = ManifestLocator.Discover(scratch.Project).Manifest!;
+        return await GuardRules.DecideAsync(request, manifest, context, new DirectoryReads(), cancellationToken);
     }
 
     /// <summary>
