@@ -90,6 +90,19 @@ public sealed class ApprovalsCheckerTests : IDisposable
     }
 
     [Fact]
+    public async Task SpecFirstSeesAChangedSpecUnderSpecsWhateverSpecPathsSays()
+    {
+        ApprovalSettings specFirst = ApprovalSettings.Default with { Mode = ApprovalMode.SpecFirst, SpecPaths = ["docs/specs/**"] };
+        string baseCommit = await CommitAsync(new() { ["CODEOWNERS"] = "* @org/all\n", ["specs/001-a/spec.md"] = "approved" });
+        string changed = await CommitAsync(new() { ["specs/001-a/spec.md"] = "edited" });
+
+        ApprovalsFacts edited = await CheckAsync(baseCommit, changed, specFirst, "001-a", ["specs/001-a/spec.md"]);
+
+        Assert.False(edited.Satisfied);
+        Assert.Contains(edited.Problems, problem => problem.Contains("this pull request changes specs/001-a/spec.md", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task SpecFirstAppliesFromAClassOrAPathGlob()
     {
         ApprovalSettings settings = ApprovalSettings.Default with { SpecFirstFrom = ChangeClass.Critical, SpecFirstPaths = ["src/Payments/**"] };

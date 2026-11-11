@@ -298,7 +298,8 @@ approvals:                      # the approval of record is the platform's revie
   default: same-pr              # same-pr | spec-first: the spec arrives with the code, or is merged first
   specFirstFrom: none           # none | feature | critical: from this class spec-first applies anyway
   specFirstPaths: []            # a change touching these globs needs spec-first
-  specPaths: ["specs/**"]       # what counts as the spec, for the CODEOWNERS coverage check (never empty)
+  specPaths: ["specs/**"]       # what counts as the spec, for the CODEOWNERS coverage check (never empty);
+                                # under spec-first a change in specs/ counts as a spec change whatever this says
 
 autonomy:                       # reserved: validated, no effect in this version
   maxClass: fix
