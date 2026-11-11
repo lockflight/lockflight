@@ -11,6 +11,26 @@ public sealed class RedSnapshotsTests : IDisposable
 
     private readonly DirectoryInfo repository = Directory.CreateTempSubdirectory("lockflight-snapshot-");
 
+    [Theory]
+    [InlineData("001-orders", "001-orders")]
+    [InlineData("002-v1.2_x", "002-v1.2_x")]
+    [InlineData("a b", "a%20b")]
+    [InlineData("x~1^2:3", "x%7E1%5E2%3A3")]
+    [InlineData("..", "%2E%2E")]
+    [InlineData(".hidden", "%2Ehidden")]
+    [InlineData("end.", "end%2E")]
+    [InlineData("x.lock", "x%2Elock")]
+    [InlineData("a@{b", "a%40{b")]
+    public async Task AFeatureIdBecomesARefSegmentGitAccepts(string featureId, string expected)
+    {
+        string reference = RedSnapshots.RefFor(featureId, 1, "0123456789abcdef");
+
+        ProcessResult check = await ProcessRunner.RunAsync("git", ["check-ref-format", reference], Path.GetTempPath(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, RedSnapshots.RefSegment(featureId));
+        Assert.True(check.ExitCode == 0, $"git refuses {reference}");
+    }
+
     [Fact]
     public async Task ASnapshotHoldsTheWorkingTreeAndLeavesTheIndexBranchAndStashAlone()
     {

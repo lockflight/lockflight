@@ -1,3 +1,4 @@
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Lifecycle.RedGreen.Snapshots;
@@ -41,6 +42,7 @@ internal static class RedCommitter
                 string operation = state switch
                 {
                     "sequencer" => "cherry-pick or revert",
+                    "CHERRY_PICK_HEAD" => "cherry-pick",
                     _ when state.StartsWith("rebase", StringComparison.Ordinal) => "rebase",
                     _ => state[..state.IndexOf('_', StringComparison.Ordinal)].ToLowerInvariant(),
                 };
@@ -92,7 +94,7 @@ internal static class RedCommitter
         string? started = await SnapshotGit.OutputAsync(["rev-parse", "--verify", "--quiet", $"{snapshot}^1"], root, timeLimit, cancellationToken);
         string? branch = await SnapshotGit.OutputAsync(["symbolic-ref", "-q", "HEAD"], root, timeLimit, cancellationToken);
         string? head = await SnapshotGit.OutputAsync(["rev-parse", "--verify", "--quiet", "HEAD^{commit}"], root, timeLimit, cancellationToken);
-        string byHand = $"git read-tree {snapshot} && git commit --allow-empty --no-verify -m \"{subject}\" -m \"{trailer}\"";
+        string byHand = $"git read-tree {snapshot} && git commit --allow-empty --no-verify -m {ShellQuoting.Quote(subject)} -m {ShellQuoting.Quote(trailer)}";
         if (branch is null || head != started)
         {
             return new RedCommitOutcome(null,
