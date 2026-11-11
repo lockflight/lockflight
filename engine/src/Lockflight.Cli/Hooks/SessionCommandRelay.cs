@@ -1,6 +1,8 @@
+using Lockflight.Cli.Hooks.Guard;
 using Lockflight.Cli.Hooks.Requests;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Lifecycle.Approvals;
+using Lockflight.Cli.Paths;
 
 namespace Lockflight.Cli.Hooks;
 
@@ -12,7 +14,10 @@ namespace Lockflight.Cli.Hooks;
 /// is the call that would queue the prompt. Tools that only read or write files are exempt, so specs and docs that mention the
 /// commands can still be edited, and so is a POSIX shell command that only writes literal text to files
 /// (<see cref="ShellLiteralWrite"/>), except on the files Claude Code reads prompts from (<see cref="PromptQueueFiles"/>): every
-/// write there is blocked, by a file tool or a shell command, because a prompt can be put together across several edits. Any
+/// write there is blocked, by a file tool or a shell command, because a prompt can be put together across several edits; a target
+/// is judged as written and as the path the OS would touch (against the working directory, <c>~</c> and <c>$HOME</c> resolved,
+/// <c>.</c> and <c>..</c> applied, links followed), so <c>.claude/./loop.md</c> or <c>loop.md</c> from inside <c>.claude</c> is
+/// one of them. Any
 /// other tool is checked whatever its name or input looks like, MCP tools included; when a blocked call writes a file, the
 /// message says to save the text with a file tool instead.
 /// </summary>
@@ -25,11 +30,12 @@ internal static class SessionCommandRelay
     /// <summary>The tools that only read or write files: what they write is checked, not what they say.</summary>
     private static readonly HashSet<ToolKind> FileKinds = [ToolKind.Read, ToolKind.Search, ToolKind.Edit, ToolKind.Write, ToolKind.Notebook];
 
-    public static HookDecision? Decide(HookRequest input)
+    /// <param name="home">The user's home folder, for a target that starts with <c>~</c> or <c>$HOME</c>; null when unknown.</param>
+    public static HookDecision? Decide(HookRequest input, string? home)
     {
         // A call without a tool name is checked too: only a known file tool is exempt.
         string toolName = input.Tool.Name ?? "(unnamed tool)";
-        if (QueueWrite(input) is string queue)
+        if (QueueWrite(input, home) is string queue)
         {
             string commands = string.Join(", ", SessionCommands.All.Select(spec => $"/{spec.Name}"));
             return HookDecision.Block(
@@ -62,20 +68,40 @@ internal static class SessionCommandRelay
         input.Tool.WritesFiles
         || (input.Tool is { Kind: ToolKind.Shell, Shell: ShellDialect shell } && input.Command is string command && ShellWriteTargets.Find(command, shell).Files.Count > 0);
 
-    /// <summary>The prompt queue file the call writes, if any.</summary>
-    private static string? QueueWrite(HookRequest input)
+    /// <summary>The prompt queue file the call writes, if any, as the call names it.</summary>
+    private static string? QueueWrite(HookRequest input, string? home)
     {
+        IEnumerable<string> targets;
         if (input.Tool.WritesFiles)
         {
-            return input.Paths.FirstOrDefault(PromptQueueFiles.Contains);
+            targets = input.Paths;
         }
-
-        if (input.Tool is not { Kind: ToolKind.Shell, Shell: ShellDialect shell } || input.Command is not string command)
+        else if (input.Tool is { Kind: ToolKind.Shell, Shell: ShellDialect shell } && input.Command is string command)
+        {
+            ShellWrites writes = ShellWriteTargets.Find(command, shell);
+            targets = writes.Files.Concat(writes.Trees);
+        }
+        else
         {
             return null;
         }
 
-        ShellWrites writes = ShellWriteTargets.Find(command, shell);
-        return writes.Files.Concat(writes.Trees).FirstOrDefault(PromptQueueFiles.Contains);
+        string workingDirectory = input.WorkingDirectory ?? Environment.CurrentDirectory;
+        return targets.FirstOrDefault(target => IsQueue(target, workingDirectory, home));
+    }
+
+    /// <summary>
+    /// Whether the target, as written or as the path it resolves to, is a prompt queue file: on Windows a <c>..</c> is also taken
+    /// by its text, as Win32 does (<see cref="WindowsParentSegments"/>).
+    /// </summary>
+    private static bool IsQueue(string target, string workingDirectory, string? home)
+    {
+        if (PromptQueueFiles.Contains(target))
+        {
+            return true;
+        }
+
+        IReadOnlyList<string> resolved = WindowsParentSegments.WithCollapsed(ProtectedPathRule.Resolved([target], workingDirectory, home).Literal, workingDirectory);
+        return resolved.Any(path => PromptQueueFiles.Contains(PathRules.ToAbsolute(path, workingDirectory)) || PromptQueueFiles.Contains(PathRules.Canonicalize(path, workingDirectory)));
     }
 }

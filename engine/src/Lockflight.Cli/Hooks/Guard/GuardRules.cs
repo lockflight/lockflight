@@ -18,7 +18,7 @@ internal static class GuardRules
 {
     /// <summary>The rules that judge the call once, on its input, before any path work.</summary>
     public static IReadOnlyList<IGuardRule> OncePerCall(CliContext context) =>
-        [new LockdownRule(), new EnginePinRule(context.Environment), new SessionRelayRule()];
+        [new LockdownRule(), new EnginePinRule(context.Environment), new SessionRelayRule(context.Environment)];
 
     /// <summary>The rules that judge the call at each root, built for one invocation.</summary>
     public static IReadOnlyList<IGuardRule> PerRoot(CliContext context, DirectoryReads reads) =>
