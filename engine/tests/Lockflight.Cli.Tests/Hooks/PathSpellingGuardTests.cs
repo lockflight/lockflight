@@ -95,6 +95,43 @@ public sealed class PathSpellingGuardTests : IDisposable
         Assert.True(exitCode == ExitCode.HookBlock, $"'{target}' was allowed");
     }
 
+    [Fact]
+    public async Task AWriteThroughALinkLoopIsBlocked()
+    {
+        Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
+        Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "a"), Path.Combine(projectRoot.FullName, "b"));
+        Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "b"), Path.Combine(projectRoot.FullName, "a"));
+
+        (ExitCode exitCode, _, string error) = await RunAsync("Write", "a/x.txt");
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("Too many levels of symbolic links", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OnWindowsAWriteThroughAShortNameOfTheProjectToAProtectedFileIsBlocked()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "8.3 short names are a Windows file-system alias.");
+        string? alias = await WindowsShortNames.OfFolderAsync(projectRoot.FullName, TestContext.Current.CancellationToken);
+        Assert.SkipWhen(alias is null, "this volume keeps no 8.3 short names.");
+
+        (ExitCode exitCode, _, string error) = await RunAsync("Write", Path.Combine(alias!, Manifest.FileName));
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("protected by rule", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task OnWindowsAShortNameThatCannotBeExpandedIsBlocked()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "8.3 short names are a Windows file-system alias.");
+
+        (ExitCode exitCode, _, string error) = await RunAsync("Write", Path.Combine(projectRoot.FullName, "NOSUCH~1", "x.txt"));
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("cannot resolve short (8.3) path", error, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("echo x > docs/notes.md")]
     [InlineData("echo x > l/notes.txt")]
