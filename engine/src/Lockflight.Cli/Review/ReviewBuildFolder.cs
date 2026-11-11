@@ -33,16 +33,23 @@ internal sealed class ReviewBuildFolder : IDisposable
     public static ReviewBuildFolder Acquire(string root)
     {
         string full = Path.GetFullPath(root);
-        string hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(full.ToUpperInvariant()))[..RootHashBytes]);
         try
         {
-            FileStream held = new(Path.Combine(Path.GetTempPath(), $"lockflight-review-{hash}.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            FileStream held = new(LockPath(full), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             return new ReviewBuildFolder(full, ReproductionBuild.OutputFolder, held);
         }
-        catch (IOException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
+            // Held by another review, or a file of that name another user of the machine made: build into a folder of our own.
             return new ReviewBuildFolder(full, $"{ReproductionBuild.OutputFolder}-{Guid.NewGuid().ToString("N")[..OwnSuffixLength]}", null);
         }
+    }
+
+    /// <summary>The lock file of a project root, in the temporary directory.</summary>
+    public static string LockPath(string root)
+    {
+        string hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(root).ToUpperInvariant()))[..RootHashBytes]);
+        return Path.Combine(Path.GetTempPath(), $"lockflight-review-{hash}.lock");
     }
 
     public void Dispose()
