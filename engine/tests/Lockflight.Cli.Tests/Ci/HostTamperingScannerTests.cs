@@ -127,4 +127,35 @@ public sealed class HostTamperingScannerTests
         Assert.False(HostTamperingJudge.Accepts(new HashSet<string> { "Shop.Tests|file" }, finding));
         Assert.False(HostTamperingJudge.Accepts(new HashSet<string> { "Shop.Tests|process-start" }, finding));
     }
+
+    [Fact]
+    public void AnAssemblyThatCannotBeReadIsAScanFailureNotAClean()
+    {
+        string notAnAssembly = Path.Combine(Path.GetTempPath(), $"lockflight-not-an-assembly-{Guid.NewGuid():N}.dll");
+        File.WriteAllText(notAnAssembly, "not a portable executable");
+        try
+        {
+            TamperingFinding finding = Assert.Single(HostTamperingScanner.Scan(notAnAssembly));
+
+            Assert.Equal(HostTamperingScanner.ScanFailedKind, finding.Kind);
+            Assert.Equal(Path.GetFileName(notAnAssembly), finding.Location);
+        }
+        finally
+        {
+            File.Delete(notAnAssembly);
+        }
+    }
+
+    [Fact]
+    public void AnUnreadableAssemblyIsNotEarnedWhateverTheBaseOrABaselineSays()
+    {
+        TamperingFinding unreadable = new("Shop.Tests", HostTamperingScanner.ScanFailedKind, "Shop.Tests.dll", "IOException");
+
+        TamperingJudgement judgement = HostTamperingJudge.Unreadable([unreadable])!;
+
+        Assert.Equal(CheckVerdict.NotEarned, judgement.Verdict);
+        Assert.Contains("Shop.Tests.dll (IOException)", judgement.Why, StringComparison.Ordinal);
+        Assert.Empty(judgement.New);
+        Assert.Null(HostTamperingJudge.Unreadable([new TamperingFinding("Shop.Tests", "exit", "Shop.Tests.Guard::Stop", "System.Environment.Exit")]));
+    }
 }

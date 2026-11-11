@@ -199,7 +199,7 @@ The `tests.hostTampering` check: the test assemblies are scanned for the plain w
 
 ### HOST_TAMPERING
 
-**Means:** New code in a test assembly could tamper with the test host: a module initializer, a process-exit handler, `Environment.Exit`, starting a process, a file write outside a temporary folder, reflection over a runner's types, setting CI variables; or something a VSTest run loads besides the tests: a data collector, adapter path or logger a test project's `.runsettings` names, a `VSTestCollect`, `VSTestTestAdapterPath`, `VSTestLogger` or `VSTestSetting` property, or an adapter, logger or collector assembly in a test app's output folder.
+**Means:** New code in a test assembly could tamper with the test host: a module initializer, a process-exit handler, `Environment.Exit`, starting a process, a file write outside a temporary folder, reflection over a runner's types, setting CI variables; or something a VSTest run loads besides the tests: a data collector, adapter path or logger a test project's `.runsettings` names, a `VSTestCollect`, `VSTestTestAdapterPath`, `VSTestLogger` or `VSTestSetting` property, or an adapter, logger or collector assembly in a test app's output folder. Also when a test assembly could not be read to scan (a test host still holds it, or it is not a valid assembly): nothing in it was judged, and no baseline entry accepts that.
 
 **Why:** The tests run in the judge's job, so code like this could forge the results. Legitimate uses exist (a snapshot store that writes its files); accepting one is a person's decision, made on the target branch.
 

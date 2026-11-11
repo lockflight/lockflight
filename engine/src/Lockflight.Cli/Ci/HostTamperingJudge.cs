@@ -41,9 +41,14 @@ internal static class HostTamperingJudge
             return new TamperingJudgement(CheckVerdict.NotEarned, CheckReasons.NotListed(head.Outcome), "the head's test assemblies could not be built to scan", [], []);
         }
 
+        TamperingFinding[] all = [.. head.Tampering.Concat(cycles.SelectMany(cycle => cycle.Tampering)).DistinctBy(finding => (finding.Id, finding.Member))];
+        if (Unreadable(all) is TamperingJudgement unreadable)
+        {
+            return unreadable;
+        }
+
         HashSet<string> atBase = [.. (baseListing?.Tampering ?? []).Select(finding => finding.Id)];
         HashSet<string> accepted = await AcceptedAsync(plan, cancellationToken);
-        TamperingFinding[] all = [.. head.Tampering.Concat(cycles.SelectMany(cycle => cycle.Tampering)).DistinctBy(finding => (finding.Id, finding.Member))];
         TamperingFinding[] added = [.. all.Where(finding => !atBase.Contains(finding.Id) && !Accepts(accepted, finding))];
         TamperingFinding[] existing = [.. all.Where(finding => atBase.Contains(finding.Id) || Accepts(accepted, finding))];
         return added.Length > 0
@@ -54,6 +59,21 @@ internal static class HostTamperingJudge
             : new TamperingJudgement(CheckVerdict.Pass, ReasonCode.None,
                 existing.Length == 0 ? "no code in the test assemblies that could tamper with the test host" : $"nothing new; {existing.Length} findings the base already had or accepted",
                 added, existing);
+    }
+
+    /// <summary>
+    /// NOT-EARNED when a scanned assembly could not be read, naming each one: nothing in it was judged, whatever the base had or a
+    /// baseline accepts. Null when every assembly was read.
+    /// </summary>
+    public static TamperingJudgement? Unreadable(IReadOnlyList<TamperingFinding> findings)
+    {
+        TamperingFinding[] unreadable = [.. findings.Where(finding => finding.Kind == HostTamperingScanner.ScanFailedKind)];
+        return unreadable.Length == 0
+            ? null
+            : new TamperingJudgement(CheckVerdict.NotEarned, ReasonCode.HostTampering,
+                $"a test assembly could not be read to scan, so nothing in it was judged: {string.Join("; ", unreadable.Select(finding => $"{finding.Location} ({finding.Member})"))};"
+                + " make sure no test host still holds it and that the build writes a valid assembly, then run the judge again",
+                [], []);
     }
 
     /// <summary>

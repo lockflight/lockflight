@@ -45,7 +45,13 @@ internal static partial class HostTamperingScanner
     private static readonly string[] RunnerNamespaces = ["Xunit", "NUnit", "Microsoft.Testing", "Microsoft.VisualStudio.TestPlatform", "Microsoft.TestPlatform"];
     private static readonly string[] CiVariablePrefixes = ["GITHUB_", "RUNNER_", "LOCKFLIGHT_", "BITBUCKET_", "CI_", "SYSTEM_", "BUILD_"];
 
-    /// <summary>Every finding in the assembly; empty when it cannot be read (the build output is the build's problem, not tampering).</summary>
+    /// <summary>
+    /// The kind of the one finding of an assembly that could not be read (locked by a test host still running, not a valid image, IL
+    /// the walker cannot follow): nothing in it was judged, so it is never a pass and never accepted by a baseline entry.
+    /// </summary>
+    public const string ScanFailedKind = "scan-failed";
+
+    /// <summary>Every finding in the assembly; a single <see cref="ScanFailedKind"/> finding when it cannot be read.</summary>
     public static IReadOnlyList<TamperingFinding> Scan(string assemblyPath)
     {
         try
@@ -91,9 +97,10 @@ internal static partial class HostTamperingScanner
 
             return [.. findings.DistinctBy(finding => (finding.Id, finding.Member))];
         }
-        catch (Exception exception) when (exception is IOException or BadImageFormatException or InvalidOperationException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or BadImageFormatException or InvalidOperationException)
         {
-            return [];
+            string file = Path.GetFileName(assemblyPath);
+            return [new TamperingFinding(Path.GetFileNameWithoutExtension(assemblyPath), ScanFailedKind, file, exception.GetType().Name)];
         }
     }
 
