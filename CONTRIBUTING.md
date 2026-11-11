@@ -76,7 +76,8 @@ claude plugin validate --strict plugins/lockflight-crew                        #
 claude plugin validate --strict . && claude plugin validate --strict plugins    # both marketplaces
 scripts/marketplace-ref.sh                                                      # the marketplace serves a published release
 python3 -I scripts/check-doc-links.py                                           # relative links and anchors in the docs
-shellcheck -S warning plugins/lockflight/bin/lockflight-hook tests/*/*.sh       # shell scripts (CI runs this too)
+shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/*.sh action/*.sh tests/*/*.sh  # shell scripts (CI too)
+python3 -I scripts/gitleaks-pins.py                                             # every gitleaks pin agrees
 ```
 
 ### Canaries
