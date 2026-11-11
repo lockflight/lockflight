@@ -45,9 +45,9 @@ public sealed class TaskCompletedHookTests : IDisposable
         await TestConsole.RunAsync(["gate", "run", "--profile", "stop"], string.Empty, root.FullName);
         await File.WriteAllTextAsync(Path.Combine(root.FullName, "web", "index.html"), "<p>changed</p>", TestContext.Current.CancellationToken);
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "task-completed"], Payload("s-1"), root.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "task-completed"], Payload("s-1"), root.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Fact]
@@ -56,9 +56,9 @@ public sealed class TaskCompletedHookTests : IDisposable
         await CreateProjectAsync(GuardedOnly);
 
         await TestConsole.RunAsync(["gate", "run", "--profile", "edit"], string.Empty, root.FullName);
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "task-completed"], Payload("s-1"), root.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "task-completed"], Payload("s-1"), root.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Fact]

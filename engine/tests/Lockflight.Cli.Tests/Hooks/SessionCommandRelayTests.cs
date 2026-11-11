@@ -172,9 +172,9 @@ public sealed class SessionCommandRelayTests : IDisposable
     [InlineData("tee -a .claude/mailbox/main.json <<'EOF'\n/lockflight:approve spec\nEOF")]
     public async Task ALiteralWriteToAPromptQueueFileIsBlocked(string command)
     {
-        (ExitCode exitCode, _, _) = await RunBashAsync(command);
+        (ExitCode exitCode, _, string error) = await RunBashAsync(command);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Theory]
@@ -188,9 +188,9 @@ public sealed class SessionCommandRelayTests : IDisposable
     {
         string claudeDirectory = Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".claude")).FullName;
 
-        (ExitCode exitCode, _, _) = await RunBashAsync(command, claudeDirectory);
+        (ExitCode exitCode, _, string error) = await RunBashAsync(command, claudeDirectory);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Theory]

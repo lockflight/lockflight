@@ -76,10 +76,10 @@ public sealed class AmendedTestGuardTests : IDisposable
     {
         SaveRecord("f1", rechecked: true);
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(
             ["hook", "pre-tool-use"], HookPayloads.ToolCall("Edit", Path.Combine(projectRoot.FullName, Amended), projectRoot.FullName), projectRoot.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Fact]

@@ -28,9 +28,9 @@ public sealed class GuardScenarioTests : IDisposable
     {
         string payload = HookPayloads.ToolCall("Edit", Path.Combine(projectRoot.FullName, relativePath), projectRoot.FullName);
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Fact]
@@ -80,9 +80,9 @@ public sealed class GuardScenarioTests : IDisposable
     {
         string payload = HookPayloads.ToolCall("Write", Path.Combine(projectRoot.FullName, "a.cs"), projectRoot.FullName);
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "teammate-idle"], payload, projectRoot.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "teammate-idle"], payload, projectRoot.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Theory]
@@ -112,9 +112,9 @@ public sealed class GuardScenarioTests : IDisposable
     [InlineData("git restore .")]
     public async Task ARewriteOfADirectoryThatCanHoldProtectedFilesIsBlocked(string command)
     {
-        (ExitCode exitCode, _, _) = await RunBashAsync(command);
+        (ExitCode exitCode, _, string error) = await RunBashAsync(command);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Fact]

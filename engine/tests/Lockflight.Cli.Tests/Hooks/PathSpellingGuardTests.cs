@@ -24,9 +24,9 @@ public sealed class PathSpellingGuardTests : IDisposable
         Assert.SkipUnless(SymbolicLinks.CanCreate, SymbolicLinks.SkipReason);
         Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "l"), Path.Combine(projectRoot.FullName, ".lockflight", "local"));
 
-        (ExitCode exitCode, _, _) = await RunAsync("Bash", command);
+        (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
 
-        Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
+        HookAssert.Blocked(exitCode, error, $"'{command}' was allowed");
     }
 
     [Theory]
@@ -41,9 +41,9 @@ public sealed class PathSpellingGuardTests : IDisposable
             Directory.CreateDirectory(Path.Combine(elsewhere.FullName, "inner"));
             Directory.CreateSymbolicLink(Path.Combine(projectRoot.FullName, "out"), Path.Combine(elsewhere.FullName, "inner"));
 
-            (ExitCode exitCode, _, _) = await RunAsync(tool, target);
+            (ExitCode exitCode, _, string error) = await RunAsync(tool, target);
 
-            Assert.True(exitCode == ExitCode.HookBlock, $"'{target}' was allowed");
+            HookAssert.Blocked(exitCode, error, $"'{target}' was allowed");
         }
         finally
         {
@@ -56,9 +56,9 @@ public sealed class PathSpellingGuardTests : IDisposable
     [InlineData("rm docs/caf\u00e9.md")]
     public async Task EitherUnicodeSpellingOfAProtectedNameIsBlocked(string command)
     {
-        (ExitCode exitCode, _, _) = await RunAsync("Bash", command);
+        (ExitCode exitCode, _, string error) = await RunAsync("Bash", command);
 
-        Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
+        HookAssert.Blocked(exitCode, error, $"'{command}' was allowed");
     }
 
     [Fact]
@@ -71,9 +71,9 @@ public sealed class PathSpellingGuardTests : IDisposable
             ["tool_input"] = new Dictionary<string, string> { ["file_path"] = Path.Combine(projectRoot.FullName, "docs", "cafe\u0301.md"), ["content"] = "x" },
         });
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Theory]
@@ -90,9 +90,9 @@ public sealed class PathSpellingGuardTests : IDisposable
             .Replace("{drive}", root[..1], StringComparison.Ordinal)
             .Replace("{rest}", root[3..], StringComparison.Ordinal);
 
-        (ExitCode exitCode, _, _) = await RunAsync("PowerShell", $"Remove-Item -LiteralPath '{target}'");
+        (ExitCode exitCode, _, string error) = await RunAsync("PowerShell", $"Remove-Item -LiteralPath '{target}'");
 
-        Assert.True(exitCode == ExitCode.HookBlock, $"'{target}' was allowed");
+        HookAssert.Blocked(exitCode, error, $"'{target}' was allowed");
     }
 
     [Fact]

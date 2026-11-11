@@ -69,9 +69,9 @@ public sealed class OpaqueTargetScenarioTests : IDisposable
     {
         Dictionary<string, string> environment = new() { [EnvironmentVariables.Home] = projectRoot.FullName };
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], Payload("Bash", command), projectRoot.FullName, environment);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], Payload("Bash", command), projectRoot.FullName, environment);
 
-        Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
+        HookAssert.Blocked(exitCode, error, $"'{command}' was allowed");
     }
 
     [Theory]

@@ -26,9 +26,9 @@ public sealed class BlockLedgerContextTests : IDisposable
             payload["agent_type"] = agentType;
         }
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], JsonSerializer.Serialize(payload), root.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], JsonSerializer.Serialize(payload), root.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
         string line = File.ReadAllLines(Directory.GetFiles(Path.Combine(root.FullName, ".lockflight", "ledger"))[0]).Last();
         using JsonDocument document = JsonDocument.Parse(line);
         JsonElement record = document.RootElement;
@@ -54,9 +54,9 @@ public sealed class BlockLedgerContextTests : IDisposable
             ["tool_input"] = new Dictionary<string, string> { ["file_path"] = target, ["content"] = "x" },
         };
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], JsonSerializer.Serialize(payload), project.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], JsonSerializer.Serialize(payload), project.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
         string line = File.ReadAllLines(Directory.GetFiles(Path.Combine(project.FullName, ".lockflight", "ledger"))[0]).Last();
         using JsonDocument document = JsonDocument.Parse(line);
         JsonElement record = document.RootElement;
