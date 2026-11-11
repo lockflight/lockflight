@@ -101,8 +101,9 @@ if (-not $gitBash) {
 }
 
 # The version follows the commit, so the same code always gets the same version and a project's pin goes stale only when the
-# code changed. A checkout with uncommitted changes gets the time instead. The same numbering as scripts/dev-install.sh.
-$changes = Read-Native "git" @("-C", $repo, "status", "--porcelain", "--untracked-files=no")
+# code changed. A checkout with uncommitted changes, a new untracked file included, gets the time instead. The same numbering as
+# scripts/dev-install.sh.
+$changes = Read-Native "git" @("-C", $repo, "status", "--porcelain")
 if (-not $changes) {
     $seconds = [long](Read-Native "git" @("-C", $repo, "log", "-1", "--format=%ct"))
     $stamp = [DateTimeOffset]::FromUnixTimeSeconds($seconds).UtcDateTime.ToString("yyyyMMddHHmmss")

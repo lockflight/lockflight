@@ -7,7 +7,11 @@
 # 5.1, the real engine and the user PATH are run by CI's windows-install job.
 set -euo pipefail
 
-command -v pwsh >/dev/null || { echo "skipped: no pwsh"; exit 0; }
+# In CI a missing pwsh fails the suite: a runner image without it would otherwise pass having tested nothing.
+if ! command -v pwsh >/dev/null; then
+  if [ -n "${CI:-}" ]; then echo "FAIL pwsh is not installed, so install.ps1 was not tested"; exit 1; fi
+  echo "skipped: no pwsh"; exit 0
+fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
