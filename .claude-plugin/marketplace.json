@@ -1,6 +1,6 @@
 {
   "name": "lockflight",
-  "description": "Lockflight: gated, spec-driven delivery for Claude Code agents on .NET.",
+  "description": "Lockflight: test-first guardrails for AI coding agents on .NET.",
   "owner": {
     "name": "Bohdan Ivaniichuk",
     "url": "https://github.com/bohdan-ivaniichuk"
@@ -12,10 +12,10 @@
         "source": "git-subdir",
         "url": "https://github.com/lockflight/lockflight.git",
         "path": "plugins/lockflight",
-        "ref": "v0.3.1",
-        "sha": "98497a3d3a99cac8f1fa29030eef8473cc01b000"
+        "ref": "v0.5.0",
+        "sha": "61b4c17644473982a3a6dac695f0a3fa4dc472e6"
       },
-      "description": "Gated, spec-driven delivery for Claude Code agents on .NET: deterministic gates, protected-path guards, a spec lifecycle with approvals, red/green evidence and trace, and evidence-bound review."
+      "description": "Test-first guardrails for AI coding agents on .NET: new behaviour goes red → green, the build and tests can run before an agent says \"done\", and a CI judge re-checks that evidence on every pull request."
     },
     {
       "name": "lockflight-crew",
@@ -23,10 +23,10 @@
         "source": "git-subdir",
         "url": "https://github.com/lockflight/lockflight.git",
         "path": "plugins/lockflight-crew",
-        "ref": "v0.3.1",
-        "sha": "98497a3d3a99cac8f1fa29030eef8473cc01b000"
+        "ref": "v0.5.0",
+        "sha": "61b4c17644473982a3a6dac695f0a3fa4dc472e6"
       },
-      "description": "Optional agents for the Lockflight lifecycle: a spec writer and a planner that write the spec and tasks until `phase check` passes, and a test author that writes a story's failing tests until `redgreen red` accepts them. An aid; the gates still judge."
+      "description": "Experimental advice for Lockflight: a spec writer and a planner that write the spec and tasks until `phase check` passes, a test author that writes a story's failing tests until `redgreen red` accepts them, and two advice skills. An aid; the gates and the CI judge still decide."
     }
   ]
 }
