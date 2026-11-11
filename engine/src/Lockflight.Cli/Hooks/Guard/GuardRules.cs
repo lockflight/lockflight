@@ -55,7 +55,7 @@ internal static class GuardRules
         {
             if (await rule.CheckAsync(facts, cancellationToken) is GuardBlock block)
             {
-                return block;
+                return block with { Rule = rule.Id };
             }
         }
 
