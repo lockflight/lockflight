@@ -79,6 +79,9 @@ public sealed class ReviewResultParserTests
     [InlineData("""{"is_error":true,"result":"Credit balance is too low","total_cost_usd":0}""", "claude reported an error")]
     [InlineData("Not logged in", "no JSON")]
     [InlineData("""{"is_error":false,"result":"I could not finish"}""", "not JSON")]
+    [InlineData("""{"is_error":false,"result":"I found {a problem"}""", "not JSON")]
+    [InlineData("warning: {retrying} the request\n{\"is_error\":false,\"result\":\"{}\"}", "could not be read")]
+    [InlineData("""{"is_error":false,"result":"{\"verdict\": oops}"}""", "could not be read")]
     public void UnusableOutputIsAnError(string output, string expected) =>
         Assert.Contains(expected, ReviewResultParser.Parse(output).Error, StringComparison.Ordinal);
 

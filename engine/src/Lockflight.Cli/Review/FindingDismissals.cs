@@ -46,6 +46,11 @@ internal static class FindingDismissals
             {
                 using JsonDocument document = JsonDocument.Parse(File.ReadAllText(file));
                 JsonElement root = document.RootElement;
+                if (root.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
                 dismissals.Add(new FindingDismissal(
                     Text(root, "finding"),
                     ReviewNames.ParseSeverity(Text(root, "severity")),
