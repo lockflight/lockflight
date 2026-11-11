@@ -395,8 +395,8 @@ A test fails when a guard rule, a gate step or a human-only command is registere
 control cannot ship without being seen red ([CONTRIBUTING](../../CONTRIBUTING.md#canaries)).
 
 Each canary has a harmless twin (an ordinary write, an ordinary redirect, a doc that mentions `/lockflight:reset`, the person's
-own two steps of an in-session command, the same completion right after a passing stop gate, a passing test run, a build whose
-tool succeeds) that must be allowed or pass; when a twin is refused too the canary is **BROKEN**, because a control that refuses
+own two steps of an in-session command, the same completion right after a passing stop gate, a passing test run, each gate
+step on a harmless change with tools that report nothing wrong) that must be allowed or pass; when a twin is refused too the canary is **BROKEN**, because a control that refuses
 everything proves nothing. Everything happens in temporary scratch projects that are deleted afterwards.
 
 On your machine, `lockflight doctor --self-test` runs five of these in a scratch project, never in your project, in under a
