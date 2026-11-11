@@ -4,13 +4,15 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// The git queries of the CI judge, on full commit ids only, with output independent of the user's git configuration (unquoted
-/// names, NUL-separated lists, no renames, no external diff drivers or text conversion, no signature checks in logs).
+/// names, NUL-separated lists, no renames, no external diff drivers or text conversion, no signature checks in logs). A path
+/// from the pull request is a path to git, never a pattern: <c>*</c>, <c>?</c>, <c>[</c> and a leading <c>:(…)</c> in a file
+/// name match only that file.
 /// </summary>
 internal static class JudgeGit
 {
     private const string Executable = "git";
 
-    private static readonly string[] Pinned = ["-c", "core.quotePath=false", "-c", "log.showSignature=false"];
+    private static readonly string[] Pinned = ["--literal-pathspecs", "-c", "core.quotePath=false", "-c", "log.showSignature=false"];
 
     /// <summary>Whether <paramref name="commit"/> names a commit object this clone has.</summary>
     public static async Task<bool> HasCommitAsync(string root, string commit, CancellationToken cancellationToken) =>
