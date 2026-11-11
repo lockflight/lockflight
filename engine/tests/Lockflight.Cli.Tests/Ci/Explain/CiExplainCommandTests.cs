@@ -100,7 +100,7 @@ public sealed class CiExplainCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task TheReportJobsVerdictIsPreferredAndLabelledAsTheVerdictOfRecord()
+    public async Task TheReportJobsVerdictIsPreferredAndLabelledByWhatItsNameCannotProve()
     {
         RunProcess gh = GhWrites(("green-before", "lockflight-evidence", "evidence.json"), ("review-findings", "lockflight-verdict", "verdict.json"));
 
@@ -108,7 +108,7 @@ public sealed class CiExplainCommandTests : IDisposable
 
         Assert.Equal(ExitCode.Pass, exitCode);
         Assert.Contains("Source: run 42/lockflight-verdict/verdict.json", output, StringComparison.Ordinal);
-        Assert.Contains("From: the report job's lockflight-verdict artifact (the verdict of record)", output, StringComparison.Ordinal);
+        Assert.Contains("From: the lockflight-verdict artifact, which the report job uploads (the name does not prove which job did; the run's checks are the verdict of record)", output, StringComparison.Ordinal);
         Assert.DoesNotContain("GREEN_BEFORE", output, StringComparison.Ordinal);
     }
 
