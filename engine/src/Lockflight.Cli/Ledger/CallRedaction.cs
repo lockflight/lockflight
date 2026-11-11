@@ -6,8 +6,10 @@ namespace Lockflight.Cli.Ledger;
 /// Shortens a blocked call for the ledger and masks what looks like a credential: the password in a URL
 /// (<c>https://user:***@host</c>), a random-looking base64 run that may hold <c>/</c> and <c>+</c> (an AWS secret key), a run of
 /// 24 or more token characters, the value after <c>Bearer</c>, <c>token</c>, <c>password</c>, <c>secret</c> or <c>key</c> with
-/// <c>=</c> or <c>:</c>, and the value after a long option or variable named for one (<c>--password x</c>,
-/// <c>aws_secret_access_key x</c>). Best effort; the ledger is local and git-ignored, but the agent can read it.
+/// <c>=</c> or <c>:</c>, the value after a long option or variable named for one (<c>--password x</c>,
+/// <c>aws_secret_access_key x</c>), the credentials of an <c>Authorization: Basic</c> header, the password of
+/// <c>curl -u user:password</c>, and a MySQL or MariaDB client's <c>-psecret</c>. Best effort; the ledger is local and
+/// git-ignored, but the agent can read it.
 /// </summary>
 internal static partial class CallRedaction
 {
@@ -23,13 +25,18 @@ internal static partial class CallRedaction
 
     private static readonly char[] Separators = ['/', '_', '-', '='];
 
-    public static string Shorten(string call)
+    public static string Shorten(string call) => OneLine(Masked(call));
+
+    /// <summary>The text with what looks like a credential masked, at its full length: a block's reason, which may quote the call.</summary>
+    public static string Masked(string text)
     {
-        string masked = UrlPassword().Replace(call, match => $"{match.Groups["prefix"].Value}{Mask}@");
+        string masked = UrlPassword().Replace(text, match => $"{match.Groups["prefix"].Value}{Mask}@");
+        masked = UserPassword().Replace(masked, match => $"{match.Groups["label"].Value}{Mask}");
+        masked = MySqlPassword().Replace(masked, match => $"{match.Groups["label"].Value}{Mask}");
         masked = Base64Run().Replace(masked, match => LooksRandom(match.Value) ? Mask : match.Value);
         masked = LongToken().Replace(masked, Mask);
         masked = Labelled().Replace(masked, match => $"{match.Groups["label"].Value}{Mask}");
-        return OneLine(masked);
+        return masked;
     }
 
     /// <summary>
@@ -79,6 +86,14 @@ internal static partial class CallRedaction
     [GeneratedRegex(@"[A-Za-z0-9_\-]{24,}")]
     private static partial Regex LongToken();
 
-    [GeneratedRegex(@"(?<label>(?i:bearer\s+|(?:token|password|passwd|secret|api[_-]?key|key)\s*[=:]\s*|--[a-z0-9-]*(?:token|password|passwd|secret|api-?key)\s+|\b\w*(?:secret_access_key|_secret|_token|_password)\s+))\S+")]
+    /// <summary><c>curl -u user:password</c>, <c>--user user:password</c>, <c>--proxy-user user:password</c>.</summary>
+    [GeneratedRegex(@"(?<label>(?:^|\s)(?:-u\s*|--(?:proxy-)?user[=\s]\s*)['""]?[^\s:'""]*:)[^\s'""]+")]
+    private static partial Regex UserPassword();
+
+    /// <summary>The password a MySQL or MariaDB client takes glued to <c>-p</c>, as no other tool's <c>-p</c> is a secret.</summary>
+    [GeneratedRegex(@"(?<label>\b(?:mysql|mysqldump|mysqladmin|mariadb|mariadb-dump)\b[^|;&\n]*?\s-p)[^\s|;&]+")]
+    private static partial Regex MySqlPassword();
+
+    [GeneratedRegex(@"(?<label>(?i:bearer\s+|authorization:\s*basic\s+|(?:token|password|passwd|secret|api[_-]?key|key)\s*[=:]\s*|--[a-z0-9-]*(?:token|password|passwd|secret|api-?key)\s+|\b\w*(?:secret_access_key|_secret|_token|_password)\s+))\S+")]
     private static partial Regex Labelled();
 }

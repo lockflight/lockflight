@@ -50,7 +50,8 @@ internal sealed class LedgerWriter(string projectRoot, TimeProvider time)
             writer.WriteString("summary", ledgerEvent.Summary);
             if (ledgerEvent.Detail is string detail)
             {
-                writer.WriteString("detail", detail.Length > MaxDetailLength ? detail[..MaxDetailLength] : detail);
+                string masked = CallRedaction.Masked(detail);
+                writer.WriteString("detail", masked.Length > MaxDetailLength ? masked[..MaxDetailLength] : masked);
             }
 
             if (ledgerEvent.Context is LedgerEventContext eventContext)
