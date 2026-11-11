@@ -21,8 +21,7 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
 
             switch (key)
             {
-                case "timeoutSeconds" when value is YamlScalarNode { Value: string text }
-                    && int.TryParse(text, out int seconds) && seconds is > 0 and <= GateSettings.MaxTimeoutSeconds:
+                case "timeoutSeconds" when ManifestScalars.TryInteger(value, 1, GateSettings.MaxTimeoutSeconds, out int seconds):
                     gates = gates with { TimeoutSeconds = seconds };
                     break;
                 case "timeoutSeconds":
@@ -101,12 +100,12 @@ internal sealed class GatesSectionReader(ManifestErrors errors)
                     break;
                 case "collector":
                     return errors.At(value.Start, "'gates.coverage.collector' must be coverlet, microsoft or none");
-                case "patchThreshold" when int.TryParse(text, out int threshold) && threshold is >= 0 and <= 100:
+                case "patchThreshold" when ManifestScalars.TryInteger(value, 0, 100, out int threshold):
                     settings = settings with { PatchThreshold = threshold };
                     break;
                 case "patchThreshold":
                     return errors.At(value.Start, "'gates.coverage.patchThreshold' must be a whole percentage from 0 to 100");
-                case "minChangedLines" when int.TryParse(text, out int minimum) && minimum >= 0:
+                case "minChangedLines" when ManifestScalars.TryInteger(value, 0, int.MaxValue, out int minimum):
                     settings = settings with { MinChangedLines = minimum };
                     break;
                 case "minChangedLines":
