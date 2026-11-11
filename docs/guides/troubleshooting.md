@@ -499,7 +499,7 @@ checks for it. Git Bash makes each hook call slower than on macOS or Linux ([per
 
 ## "records a human decision and does not run inside a Claude Code session"
 
-`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss` and `update` are refused when `CLAUDECODE=1` is set. That variable
+`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `update` and `engine install` are refused when `CLAUDECODE=1` is set. That variable
 is set inside Claude Code sessions, and a command typed with the `!` prefix runs inside the session too, so it is refused as
 well. Open a separate terminal window and paste the line the refusal prints: it changes to the project root and runs the same
 command, for example `cd '/path/to/project' && .lockflight/bin/lockflight approve spec`.

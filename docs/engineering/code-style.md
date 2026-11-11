@@ -1,6 +1,6 @@
 # C# code style
 
-Rules for the engine (`engine/`) and the NuGet packages. Formatting is encoded in `.editorconfig`; everything else is checked in
+Rules for the engine (`engine/`). Formatting is encoded in `.editorconfig`; everything else is checked in
 review (and, where possible, by analyzers later). A rule may be departed from only visibly — one line at the code or in the PR —
 never silently.
 
@@ -36,7 +36,7 @@ never silently.
 
 14. **Time is injected** (`TimeProvider`), never `DateTime*.UtcNow/Now` outside the composition root.
 15. **`CancellationToken`** on every async method: last parameter, named `cancellationToken`, no default, forwarded everywhere.
-16. **`ConfigureAwait(false)`** is not used in the engine (an application); it **is** used in reusable library packages.
+16. **`ConfigureAwait(false)`** is not used: the engine is an application, not a library.
 17. **Guard clauses protect contracts**; they do not duplicate validation done elsewhere.
 18. **A named private method beats a commented block**; extract cohesive steps, not single lines.
 19. **Messages say enough to act on:** an error names what failed and what to do next (the engine's stderr is read by an agent
