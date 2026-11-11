@@ -7,27 +7,6 @@
 LOCKFLIGHT_PLUGIN_API=1
 export LOCKFLIGHT_PLUGIN_API
 event="$1"
-# At session start the engine reports a project engine older than this plugin works with (min-engine-version, a released
-# version). `read` is a shell builtin, so this starts no process.
-if [ "$event" = "session-start" ] && [ -f "${0%/*}/../min-engine-version" ]; then
-  IFS= read -r LOCKFLIGHT_PLUGIN_MIN_ENGINE < "${0%/*}/../min-engine-version" || true
-  export LOCKFLIGHT_PLUGIN_MIN_ENGINE
-  # Claude Code sources CLAUDE_ENV_FILE into the session's later Bash commands, so `lockflight doctor` run by the agent checks
-  # the plugin this session loaded (also one from --plugin-dir), not only the installed one. Values that would need quoting
-  # beyond single quotes are left out rather than written.
-  if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-    case "$LOCKFLIGHT_PLUGIN_MIN_ENGINE" in
-      *[!0-9A-Za-z.+-]*|"") ;;
-      *) printf "export LOCKFLIGHT_PLUGIN_MIN_ENGINE='%s'\n" "$LOCKFLIGHT_PLUGIN_MIN_ENGINE" >> "$CLAUDE_ENV_FILE" ;;
-    esac
-    plugin_root="${CLAUDE_PLUGIN_ROOT:-${0%/*}/..}"
-    case "$plugin_root" in
-      *"'"*|*"
-"*) ;;
-      *) printf "export LOCKFLIGHT_PLUGIN_ROOT='%s'\n" "$plugin_root" >> "$CLAUDE_ENV_FILE" ;;
-    esac
-  fi
-fi
 # Every process costs ~10-20 ms under Git Bash, so the fast path (CLAUDE_PROJECT_DIR set, engine linked) starts none: stdin
 # goes straight to the engine and the root search uses parameter expansion only. The JSON is read only when it is needed.
 input=""
@@ -87,7 +66,9 @@ if [ -z "$dir" ]; then
 fi
 [ -n "$dir" ] || dir="$PWD"
 
-# Walks up with either separator, so Windows paths ("C:\Users\x", which Git Bash file tests accept) need no cygpath.
+# Walks up with either separator, so Windows paths ("C:\Users\x", which Git Bash file tests accept) need no cygpath. The
+# filesystem root itself is never searched ("/x" ends the walk at "", and "C:\x" at the drive "C:"), on purpose: a project
+# does not live there, and a lockflight.yaml at / would otherwise put every directory on the machine under its policy.
 root=""
 while [ -n "$dir" ] && [ "$dir" != "." ]; do
   if [ -f "$dir/lockflight.yaml" ]; then root="$dir"; break; fi
@@ -96,6 +77,30 @@ while [ -n "$dir" ] && [ "$dir" != "." ]; do
   dir="$parent"
 done
 [ -n "$root" ] || exit 0
+
+# At session start the engine reports a project engine older than this plugin works with (min-engine-version, a released
+# version). `read` is a shell builtin, so this starts no process. Only in a Lockflight project: elsewhere the shim does nothing.
+if [ "$event" = "session-start" ] && [ -f "${0%/*}/../min-engine-version" ]; then
+  IFS= read -r LOCKFLIGHT_PLUGIN_MIN_ENGINE < "${0%/*}/../min-engine-version" || true
+  export LOCKFLIGHT_PLUGIN_MIN_ENGINE
+  # Claude Code sources CLAUDE_ENV_FILE into the session's later Bash commands, so `lockflight doctor` run by the agent checks
+  # the plugin this session loaded (also one from --plugin-dir), not only the installed one. Values that would need quoting
+  # beyond single quotes are left out rather than written, and a line the file already holds (a resumed or cleared session)
+  # is not written again.
+  if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+    env_line() { grep -qxF -e "$1" "$CLAUDE_ENV_FILE" 2>/dev/null || printf '%s\n' "$1" >> "$CLAUDE_ENV_FILE"; }
+    case "$LOCKFLIGHT_PLUGIN_MIN_ENGINE" in
+      *[!0-9A-Za-z.+-]*|"") ;;
+      *) env_line "export LOCKFLIGHT_PLUGIN_MIN_ENGINE='$LOCKFLIGHT_PLUGIN_MIN_ENGINE'" ;;
+    esac
+    plugin_root="${CLAUDE_PLUGIN_ROOT:-${0%/*}/..}"
+    case "$plugin_root" in
+      *"'"*|*"
+"*) ;;
+      *) env_line "export LOCKFLIGHT_PLUGIN_ROOT='$plugin_root'" ;;
+    esac
+  fi
+fi
 
 engine="$root/.lockflight/bin/lockflight"
 [ -f "$engine.exe" ] && engine="$engine.exe"
@@ -165,6 +170,11 @@ if [ -x "$engine" ]; then
     # The new marker and hard link are made before the checks and moved into place only when they pass, so no hook reads them
     # early, and the link is to the file that was hashed: one renamed over the engine meanwhile is not that file.
     pending=""; held=""
+    # A hook stopped by its time limit or interrupted while checking leaves no marker or hard link behind.
+    if [ -n "$checked" ]; then
+      trap 'rm -f "$checked.$$" "$checked.engine.$$"' EXIT
+      trap 'exit 143' TERM; trap 'exit 130' INT; trap 'exit 129' HUP
+    fi
     if [ -n "$checked" ] && : > "$checked.$$" 2>/dev/null; then pending="$checked.$$"; fi
     if [ -e "$root/.git" ] && git -C "$root" ls-files --error-unmatch -- "${engine#"$root"/}" >/dev/null 2>&1; then
       untrusted="it is committed to the repository"
@@ -185,6 +195,7 @@ if [ -x "$engine" ]; then
       fi
     fi
     [ -z "$pending" ] || rm -f "$pending" "$checked.engine.$$"
+    trap - EXIT TERM INT HUP
   fi
 fi
 untrusted_message="lockflight: the engine at $engine was not run because $untrusted. Ask the user to $untrusted_fix, then run: dotnet tool restore && dotnet lockflight link"

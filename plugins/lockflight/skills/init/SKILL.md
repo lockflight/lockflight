@@ -43,12 +43,13 @@ Windows, Git Bash; for the standard profile with Spec Kit, `uv` and a working `p
   config, and never edit `nuget.config`: it is protected.
 - **The project already pins a different version** (`doctor` reports the pin or link as behind, or the pin as not
   restorable): ask the user to open a separate terminal window (not `!` in Claude Code) and run
-  `~/.lockflight/bin/lockflight update` there, in the project. It re-pins and links; they commit `dotnet-tools.json`.
+  `~/.lockflight/bin/lockflight update` there, in the project. It re-pins and links; they commit the pin files it
+  changed (`dotnet-tools.json`, `.lockflight/engine.lock`, `.lockflight/ci/install.sh`).
 
 ## 3. Choose with the user
 
 - **Profile:** **lite** (the default) — gates and guard; **standard** — adds the spec-driven lifecycle: spec and tasks in
-  the spec contract, approvals, red/green with xUnit v3 or v2, review and trace.
+  the spec contract, approvals, red/green with xUnit (v3 or v2), NUnit or MSTest, review and trace.
 - **Spec Kit** (standard profile only, in a project without `.specify/`): **without** (recommended unless the team uses
   Spec Kit) — the `lockflight-crew` plugin's spec writer and planner, or the session with the user, write the spec and tasks
   in the contract, with no Python needed; **with** — Spec Kit's `/speckit-*` commands and the Lockflight preset (step 4),
