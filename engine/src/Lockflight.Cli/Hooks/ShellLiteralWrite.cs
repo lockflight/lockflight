@@ -39,6 +39,12 @@ internal static partial class ShellLiteralWrite
     public static bool OnlyWritesLiteralText(string command, string? workingDirectory)
     {
         bool hereDocument = HereDocumentOperator().IsMatch(command);
+        // zsh's ">!", ">>|" and ">>!": bash reads the "!" or "|" otherwise, so the target is not certain.
+        if (command.Contains(">!", StringComparison.Ordinal) || command.Contains(">>|", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         if (command.Any(IsUnusualSpace) || (hereDocument ? !IsPlainHereDocument(command) : HasEmptyQuotes(command)))
         {
             return false;
