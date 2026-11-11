@@ -1,7 +1,14 @@
 # Not covered here on purpose:
 # - samples/**: fixed test projects that the end-to-end suites build (one deliberately on net8.0 with xUnit v2 on VSTest).
 #   Upgrading them would change what those suites exercise, so they move only by hand, together with the tests.
-# - gitleaks, shellcheck and Claude Code in the workflows: pinned by version and checksum in the workflow files, bumped by hand.
+# - gitleaks and shellcheck: pinned by version and checksum in the workflow files and action/action.yml, bumped by hand;
+#   scripts/gitleaks-pins.py (CI) checks that every gitleaks copy agrees, the engine's templates included.
+# - Claude Code (npm, in ci.yml, canary.yml and release-crew.yml): pinned by version only, bumped by hand together.
+# - action/ (action.yml's actions and action/claude-code's npm lockfile): the generated workflows pin action/ by commit
+#   (Templates.ActionCommit), so a change there needs the action pin procedure in docs/engineering/releasing.md and is made
+#   by hand. .github/actions/install-gitleaks uses no action.
+# - The actions pinned inside the workflows the engine writes (engine/src/Lockflight.Cli/Init/Templates.cs): moved by hand
+#   with the template, which update recognises by its released versions.
 version: 2
 updates:
   - package-ecosystem: github-actions

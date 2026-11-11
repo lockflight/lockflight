@@ -972,10 +972,14 @@ jobs:
           tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}" >> "$GITHUB_PATH"
       # Warnings and errors fail the job; style-only notes do not.
-      - name: Shellcheck the hook shim and test scripts
+      # Every shell script by glob, so a new one is linted without being added here: scripts/install.sh is vendored into every
+      # project and run by the action.
+      - name: Shellcheck the hook shim and every shell script
         run: |
           shellcheck --version
-          find tests benchmarks -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/check-public-tree.sh scripts/dev-install.sh scripts/marketplace-ref.sh scripts/user-path.sh scripts/crew-trust-boundary.sh scripts/release-assets.sh scripts/release-versions.sh scripts/action-pin.sh
+          find tests benchmarks schemas -name '*.sh' -print0 | xargs -0 shellcheck -S warning plugins/lockflight/bin/lockflight-hook scripts/*.sh action/*.sh
+      - name: Every copy of the gitleaks pin agrees (version and SHA-256 per platform)
+        run: python3 -I scripts/gitleaks-pins.py
       - name: The install puts its folder on PATH once, for each shell
         run: sh tests/install/user-path.sh
       # The crew gives advice and the engine judges: the crew plugin ships no hooks, executables, policy files or
@@ -1047,6 +1051,10 @@ jobs:
     if: github.event_name == 'pull_request' && vars.LOCKFLIGHT_SELF_JUDGE == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 55
+    outputs:
+      policy: ${{ steps.judge.outputs.policy }}
+      evidence-sha256: ${{ steps.judge.outputs.evidence-sha256 }}
+      evidence-artifact-id: ${{ steps.judge.outputs.evidence-artifact-id }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1066,6 +1074,7 @@ jobs:
           git config --global user.email ci@example.com && git config --global user.name ci
           (cd engine && dotnet publish src/Lockflight.Cli -c Release -r linux-x64 -o "$RUNNER_TEMP/engine" -nologo)
       - uses: ./action
+        id: judge
         with:
           mode: judge
           head: ${{ github.event.pull_request.head.sha }}
@@ -1086,7 +1095,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
           persist-credentials: false
+      # As the generated workflow's report jobs do: the judge's policy commit only when it is one of the target branch's own
+      # (first-parent) commits, else the tip checked out here.
+      - name: The policy commit, on the target branch
+        id: policy
+        env:
+          LF_CLAIMED: ${{ needs.judge.outputs.policy }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          if printf '%s' "$LF_CLAIMED" | grep -Eq '^[0-9a-f]{40}$' && git rev-list --first-parent HEAD | grep -qx "$LF_CLAIMED"; then sha="$LF_CLAIMED"; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: engine/global.json
@@ -1096,6 +1116,13 @@ jobs:
         with:
           mode: report
           head: ${{ github.event.pull_request.head.sha }}
+          base: ${{ steps.policy.outputs.sha }}
+          branch: ${{ github.head_ref }}
+          event: pr
+          replan: "true"
           context: lockflight/judge
           comment: "true"
+          verify-artifacts: "true"
+          evidence-sha256: ${{ needs.judge.outputs.evidence-sha256 }}
+          evidence-artifact-id: ${{ needs.judge.outputs.evidence-artifact-id }}
           engine: ${{ runner.temp }}/engine/lockflight
