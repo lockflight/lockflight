@@ -34,4 +34,32 @@ public sealed class WindowsPathsTests
     [InlineData(@"\\buildhost\C$\repo\x")]
     public void DevicePathsTheGuardCannotMapAreUnresolvable(string path) =>
         Assert.Null(WindowsPaths.ToDosPath(path));
+
+    [Fact]
+    public void OffWindowsAPathWithATildeIsLeftAsWritten()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows expands short names.");
+
+        Assert.Equal("/home/user/RUNNER~1/x", WindowsPaths.ExpandShortNames("/home/user/RUNNER~1/x"));
+    }
+
+    [Fact]
+    public async Task AShortNameOfAnExistingFolderExpandsToItsLongName()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "8.3 short names are a Windows file-system alias.");
+        DirectoryInfo folder = Directory.CreateTempSubdirectory("lockflight-long-folder-name-");
+        try
+        {
+            string? alias = await WindowsShortNames.OfFolderAsync(folder.FullName, TestContext.Current.CancellationToken);
+            Assert.SkipWhen(alias is null, "this volume keeps no 8.3 short names.");
+
+            string expanded = WindowsPaths.ExpandShortNames(Path.Combine(alias!, "missing", "file.txt"));
+
+            Assert.Equal(Path.Combine(folder.FullName, "missing", "file.txt"), expanded, ignoreCase: true);
+        }
+        finally
+        {
+            folder.Delete(recursive: true);
+        }
+    }
 }
