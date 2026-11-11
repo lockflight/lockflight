@@ -99,8 +99,9 @@ internal static class ApprovalsChecker
             return SpecFirstFacts.NotApplicable;
         }
 
+        // The spec is read from specs/<id>/spec.md whatever specPaths says, so a change under specs/ counts as a spec change too.
         string[] changedSpecs = request.Shell is null
-            ? [.. request.ChangedPaths.Where(path => request.Settings.SpecPaths.Any(glob => PathRules.Matches(glob, path))).Distinct(StringComparer.Ordinal)]
+            ? [.. request.ChangedPaths.Where(path => path.StartsWith(SpecDirectory, StringComparison.Ordinal) || request.Settings.SpecPaths.Any(glob => PathRules.Matches(glob, path))).Distinct(StringComparer.Ordinal)]
             : [];
         if (request.FeatureId is not string feature)
         {
