@@ -381,10 +381,11 @@ runs it on Linux and Windows on every pull request, and on macOS too on every pu
   these checks);
 - the test gate does not PASS a failing test, a run with every test skipped, or a run with no test, on Microsoft.Testing.Platform
   and on VSTest;
-- every gate step judges a planted violation as not a PASS, with its tool replaced by one that reports it (a compile error, a
-  failing test, a file the formatter would change, a Critical advisory, a leaked secret, a configured coverage collector that
-  wrote no report, an added `#pragma warning disable` with `gates.quality.suppressions: fail`), and the protected-changes report
-  lists a changed `lockflight.yaml`;
+- every gate step judges a planted violation with the verdict and reason code it calls for, with its tool replaced by one that
+  reports it (a compile error, a failing test, a file the formatter would change, a Critical advisory, a leaked secret, a
+  configured coverage collector that wrote no report, an added `#pragma warning disable` with `gates.quality.suppressions: fail`),
+  so a step that stops for another reason (a tool that is not installed) does not count as caught, and the protected-changes
+  report lists a changed `lockflight.yaml`;
 - the TaskCompleted hook refuses a task marked completed when the stop gate's PASS no longer covers the tree;
 - on a small generated .NET project: the real test gate on a failing test, every test skipped and no test, a real red that
   fails by `Assert.Fail`, an amend whose amended test passes on the red-time snapshot, a green after a test file was edited

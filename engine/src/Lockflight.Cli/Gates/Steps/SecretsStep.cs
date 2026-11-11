@@ -48,7 +48,7 @@ internal sealed class SecretsStep : IGateStep
 
     private static async Task<GateStep> CheckAsync(GateRunContext run, CancellationToken cancellationToken)
     {
-        string? gitleaks = Executables.Find("gitleaks", Environment.GetEnvironmentVariable(EnvironmentVariables.Gitleaks));
+        string? gitleaks = run.FindGitleaks();
         if (gitleaks is null)
         {
             return new GateStep(StepName, 0, Verdict.NotEarned, ReasonCode.GitleaksMissing, 0, $"gitleaks not found; install it on PATH or set {EnvironmentVariables.Gitleaks}");
