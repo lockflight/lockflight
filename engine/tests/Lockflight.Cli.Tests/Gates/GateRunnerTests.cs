@@ -82,7 +82,7 @@ public sealed class GateRunnerTests : IDisposable
             File.WriteAllText(Path.Combine(results, "lockflight.trx"), PassingTrx);
         }
 
-        string output = verb == "package" ? """{ "version": 1, "parameters": "", "projects": [] }""" : string.Empty;
+        string output = verb == "package" ? """{ "version": 1, "parameters": "", "projects": [ { "path": "src/Shop.csproj" } ] }""" : string.Empty;
         return Task.FromResult(new ProcessResult(0, output, string.Empty, 0, TimedOut: false));
     }
 }

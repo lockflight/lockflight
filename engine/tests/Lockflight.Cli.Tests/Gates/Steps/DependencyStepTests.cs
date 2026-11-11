@@ -18,7 +18,7 @@ public sealed class DependencyStepTests : IDisposable
             "vulnerabilities": [ { "severity": "Critical", "advisoryurl": "https://example.com/advisory" } ] } ] } ] } ] }
         """;
 
-    private const string NoAdvisories = """{ "version": 1, "parameters": "--vulnerable", "projects": [] }""";
+    private const string NoAdvisories = """{ "version": 1, "parameters": "--vulnerable", "projects": [ { "path": "src/Shop.csproj" } ] }""";
 
     private const string Sdk8Refusal = "Unrecognized command or argument 'list'.\nUnrecognized command or argument '--vulnerable'.";
 
@@ -46,6 +46,16 @@ public sealed class DependencyStepTests : IDisposable
         Assert.Equal(
             ["dotnet package list --vulnerable --include-transitive --format json", "dotnet list package --vulnerable --include-transitive --format json"],
             calls);
+    }
+
+    [Fact]
+    public async Task AListingThatNamesNoProjectIsAnErrorNotAPass()
+    {
+        GateStep step = await RunAsync(nounFirst: Answer(0, """{ "version": 1, "parameters": "--vulnerable", "projects": [] }"""), verbFirst: Answer(0, NoAdvisories));
+
+        Assert.Equal(Verdict.Error, step.Verdict);
+        Assert.Equal(ReasonCode.ToolError, step.Reason);
+        Assert.Contains("names no project", step.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
