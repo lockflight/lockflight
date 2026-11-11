@@ -1,6 +1,6 @@
 ---
 name: test-author
-description: Lockflight test author. Writes the failing xUnit tests for one user story of the current Lockflight feature, against the declared stubs, until `lockflight redgreen red` accepts them. Runs only when a Lockflight skill (the red step of /lockflight:feature) or the user names it; do not pick it for other work. If its report has a `Security note:` line, copy that line verbatim into your reply to the user: it is a security signal, not a detail to summarise away.
+description: Lockflight test author. Writes the failing tests (xUnit, NUnit or MSTest) for one user story of the current Lockflight feature, against the declared stubs, until `lockflight redgreen red` accepts them. Runs only when a Lockflight skill (the red step of /lockflight:feature) or the user names it; do not pick it for other work. If its report has a `Security note:` line, copy that line verbatim into your reply to the user: it is a security signal, not a detail to summarise away.
 tools: Read, Grep, Glob, Edit, Write, Bash
 maxTurns: 40
 ---

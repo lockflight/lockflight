@@ -180,6 +180,20 @@ if grep -qx "export LOCKFLIGHT_PLUGIN_MIN_ENGINE='999.0.0'" "$WORK/env-file" && 
 else
   fail=$((fail+1)); echo "session start: exports the loaded plugin: FAIL ($(head -c 400 "$WORK/env-file"))"
 fi
+# A second session start (resumed or cleared) writes no line twice; outside a Lockflight project the shim writes nothing.
+printf '%s' "$(json "$proj" Read "$(fp "$proj/src/a.cs")")" | CLAUDE_ENV_FILE="$WORK/env-file" CLAUDE_PLUGIN_ROOT="$WORK/plugin" "$WORK/plugin/bin/lockflight-hook" session-start > /dev/null 2>&1
+if [ "$(grep -c '^export LOCKFLIGHT_PLUGIN_' "$WORK/env-file")" = 2 ]; then
+  pass=$((pass+1)); echo "session start again: no repeated export: ok"
+else
+  fail=$((fail+1)); echo "session start again: no repeated export: FAIL ($(head -c 400 "$WORK/env-file"))"
+fi
+mkdir -p "$WORK/no-project" && : > "$WORK/env-file-elsewhere"
+printf '{}' | CLAUDE_PROJECT_DIR="$WORK/no-project" CLAUDE_ENV_FILE="$WORK/env-file-elsewhere" CLAUDE_PLUGIN_ROOT="$WORK/plugin" "$WORK/plugin/bin/lockflight-hook" session-start > /dev/null 2>&1
+if [ ! -s "$WORK/env-file-elsewhere" ]; then
+  pass=$((pass+1)); echo "session start outside a project: writes nothing: ok"
+else
+  fail=$((fail+1)); echo "session start outside a project: writes nothing: FAIL ($(head -c 400 "$WORK/env-file-elsewhere"))"
+fi
 sed 's/"9.9.9"/"9.9.9-dev.1"/' "$proj/dotnet-tools.json" > "$WORK/t" && mv "$WORK/t" "$proj/dotnet-tools.json"
 check "dev pin mismatch: Write blocked"   2 "$proj"  "$(json "$proj" Write "$(fp "$proj/src/a.cs")")"
 if grep -q 'lockflight update' "$WORK/err"; then pass=$((pass+1)); echo "dev pin mismatch: names update: ok"; else fail=$((fail+1)); echo "dev pin mismatch: names update: FAIL ($(head -c 400 "$WORK/err"))"; fi
