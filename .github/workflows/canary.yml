@@ -1,4 +1,4 @@
-# Weekly real-hook canary: a headless Claude Code session with the Lockflight plugin (Haiku, a few cents) must allow an ordinary
+# Real-hook canary, run by hand (before each release): a headless Claude Code session with the Lockflight plugin (Haiku, a few cents) must allow an ordinary
 # write and block a protected path and a Bash redirect into a protected file. Catches Claude Code hook-semantics changes.
 # Needs the repository secret CLAUDE_CODE_OAUTH_TOKEN (create it with `claude setup-token`).
 name: canary

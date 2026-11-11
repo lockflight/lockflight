@@ -245,7 +245,7 @@ def hook_flow(dark):
              '<title>A hook call: Claude Code runs the hook shim, the shim runs the pinned engine, and the engine allows with exit 0 '
              'or blocks with exit 2</title>', head(t["muted"]),
              f'<rect width="1040" height="340" rx="20" fill="{t["bg"]}" stroke="{t["line"]}"/>',
-             card(t, 30, 40, 220, 140, "#14808F", "Claude Code", ["SessionStart · PreToolUse", "UserPromptExpansion", "Stop"]),
+             card(t, 30, 40, 220, 140, "#14808F", "Claude Code", ["SessionStart · PreToolUse", "UserPromptExpansion", "TaskCompleted · Stop"]),
              arrow(252, 110, 286, 110, t["muted"]),
              card(t, 290, 40, 220, 140, "#14808F", "Hook shim", ["lockflight-hook", "finds the project from", "CLAUDE_PROJECT_DIR"], (0, 2)),
              arrow(512, 110, 546, 110, t["muted"]),

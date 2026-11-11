@@ -48,7 +48,7 @@ see [guardrails and boundaries](guides/guardrails-and-boundaries.md).
 | **Plugin** | The local assistant: Claude Code skills (`/lockflight:*`) and hooks that call the engine. It holds no policy of its own and is never of record. It is one of three [install levels](guides/install-levels.md); the others are CI only and CI with Claude Code's native settings. | [`plugins/lockflight/`](../plugins/lockflight/) |
 | **Crew (optional)** | A second plugin with agents briefed for the lifecycle: a spec writer, a planner and a test author. Each runs an engine check as its verdict; none is a judge. | [`plugins/lockflight-crew/`](../plugins/lockflight-crew/) |
 | **Spec Kit preset (optional)** | Templates and commands layered over [Spec Kit](https://github.com/github/spec-kit) so that its output follows the [spec contract](guides/spec-contract.md): requirement IDs, test-first tasks. A preset, not a fork. | [`plugins/lockflight/speckit-preset/`](../plugins/lockflight/speckit-preset/) |
-| **Project files** | `lockflight.yaml` (the policy, version 2, with a published [JSON Schema](../lockflight.schema.json)), the engine pin (`.lockflight/engine.lock`, the version and SHA-256 per platform, with the version also in `dotnet-tools.json` during 0.3), `.lockflight/` (approvals, evidence, baselines, ledger), the CI workflow. Which of these formats are public, and what stays stable across releases: [public contracts](guides/contracts.md). | your repository |
+| **Project files** | `lockflight.yaml` (the policy, version 2, with a published [JSON Schema](../lockflight.schema.json)), the engine pin (`.lockflight/engine.lock`, the version and SHA-256 per platform, with the version also in `dotnet-tools.json`), `.lockflight/` (approvals, evidence, baselines, ledger), the CI workflow. Which of these formats are public, and what stays stable across releases: [public contracts](guides/contracts.md). | your repository |
 
 ## The CI judge
 
@@ -92,7 +92,7 @@ engine linked into `.lockflight/bin/`. Running the binary directly keeps a hook 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/hook-flow-dark.svg">
-  <img src="assets/hook-flow-light.svg" alt="A hook call. Claude Code runs the hook shim for SessionStart, PreToolUse, UserPromptExpansion and Stop; the shim finds the project from CLAUDE_PROJECT_DIR and runs the pinned engine in .lockflight/bin, which allows with exit 0 or blocks with exit 2 and the reason on stderr. Without lockflight.yaml the shim does nothing; with the engine missing or stale, or the configuration unreadable, it enters recovery mode." width="100%">
+  <img src="assets/hook-flow-light.svg" alt="A hook call. Claude Code runs the hook shim for SessionStart, PreToolUse, UserPromptExpansion, TaskCompleted and Stop; the shim finds the project from CLAUDE_PROJECT_DIR and runs the pinned engine in .lockflight/bin, which allows with exit 0 or blocks with exit 2 and the reason on stderr. Without lockflight.yaml the shim does nothing; with the engine missing or stale, or the configuration unreadable, it enters recovery mode." width="100%">
 </picture>
 
 The shim has three states:
@@ -215,7 +215,7 @@ spec ──approve──▶ plan + tasks ──approve──▶ red ──▶ gr
   current code. Such a finding stays open across review runs until every reproduction it was given passes or a person dismisses it.
 
 Commands that record a human decision (`approve`, `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`,
-`update`) refuse to run inside a Claude Code session.
+`update`, `engine install`) refuse to run inside a Claude Code session.
 
 ## Topologies
 
@@ -252,7 +252,7 @@ change in any release ([public contracts](guides/contracts.md#internal-formats))
 | `gate.completed` | `trigger` (`command` for `lockflight gate run`, `stop-hook` for the Stop hook), `durationMs`, `cache` (`hit` when the Stop gate's cache of the last PASS answered, `miss` when it was consulted and the gate ran, `none` when it was not consulted) |
 | `approval.recorded` | `feature`, `phase`, `artifacts` (each artifact with the first 12 characters of its hash), `channel` (`terminal` for `lockflight approve`, `session` for `/lockflight:approve`) |
 | `evidence.recorded`, `config.written` | none |
-| `session-command.answered` | none: an in-session human command answered without recording anything (a usage hint, a wrong, expired or used code, changed content). It is the person's own typing, so neither the status line nor `ledger retro` counts it; a refusal for an unattended session or a command from another source stays `hook.blocked` |
+| `session-command.answered` | none: an in-session human command answered without recording anything (a usage hint, a wrong, expired or used code, changed content). It is the person's own typing, so neither the status line nor the crew's `retro` skill counts it; a refusal for an unattended session or a command from another source stays `hook.blocked` |
 
 No line names a person, with one exception: who approved a phase is kept in the approval record, not in the ledger, but
 `redgreen:amended` keeps in its detail who amended a test and why, as the red/green record does; `redgreen:red:amend-rechecked`

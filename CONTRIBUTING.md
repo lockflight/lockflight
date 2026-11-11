@@ -144,10 +144,16 @@ too after a merge to main or in a manual run. Before opening a pull request, run
 |---|---|
 | [`engine/`](engine/) | the CLI and its unit tests |
 | [`plugins/lockflight/`](plugins/lockflight/) | the Claude Code plugin and the Spec Kit preset |
+| [`plugins/lockflight-crew/`](plugins/lockflight-crew/) | the optional crew plugin: agents and advice skills, with their evals |
+| [`plugins/evals/`](plugins/evals/) | evals that load both plugins at once |
+| [`.claude-plugin/`](.claude-plugin/) | the marketplace users add, pinned to the last release |
+| [`action/`](action/) | the CI judge's GitHub Action |
+| [`schemas/`](schemas/) | the JSON Schemas of the public contracts, their fixtures, and each release's own output |
 | [`docs/`](docs/) | guides, the architecture overview and the code style |
 | [`tests/`](tests/) | cross-component suites |
+| [`benchmarks/`](benchmarks/) | the catch benchmark |
 | [`samples/`](samples/) | fixtures the suites run on |
-| [`scripts/`](scripts/) | install from source and asset generation |
+| [`scripts/`](scripts/) | install scripts, release checks and asset generation |
 
 ## Next
 

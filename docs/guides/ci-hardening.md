@@ -169,11 +169,11 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
   such as a snapshot store that writes its case files in record mode, is a person's decision, made in a pull request of
   its own to the target branch, where the protected file shows as a protected change. Once it is merged, push to the
   pull request or update it from the target branch: re-running the old check judges against the old base.
-- **A strong guardrail, not a boundary:** the evidence file itself. In 0.3.0 the judge writes its evidence in the same job
+- **A strong guardrail, not a boundary:** the evidence file itself. The judge writes its evidence in the same job
   as the pull request's code, so a process that code leaves running could rewrite it before the report jobs read it. On
   Linux and Windows the judge stops every process the pull request's code left running whenever it has no child of its own
   running, and on GitHub-hosted runners removes the Docker containers created during the run, before it writes the evidence; one it cannot stop
-  makes the verdict ERROR (see below). One started outside the engine's tree, or with root rights, is not found. Isolation (a container or a separate job for the pull request's code) is planned after 0.3.0.
+  makes the verdict ERROR (see below). One started outside the engine's tree, or with root rights, is not found. Isolation (a container or a separate job for the pull request's code) is planned.
 - **What the pull request's code can affect in the judge job.** The pull request's code runs as the same user as the engine,
   in the same job, before the judge has finished. On GitHub-hosted runners that user has administrator rights (passwordless
   `sudo` on Linux and macOS, an administrator account on Windows), so the code can act as root on the runner's VM:
@@ -262,7 +262,7 @@ review on the spec path ([structural-only change](spec-contract.md#specmd)).
     test host that rewrites its own report before it exits. Each needs deliberate code in the diff.
 
   Each needs deliberate code in the diff, which the person who merges can read. Isolation (the pull request's code in a
-  container or a separate job, the evidence computed outside it) is planned after 0.3.0.
+  container or a separate job, the evidence computed outside it) is planned.
 - **Not shown:** that the tests were written first. A red commit shows that the tests tell the stub from the
   implementation, which is what the evidence claims.
 

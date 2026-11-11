@@ -30,7 +30,7 @@ Short definitions of the terms the other pages use, in the order you are likely 
 | **Lockdown** | `.lockflight/lockdown` exists: only reads are allowed until a human removes it. |
 | **Recovery mode** | The engine isn't linked yet: only reads and the restore command are allowed. |
 | **In-session human command** | `/lockflight:approve`, `/lockflight:baseline`, `/lockflight:reset`, `/lockflight:amend`, typed by a person in Claude Code. `/lockflight:approve` records the approval in one step, for files unchanged since the agent's turn ended; the others take two: step 1 shows what would be recorded with a one-time code, step 2 (the line with the code) records it. |
-| **Human-only command** | `approve` (except `approve verify`), `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `update`: refused inside a Claude Code session; `--help` or `-h` on one only prints the usage and is allowed. |
+| **Human-only command** | `approve` (except `approve verify`), `baseline`, `redgreen reset`, `redgreen amend`, `review dismiss`, `update`, `engine install`: refused inside a Claude Code session; `--help` or `-h` on one only prints the usage and is allowed. |
 | **Ledger** | Local JSON-lines event log (blocks, verdicts, rejected reds, confirmed findings) that the crew's `retro` skill reads. It is not an audit log. |
 | **Lite / standard** | Onboarding profiles. Lite: guard and gates. Standard: adds the lifecycle (spec and tasks, approvals, red/green, trace, review); Spec Kit is optional in it. |
 | **Crew** | The optional `lockflight-crew` plugin: a spec writer, a planner and a test author, each briefed for one step and judged by that step's engine check. An aid, not a judge. |
