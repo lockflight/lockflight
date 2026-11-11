@@ -235,6 +235,17 @@ internal static class CiShellScripts
             """);
 
     /// <summary>
+    /// Stops a report step (exit 4) when the pull request's commit holds files where the judge's evidence goes: they could not be told
+    /// from the judge's. Read from <c>$HEAD_COMMIT</c>, since the report step has checked out the base by then.
+    /// </summary>
+    public const string CommittedEvidenceCheck = $$"""
+        if [ -n "$(git ls-tree -r --name-only "$HEAD_COMMIT" -- {{EvidenceDirectory}} {{VerdictDirectory}})" ]; then
+          echo "ERROR: the pull request commits files under {{EvidenceDirectory}} or {{VerdictDirectory}}, where the judge's evidence goes"
+          exit 4
+        fi
+        """;
+
+    /// <summary>
     /// A report step: installs the engine the base pins and runs <c>lockflight ci report</c> for <paramref name="statusContext"/>
     /// over the judge step's evidence, as data, re-planning the run from git to check the evidence's levels. A pull request that commits files where the evidence goes is an ERROR (its files
     /// could not be told from the judge's). The <c>gates</c> step fails with its verdict; the <c>lockflight/judge</c> step only when
@@ -243,10 +254,7 @@ internal static class CiShellScripts
     /// </summary>
     public static string ReportJob(string findInputs, string statusContext) =>
         Job(findInputs, [DotnetChannels.EngineChannel], gitleaks: false, $$"""
-            if [ -n "$(git ls-files -- {{EvidenceDirectory}} {{VerdictDirectory}})" ]; then
-              echo "ERROR: the pull request commits files under {{EvidenceDirectory}} or {{VerdictDirectory}}, where the judge's evidence goes"
-              exit 4
-            fi
+            {{CommittedEvidenceCheck}}
             code=0
             # With the base, the report re-plans the run from git and refuses evidence whose policy, class or check levels disagree.
             lockflight ci report --evidence {{EvidenceDirectory}} --head "$HEAD_COMMIT" ${BASE:+--base "$BASE" --event "$EVENT" --platform bitbucket} ${BITBUCKET_BRANCH:+--branch "$BITBUCKET_BRANCH"} --context {{statusContext}} --out {{VerdictDirectory}}/{{statusContext.Replace('/', '-')}} || code=$?
