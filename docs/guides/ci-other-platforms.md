@@ -37,7 +37,7 @@ Lockflight job on a Windows agent of your own, or the judge stops with
 | GitHub Actions | GitHub-hosted Linux x64 (`ubuntu-latest`) | the CI judge, through the action | supported |
 | GitHub Actions | self-hosted Linux x64 | the CI judge, through the action | unverified: not run |
 | GitHub Actions | GitHub-hosted Windows x64 (`windows-latest`) | the CI judge, through the action; `init` and `update --project` choose it for a desktop solution | supported |
-| GitHub Actions | macOS, or Linux arm64 | — | not supported: gitleaks is downloaded for Linux x64 only |
+| GitHub Actions | macOS, or Linux arm64 | — | not supported: CI does not run the action there |
 | Bitbucket Pipelines | the .NET SDK image, Linux x64 | the CI judge | unverified: the template has never run on a live workspace |
 | GitLab CI/CD | the .NET SDK image, Linux x64 | the `pr` gates only | experimental and unverified: its shell steps ran in the SDK container, never on a live GitLab |
 | Azure Pipelines | `ubuntu-latest` | the `pr` gates only | experimental and unverified: not run at all |
