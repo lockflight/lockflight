@@ -35,17 +35,15 @@ internal sealed partial record SpecDocument(
         List<int> clarifications = [];
         List<TemplatePlaceholder> placeholders = [];
         (int Number, string Title, int Line, bool Scenarios)? story = null;
-        bool inComment = false;
+        MarkdownComments comments = new();
 
         for (int index = 0; index < lines.Length; index++)
         {
-            string line = lines[index];
-            int lineNumber = index + 1;
-
             // Template guidance lives in HTML comments; it is not part of the spec.
-            if (inComment || line.TrimStart().StartsWith("<!--", StringComparison.Ordinal))
+            string line = comments.Visible(lines[index]);
+            int lineNumber = index + 1;
+            if (line.Length == 0)
             {
-                inComment = !line.Contains("-->", StringComparison.Ordinal);
                 continue;
             }
 

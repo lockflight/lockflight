@@ -25,14 +25,13 @@ internal static partial class TasksDocument
         List<TaskLine> tasks = [];
         bool underTestsHeading = false;
         bool underImplementationHeading = false;
-        bool inComment = false;
+        MarkdownComments comments = new();
 
         for (int index = 0; index < lines.Length; index++)
         {
-            string line = lines[index];
-            if (inComment || line.TrimStart().StartsWith("<!--", StringComparison.Ordinal))
+            string line = comments.Visible(lines[index]);
+            if (line.Length == 0)
             {
-                inComment = !line.Contains("-->", StringComparison.Ordinal);
                 continue;
             }
 
