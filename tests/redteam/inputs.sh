@@ -127,6 +127,14 @@ if [ "$code" = 1 ]; then ok "the step fails"; else bad "the step exits $code, wa
 contains "$W/lock-removed.log" "engine lock: FAIL lock-removed" "it names the removed lock"
 guide_says ci-hardening.md "a pull request that removes the lock: \`lock-removed\`), the judge does not run"
 
+case_start "a branch forked before the target added its lock, which it never touched"
+git checkout -q -b before-lock "$prelock"
+printf 'notes\n' > NOTES.md; git add NOTES.md; git commit -qm "docs: notes"
+rm -rf "$W/runner-temp"
+run_step "$lock_step" "$W/before-lock.log" LF_BASE="$base" LF_HEAD="$(git rev-parse HEAD)" GH_TOKEN=
+code=$?
+if [ "$code" = 0 ]; then ok "the step passes: the merge keeps the target's lock"; else bad "the step exits $code, want 0"; sed 's/^/     /' "$W/before-lock.log"; fi
+
 case_start "a pull request changes the vendored install script, not the lock"
 git checkout -q -b own-script "$base"
 marker="$W/pull-request-script-ran"

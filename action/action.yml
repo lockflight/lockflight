@@ -215,6 +215,10 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
       run: |
         if [ -z "$LF_BASE" ]; then exit 0; fi
+        # What the pull request itself changes is measured from where it forked: a branch older than a lock change on the
+        # target has not touched the lock, and the merge keeps the target's. Without a merge base, the target's tip.
+        fork=$(git merge-base "$LF_BASE" "$LF_HEAD" 2>/dev/null || true)
+        fork="${fork:-$LF_BASE}"
         # A refusal stops the job before the judge runs. It leaves a short evidence (lockflight.ci-evidence/v1, judge "refused")
         # beside where the judge's would be, so the report says which check failed and what to do, not "the judge did not
         # finish". The argument is "<check>: <what failed>", as engine verify-lock names it.
@@ -237,13 +241,13 @@ runs:
         }
         if ! git cat-file -e "$LF_HEAD:.lockflight/engine.lock" 2>/dev/null; then
           # Without the lock, CI would install the engine by version alone once this is merged.
-          if git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null; then
+          if git cat-file -e "$fork:.lockflight/engine.lock" 2>/dev/null; then
             refuse "lock-removed: this pull request removes .lockflight/engine.lock, which pins the engine by hash; without it CI would install the engine by version only"
           fi
           exit 0
         fi
         if git cat-file -e "$LF_BASE:.lockflight/engine.lock" 2>/dev/null; then
-          if git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then exit 0; fi
+          if git diff --quiet "$fork" "$LF_HEAD" -- .lockflight/engine.lock || git diff --quiet "$LF_BASE" "$LF_HEAD" -- .lockflight/engine.lock; then exit 0; fi
           git show "$LF_HEAD:.lockflight/engine.lock" > "$RUNNER_TEMP/proposed-engine.lock"
           git show "$LF_BASE:.lockflight/engine.lock" > "$RUNNER_TEMP/base-engine.lock"
           # The pull request's vendored install script is compared with the lock it proposes: CI runs that script next time.
@@ -492,14 +496,25 @@ runs:
         LF_PR: ${{ github.event.pull_request.number }}
         LF_REPO: ${{ github.repository }}
       run: |
-        # A failed post (a fork's read-only token, an API outage) is a warning, never the verdict.
+        # A failed post (a fork's read-only token, an API outage, no jq on a self-hosted runner) is a warning, never the verdict:
+        # every failure below ends the step with exit 0, so the next step still exits with the verdict.
         body="$RUNNER_TEMP/lockflight-verdict/comment.md"
         if [ ! -f "$body" ]; then echo "::warning::no comment to post"; exit 0; fi
+        if ! payload=$(jq -Rs '{body: .}' < "$body" 2>/dev/null) || [ -z "$payload" ]; then
+          echo "::warning::the comment could not be prepared (jq is needed; see the job summary)"; exit 0
+        fi
         marker='<!-- lockflight:ci:v1'
-        # Only the workflow's own comment is replaced: a marker comment someone else posted is ignored.
+        # Only a comment this token posted is replaced: a marker comment someone else posted is ignored. The workflow's token
+        # posts as github-actions[bot]; a personal token as its user (REST /user), an app's token as <app>[bot] (GraphQL viewer).
+        owners='.user.login == "github-actions[bot]"'
+        for login in "$(gh api user --jq .login 2>/dev/null || true)" "$(gh api graphql -f query='{viewer{login}}' --jq .data.viewer.login 2>/dev/null || true)"; do
+          case "$login" in
+            ""|*[!A-Za-z0-9_.-]*) ;;
+            *) owners="$owners or .user.login == \"$login\" or .user.login == \"$login[bot]\"" ;;
+          esac
+        done
         existing=$(gh api "repos/$LF_REPO/issues/$LF_PR/comments" --paginate \
-          --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" 2>/dev/null | head -n 1 || true)
-        payload=$(jq -Rs '{body: .}' < "$body")
+          --jq ".[] | select(($owners) and (.body | startswith(\"$marker\"))) | .id" 2>/dev/null | head -n 1 || true)
         if [ -n "$existing" ]; then
           printf '%s' "$payload" | gh api --method PATCH "repos/$LF_REPO/issues/comments/$existing" --input - >/dev/null || echo "::warning::the comment could not be updated"
         else
