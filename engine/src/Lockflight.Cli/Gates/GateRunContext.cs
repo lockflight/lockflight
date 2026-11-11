@@ -1,4 +1,5 @@
 using Lockflight.Cli.Config;
+using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Processes;
 
 namespace Lockflight.Cli.Gates;
@@ -69,6 +70,12 @@ internal sealed record GateRunContext(
 
     /// <summary>Runs the tools the steps judge (the .NET SDK, gitleaks); real processes unless a test supplies its own.</summary>
     public RunTimedProcess Processes { get; init; } = ProcessRunner.RunAsync;
+
+    /// <summary>
+    /// Finds gitleaks for the secrets step: the <c>LOCKFLIGHT_GITLEAKS</c> path, else the first on <c>PATH</c>; null when there is
+    /// none. A test that supplies <see cref="Processes"/> supplies a stand-in here too, so the step runs whatever is installed.
+    /// </summary>
+    public Func<string?> FindGitleaks { get; init; } = () => Executables.Find("gitleaks", Environment.GetEnvironmentVariable(EnvironmentVariables.Gitleaks));
 
     /// <summary>
     /// The run for one directory of a project: in a unit of a workspace, that unit's <c>build:</c> file (resolved from the target),

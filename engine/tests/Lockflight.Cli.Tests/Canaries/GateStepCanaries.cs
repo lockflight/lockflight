@@ -4,6 +4,7 @@ using Lockflight.Cli.Gates;
 using Lockflight.Cli.Gates.Affected;
 using Lockflight.Cli.Gates.Steps;
 using Lockflight.Cli.Processes;
+using Lockflight.Cli.Reasons;
 
 namespace Lockflight.Cli.Tests.Canaries;
 
@@ -13,8 +14,10 @@ namespace Lockflight.Cli.Tests.Canaries;
 /// scratch git repository whose last commit changes a protected file and a C# file, adding a <c>#pragma warning disable</c> the
 /// suppressions step (set to fail) must not pass, and deleting the guide its <c>CLAUDE.md</c> links to, which the references step
 /// (set to fail) must not pass. The C# file belongs to a project with EF Core migrations and the repository pins dotnet-ef, so
-/// the EF Core model step runs, and its <c>dotnet ef</c> reports a model changed without a migration. A step that is anything but PASS is caught;
-/// the protected-changes step reports and never fails, so it is caught when it lists the protected file. A step with no planted
+/// the EF Core model step runs, and its <c>dotnet ef</c> reports a model changed without a migration. A step is caught only with
+/// the verdict and reason code its violation calls for, so a step that is NOT-EARNED or ERROR for another cause (gitleaks not
+/// installed: the step is handed a stand-in) is MISSED; the protected-changes step reports and never fails, so it is caught when it
+/// lists the protected file. A tool called with arguments the stand-in does not know makes the canary BROKEN. A step with no planted
 /// case here is MISSED, so a step added to the table without a canary shows up. The harmless twin, the build with a tool that
 /// succeeds, must PASS. <see cref="FullCanaries"/> runs the real build and test tools.
 /// </summary>
@@ -27,6 +30,7 @@ internal static class GateStepCanaries
     private const string PendingModelChanges = "Changes have been made to the model since the last migration. Add a new migration.";
     private const string LeakReportOption = "--report-path";
     private const int LeaksFoundExitCode = 99;
+    private const string GitleaksStandIn = "gitleaks";
 
     private const string PlantedTrx = """
         <?xml version="1.0" encoding="utf-8"?>
@@ -124,7 +128,7 @@ internal static class GateStepCanaries
         }
 
         Manifest manifest = ManifestLocator.Discover(scratch.Project).Manifest!;
-        GateRunContext run = GateRunContext.ForTarget(manifest, scratch.Project, GateProfile.Stop, baseRef: null, time) with { Processes = FailingAppTestsAsync };
+        GateRunContext run = GateRunContext.ForTarget(manifest, scratch.Project, GateProfile.Stop, baseRef: null, time) with { Processes = FailingAppTestsAsync, FindGitleaks = () => GitleaksStandIn };
         if ((await ProjectSelector.SelectAsync(run with { FullRun = true }, cancellationToken)).PassRecord is not StopPassRecord passed)
         {
             return new CanaryReport(name, CanaryResult.Broken, "the working tree of the green base could not be recorded");
@@ -152,7 +156,7 @@ internal static class GateStepCanaries
             return new CanaryReport(name, CanaryResult.Broken, $"the harmless twin is not left out ({facts.Selection?.Describe()}), so a caught failure proves nothing about the choice");
         }
 
-        return CanaryReport.NotAPass(name, last!);
+        return CanaryReport.Expected(name, last!, Verdict.Fail, ReasonCode.TestsFailed);
     }
 
     /// <summary>The build succeeds; the tests fail when App.Tests is among the projects run (a filter that names it, or everything).</summary>
@@ -173,21 +177,26 @@ internal static class GateStepCanaries
 
     private static async Task<CanaryReport> JudgeAsync(IGateStep step, Manifest manifest, string project, TimeProvider time, CancellationToken cancellationToken)
     {
-        GateRunContext run = GateRunContext.ForTarget(manifest, project, GateProfile.PullRequest, BaseRef, time) with { Processes = PlantedAsync };
-        GateRunFacts afterTests = new(TestsTotal: 1, TestResultsDirectory: Path.Combine(project, "no-coverage-here"), TestsStarted: time.GetUtcNow());
-        (string name, GateRunFacts facts) = step.Name switch
+        List<string> unknown = [];
+        GateRunContext run = GateRunContext.ForTarget(manifest, project, GateProfile.PullRequest, BaseRef, time) with
         {
-            ProtectedChangesStep.StepName => ("policy: a change to lockflight.yaml since the base is listed for review", GateRunFacts.None),
-            FormatStep.StepName => ("format: a changed file the formatter would change is not a PASS", GateRunFacts.None),
-            BuildStep.StepName => ("build: a compile error is not a PASS", GateRunFacts.None),
-            TestStep.StepName => ("test: a failing test is not a PASS", GateRunFacts.None),
-            CoverageStep.StepName => ("coverage: a configured collector without a coverage report is not a PASS", afterTests),
-            DependencyStep.StepName => ("dependencies: a Critical advisory is not a PASS", GateRunFacts.None),
-            SecretsStep.StepName => ("secrets: a leaked secret is not a PASS", GateRunFacts.None),
-            SuppressionsStep.StepName => ("suppressions: an added #pragma warning disable is not a PASS (gates.quality.suppressions: fail)", GateRunFacts.None),
-            DocsReferencesStep.StepName => ("references: a CLAUDE.md link the change broke is not a PASS (gates.docs.references: fail)", GateRunFacts.None),
-            EfPendingModelChangesStep.StepName => ("EF Core: a model changed without a migration is not a PASS (dotnet-ef pinned)", GateRunFacts.None),
-            _ => (string.Empty, GateRunFacts.None),
+            Processes = (fileName, arguments, workingDirectory, timeLimit, token) => PlantedAsync(fileName, arguments, unknown, token),
+            FindGitleaks = () => GitleaksStandIn,
+        };
+        GateRunFacts afterTests = new(TestsTotal: 1, TestResultsDirectory: Path.Combine(project, "no-coverage-here"), TestsStarted: time.GetUtcNow());
+        (string name, GateRunFacts facts, Verdict verdict, ReasonCode reason) = step.Name switch
+        {
+            ProtectedChangesStep.StepName => ("policy: a change to lockflight.yaml since the base is listed for review", GateRunFacts.None, Verdict.Pass, ReasonCode.None),
+            FormatStep.StepName => ("format: a changed file the formatter would change fails", GateRunFacts.None, Verdict.Fail, ReasonCode.FormatNeeded),
+            BuildStep.StepName => ("build: a compile error fails", GateRunFacts.None, Verdict.Fail, ReasonCode.BuildFailed),
+            TestStep.StepName => ("test: a failing test fails", GateRunFacts.None, Verdict.Fail, ReasonCode.TestsFailed),
+            CoverageStep.StepName => ("coverage: a configured collector without a coverage report is not earned", afterTests, Verdict.NotEarned, ReasonCode.CoverageReportMissing),
+            DependencyStep.StepName => ("dependencies: a Critical advisory fails", GateRunFacts.None, Verdict.Fail, ReasonCode.VulnerablePackage),
+            SecretsStep.StepName => ("secrets: a leaked secret fails", GateRunFacts.None, Verdict.Fail, ReasonCode.SecretFound),
+            SuppressionsStep.StepName => ("suppressions: an added #pragma warning disable fails (gates.quality.suppressions: fail)", GateRunFacts.None, Verdict.Fail, ReasonCode.NewSuppressions),
+            DocsReferencesStep.StepName => ("references: a CLAUDE.md link the change broke fails (gates.docs.references: fail)", GateRunFacts.None, Verdict.Fail, ReasonCode.DocsReferencesBroken),
+            EfPendingModelChangesStep.StepName => ("EF Core: a model changed without a migration fails (dotnet-ef pinned)", GateRunFacts.None, Verdict.Fail, ReasonCode.EfMigrationMissing),
+            _ => (string.Empty, GateRunFacts.None, Verdict.Pass, ReasonCode.None),
         };
         if (name.Length == 0)
         {
@@ -202,6 +211,11 @@ internal static class GateStepCanaries
             _ => run,
         };
         GateStep result = (await step.RunAsync(judged, facts, cancellationToken)).Step;
+        if (unknown.Count > 0)
+        {
+            return new CanaryReport(name, CanaryResult.Broken, $"the stand-in tools were called with arguments they do not know, so the step judged no planted report: {string.Join("; ", unknown)}");
+        }
+
         if (step.Name == ProtectedChangesStep.StepName)
         {
             return result.Detail.Contains(Manifest.FileName, StringComparison.Ordinal)
@@ -209,7 +223,7 @@ internal static class GateStepCanaries
                 : new CanaryReport(name, CanaryResult.Missed, $"{VerdictNames.ToContractName(result.Verdict)} without the file: {result.Detail}");
         }
 
-        return CanaryReport.NotAPass(name, result);
+        return CanaryReport.Expected(name, result, verdict, reason);
     }
 
     /// <summary>A project whose last commit changes the manifest (a protected file) and a C# file, and deletes a guide CLAUDE.md links to.</summary>
@@ -239,12 +253,15 @@ internal static class GateStepCanaries
     private static Task<ProcessResult> SucceedingAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
         Task.FromResult(new ProcessResult(0, "Build succeeded.", string.Empty, 0, TimedOut: false));
 
-    /// <summary>Each tool reports its violation: the run the steps judge as a real one.</summary>
-    private static async Task<ProcessResult> PlantedAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken)
+    /// <summary>
+    /// Each tool reports its violation: the run the steps judge as a real one. A call the stand-in does not know is added to
+    /// <paramref name="unknown"/> and fails.
+    /// </summary>
+    private static async Task<ProcessResult> PlantedAsync(string fileName, IReadOnlyList<string> arguments, List<string> unknown, CancellationToken cancellationToken)
     {
         string tool = Path.GetFileNameWithoutExtension(fileName);
         string verb = arguments.Count > 0 ? arguments[0] : string.Empty;
-        if (tool != "dotnet")
+        if (tool == GitleaksStandIn && verb is "git" or "dir")
         {
             int report = arguments.ToList().IndexOf(LeakReportOption);
             if (report >= 0)
@@ -253,6 +270,11 @@ internal static class GateStepCanaries
             }
 
             return new ProcessResult(LeaksFoundExitCode, "leaks found: 1", string.Empty, 0, TimedOut: false);
+        }
+
+        if (tool != "dotnet")
+        {
+            return Unknown(fileName, arguments, unknown);
         }
 
         switch (verb)
@@ -268,10 +290,23 @@ internal static class GateStepCanaries
                 return new ProcessResult(2, $"{ChangedSource}(3,1): warning WHITESPACE: Fix whitespace formatting.", string.Empty, 0, TimedOut: false);
             case "package":
                 return new ProcessResult(0, PlantedAdvisory, string.Empty, 0, TimedOut: false);
+            case "tool" when arguments is [_, "restore", ..]:
+                return new ProcessResult(0, "Restore was successful.", string.Empty, 0, TimedOut: false);
             case "ef":
                 return new ProcessResult(1, PendingModelChanges, string.Empty, 0, TimedOut: false);
             default:
-                return new ProcessResult(1, $"unexpected arguments: {string.Join(' ', arguments)}", string.Empty, 0, TimedOut: false);
+                return Unknown(fileName, arguments, unknown);
         }
+    }
+
+    private static ProcessResult Unknown(string fileName, IReadOnlyList<string> arguments, List<string> unknown)
+    {
+        string call = $"{Path.GetFileName(fileName)} {string.Join(' ', arguments)}";
+        lock (unknown)
+        {
+            unknown.Add(call);
+        }
+
+        return new ProcessResult(1, $"unexpected arguments: {call}", string.Empty, 0, TimedOut: false);
     }
 }
