@@ -20,11 +20,13 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
    is of the executable, not of the package: nuget.org adds its repository signature to every package after the push, which
    changes the package's bytes but not the executable's.
 3. **Packs the pointer package** with `engine-hashes.json` at its root: `lockflight.engine-hashes/v1`, the version, the
-   tagged commit and the SHA-256 of each platform's executable, merged from the platform jobs (exactly five). It also writes a
-   CycloneDX software bill of materials.
+   tagged commit and the SHA-256 of each platform's executable, merged from the platform jobs (exactly five). A job of its own
+   writes a CycloneDX software bill of materials.
 4. **Verifies the hashes**, on dry runs too: every RID package is extracted again and compared with `engine-hashes.json`,
    the pointer's copy must be byte-identical, and so must the bare executables. The file that ships describes the packages
-   that ship.
+   that ship. Beside it, on dry runs too, the `preflight` job checks what would otherwise fail only after the push: the tag
+   has no GitHub Release yet, and the notes git-cliff drafts from the commits since the previous tag are not empty. It drafts
+   them with a read-only token, so git-cliff never runs where the repository can be written to.
 5. **Publishes, after approval.** The `publish` job runs in the `nuget` environment, so it waits for a required reviewer. It
    writes `SHA256SUMS` (`scripts/release-assets.sh checksums`) of the packages, the bare executables, `engine-hashes.json` and the install scripts
    (`scripts/install.sh`, `scripts/install.ps1`), records a build provenance attestation
@@ -33,17 +35,16 @@ A release publishes the `Lockflight.Cli` tool packages to nuget.org and publishe
    push: Native AOT builds are not guaranteed reproducible, so a re-run must not leave older packages beside hashes of new
    bytes (a partial push needs a new version). It then downloads every package back from nuget.org (polling for up to 30
    minutes while nuget.org validates them) and verifies them against `engine-hashes.json` again.
-6. **Publishes the GitHub Release** for the tag, with notes from git-cliff (the commits since the previous tag) and sixteen
+6. **Publishes the GitHub Release** for the tag, with the notes the `preflight` job drafted and sixteen
    files attached, each named once by `scripts/release-assets.sh assemble`: the six packages, the five bare executables,
    `engine-hashes.json`, `install.sh`, `install.ps1`, `SHA256SUMS` and the SBOM (`lockflight-<version>.cdx.json`). The
-   script checks the files against `SHA256SUMS` first; GitHub refuses a second asset of the same name, and by then the packages
+   script checks the files against `SHA256SUMS` first, and the upload step once more; GitHub refuses a second asset of the same name, and by then the packages
    are on nuget.org. The release is published at once, not drafted, so the hashes are downloadable as soon as the packages are
    on nuget.org; edit the notes afterwards.
 
 A manual dispatch from the tag (Actions → release-packages → Run workflow → "Use workflow from": the tag) with `publish` off
-is a dry run: steps 1 to 4, then the `release-dry-run` job, which writes `SHA256SUMS` and assembles the release files with
-the same script into a throw-away folder on the runner, checks that the tag has no GitHub Release yet, and drafts the
-notes. Nothing is pushed or published. A dispatch from
+is a dry run: steps 1 to 4 (the preflight checks included), then the `release-dry-run` job, which writes `SHA256SUMS` and
+assembles the release files with the same script into a throw-away folder on the runner. Nothing is pushed or published. A dispatch from
 a branch is a dry run of version `0.0.0-ci.<run number>`; its artifacts (packages and `engine-hashes.json`) can fill a test
 feed.
 
@@ -117,7 +118,7 @@ push to `main`) fails unless:
   `main`).
 
 The release pull request raises the versions on `main` while the pin still names the previous tag, so the check passes
-throughout and users stay on the previous release until the last step below.
+throughout and users stay on the previous release until step 5 below moves the pin.
 
 ## Cutting a release
 
@@ -153,6 +154,12 @@ pinned to one of those or to `ActionCommit`, and `doctor` warns about any other 
    has no release of its own), copies the descriptions from the development marketplace at the tag, and runs the check. Merge it; users
    then get the release from `claude plugin update` or auto-update. If the release is abandoned before this step, users never
    see it.
+6. Once nuget.org lists the packages, add the release's own fixtures in a pull request of its own: install the published
+   engine with `scripts/install.sh --version X.Y.Z --dir <dir>`, run
+   `schemas/fixtures/released/generate.sh X.Y.Z <dir>/lockflight` (it needs the tag in the clone, the network and a .NET
+   SDK), and commit the folder it writes, `schemas/fixtures/released/X.Y.Z/`, unedited. The released-contract tests and the
+   upgrade matrix cover every version that has a folder there, so a release without one is left out of "every released
+   version" ([public contracts](../guides/contracts.md#how-it-is-checked)).
 
 Check a published package against its attestation with
 `gh attestation verify Lockflight.Cli.X.Y.Z.nupkg --repo lockflight/lockflight`, using the file from the GitHub Release
