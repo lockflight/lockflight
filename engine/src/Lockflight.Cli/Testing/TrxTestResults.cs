@@ -14,8 +14,7 @@ internal static class TrxTestResults
 {
     public static IReadOnlyList<ExecutedTest> Parse(string assembly, string trx, Func<string, string?> exceptionTypeOf)
     {
-        XmlDocument document = new() { XmlResolver = null };
-        document.LoadXml(trx);
+        XmlDocument document = ReportXml.Load(trx);
         Dictionary<string, string> methods = new(StringComparer.Ordinal);
         foreach (XmlElement definition in document.GetElementsByTagName("UnitTest").OfType<XmlElement>())
         {

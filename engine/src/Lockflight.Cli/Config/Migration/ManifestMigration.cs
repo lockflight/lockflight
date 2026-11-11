@@ -10,7 +10,7 @@ namespace Lockflight.Cli.Config.Migration;
 /// <c>init</c> wrote are removed when they are exactly the template's, and the sections version 2 added are appended with
 /// migration values (the new checks only report; routing spells out the default preset). The edited text must parse to the
 /// settings version 1 had; otherwise nothing is written and the person gets the snippet. A byte-order mark and the file's line
-/// endings are kept; a file with more than one YAML document is left for a person.
+/// endings are kept; a file with more than one YAML document is invalid, as it is for every command.
 /// </summary>
 internal static partial class ManifestMigration
 {
@@ -57,11 +57,6 @@ internal static partial class ManifestMigration
 
         YamlStream stream = new();
         stream.Load(new StringReader(lf));
-        if (stream.Documents.Count > 1)
-        {
-            return Manual("it holds more than one YAML document", gatesPresent: false, GateToggles);
-        }
-
         YamlMappingNode? rootNode = stream.Documents.Count == 1 ? stream.Documents[0].RootNode as YamlMappingNode : null;
         YamlMappingNode? gates = Child(rootNode, "gates") as YamlMappingNode;
         List<string> lines = [.. lf.Split('\n')];

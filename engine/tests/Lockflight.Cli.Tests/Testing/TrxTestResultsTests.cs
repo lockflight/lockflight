@@ -1,3 +1,4 @@
+using System.Xml;
 using Lockflight.Cli.Testing;
 
 namespace Lockflight.Cli.Tests.Testing;
@@ -50,4 +51,16 @@ public sealed class TrxTestResultsTests
     [InlineData("Shop.Tests.Outer+Inner", "Shop.Tests.Outer+Inner")]
     [InlineData("Shop.Tests.Box<Int32>", "Shop.Tests.Box")]
     public void ArgumentsAreDroppedFromNames(string name, string expected) => Assert.Equal(expected, TrxTestResults.WithoutArguments(name));
+
+    [Fact]
+    public void AReportWithADocumentTypeDefinitionIsRefused()
+    {
+        const string trx = """
+            <?xml version="1.0"?>
+            <!DOCTYPE TestRun [ <!ENTITY a "aaaaaaaaaa"> <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;"> ]>
+            <TestRun><Results><UnitTestResult testName="&b;" outcome="Passed" /></Results></TestRun>
+            """;
+
+        Assert.Throws<XmlException>(() => TrxTestResults.Parse("Shop.Tests", trx, TrxFailureMessages.NUnit));
+    }
 }

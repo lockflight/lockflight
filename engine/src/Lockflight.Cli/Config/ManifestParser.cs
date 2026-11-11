@@ -46,6 +46,12 @@ internal sealed class ManifestParser(string root, string path)
             return ManifestLoadResult.Invalid(errors.AtStart("the manifest must be a mapping of keys"));
         }
 
+        if (stream.Documents.Count > 1)
+        {
+            // A second document after "---" would otherwise be ignored without a word: a file a person writes is read strictly.
+            return Invalid(stream.Documents[1].RootNode.Start, "the manifest must be one YAML document: remove the '---' and what follows it, or merge it into the first");
+        }
+
         return ParseRoot(rootNode);
     }
 

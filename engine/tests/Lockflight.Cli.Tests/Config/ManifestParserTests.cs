@@ -297,4 +297,13 @@ public sealed class ManifestParserTests
         Assert.Equal(ManifestLoadStatus.Invalid, result.Status);
         Assert.Contains(message, result.Error!.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ASecondYamlDocumentIsAnErrorNotIgnored()
+    {
+        ManifestLoadResult result = Parse("version: 2\n---\nprotected:\n  - secrets/**\n");
+
+        Assert.Contains("must be one YAML document", result.Error!.Message, StringComparison.Ordinal);
+        Assert.Equal(3, result.Error.Line);
+    }
 }

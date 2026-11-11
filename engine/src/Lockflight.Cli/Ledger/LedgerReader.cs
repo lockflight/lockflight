@@ -35,7 +35,7 @@ internal static class LedgerReader
         {
             using JsonDocument document = JsonDocument.Parse(line);
             JsonElement root = document.RootElement;
-            if (!DateTimeOffset.TryParse(Text(root, "ts"), CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTimeOffset at))
+            if (root.ValueKind != JsonValueKind.Object || !DateTimeOffset.TryParse(Text(root, "ts"), CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTimeOffset at))
             {
                 return null;
             }

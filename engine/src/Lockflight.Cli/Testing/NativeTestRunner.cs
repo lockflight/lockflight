@@ -96,8 +96,7 @@ internal static class NativeTestRunner
 
     public static IReadOnlyList<ExecutedTest> Parse(string assembly, string xml)
     {
-        XmlDocument document = new() { XmlResolver = null };
-        document.LoadXml(xml);
+        XmlDocument document = ReportXml.Load(xml);
         List<ExecutedTest> results = [];
         foreach (XmlElement test in document.GetElementsByTagName("test").OfType<XmlElement>())
         {

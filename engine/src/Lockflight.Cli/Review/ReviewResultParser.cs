@@ -12,6 +12,18 @@ internal static class ReviewResultParser
 {
     public static ReviewOutcome Parse(string output)
     {
+        try
+        {
+            return ParseEnvelope(output);
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            return Failed($"claude's output could not be read: {exception.Message}");
+        }
+    }
+
+    private static ReviewOutcome ParseEnvelope(string output)
+    {
         int start = output.IndexOf('{', StringComparison.Ordinal);
         if (start < 0)
         {
@@ -31,7 +43,7 @@ internal static class ReviewResultParser
             ? structured.GetRawText()
             : Text(root, "result");
         int objectStart = result.IndexOf('{', StringComparison.Ordinal);
-        if (objectStart < 0)
+        if (objectStart < 0 || result.LastIndexOf('}') < objectStart)
         {
             return Failed($"the review is not JSON: {First(result)}") with { CostUsd = cost, DurationMs = duration };
         }

@@ -9,7 +9,7 @@ internal enum ManifestMigrationStatus
     /// <summary>The edited text is ready to write; it parses to the settings version 1 had, with the new sections spelled out.</summary>
     Migrated = 2,
 
-    /// <summary>The file could not be edited safely (more than one YAML document, a flow-style section, a check set half-way);
+    /// <summary>The file could not be edited safely (a flow-style section, a check set half-way);
     /// nothing is written and the person gets the snippet to add by hand.</summary>
     ManualEdit = 3,
 

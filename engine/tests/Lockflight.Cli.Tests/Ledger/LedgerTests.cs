@@ -52,4 +52,10 @@ public sealed class LedgerTests : IDisposable
     }
 
     public void Dispose() => projectRoot.Delete(recursive: true);
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("[]")]
+    [InlineData("\"text\"")]
+    public void ALedgerLineThatIsNotAnObjectIsSkipped(string line) => Assert.Null(LedgerReader.Parse(line));
 }
