@@ -63,6 +63,18 @@ public sealed class EvidenceCrossCheckTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task EvidenceThatPassesPolicyWhenTheManifestIsLoosenedIsRefused()
+    {
+        head = await repository.Write("lockflight.yaml", "version: 2\nci:\n  maxRedCommits: 50\n").CommitAsync("chore: more red commits", TestContext.Current.CancellationToken);
+        JsonObject evidence = await EvidenceAsync();
+        JsonNode policy = evidence["checks"]!.AsArray().Single(check => check!["id"]!.GetValue<string>() == "policy")!;
+        Assert.Equal("FAIL", policy["verdict"]!.GetValue<string>());
+        policy["verdict"] = "PASS";
+
+        Assert.Contains("it has policy PASS, and git alone makes it FAIL", await MismatchAsync(evidence), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task EvidenceWithoutTheEngineVersionIsRefused()
     {
         JsonObject evidence = await EvidenceAsync();

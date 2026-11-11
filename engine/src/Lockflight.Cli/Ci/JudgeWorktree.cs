@@ -143,7 +143,9 @@ internal sealed class JudgeWorktree
         {
             if (Directory.Exists(Root))
             {
-                foreach (FileInfo file in new DirectoryInfo(Root).EnumerateFiles("*", SearchOption.AllDirectories))
+                // A link the pull request committed is not followed: its target is outside the worktree.
+                EnumerationOptions withinTheWorktree = new() { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
+                foreach (FileInfo file in new DirectoryInfo(Root).EnumerateFiles("*", withinTheWorktree))
                 {
                     file.Attributes = FileAttributes.Normal;
                 }
