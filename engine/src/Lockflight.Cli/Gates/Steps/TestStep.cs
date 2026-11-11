@@ -352,7 +352,7 @@ internal sealed partial class TestStep : IGateStep
     [GeneratedRegex(@"^\s*Exit code: 5\s*$", RegexOptions.Multiline)]
     private static partial Regex ModuleExitedWithInvalidCommandLine();
 
-    [GeneratedRegex(@"total:\s*(\d+)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^\s*total:\s*(\d+)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex TestsTotalPattern();
 
     [GeneratedRegex(@"^\s*failed:\s*(\d+)\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]

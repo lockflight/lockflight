@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using Lockflight.Cli.Processes;
 
@@ -18,6 +19,29 @@ public sealed class ProcessRunnerTests : IDisposable
         Assert.True(result.TimedOut);
         Assert.Equal(ProcessRunner.TimedOutExitCode, result.ExitCode);
         Assert.True(result.DurationMs < 10_000);
+    }
+
+    [Fact]
+    public async Task ACallersCancellationKillsTheWholeProcessTreeAndIsRethrown()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Uses the POSIX sh and sleep commands.");
+        string pidFile = Path.Combine(directory.FullName, "pid");
+        using CancellationTokenSource cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        Task<ProcessResult> run = ProcessRunner.RunAsync("sh", ["-c", $"sleep 30 & echo $! > '{pidFile}.tmp' && mv '{pidFile}.tmp' '{pidFile}'; wait"], directory.FullName, Timeout.InfiniteTimeSpan, cancel.Token);
+        Assert.True(SpinWait.SpinUntil(() => File.Exists(pidFile), TimeSpan.FromSeconds(30)), "the child never started its own child");
+        int grandchild = int.Parse(File.ReadAllText(pidFile).Trim(), CultureInfo.InvariantCulture);
+
+        await cancel.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        Assert.True(SpinWait.SpinUntil(() => !IsRunning(grandchild), TimeSpan.FromSeconds(10)), $"process {grandchild} outlived the cancelled run");
+    }
+
+    [Fact]
+    public void ChildProcessesSpeakEnglishSoTheirSummariesCanBeRead()
+    {
+        Assert.Equal("en", ProcessRunner.EngineVariables["DOTNET_CLI_UI_LANGUAGE"]);
+        Assert.Equal("en", ProcessRunner.EngineVariables["TESTINGPLATFORM_UI_LANGUAGE"]);
     }
 
     [Fact]
@@ -241,6 +265,19 @@ public sealed class ProcessRunnerTests : IDisposable
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
             // Already gone.
+        }
+    }
+
+    private static bool IsRunning(int processId)
+    {
+        try
+        {
+            using Process process = Process.GetProcessById(processId);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
         }
     }
 }

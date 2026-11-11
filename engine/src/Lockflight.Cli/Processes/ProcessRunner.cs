@@ -44,6 +44,12 @@ internal static class ProcessRunner
         ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
         ["DOTNET_NOLOGO"] = "1",
 
+        // The gates read the SDK's and the test platforms' summaries (MTP's "total:", "failed …"), which a translated SDK would
+        // print in the machine's language: English for the CLI and MSBuild, Microsoft.Testing.Platform and VSTest.
+        ["DOTNET_CLI_UI_LANGUAGE"] = "en",
+        ["TESTINGPLATFORM_UI_LANGUAGE"] = "en",
+        ["VSLANG"] = "1033",
+
         // Read-only git calls (status, diff) must not take index.lock and collide with the user's or the agent's own commit.
         ["GIT_OPTIONAL_LOCKS"] = "0",
 
@@ -55,7 +61,10 @@ internal static class ProcessRunner
     public static Task<ProcessResult> RunAsync(string fileName, IEnumerable<string> arguments, string workingDirectory, CancellationToken cancellationToken) =>
         RunAsync(fileName, arguments, workingDirectory, Timeout.InfiniteTimeSpan, cancellationToken);
 
-    /// <summary>Runs the process; past <paramref name="timeLimit"/> the whole process tree is killed (build servers and test hosts included).</summary>
+    /// <summary>
+    /// Runs the process; past <paramref name="timeLimit"/>, or when <paramref name="cancellationToken"/> is cancelled (then the
+    /// cancellation is rethrown), the whole process tree is killed (build servers and test hosts included).
+    /// </summary>
     public static Task<ProcessResult> RunAsync(
         string fileName, IEnumerable<string> arguments, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
         RunAsync(fileName, arguments, workingDirectory, timeLimit, standardInputPath: null, cancellationToken);
@@ -139,10 +148,16 @@ internal static class ProcessRunner
 
             await process.WaitForExitAsync(limit.Token);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Killed whether the time limit or the caller stopped it: a cancelled build must not go on writing into the tree.
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync(CancellationToken.None);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+
             timedOut = true;
         }
 
@@ -202,10 +217,16 @@ internal static class ProcessRunner
 
             await process.WaitForExitAsync(limit.Token);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Killed whether the time limit or the caller stopped it: a cancelled build must not go on writing into the tree.
             process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync(CancellationToken.None);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+
             timedOut = true;
         }
 

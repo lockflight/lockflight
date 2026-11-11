@@ -12,6 +12,17 @@ public sealed class TestStepTests
     private static readonly HashSet<string> Known = new(StringComparer.Ordinal) { "Shop.Tests.Legacy.Flaky" };
 
     [Fact]
+    public void ATotalPrintedByATestIsNotTheRunnersCount()
+    {
+        GateStep step = TestStep.JudgeTestingPlatform(
+            new ProcessResult(0, "order subtotal: 99 computed\nTest run summary: Passed!\n  total: 3\n  failed: 0\n  succeeded: 3\n", string.Empty, 0, TimedOut: false), stopFilter: null);
+
+        Assert.Equal(Verdict.Pass, step.Verdict);
+        Assert.Contains("3", step.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("102", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void KnownFailuresThatAccountForEveryCountedFailurePass()
     {
         GateStep step = Judge("failed Shop.Tests.Legacy.Flaky (12ms)\nTest run summary: Failed!\n  total: 10\n  failed: 1\n  succeeded: 9\n");
