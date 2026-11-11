@@ -17,7 +17,8 @@ internal sealed record ShellRedirection(int Length, ShellTokenKind? Kind, bool? 
         return command[index] switch
         {
             '&' when At(1) == '>' => new ShellRedirection(At(2) == '>' ? 3 : 2, ShellTokenKind.WriteRedirect, null),
-            '>' => Output(command, index, At(1) is '>' or '|' ? 2 : 1),
+            // ">|" and zsh's ">!", ">>|" and ">>!" write past noclobber: the "|" or "!" is part of the operator, not the target.
+            '>' => Output(command, index, (At(1) == '>' ? 2 : 1) + (At(At(1) == '>' ? 2 : 1) is '|' or '!' ? 1 : 0)),
             // zsh reads "<<(" as "<" and a process substitution; bash refuses it.
             '<' when At(1) == '<' && At(2) == '(' => new ShellRedirection(1, ShellTokenKind.InputRedirect, null),
             '<' when At(1) == '<' && At(2) == '<' => new ShellRedirection(3, ShellTokenKind.HereText, null),
