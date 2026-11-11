@@ -332,10 +332,7 @@ public sealed class UpdateCommandTests : IDisposable
     [Fact]
     public void TheInstalledVersionIsReadFromTheEngineLink()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Links the user's engine with a POSIX symbolic link.");
 
         string tool = Path.Combine(home.FullName, ".lockflight", "tools", "0.2.0-dev.20261015000000", "lockflight");
         Directory.CreateDirectory(Path.GetDirectoryName(tool)!);

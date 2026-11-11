@@ -13,10 +13,7 @@ public sealed class EngineCommandTests
     [InlineData("/home/u/.nuget/packages/lockflight.cli/0.2.0/tools/lockflight", EngineCommand.Tool)]
     public void TheCommandFollowsWhereTheEngineRunsFrom(string processPath, string expected)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The process paths are POSIX paths.");
 
         Assert.Equal(expected, EngineCommand.For(processPath, "/home/u"));
     }

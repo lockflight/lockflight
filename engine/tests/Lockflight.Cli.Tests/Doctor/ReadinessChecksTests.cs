@@ -746,10 +746,7 @@ public sealed class ReadinessChecksTests : IDisposable
     [InlineData(DevelopmentVersion, "0.2.0-alpha.4")]
     public void ADevelopmentPinWithAReleaseInstalledIsMovedToTheRelease(string pinned, string installed)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Links the user's engine with a POSIX symbolic link.");
 
         PinEngine(pinned);
         string home = HomeWithEngineLinkedTo(installed);
@@ -768,10 +765,7 @@ public sealed class ReadinessChecksTests : IDisposable
     [InlineData("0.2.0-alpha.5.dev.20261016000000")]
     public void ADevelopmentPinWithNoReleaseAtItsBaseInstalledIsCheckedForRestoreOnly(string installed)
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Links the user's engine with a POSIX symbolic link.");
 
         PinEngine("0.2.0-alpha.4.dev.20261015101143");
         string home = HomeWithEngineLinkedTo(installed);

@@ -63,10 +63,7 @@ public sealed class TestFileHashesTests : IDisposable
     [Fact]
     public void AnUnreadableLinkDoesNotStopTheHashing()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Creates a dangling symbolic link, which Windows allows only with developer mode.");
 
         File.CreateSymbolicLink(Path.Combine(root.FullName, "tests", "Shop.Tests", "Dangling.cs"), Path.Combine(root.FullName, "missing.cs"));
 
