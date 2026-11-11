@@ -53,9 +53,13 @@ internal sealed class ApproveCommand(CliContext context) : ICommand
 
     private async Task<ExitCode> ApproveAsync(Manifest manifest, Feature feature, ApprovalPhase phase, CommandOptions options, CancellationToken cancellationToken)
     {
-        string primary = Path.Combine(feature.SpecDirectory, ApprovalPhaseNames.ArtifactsOf(phase)[0]);
-        if (!File.Exists(primary))
+        // Each artifact is read once before the phase check, and the record binds those hashes: content swapped in while the
+        // check ran is neither checked nor recorded.
+        ApprovalStore store = new(feature);
+        IReadOnlyList<ArtifactSnapshot> snapshot = store.Snapshot(phase);
+        if (snapshot[0].Content is null)
         {
+            string primary = Path.Combine(feature.SpecDirectory, snapshot[0].Name);
             await context.Error.WriteLineAsync($"lockflight: {Path.GetRelativePath(manifest.Root, primary)} does not exist; nothing to approve");
             return ExitCode.Config;
         }
@@ -66,9 +70,15 @@ internal sealed class ApproveCommand(CliContext context) : ICommand
             return ExitCode.Fail;
         }
 
-        ApprovalStore store = new(feature);
+        (string Name, string Hash)[] artifacts = [.. snapshot.Select(artifact => (artifact.Name, artifact.Hash))];
+        if (!store.CurrentHashes(phase).SequenceEqual(artifacts))
+        {
+            await context.Error.WriteLineAsync($"lockflight: nothing was approved: the {ApprovalPhaseNames.ToName(phase)} changed while it was checked; run the command again.");
+            return ExitCode.Fail;
+        }
+
         ApprovalRecording recording = await new ApprovalRecorder(context, manifest.Root).RecordAsync(
-            feature, phase, [.. store.CurrentHashes(phase)], ApprovalChannel.Terminal, cancellationToken);
+            feature, phase, artifacts, ApprovalChannel.Terminal, cancellationToken);
         string record = Path.GetRelativePath(manifest.Root, recording.RecordPath);
         await context.Output.WriteLineAsync($"Approved {ApprovalPhaseNames.ToName(phase)} of {feature.Id} as {recording.ApprovedBy}: {record}");
         return ExitCode.Pass;
