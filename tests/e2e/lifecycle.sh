@@ -55,7 +55,7 @@ cat > $F/spec.md <<'MD'
 - **FR-003**: Orders of 50.00 or more MUST ship free
 MD
 expect 0 "specify phase passes" -- "$E" phase check specify
-expect 1 "tasks phase fails before approval and tasks.md" -- "$E" phase check tasks
+expect 1 "tasks phase fails before approval and tasks.md" "tasks.md (and spec.md) must exist" -- "$E" phase check tasks
 expect 2 "the agent cannot approve" "records a human decision" -- "$E" approve spec
 expect 0 "a person approves the spec" -- human approve spec
 cat > $F/tasks.md <<'MD'
@@ -86,11 +86,11 @@ cat > $F/tasks.md <<'MD'
 - [ ] T021 [US2] (FR-003) Free shipping at 50.00 or more
 MD
 expect 0 "tasks phase passes" -- "$E" phase check tasks
-expect 1 "red/green needs the tasks approval" -- "$E" redgreen start
+expect 1 "red/green needs the tasks approval" "tasks is not approved" -- "$E" redgreen start
 expect 0 "a person approves the tasks" -- human approve tasks
 expect 0 "baseline taken; its regression pass leaves out the Docker test by test.stopFilter" "test.stopFilter 'Category!=Integration' left out 1 test" -- "$E" redgreen start
 expect 0 "status shows the baseline's regression filter" "baseline regression pass: test.stopFilter 'Category!=Integration' left out 1 test" -- "$E" redgreen status
-expect 1 "baseline is write-once" -- "$E" redgreen start
+expect 1 "baseline is write-once" "it is never retaken by the agent" -- "$E" redgreen start
 calc=src/Shop.Api/PriceCalculator.cs
 # Declare the stub: replace the class's closing brace.
 perl -0pi -e 's/\}\s*\z/\n    \/\/\/ <summary>Shipping cost (FR-001, FR-002, FR-003).<\/summary>\n    public decimal ShippingCost(decimal weightKg, decimal subtotal) => throw new NotImplementedException();\n}\n/' "$calc"

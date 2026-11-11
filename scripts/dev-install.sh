@@ -42,8 +42,8 @@ case "$(uname -s)-$(uname -m)" in
 esac
 
 # The version follows the commit, so the same code always gets the same version and a project's pin goes stale only when the
-# code changed. A checkout with uncommitted changes gets the time instead.
-if [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+# code changed. A checkout with uncommitted changes, a new untracked file included, gets the time instead.
+if [ -z "$(git -C "$REPO" status --porcelain 2>/dev/null)" ]; then
   stamp=$(TZ=UTC git -C "$REPO" log -1 --format=%cd --date=format-local:%Y%m%d%H%M%S)
 else
   stamp=$(date -u +%Y%m%d%H%M%S)

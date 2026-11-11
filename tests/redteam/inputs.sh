@@ -79,6 +79,8 @@ if [ -L "$W/link-test" ]; then
     LF_BRANCH="" LF_EVENT=pr LF_REVIEW=false LF_SHELL_CLONE=false PLANT_LINK="$W/planted/artifacts/lockflight/result.json"
   if [ -e "$W/runner-temp/lockflight-result/result.json" ]; then bad "a symlinked gates result was uploaded"
   else ok "a gates result that is a symlink is not uploaded"; fi
+elif [ -n "${CI:-}" ] && ! $windows; then
+  bad "no symlink could be made, so a symlinked gates result was not tested"
 else
   echo "skip a symlinked gates result: this platform made no symlink"
 fi

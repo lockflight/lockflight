@@ -59,7 +59,16 @@ function Get-Url([string]$Url, [string]$OutFile, [bool]$WithCredentials) {
     $pair = [Text.Encoding]::UTF8.GetBytes("$($env:LOCKFLIGHT_NUGET_USER):$($env:LOCKFLIGHT_NUGET_TOKEN)")
     $headers["Authorization"] = "Basic " + [Convert]::ToBase64String($pair)
   }
-  Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $OutFile -Headers $headers -MaximumRedirection 5
+  $response = Invoke-WebRequest -UseBasicParsing -Uri $Url -OutFile $OutFile -Headers $headers -MaximumRedirection 5 -PassThru
+  # Only https, also after redirects, as install.sh's --proto-redir '=https': Windows PowerShell follows a redirect from https to
+  # http. The address the content came from is BaseResponse.ResponseUri there and the request's RequestUri in PowerShell 7.
+  $final = $null
+  if ($response.BaseResponse.ResponseUri) { $final = $response.BaseResponse.ResponseUri }
+  elseif ($response.BaseResponse.RequestMessage) { $final = $response.BaseResponse.RequestMessage.RequestUri }
+  if ($final -and $final.Scheme -ne "https") {
+    Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+    throw "$Url redirected to $final, which is not https"
+  }
 }
 
 function Get-FeedBase {
