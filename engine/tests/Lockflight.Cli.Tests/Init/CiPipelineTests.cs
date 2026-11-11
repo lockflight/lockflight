@@ -24,7 +24,7 @@ public sealed class CiPipelineTests
         Assert.Contains("git -c core.quotePath=false ls-tree -r --name-only \"$BASE\" -- \"$directory\" | while IFS= read -r file;", pipeline, StringComparison.Ordinal);
         Assert.DoesNotContain("git checkout \"$BASE\" -- \"$directory\"", pipeline, StringComparison.Ordinal);
         Assert.Contains($"style={CiShellScripts.StylePattern}", pipeline, StringComparison.Ordinal);
-        Assert.Contains("{ git ls-tree -r --name-only \"$BASE\"; git ls-files; }", pipeline, StringComparison.Ordinal);
+        Assert.Contains("{ git -c core.quotePath=false ls-tree -r --name-only \"$BASE\"; git -c core.quotePath=false ls-files; }", pipeline, StringComparison.Ordinal);
     }
 
     [Theory]

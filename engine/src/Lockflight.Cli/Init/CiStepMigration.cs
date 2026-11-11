@@ -35,7 +35,10 @@ internal static class CiStepMigration
     ];
 
     private const string LegacyGitHubStyleLoop = "{ git ls-tree -r --name-only \"$BASE\"; git ls-files; } | grep -E \"$style\" | sort -u | while IFS= read -r file; do";
-    private const string StyleLoop = "{ git ls-tree -r --name-only \"$BASE\"; git ls-files; } | { grep -E \"$style\" || true; } | sort -u | while IFS= read -r file; do";
+    /// <summary>The style loop up to 0.5, which listed a non-ASCII path quoted, so its file was never restored from the base.</summary>
+    private const string PreviousStyleLoop = "{ git ls-tree -r --name-only \"$BASE\"; git ls-files; } | { grep -E \"$style\" || true; } | sort -u | while IFS= read -r file; do";
+
+    private const string StyleLoop = "{ git -c core.quotePath=false ls-tree -r --name-only \"$BASE\"; git -c core.quotePath=false ls-files; } | { grep -E \"$style\" || true; } | sort -u | while IFS= read -r file; do";
 
     private static readonly string[] Directories =
     [
@@ -334,6 +337,8 @@ internal static class CiStepMigration
                 lines.InsertRange(at, Directories[2..].Select(line => directoryIndent + line));
             }
 
+            UpdateStyleLoop(lines);
+
             // A checkout restore left that is not the block Lockflight wrote (hand-edited) is not half migrated: the person merges it.
             return !lines.Any(line => line.Contains("git checkout \"$BASE\" -- \"$directory\"", StringComparison.Ordinal));
         }
@@ -342,6 +347,7 @@ internal static class CiStepMigration
         if (previous.Length == 1)
         {
             lines[previous[0]] = Indent(lines[previous[0]]) + $"for file in {CiShellScripts.PolicyFiles}; do";
+            UpdateStyleLoop(lines);
             return true;
         }
 
@@ -354,16 +360,23 @@ internal static class CiStepMigration
         lines[legacy[0]] = Indent(lines[legacy[0]]) + $"for file in {CiShellScripts.PolicyFiles}; do";
         RestoreCommittedFile(lines, legacy[0]);
 
-        // The GitHub workflow's style loop failed under bash -e on a base without style files; it now tolerates none, as the others do.
-        int[] styleLoop = [.. Indexes(lines, line => line.Trim() == LegacyGitHubStyleLoop)];
+        UpdateStyleLoop(lines);
+        lines.RemoveRange(start, LegacyBaselines.Length);
+        lines.InsertRange(start, Directories.Select(line => indent + line));
+        return true;
+    }
+
+    /// <summary>
+    /// The style loop lists paths unquoted, so a non-ASCII one is restored from the base too. The GitHub workflow's legacy loop also
+    /// failed under bash -e on a base without style files; it now tolerates none, as the others do.
+    /// </summary>
+    private static void UpdateStyleLoop(List<string> lines)
+    {
+        int[] styleLoop = [.. Indexes(lines, line => line.Trim() is LegacyGitHubStyleLoop or PreviousStyleLoop)];
         if (styleLoop.Length == 1)
         {
             lines[styleLoop[0]] = Indent(lines[styleLoop[0]]) + StyleLoop;
         }
-
-        lines.RemoveRange(start, LegacyBaselines.Length);
-        lines.InsertRange(start, Directories.Select(line => indent + line));
-        return true;
     }
 
     /// <summary>The policy file loop at <paramref name="loop"/> restores each file's committed bytes rather than checking it out.</summary>
