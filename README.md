@@ -58,7 +58,8 @@ It is best effort; CI is the definition of done.
 **🔒 Rules the agent shouldn't edit**
 
 The guard blocks the agent's common edits to the policy, CI and build config, `echo … >> lockflight.yaml` included. CI
-judges every pull request with the target branch's policy, so what slips past is still caught there.
+judges every pull request with the target branch's policy and lists the protected files it changes, for a required
+code-owner review to decide.
 
 </td>
 </tr>
@@ -68,7 +69,7 @@ judges every pull request with the target branch's policy, so what slips past is
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) to install the engine. Your projects can target .NET 8, 9
 or 10. On Windows, follow [install on Windows](docs/guides/getting-started.md#install-on-windows) instead of step 1. The CI
-judge runs on GitHub-hosted Linux runners for now.
+judge runs on GitHub-hosted Linux x64 and Windows x64 runners.
 
 ### With Claude Code (recommended)
 
@@ -211,7 +212,7 @@ Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-
 | Runs build and tests before the agent says "done" (opt-in Stop gate) | — | — | ✅ |
 | Checks every requirement has a test | — | — | ✅ |
 | Blocks the merge when required | — | ✅ | ✅ |
-| A PR can't weaken the checks that judge it | — | — | ✅¹ |
+| A PR can't change the policy and engine that judge it | — | — | ✅¹ |
 
 <sub>¹ With `lockflight/judge` required, and CODEOWNERS with required code-owner review on `lockflight.yaml`, `.lockflight/`, `.github/workflows/**`, `.github/actions/**` and build files ([CI hardening](docs/guides/ci-hardening.md)).</sub>
 
@@ -229,8 +230,8 @@ Every control is labelled in [guardrails and boundaries](docs/guides/guardrails-
 | CI service | Runner | State |
 |---|---|---|
 | GitHub Actions | GitHub-hosted Linux x64 | supported |
-| GitHub Actions | Windows | not yet: being added |
-| GitHub Actions | macOS, Linux arm64 | not supported: gitleaks is downloaded for Linux x64 only |
+| GitHub Actions | GitHub-hosted Windows x64 | supported |
+| GitHub Actions | macOS, Linux arm64 | not supported: CI does not run the action there |
 | Bitbucket Pipelines | .NET SDK image (Linux x64) | the judge, from a template never run on a live workspace: unverified |
 | GitLab CI/CD, Azure Pipelines | Linux x64 | the gates only, experimental: unverified on the live services (Azure not run at all) |
 

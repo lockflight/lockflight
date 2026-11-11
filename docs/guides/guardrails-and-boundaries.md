@@ -412,7 +412,8 @@ removes or empties its record, and checks that writes are refused (its twin, the
 self-test's **linked engine** canary checks the same refusal in `doctor`, which fails an engine without a record; the `.claude/settings.json` deny rules and sandbox write denials are
 configuration, not a refusal, so `doctor` reports a missing one (**deny rules**, **sandbox**) and its tests remove one after `init`. A caught canary shows that a control works on the planted case, not that
 nothing can get around it: the labels above still apply. Editing an existing hard link to a protected file is not caught by
-the guard (the guard sees paths, and hard links share none); CI with the base branch's policy catches the change.
+the guard (the guard sees paths, and hard links share none); CI lists the changed protected file for the code-owner review
+(`policy.protected`), and fails a loosened `lockflight.yaml` (`policy`).
 
 ## What this means in practice
 

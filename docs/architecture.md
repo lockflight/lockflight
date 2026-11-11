@@ -150,8 +150,10 @@ equivalents) to catch accidents; a command whose writes the guard does not parse
 on the operating system refuses a shell command's write to them however the command hides it
 ([the Claude Code sandbox](guides/guardrails-and-boundaries.md#the-claude-code-sandbox)).
 
-The guard is a guardrail: the agent runs with your credentials. The boundary for the same files is CI, which reads the policy
-from the base branch and fails a pull request that changes protected files without a person's review.
+The guard is a guardrail: the agent runs with your credentials. CI reads the policy from the base branch: it lists the
+protected files a pull request changes (`policy.protected`, which reports and never fails) and fails a pull request whose
+`lockflight.yaml` is looser than the base's (`policy`). The boundary for the same files is a required code-owner review of
+them, with the judge as a required check ([CODEOWNERS](guides/ci-hardening.md#what-you-add-codeowners-for-the-protected-paths)).
 
 ## Gates
 
