@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace Lockflight.Cli.Review;
 
@@ -8,7 +9,9 @@ namespace Lockflight.Cli.Review;
 /// <c>yarn.lock</c>), an EF Core model snapshot (<c>Migrations/*ModelSnapshot.cs</c>), and a migration's designer file
 /// (<c>Migrations/&lt;name&gt;.Designer.cs</c>) when its migration <c>&lt;name&gt;.cs</c> is in the diff or the tree (the
 /// migration itself stays in the diff). A snapshot or designer file whose content does not look like EF Core's generated code
-/// (<see cref="EfGeneratedCode"/>) is shown in full. A file's own marks (an <c>// &lt;auto-generated /&gt;</c> header alone, or
+/// (<see cref="EfGeneratedCode"/>) is shown in full, and so is a lock file whose content does not have its format's shape (a JSON
+/// lock file that is not a JSON object, a YAML or yarn lock file with a <c>;</c>): a project can compile a file of any name, so a
+/// lock file's name alone would hide C# from the reviewer. A file's own marks (an <c>// &lt;auto-generated /&gt;</c> header alone, or
 /// <c>linguist-generated</c> in <c>.gitattributes</c>) are never trusted: the change under review could add them. A file that is not
 /// in the working tree (deleted), is a symbolic link, or whose path git quoted, is shown in full. Names are compared ignoring case,
 /// as the guard's globs are.
@@ -38,7 +41,8 @@ internal static class GeneratedFiles
         }
 
         byte[] content = File.ReadAllBytes(file.FullName);
-        if (!IsLockFile(path) && !LooksGenerated(path, File.ReadAllText(file.FullName)))
+        string text = File.ReadAllText(file.FullName);
+        if (IsLockFile(path) ? !LooksLikeLockFile(path, text) : !LooksGenerated(path, text))
         {
             return null;
         }
@@ -93,6 +97,25 @@ internal static class GeneratedFiles
 
     private static bool LooksGenerated(string path, string content) =>
         path.EndsWith(SnapshotSuffix, StringComparison.OrdinalIgnoreCase) ? EfGeneratedCode.IsModelSnapshot(content) : EfGeneratedCode.IsMigrationDesigner(content);
+
+    private static bool LooksLikeLockFile(string path, string content)
+    {
+        if (!path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+        {
+            // pnpm and yarn lock files hold YAML or yarn's own key-value lines, which never need a ';'; C# that does anything does.
+            return !content.Contains(';', StringComparison.Ordinal);
+        }
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(content);
+            return document.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     private static bool IsLockFile(string path) => LockFiles.Contains(FileName(path), StringComparer.OrdinalIgnoreCase);
 

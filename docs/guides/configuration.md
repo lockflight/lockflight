@@ -99,7 +99,7 @@ edits (a file moved unchanged is a few lines naming the old and new path), so a 
 much smaller than its file count suggests. Raise it for a change that cannot be split, up to
 the engine's ceiling of 400,000 (a value outside 10,000 to 400,000 is a configuration error). A larger diff costs more tokens,
 so `review.maxUsd` may need raising with it. Generated files (package lock files, EF Core model snapshots and migration
-designer files, chosen by path and, for the EF files, by the shape of their content) are listed by path, size and hash instead
+designer files, chosen by path and by the shape of their content) are listed by path, size and hash instead
 of shown and do not count toward the limit; see [`review`](commands.md). The run file records the limit under `settings`.
 `lockflight.yaml` is a protected path, so the guard hooks refuse an agent's edit to the limit; that is a guardrail, not a
 boundary. The boundary is on the server: the [CI workflow](ci-hardening.md) takes `lockflight.yaml` from the base branch, and

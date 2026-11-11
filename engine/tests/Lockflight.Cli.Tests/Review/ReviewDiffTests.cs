@@ -82,14 +82,13 @@ public sealed class ReviewDiffTests : IDisposable
     }
 
     [Theory]
-    [InlineData("packages.lock.json")]
-    [InlineData("src/Shop/packages.lock.json")]
-    [InlineData("web/package-lock.json")]
-    [InlineData("web/pnpm-lock.yaml")]
-    [InlineData("web/yarn.lock")]
-    public void ALockFileIsListedWithItsSizeAndHashAndNotShown(string path)
+    [InlineData("packages.lock.json", "{ \"version\": 1 }\n")]
+    [InlineData("src/Shop/packages.lock.json", "{ \"version\": 2, \"dependencies\": {} }\n")]
+    [InlineData("web/package-lock.json", "{ \"lockfileVersion\": 3 }\n")]
+    [InlineData("web/pnpm-lock.yaml", "lockfileVersion: '9.0'\npackages:\n  left-pad@1.3.0:\n    resolution: {integrity: sha512-abc}\n")]
+    [InlineData("web/yarn.lock", "# yarn lockfile v1\n\nleft-pad@^1.3.0:\n  version \"1.3.0\"\n")]
+    public void ALockFileIsListedWithItsSizeAndHashAndNotShown(string path, string content)
     {
-        string content = "{ \"version\": 1 }\n";
         Write(path, content);
         string orders = Section("src/Orders.cs", 10);
         string diff = orders + Section(path, 50);
@@ -183,6 +182,21 @@ public sealed class ReviewDiffTests : IDisposable
 
         Assert.Empty(fitted.Generated);
         Assert.Equal(diff, fitted.Shown);
+    }
+
+    [Theory]
+    [InlineData("packages.lock.json")]
+    [InlineData("web/pnpm-lock.yaml")]
+    [InlineData("web/yarn.lock")]
+    public void CodeInAFileWithALockFilesNameIsShownNotListed(string path)
+    {
+        Write(path, "namespace Shop;\n\npublic static class Hidden\n{\n    public static int Answer() => 42;\n}\n");
+        string diff = Section(path, 6);
+
+        ReviewDiff fitted = ReviewDiff.Fit(diff, 10_000, root.FullName);
+
+        Assert.Empty(fitted.Generated);
+        Assert.Contains($"diff --git a/{path}", fitted.Shown, StringComparison.Ordinal);
     }
 
     [Theory]
