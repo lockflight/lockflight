@@ -62,6 +62,30 @@ public sealed class SharedChangesTests : IDisposable
         Assert.Null(await SharedChanges.FingerprintAsync(manifest, cancellationToken));
     }
 
+    [Theory]
+    [InlineData("libs/shared/Pages/Index.razor")]
+    [InlineData("libs/shared/Views/Home.cshtml")]
+    [InlineData("libs/shared/App.xaml")]
+    [InlineData("libs/protos/orders.proto")]
+    [InlineData("test.runsettings")]
+    [InlineData("libs/shared/packages.lock.json")]
+    public async Task AFileABuildCompilesOrATestRunReadsIsASharedChange(string path)
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        Write(Manifest.FileName, "version: 2\nunits:\n  - path: svc/a\n");
+        Write("svc/a/A.cs", "class A {}\n");
+        await GitAsync(["init", "-q"]);
+        await CommitAsync("base");
+        Manifest manifest = ManifestLocator.Discover(root.FullName).Manifest!;
+        string before = await SharedChanges.CommittedFingerprintAsync(manifest, cancellationToken);
+
+        Write(path, "changed\n");
+
+        Assert.NotNull(await SharedChanges.FingerprintAsync(manifest, cancellationToken));
+        await CommitAsync("shared file");
+        Assert.NotEqual(before, await SharedChanges.CommittedFingerprintAsync(manifest, cancellationToken));
+    }
+
     private async Task CommitAsync(string message)
     {
         await GitAsync(["add", "."]);

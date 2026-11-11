@@ -6,8 +6,9 @@ using Lockflight.Cli.Processes;
 namespace Lockflight.Cli.Gates;
 
 /// <summary>
-/// Changes in the project's own working tree outside every unit that can change how units build or test: C# sources, project and
-/// MSBuild files, solutions, SDK and package configuration (a shared <c>libs/</c> folder a unit references, a root
+/// Changes in the project's own working tree outside every unit that can change how units build or test: C# sources, the other files
+/// a build compiles or generates code from (Razor, XAML, Protocol Buffers), project and MSBuild files, solutions, SDK, package and
+/// test-run configuration (a shared <c>libs/</c> folder a unit references, a root
 /// <c>Directory.Build.props</c>). Such a change makes every .NET unit "changed" for the Stop gate. Their committed and uncommitted
 /// state are both part of each unit's cache key, so a unit's cached PASS never outlives an edit, or a commit, to code it depends on.
 /// </summary>
@@ -20,7 +21,8 @@ internal static class SharedChanges
     };
 
     private static readonly string[] BuildInputs =
-        [.. SourceExtensions.Order(StringComparer.Ordinal).Select(extension => $"*{extension}"), "*.props", "*.targets", "*.sln", "*.slnx", "*.rsp", "global.json", "nuget.config", "NuGet.config", "*.editorconfig", "*.globalconfig"];
+        [.. SourceExtensions.Order(StringComparer.Ordinal).Select(extension => $"*{extension}"), "*.props", "*.targets", "*.sln", "*.slnx", "*.rsp", "global.json", "nuget.config", "NuGet.config", "*.editorconfig", "*.globalconfig",
+         "*.razor", "*.cshtml", "*.xaml", "*.proto", "*.runsettings", "packages.lock.json"];
 
     /// <summary>
     /// A fingerprint of the shared build inputs git tracks, by content (the blob ids its index lists), so a commit that changes one
