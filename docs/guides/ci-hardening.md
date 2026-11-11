@@ -376,6 +376,10 @@ workflow in place.
   and `routing.nonProduction` / `routing.generatedPaths` for the parts of the repository outside .NET, so that a change there
   is not judged as a behaviour change ([risk routing](risk-routing.md)). Until then a red judge says something worth reading
   but may block work it should not.
+- **Merge queues are not supported yet.** The workflow `init` writes runs on `pull_request` and `push`, not `merge_group`, so
+  the queue's commit gets neither context and a queue that requires them waits until it times out. Adding `merge_group:` to
+  the workflow by hand is not supported either: its jobs pass every event other than `pull_request` to the action as `push`.
+  Require the checks on pull requests without turning the merge queue on.
 
 ### Moving from Lockflight 0.2's gates workflow
 
