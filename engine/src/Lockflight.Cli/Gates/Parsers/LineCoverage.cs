@@ -51,8 +51,9 @@ internal sealed class LineCoverage
 
             switch (reader.Name)
             {
-                case "source":
-                    sources.Add(reader.ReadElementContentAsString().Trim());
+                // Its text node is read in place: ReadElementContentAsString would move past the next <source> as well.
+                case "source" when !reader.IsEmptyElement && reader.Read() && reader.NodeType is XmlNodeType.Text or XmlNodeType.CDATA:
+                    sources.Add(reader.Value.Trim());
                     break;
                 case "class":
                     currentLines = LinesFor(reader.GetAttribute("filename") ?? string.Empty, sources, projectRoot, deterministicSourceRoot);
@@ -72,17 +73,22 @@ internal sealed class LineCoverage
 
     private Dictionary<int, int>? LinesFor(string filename, List<string> sources, string projectRoot, string? deterministicSourceRoot)
     {
-        string absolute = Path.IsPathRooted(filename) || sources.Count == 0 ? filename : Path.Combine(sources[0], filename);
-        string separated = absolute.Replace('\\', '/');
-        if (deterministicSourceRoot is not null && separated.StartsWith(DeterministicRoot, StringComparison.Ordinal))
-        {
-            absolute = Path.Combine(deterministicSourceRoot, separated[DeterministicRoot.Length..].Replace('/', Path.DirectorySeparatorChar));
-        }
-        if (PathRules.ToRelative(projectRoot, absolute) is not string relative)
+        // A relative file name is read against each <source> in turn (a report of several projects lists a root for each): the
+        // first under which the file exists in the project, else the first that is in the project at all.
+        string[] candidates = Path.IsPathRooted(filename) || sources.Count == 0 ? [filename] : [.. sources.Select(source => Path.Combine(source, filename))];
+        (string Absolute, string Relative)[] inProject =
+        [
+            .. candidates.Select(candidate => Mapped(candidate, deterministicSourceRoot))
+                .Select(absolute => (Absolute: absolute, Relative: PathRules.ToRelative(projectRoot, absolute)))
+                .Where(candidate => candidate.Relative is not null)
+                .Select(candidate => (candidate.Absolute, candidate.Relative!)),
+        ];
+        if (inProject.Length == 0)
         {
             return null;
         }
 
+        string relative = inProject.FirstOrDefault(candidate => File.Exists(candidate.Absolute)).Relative ?? inProject[0].Relative;
         if (!hitsByFile.TryGetValue(relative, out Dictionary<int, int>? lines))
         {
             lines = [];
@@ -90,5 +96,14 @@ internal sealed class LineCoverage
         }
 
         return lines;
+    }
+
+    /// <summary>A path under <c>/_/</c> read against the repository the tests were built in.</summary>
+    private static string Mapped(string path, string? deterministicSourceRoot)
+    {
+        string separated = path.Replace('\\', '/');
+        return deterministicSourceRoot is not null && separated.StartsWith(DeterministicRoot, StringComparison.Ordinal)
+            ? Path.Combine(deterministicSourceRoot, separated[DeterministicRoot.Length..].Replace('/', Path.DirectorySeparatorChar))
+            : path;
     }
 }

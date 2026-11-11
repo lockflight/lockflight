@@ -43,6 +43,25 @@ public sealed class LineCoverageTests : IDisposable
     }
 
     [Fact]
+    public void ARelativeFilenameIsReadAgainstTheSourceItExistsUnder()
+    {
+        string api = Path.Combine(projectRoot.FullName, "src", "Api");
+        string core = Directory.CreateDirectory(Path.Combine(projectRoot.FullName, "src", "Core")).FullName;
+        File.WriteAllText(Path.Combine(core, "B.cs"), "class B { }\n");
+        string report = Write("coverlet.cobertura.xml", $"""
+            <coverage><sources><source>{api}</source><source>{core}</source></sources><packages><package><classes>
+              <class name="B" filename="B.cs"><methods /><lines><line number="5" hits="4" /></lines></class>
+            </classes></package></packages></coverage>
+            """);
+        LineCoverage coverage = new();
+
+        coverage.AddCobertura(report, projectRoot.FullName);
+
+        Assert.Equal(4, coverage.HitsAt("src/Core/B.cs", 5));
+        Assert.False(coverage.Covers("src/Api/B.cs"));
+    }
+
+    [Fact]
     public void DeterministicSourcePathsMapBackToTheRepositoryRoot()
     {
         // ContinuousIntegrationBuild maps the repository root to /_/ in the PDBs, and a report read from them names /_/ paths.
