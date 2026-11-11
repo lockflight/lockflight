@@ -206,6 +206,23 @@ public sealed class SecretsStepTests : IDisposable
     }
 
     [Fact]
+    public async Task ASecretAllowedInlineInACommitALaterCommitRemovedStillFailsTheStep()
+    {
+        await InitRepositoryAsync();
+        await GitAsync(["branch", "base"]);
+        Write("src/config.txt", FakeToken.TrimEnd('\n') + " # gitleaks:allow\n");
+        await CommitAsync();
+        Write("src/config.txt", "no secret here\n");
+        await CommitAsync();
+
+        GateStep step = await RunStepAsync(baseRef: "base");
+
+        Assert.Equal(Verdict.Fail, step.Verdict);
+        Assert.Equal(ReasonCode.SecretFound, step.Reason);
+        Assert.Contains("slack-bot-token at src/config.txt:1", step.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ACommittedChangeIsScannedWithTheProjectsGitleaksConfig()
     {
         await InitRepositoryAsync();

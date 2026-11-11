@@ -13,8 +13,8 @@ namespace Lockflight.Cli.Gates.Steps;
 /// untracked files (from <c>git ls-files --others --exclude-standard</c>) are copied under their relative paths into a temporary
 /// directory only the current user can read, and scanned there in one run; findings and <c>.gitleaksignore</c> fingerprints then
 /// carry repository-relative paths. Findings are accepted only through gitleaks' own <c>.gitleaksignore</c>, a protected path; an
-/// added inline <c>gitleaks:allow</c> comment — which would silence gitleaks — fails the step (in an untracked file it is also ignored
-/// by the scan). Without gitleaks the step cannot vouch for anything, so it is NOT-EARNED rather than PASS. When the run names the
+/// added inline <c>gitleaks:allow</c> comment — which would silence gitleaks — fails the step, and every scan ignores such comments,
+/// so a secret allowed inline in a commit that a later commit removed is still found in the history. Without gitleaks the step cannot vouch for anything, so it is NOT-EARNED rather than PASS. When the run names the
 /// binary's SHA-256 (<c>LOCKFLIGHT_GITLEAKS_SHA256</c>) the binary is copied into the step's private directory, the copy is hashed,
 /// and only the copy runs; one that differs is an ERROR (<c>SCANNER_REPLACED</c>). In the CI judge the scan runs before any of the pull request's code is built, and the step reports that scan.
 /// </summary>
@@ -108,7 +108,7 @@ internal sealed class SecretsStep : IGateStep
             {
                 foreach (string[] scope in scopes)
                 {
-                    if (await scan.RunAsync(["git", .. scope, .. scan.ReportArguments, repo.Directory], repo.Directory, scope[0], repo.Prefix, cancellationToken) is GateStep problem)
+                    if (await scan.RunAsync(["git", .. scope, .. scan.ReportArguments, "--ignore-gitleaks-allow", repo.Directory], repo.Directory, scope[0], repo.Prefix, cancellationToken) is GateStep problem)
                     {
                         return problem;
                     }
