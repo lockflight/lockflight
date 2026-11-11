@@ -36,6 +36,18 @@ public sealed class TasksDocumentTests
         Assert.Equal(TaskRole.Test, parsed[3].Role);
     }
 
+    [Fact]
+    public void ATaskAfterACommentClosesOnItsLineIsRead()
+    {
+        const string tasks = """
+            <!--
+            - [ ] T001 guidance
+            --> - [ ] T002 (FR-001) Charge for shipping
+            """;
+
+        Assert.Equal(["T002"], TasksDocument.Parse(tasks).Select(task => task.Id));
+    }
+
     [Theory]
     [InlineData("Spec for the cart total in web/src/cart/total.spec.ts")]
     [InlineData("Specs for checkout")]

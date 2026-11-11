@@ -32,6 +32,22 @@ public sealed class SpecDocumentTests
         """;
 
     [Fact]
+    public void TextAfterACommentClosesOnItsLineIsRead()
+    {
+        SpecDocument spec = SpecDocument.Parse("""
+            <!-- one line --> - **FR-001**: System MUST charge for shipping
+            <!--
+              - **FR-998**: guidance
+            --> - **FR-002**: System MUST waive shipping over 100.00
+            <!-- a --><!-- b
+              - **FR-999**: still guidance
+            -->
+            """);
+
+        Assert.Equal([("FR-001", 1), ("FR-002", 4)], spec.Requirements.Select(requirement => (requirement.Id, requirement.Line)));
+    }
+
+    [Fact]
     public void RequirementsStoriesAndClarificationsAreReadOutsideComments()
     {
         SpecDocument spec = SpecDocument.Parse(Spec);

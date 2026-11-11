@@ -24,7 +24,8 @@ optional: the engine reads the files, not the tool that wrote them.
 ## spec.md
 
 `phase check specify` passes when all five of its items pass. Lines inside HTML comments (`<!-- … -->`) are ignored by every
-item, so template guidance may stay in comments.
+item, so template guidance may stay in comments. A comment counts when it starts a line; text after its `-->` on the same line
+is shown when the spec is rendered, so it is read too.
 
 | Item | Passes when | Written as |
 |---|---|---|
