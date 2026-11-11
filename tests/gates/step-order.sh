@@ -46,7 +46,7 @@ TRX
   package|list)
     # `dotnet package list` (SDK 10), or `dotnet list package` that the step asks when that gives no report (SDK 8 and 9).
     if fails deps; then echo "error: no assets file"; exit 1; fi
-    echo '{ "version": 1, "parameters": "--vulnerable", "projects": [] }'; exit 0 ;;
+    echo '{ "version": 1, "parameters": "--vulnerable", "projects": [ { "path": "src/Shop.csproj" } ] }'; exit 0 ;;
 esac
 echo "fake dotnet: unexpected arguments: $*" >&2
 exit 99

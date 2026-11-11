@@ -32,4 +32,19 @@ public sealed class VulnerablePackagesTests
     [Fact]
     public void AReportWithoutAdvisoriesIsEmpty() =>
         Assert.Empty(VulnerablePackages.Parse("""{ "version": 1, "projects": [ { "path": "/r/A.csproj" } ] }"""));
+
+    [Theory]
+    [InlineData("""{ "version": 1, "projects": [] }""", "names no project")]
+    [InlineData("""{ "version": 1 }""", "names no project")]
+    [InlineData("""{ "version": 1, "problems": [ { "text": "No assets file was found for /r/A.csproj.", "level": "error" } ], "projects": [ { "path": "/r/A.csproj" } ] }""", "No assets file")]
+    public void AReportThatJudgedNothingIsRefused(string report, string why)
+    {
+        InvalidOperationException refused = Assert.Throws<InvalidOperationException>(() => VulnerablePackages.Parse(report));
+
+        Assert.Contains(why, refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AWarningProblemDoesNotRefuseTheReport() =>
+        Assert.Empty(VulnerablePackages.Parse("""{ "version": 1, "problems": [ { "text": "a note", "level": "warning" } ], "projects": [ { "path": "/r/A.csproj" } ] }"""));
 }
