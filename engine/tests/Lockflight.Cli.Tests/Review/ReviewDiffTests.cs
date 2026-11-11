@@ -185,6 +185,17 @@ public sealed class ReviewDiffTests : IDisposable
         Assert.Equal(diff, fitted.Shown);
     }
 
+    [Fact]
+    public void ALockFileUnderAFolderEndingInASpaceAndBIsListedByItsWholePath()
+    {
+        const string path = "web b/package-lock.json";
+        Write(path, "{ \"lockfileVersion\": 3 }\n");
+
+        ReviewDiff fitted = ReviewDiff.Fit(Section(path, 5), 10_000, root.FullName);
+
+        Assert.Equal(path, Assert.Single(fitted.Generated).Path);
+    }
+
     [Theory]
     [InlineData("src/Data/ShopContextModelSnapshot.cs")]
     [InlineData("src/OldMigrations/ShopContextModelSnapshot.cs")]
