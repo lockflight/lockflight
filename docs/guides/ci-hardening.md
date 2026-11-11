@@ -568,6 +568,12 @@ and the evidence records the shell's URL and commit. The change class and which 
 gates apply the shell's stricter policy; approvals settings stay the unit's. Locally, a unit checked out
 inside its shell is judged against whatever commit the shell has checked out, merged or not.
 
+**Not yet read with the shell: the report and the review jobs.** Neither `ci report` nor `ci review` takes `--shell`. In a unit
+repository the report re-plans from the unit's own `lockflight.yaml` and routing, so the floor it checks the evidence's change
+class and check levels against is the unit's, not the stricter one the judge applied with the shell's routing merged in: evidence
+lowered to the unit's own levels passes that cross-check. And `ci review` looks for the spec in the unit's own tree, so when the
+specs live only in the shell it finds none, and a review the class requires ends NOT-EARNED.
+
 **Access.** The clone needs read access to the shell repository, and nothing else:
 
 | Shell URL | What to set up |
