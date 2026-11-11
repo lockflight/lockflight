@@ -28,5 +28,30 @@ public sealed class ReviewBuildFolderTests : IDisposable
         Assert.Equal(ReproductionBuild.OutputFolder, later.Name);
     }
 
+    [Fact]
+    public void ALockFileThisUserCannotOpenLeavesTheReviewAFolderOfItsOwn()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Uses Unix file permissions.");
+            return;
+        }
+
+        string lockFile = ReviewBuildFolder.LockPath(root.FullName);
+        File.Delete(lockFile);
+        File.WriteAllText(lockFile, string.Empty);
+        File.SetUnixFileMode(lockFile, UnixFileMode.None);
+        try
+        {
+            using ReviewBuildFolder folder = ReviewBuildFolder.Acquire(root.FullName);
+
+            Assert.StartsWith(ReproductionBuild.OutputFolder + "-", folder.Name, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(lockFile);
+        }
+    }
+
     public void Dispose() => root.Delete(recursive: true);
 }

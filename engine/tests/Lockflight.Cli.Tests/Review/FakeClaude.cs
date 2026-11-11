@@ -14,6 +14,9 @@ internal sealed class FakeClaude
     /// <summary>The prompt of each <c>-p</c> call, read from its standard input file.</summary>
     public List<string> Prompts { get; } = [];
 
+    /// <summary>The prompt file's mode as each call saw it (off Windows).</summary>
+    public List<UnixFileMode> PromptModes { get; } = [];
+
     /// <summary>Queues a review answering with these findings (JSON objects of the review schema).</summary>
     public FakeClaude Answers(params string[] findings)
     {
@@ -31,6 +34,10 @@ internal sealed class FakeClaude
         if (standardInputPath is not null)
         {
             Prompts.Add(File.ReadAllText(standardInputPath));
+            if (!OperatingSystem.IsWindows())
+            {
+                PromptModes.Add(File.GetUnixFileMode(standardInputPath));
+            }
         }
 
         string output = arguments is ["--version"] ? Version : reviews.Dequeue();

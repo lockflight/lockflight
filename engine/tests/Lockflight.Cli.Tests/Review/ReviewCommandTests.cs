@@ -19,6 +19,18 @@ public sealed class ReviewCommandTests : IDisposable
     private readonly FakeClaude claude = new();
 
     [Fact]
+    public async Task ThePromptFileIsReadableByThisUserOnly()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "POSIX file modes.");
+        await ProjectAsync();
+        claude.Answers(FakeClaude.Unverified("Discount ignored"));
+
+        await RunAsync(["review"]);
+
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, Assert.Single(claude.PromptModes));
+    }
+
+    [Fact]
     public async Task ARunRecordsEvidenceWithTheBaseTheModelTheClaudeVersionAndTokens()
     {
         await ProjectAsync();

@@ -12,7 +12,8 @@ namespace Lockflight.Cli.Ci;
 
 /// <summary>
 /// Runs the steps of a plan that build: opens the judge's worktree (in <c>LOCKFLIGHT_TEMP</c> when the template sets it, else
-/// locally in the repository's git directory, else the system's temporary folder), scans the head for secrets before anything is
+/// locally in the repository's git directory, else a new folder of its own in the system's temporary folder, readable by this user
+/// only and removed afterwards), scans the head for secrets before anything is
 /// built there, runs the head's suite (P1), lists the base (P2) and re-runs the red commits (P3), then judges green over what they
 /// found, and removes the worktree again whatever happened. A head whose build includes a test project that needs Windows is not
 /// built on another OS (<see cref="WindowsRunner"/>). The .NET build servers are shut down after each phase that builds.
@@ -34,9 +35,10 @@ internal static class JudgeExecutor
         string root = plan.Inputs.Root;
         JudgeBudget budget = new(TimeSpan.FromMinutes(plan.Policy.Ci.TimeoutMinutes), time);
         TimeSpan gitLimit = TimeSpan.FromMinutes(5);
-        string parent = await ParentAsync(plan.Inputs, environment, cancellationToken);
+        (string parent, bool ownParent) = await ParentAsync(plan.Inputs, environment, cancellationToken);
         if (await JudgeWorktree.OpenAsync(root, parent, plan.Inputs.Head, gitLimit, cancellationToken) is not JudgeWorktree worktree)
         {
+            RemoveOwnParent(parent, ownParent);
             string why = $"git could not add a worktree under {parent}";
             GreenJudgement green = new(CheckVerdict.Error, ReasonCode.ToolError, why, 0, 0, [why], [], new Dictionary<string, string>(), []);
             return new JudgeFindings(green, judgesReds ? [.. plan.Reds.Cycles.Select(red => new CycleJudgement(red, TreeOutcome.Broken, [], new Dictionary<string, RedVerdict>(), CheckVerdict.Error, ReasonCode.ToolError, why))] : null, []);
@@ -137,6 +139,7 @@ internal static class JudgeExecutor
         {
             await BuildServers.ShutdownAsync(worktree.Root, CancellationToken.None);
             await worktree.RemoveAsync();
+            RemoveOwnParent(parent, ownParent);
         }
     }
 
@@ -184,11 +187,16 @@ internal static class JudgeExecutor
             : GreenJudge.CompareSkips(headResults, results, keys);
     }
 
-    private static async Task<string> ParentAsync(JudgeInputs inputs, EnvironmentReader environment, CancellationToken cancellationToken)
+    /// <summary>
+    /// The folder the worktree is added under, and whether the judge made it for this run. In the system's temporary folder a fixed
+    /// name could be another user's folder on a shared host, so the judge makes one of its own there (<see cref="Directory.CreateTempSubdirectory"/>
+    /// gives it a random name and, off Windows, access for this user only).
+    /// </summary>
+    private static async Task<(string Parent, bool Own)> ParentAsync(JudgeInputs inputs, EnvironmentReader environment, CancellationToken cancellationToken)
     {
         if (environment.Get(EnvironmentVariables.Temp) is { Length: > 0 } temp)
         {
-            return Path.Combine(temp, LocalFolder);
+            return (Path.Combine(temp, LocalFolder), false);
         }
 
         if (inputs.Platform == JudgePlatform.Local)
@@ -196,10 +204,25 @@ internal static class JudgeExecutor
             ProcessResult common = await ProcessRunner.RunAsync("git", ["rev-parse", "--git-common-dir"], inputs.Root, cancellationToken);
             if (common.ExitCode == 0 && common.Output.Trim() is { Length: > 0 } gitDirectory)
             {
-                return Path.Combine(Path.GetFullPath(gitDirectory, inputs.Root), LocalFolder);
+                return (Path.Combine(Path.GetFullPath(gitDirectory, inputs.Root), LocalFolder), false);
             }
         }
 
-        return Path.Combine(Path.GetTempPath(), LocalFolder);
+        return (Directory.CreateTempSubdirectory($"{LocalFolder}-").FullName, true);
+    }
+
+    private static void RemoveOwnParent(string parent, bool own)
+    {
+        try
+        {
+            if (own && Directory.Exists(parent))
+            {
+                Directory.Delete(parent, recursive: false);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Not empty (a worktree git could not remove): it stays in the temporary folder, as the worktree itself would.
+        }
     }
 }

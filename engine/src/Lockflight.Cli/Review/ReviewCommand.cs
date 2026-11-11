@@ -245,7 +245,7 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
         string[] signIn = string.IsNullOrWhiteSpace(context.Environment.Get(EnvironmentVariables.AnthropicApiKey)) ? [] : ["--bare"];
         try
         {
-            await File.WriteAllTextAsync(promptFile, prompt, cancellationToken);
+            await WritePrivateAsync(promptFile, prompt, cancellationToken);
             return await context.Claude(
                 claude,
                 [.. signIn, "-p", "--restricted", "--safe-mode", "--strict-mcp-config", "--tools", "Read,Grep,Glob", "--permission-mode", "dontAsk",
@@ -489,4 +489,21 @@ internal sealed class ReviewCommand(CliContext context) : ICommand
 
     private static bool TryParseBudget(string text, out decimal budget) =>
         decimal.TryParse(text, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out budget) && budget is > 0 and <= ReviewSettings.MaxBudgetUsd;
+
+    /// <summary>
+    /// Writes the prompt (it holds the diff) to a new file only this user can read off Windows: the temporary folder may be shared
+    /// with other users of the machine.
+    /// </summary>
+    private static async Task WritePrivateAsync(string path, string text, CancellationToken cancellationToken)
+    {
+        FileStreamOptions options = new() { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        await using FileStream stream = new(path, options);
+        await using StreamWriter writer = new(stream);
+        await writer.WriteAsync(text.AsMemory(), cancellationToken);
+    }
 }
