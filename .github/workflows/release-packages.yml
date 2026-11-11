@@ -231,6 +231,25 @@ jobs:
           name: engine-hashes
           path: engine-hashes.json
           if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-pointer
+          path: packages/*.nupkg
+          if-no-files-found: error
+
+  # The software bill of materials, in a job of its own: the CycloneDX tool it installs never runs beside the packages.
+  sbom:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: engine/global.json
       - name: Software bill of materials (CycloneDX)
         env:
           CYCLONEDX_VERSION: 6.3.1
@@ -241,13 +260,45 @@ jobs:
             --set-name Lockflight.Cli --set-version "$VERSION"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: package-pointer
-          path: packages/*.nupkg
-          if-no-files-found: error
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
           name: sbom
           path: sbom/*.json
+          if-no-files-found: error
+
+  # What would fail the release after the packages are on nuget.org is checked before anything is pushed, on dry runs too:
+  # the tag has no GitHub Release yet, and the notes are not empty. The notes are drafted here, with a read-only token and no
+  # credentials kept, so git-cliff (which downloads its own binary) never runs in a job that can write to the repository.
+  preflight:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # gh release create fails for a tag that already has a release, after the packages are on nuget.org.
+      - name: No GitHub Release exists for the tag yet
+        if: ${{ github.ref_type == 'tag' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::$TAG already has a GitHub Release: a release of this version would fail after the push"; exit 1
+          fi
+      - name: Draft the notes from the commits since the previous tag
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          version: v2.14.2
+          config: cliff.toml
+          args: --latest --strip header
+        env:
+          OUTPUT: release-notes.md
+      - name: The notes are not empty
+        run: test -s release-notes.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: release-notes.md
           if-no-files-found: error
 
   # The file that ships must describe the packages that ship: every RID package re-extracted and compared, and the pointer's
@@ -289,7 +340,7 @@ jobs:
           echo "Hashes verified for $VERSION" >> "$GITHUB_STEP_SUMMARY"
 
   publish:
-    needs: [version, rid, pointer, verify]
+    needs: [version, rid, pointer, verify, sbom, preflight]
     if: ${{ needs.version.outputs.publish == 'true' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     environment: nuget
@@ -379,32 +430,28 @@ jobs:
           path: release
           merge-multiple: true
       # Each file named once (a second asset of the same name fails the upload after the packages are on nuget.org), and
-      # SHA256SUMS checked against what is uploaded. The release-dry-run job runs the same step.
+      # SHA256SUMS checked against what is uploaded. The release-dry-run job runs the same step. The notes come from the
+      # preflight job.
       - name: Assemble the release files
         run: scripts/release-assets.sh assemble release "$VERSION" assets
-      - name: Draft the notes from the commits since the previous tag
-        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
-        with:
-          version: v2.14.2
-          config: cliff.toml
-          args: --latest --strip header
-        env:
-          OUTPUT: release-notes.md
       # Published, not drafted: engine-hashes.json must be downloadable the moment the packages are on nuget.org (update
-      # compares the feed's copy with this one). Edit the notes afterwards.
+      # compares the feed's copy with this one). Edit the notes afterwards. The files are checked against SHA256SUMS once more
+      # right before the upload.
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          (cd assets && sha256sum -c --quiet SHA256SUMS)
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
           gh release create "$TAG" --verify-tag $prerelease --title "Lockflight $VERSION" \
-            --notes-file release-notes.md assets/*
+            --notes-file release/release-notes.md assets/*
 
   # Dry runs skip publish and release, so this job runs the release job's steps on the dry run's files without publishing:
-  # the checksums the publish job writes, the assembled release files, and the notes. Nothing leaves the runner.
+  # the checksums the publish job writes and the assembled release files (the preflight job checked the tag and the notes).
+  # Nothing leaves the runner.
   release-dry-run:
-    needs: [version, verify]
+    needs: [version, verify, sbom, preflight]
     if: ${{ needs.version.outputs.publish != 'true' }}
     runs-on: ubuntu-latest
     env:
@@ -428,23 +475,3 @@ jobs:
             ls -1 "$RUNNER_TEMP/assets"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      # gh release create fails for a tag that already has a release, after the packages are on nuget.org.
-      - name: No GitHub Release exists for the tag yet
-        if: ${{ github.ref_type == 'tag' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            echo "::error::$TAG already has a GitHub Release: a release of this version would fail after the push"; exit 1
-          fi
-      - name: Draft the notes, as the release job does
-        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
-        with:
-          version: v2.14.2
-          config: cliff.toml
-          args: --latest --strip header
-        env:
-          OUTPUT: release-notes.md
-      - name: The notes are not empty
-        run: test -s release-notes.md
