@@ -39,5 +39,17 @@ public sealed class LedgerTests : IDisposable
         Assert.Equal(ExitCode.HookBlock, exitCode);
     }
 
+    [Fact]
+    public async Task ACredentialQuotedInABlocksReasonIsMaskedInTheLedger()
+    {
+        await new LedgerWriter(projectRoot.FullName, TimeProvider.System).AppendAsync(
+            new LedgerEvent(LedgerEventType.HookBlocked, "pre-tool-use:human-only-command", "human-only-command", "lockflight: 'curl -u admin:hunter2 https://x' was refused"),
+            TestContext.Current.CancellationToken);
+
+        string line = Directory.EnumerateFiles(Path.Combine(projectRoot.FullName, LedgerWriter.RelativeDirectory)).Select(File.ReadAllText).Single();
+        Assert.DoesNotContain("hunter2", line, StringComparison.Ordinal);
+        Assert.Contains("curl -u admin:***", line, StringComparison.Ordinal);
+    }
+
     public void Dispose() => projectRoot.Delete(recursive: true);
 }

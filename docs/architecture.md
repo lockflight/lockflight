@@ -250,7 +250,7 @@ change in any release ([public contracts](guides/contracts.md#internal-formats))
 
 | Type | Extra fields |
 |---|---|
-| `hook.blocked` | `tool`, `call` (shortened, credentials masked), `session`, `agent` |
+| `hook.blocked` | `tool`, `call` (shortened, credentials masked), `session`, `agent`; its `detail`, the block's reason, is masked the same way |
 | `gate.completed` | `trigger` (`command` for `lockflight gate run`, `stop-hook` for the Stop hook), `durationMs`, `cache` (`hit` when the Stop gate's cache of the last PASS answered, `miss` when it was consulted and the gate ran, `none` when it was not consulted) |
 | `approval.recorded` | `feature`, `phase`, `artifacts` (each artifact with the first 12 characters of its hash), `channel` (`terminal` for `lockflight approve`, `session` for `/lockflight:approve`) |
 | `evidence.recorded`, `config.written` | none |

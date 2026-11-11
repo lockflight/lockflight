@@ -22,6 +22,13 @@ public sealed class CallRedactionTests
     [InlineData("ls /home/user/lockflight-checkout/engine/tests/Lockflight.Cli.Tests/Hooks", "ls /home/user/lockflight-checkout/engine/tests/Lockflight.Cli.Tests/Hooks")]
     [InlineData("git log origin/main..feature/AddPaymentProviderV2", "git log origin/main..feature/AddPaymentProviderV2")]
     [InlineData("ssh-keygen -t ed25519 -f key.pem", "ssh-keygen -t ed25519 -f key.pem")]
+    [InlineData("curl -u admin:hunter2 https://x", "curl -u admin:*** https://x")]
+    [InlineData("curl --user admin:hunter2 https://x", "curl --user admin:*** https://x")]
+    [InlineData("mysql -uroot -pS3cret -h db", "mysql -uroot -p*** -h db")]
+    [InlineData("mysqldump -pS3cret shop > dump.sql", "mysqldump -p*** shop > dump.sql")]
+    [InlineData("curl -H 'Authorization: Basic dXNlcjpw' https://x", "curl -H 'Authorization: Basic *** https://x")]
+    [InlineData("mkdir -p src/a && ssh -p22 host", "mkdir -p src/a && ssh -p22 host")]
+    [InlineData("docker run -p 8080:80 nginx", "docker run -p 8080:80 nginx")]
     public void CredentialsAreMaskedAndOrdinaryCommandsKept(string call, string expected) => Assert.Equal(expected, CallRedaction.Shorten(call));
 
     [Fact]
