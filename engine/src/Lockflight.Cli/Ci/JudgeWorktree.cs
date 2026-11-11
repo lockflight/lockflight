@@ -108,15 +108,15 @@ internal sealed class JudgeWorktree
     }
 
     /// <summary>
-    /// Lays <paramref name="paths"/> as they are at <paramref name="fromCommit"/> over the tree the worktree holds, removes
-    /// <paramref name="deleted"/>, then the base policy again (a test project's own style file must not override it). Null on
-    /// success, else why.
+    /// Lays <paramref name="paths"/> (file names, never patterns) as they are at <paramref name="fromCommit"/> over the tree the
+    /// worktree holds, removes <paramref name="deleted"/>, then the base policy again (a test project's own style file must not
+    /// override it). Null on success, else why.
     /// </summary>
     public async Task<string?> OverlayAsync(string fromCommit, IReadOnlyList<string> paths, IReadOnlyList<string> deleted, string policyCommit, CancellationToken cancellationToken)
     {
         foreach (string[] chunk in paths.Chunk(PathsPerCall))
         {
-            ProcessResult checkout = await SnapshotGit.RunAsync(["checkout", fromCommit, "--", .. chunk], Root, timeLimit, cancellationToken);
+            ProcessResult checkout = await SnapshotGit.RunAsync(["--literal-pathspecs", "checkout", fromCommit, "--", .. chunk], Root, timeLimit, cancellationToken);
             if (checkout.ExitCode != 0)
             {
                 return $"git could not lay {CommitIds.Short(fromCommit)}'s test files over {CommitIds.Short(Commit ?? fromCommit)}: {checkout.Combined.Trim()}";
