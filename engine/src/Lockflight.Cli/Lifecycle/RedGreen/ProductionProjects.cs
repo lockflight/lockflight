@@ -29,11 +29,17 @@ internal static partial class ProductionProjects
         foreach ((string project, string text) in projects.Where(entry => !appProjects.Contains(entry.Key) && !helpers.Contains(entry.Key)))
         {
             directories.Add(Path.GetDirectoryName(Path.Combine(root, project))!);
-            Match name = AssemblyNamePattern().Match(text);
-            assemblies.Add(name.Success && !name.Groups[1].Value.Contains('$', StringComparison.Ordinal) ? name.Groups[1].Value.Trim() : Path.GetFileNameWithoutExtension(project));
+            assemblies.Add(AssemblyName(project, text));
         }
 
         return new ProductionCode(directories, assemblies, TypeNames(apps, assemblies));
+    }
+
+    /// <summary>The name of the assembly a project builds: its <c>&lt;AssemblyName&gt;</c> when that is a literal, else the project file's name.</summary>
+    public static string AssemblyName(string projectPath, string projectText)
+    {
+        Match name = AssemblyNamePattern().Match(projectText);
+        return name.Success && !name.Groups[1].Value.Contains('$', StringComparison.Ordinal) ? name.Groups[1].Value.Trim() : Path.GetFileNameWithoutExtension(projectPath);
     }
 
     private static HashSet<string> TypeNames(IReadOnlyList<TestApp> apps, HashSet<string> assemblies)
