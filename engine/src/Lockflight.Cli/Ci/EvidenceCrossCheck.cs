@@ -91,15 +91,18 @@ internal static class EvidenceCrossCheck
 
     /// <summary>
     /// The verdict git alone decides, before anything is built: red and tests since red are NOT-EARNED without a red commit or
-    /// over the cap (N/A in a structural-only change, whose eligibility git decides too), and routing FAILs on a broken routing
-    /// rule (a shell's stricter routing can fail where the unit's passes, so a pass is not checked). Null when the verdict needs a
-    /// build.
+    /// over the cap (N/A in a structural-only change, whose eligibility git decides too), routing FAILs on a broken routing
+    /// rule (a shell's stricter routing can fail where the unit's passes, so a pass is not checked), and policy vs base FAILs when
+    /// the pull request's manifest loosens the base's, or is NOT-EARNED when the two could not be compared. Null when the verdict
+    /// needs a build.
     /// </summary>
     public static CheckVerdict? PlannedVerdict(JudgePlan plan, CheckId id) => id switch
     {
         CheckId.Red or CheckId.TestsSinceRed when plan.InStructuralLane => CheckVerdict.NotApplicable,
         CheckId.Red or CheckId.TestsSinceRed when plan.Reds.OverCap || plan.Reds.Cycles.Count == 0 => CheckVerdict.NotEarned,
         CheckId.Routing when plan.Class.Classification.Failures.Count > 0 => CheckVerdict.Fail,
+        CheckId.Policy when plan.Loosened is not null && plan.PolicyNotCompared is not null => CheckVerdict.NotEarned,
+        CheckId.Policy when plan.Loosened is { Count: > 0 } => CheckVerdict.Fail,
         _ => null,
     };
 
