@@ -46,7 +46,7 @@ lockflight-gates:
         # Code-style and analyzer config (nested files too) decides what the build and format gates enforce: a PR is
         # judged by the base's rules, and its own rule changes apply after the merge.
         style='(^|/)(\.editorconfig|\.globalconfig|[^/]*\.globalconfig|[^/]*\.ruleset|stylecop\.json|BannedSymbols\.txt|CodeMetricsConfig\.txt)$'
-        { git ls-tree -r --name-only "$BASE"; git ls-files; } | { grep -E "$style" || true; } | sort -u | while IFS= read -r file; do
+        { git -c core.quotePath=false ls-tree -r --name-only "$BASE"; git -c core.quotePath=false ls-files; } | { grep -E "$style" || true; } | sort -u | while IFS= read -r file; do
           if git cat-file -e "$BASE:$file" 2>/dev/null; then git checkout "$BASE" -- "$file"; else rm -f "$file"; fi
         done
       fi
