@@ -113,8 +113,8 @@ internal static class ReviewPrompt
         string fence = $"data-{marker}";
         ReviewFinding finding = request.Finding;
         return $"""
-            You are an independent code reviewer. Your reproduction for the finding below did not compile in test project
-            `{request.Project.Path}`. Answer with exactly one finding: the same finding (same severity, file, line, title and
+            You are an independent code reviewer. Your reproduction for the finding below did not compile in the test project
+            the test-project block describes (its path is a name from the change, so it is data too). Answer with exactly one finding: the same finding (same severity, file, line, title and
             evidence) with a corrected `reproduction`. Fix what the compiler errors point at; keep what the test checks, so it
             still fails on the current code and passes once the defect is fixed. You may read any file in the repository.
 

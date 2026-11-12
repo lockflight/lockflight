@@ -58,7 +58,9 @@ public sealed class ReproductionRepairerTests
     {
         string prompt = ReviewPrompt.Repair(Request);
 
-        Assert.Contains("did not compile in test project\n`tests/Shop.Tests/Shop.Tests.csproj`", prompt.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        string instructions = prompt[..prompt.IndexOf("<data-", StringComparison.Ordinal)];
+        Assert.DoesNotContain("tests/Shop.Tests", instructions, StringComparison.Ordinal);
+        Assert.Contains("- tests/Shop.Tests/Shop.Tests.csproj:", prompt[instructions.Length..], StringComparison.Ordinal);
         Assert.Contains("'Pricing' does not contain a definition for 'Totl'", prompt, StringComparison.Ordinal);
         Assert.Contains("public static decimal Total(decimal price) => …;", prompt, StringComparison.Ordinal);
         Assert.Contains("namespace `LockflightReproductions`", prompt, StringComparison.Ordinal);
