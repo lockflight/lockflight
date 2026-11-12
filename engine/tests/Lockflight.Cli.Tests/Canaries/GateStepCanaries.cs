@@ -18,8 +18,10 @@ namespace Lockflight.Cli.Tests.Canaries;
 /// the verdict and reason code its violation calls for, so a step that is NOT-EARNED or ERROR for another cause (gitleaks not
 /// installed: the step is handed a stand-in) is MISSED; the protected-changes step reports and never fails, so it is caught when it
 /// lists the protected file. A tool called with arguments the stand-in does not know makes the canary BROKEN. A step with no planted
-/// case here is MISSED, so a step added to the table without a canary shows up. The harmless twin, the build with a tool that
-/// succeeds, must PASS. <see cref="FullCanaries"/> runs the real build and test tools.
+/// case here is MISSED, so a step added to the table without a canary shows up. Each step has a harmless twin: the same step on a
+/// scratch repository whose last commit changes the C# file harmlessly, with tools that report nothing wrong, must PASS or be
+/// N/A (the protected-changes step must not list the manifest); a step whose twin is rejected too is BROKEN, since its rejection
+/// proves nothing. <see cref="FullCanaries"/> runs the real build and test tools.
 /// </summary>
 internal static class GateStepCanaries
 {
@@ -56,6 +58,13 @@ internal static class GateStepCanaries
 
     private const string PlantedLeak = """[ { "RuleID": "generic-api-key", "File": "src/Order.cs", "StartLine": 2, "Commit": "" } ]""";
 
+    private const string NoAdvisory = """
+        { "version": 1, "parameters": "--vulnerable", "projects": [ { "path": "src/Canary.csproj", "frameworks": [ { "framework": "net10.0",
+          "topLevelPackages": [ ] } ] } ] }
+        """;
+
+    private const string NoModelChanges = "No changes have been made to the model since the last migration.";
+
     public static async Task<IReadOnlyList<CanaryReport>> RunAsync(TimeProvider time, CancellationToken cancellationToken)
     {
         using CanaryScratch scratch = new(time);
@@ -64,19 +73,24 @@ internal static class GateStepCanaries
             return [new CanaryReport("gate steps: a planted violation is not a PASS", CanaryResult.Broken, $"{notCreated}; git is needed for these canaries")];
         }
 
-        Manifest manifest = ManifestLocator.Discover(scratch.Project).Manifest!;
-        GateRunContext twinRun = GateRunContext.ForTarget(manifest, scratch.Project, GateProfile.PullRequest, BaseRef, time) with { Processes = SucceedingAsync };
-        GateStep twin = (await new BuildStep().RunAsync(twinRun, GateRunFacts.None, cancellationToken)).Step;
-        if (twin.Verdict != Verdict.Pass)
+        using CanaryScratch twins = new(time);
+        if (await CreateAsync(twins, cancellationToken, harmless: true) is string twinsNotCreated)
         {
-            return [new CanaryReport("gate steps: a build whose tool succeeds passes", CanaryResult.Broken,
-                $"it is {VerdictNames.ToContractName(twin.Verdict)} ({twin.Detail}), so a rejection proves nothing")];
+            return [new CanaryReport("gate steps: a harmless change passes", CanaryResult.Broken, $"{twinsNotCreated}; git is needed for these canaries")];
         }
 
+        Manifest manifest = ManifestLocator.Discover(scratch.Project).Manifest!;
+        Manifest twinManifest = ManifestLocator.Discover(twins.Project).Manifest!;
         List<CanaryReport> reports = [];
         foreach (IGateStep step in GateProfiles.For(GateProfile.PullRequest).InOrder)
         {
-            reports.Add(await JudgeAsync(step, manifest, scratch.Project, time, cancellationToken) with { Control = step.Name });
+            CanaryReport report = await JudgeAsync(step, manifest, scratch.Project, time, planted: true, cancellationToken);
+            if (report.Result == CanaryResult.Caught && await TwinAsync(step, twinManifest, twins.Project, time, cancellationToken) is string twinRejected)
+            {
+                report = new CanaryReport(report.Name, CanaryResult.Broken, $"its harmless twin is {twinRejected}, so the rejection proves nothing");
+            }
+
+            reports.Add(report with { Control = step.Name });
         }
 
         // The stop profile's own steps.
@@ -175,15 +189,38 @@ internal static class GateStepCanaries
         return new ProcessResult(appTestsRun ? 1 : 0, string.Empty, string.Empty, 0, TimedOut: false);
     }
 
-    private static async Task<CanaryReport> JudgeAsync(IGateStep step, Manifest manifest, string project, TimeProvider time, CancellationToken cancellationToken)
+    /// <summary>
+    /// The step on the harmless twin: null when it passes (or is N/A, or the protected-changes step lists no manifest); else what it
+    /// returned.
+    /// </summary>
+    private static async Task<string?> TwinAsync(IGateStep step, Manifest manifest, string project, TimeProvider time, CancellationToken cancellationToken)
+    {
+        CanaryReport twin = await JudgeAsync(step, manifest, project, time, planted: false, cancellationToken);
+        return twin.Result == CanaryResult.Caught ? null : twin.Detail;
+    }
+
+    /// <summary>
+    /// Judges <paramref name="step"/> with the tools of the planted violations, or, without <paramref name="planted"/>, with tools that
+    /// report nothing wrong; the harmless run is Caught when the step passes (or is N/A), so the caller reads it the other way round.
+    /// </summary>
+    private static async Task<CanaryReport> JudgeAsync(IGateStep step, Manifest manifest, string project, TimeProvider time, bool planted, CancellationToken cancellationToken)
     {
         List<string> unknown = [];
         GateRunContext run = GateRunContext.ForTarget(manifest, project, GateProfile.PullRequest, BaseRef, time) with
         {
-            Processes = (fileName, arguments, workingDirectory, timeLimit, token) => PlantedAsync(fileName, arguments, unknown, token),
+            Processes = (fileName, arguments, workingDirectory, timeLimit, token) => planted ? PlantedAsync(fileName, arguments, unknown, token) : HarmlessAsync(fileName, arguments, unknown, token),
             FindGitleaks = () => GitleaksStandIn,
         };
         GateRunFacts afterTests = new(TestsTotal: 1, TestResultsDirectory: Path.Combine(project, "no-coverage-here"), TestsStarted: time.GetUtcNow());
+        if (!planted && step.Name == CoverageStep.StepName)
+        {
+            // The twin's test run wrote a report that covers the changed line.
+            string results = Path.Combine(project, "coverage-results");
+            Directory.CreateDirectory(results);
+            await File.WriteAllTextAsync(Path.Combine(results, "coverage.cobertura.xml"), CoveringReport(project), cancellationToken);
+            afterTests = afterTests with { TestResultsDirectory = results };
+        }
+
         (string name, GateRunFacts facts, Verdict verdict, ReasonCode reason) = step.Name switch
         {
             ProtectedChangesStep.StepName => ("policy: a change to lockflight.yaml since the base is listed for review", GateRunFacts.None, Verdict.Pass, ReasonCode.None),
@@ -216,6 +253,14 @@ internal static class GateStepCanaries
             return new CanaryReport(name, CanaryResult.Broken, $"the stand-in tools were called with arguments they do not know, so the step judged no planted report: {string.Join("; ", unknown)}");
         }
 
+        if (!planted)
+        {
+            bool passes = result.Verdict is Verdict.Pass or Verdict.NotApplicable
+                && !(step.Name == ProtectedChangesStep.StepName && result.Detail.Contains(Manifest.FileName, StringComparison.Ordinal));
+            return new CanaryReport(name, passes ? CanaryResult.Caught : CanaryResult.Missed,
+                $"{VerdictNames.ToContractName(result.Verdict)} {ReasonCodeNames.ToName(result.Reason) ?? "(no reason)"}: {result.Detail}");
+        }
+
         if (step.Name == ProtectedChangesStep.StepName)
         {
             return result.Detail.Contains(Manifest.FileName, StringComparison.Ordinal)
@@ -226,8 +271,11 @@ internal static class GateStepCanaries
         return CanaryReport.Expected(name, result, verdict, reason);
     }
 
-    /// <summary>A project whose last commit changes the manifest (a protected file) and a C# file, and deletes a guide CLAUDE.md links to.</summary>
-    private static async Task<string?> CreateAsync(CanaryScratch scratch, CancellationToken cancellationToken)
+    /// <summary>
+    /// A project whose last commit changes the manifest (a protected file) and a C# file, and deletes a guide CLAUDE.md links to; with
+    /// <paramref name="harmless"/>, one whose last commit only adds a field to the C# file.
+    /// </summary>
+    private static async Task<string?> CreateAsync(CanaryScratch scratch, CancellationToken cancellationToken, bool harmless = false)
     {
         await File.WriteAllTextAsync(scratch.PathOf(".gitignore"), ".lockflight/\n", cancellationToken);
         await File.WriteAllTextAsync(scratch.PathOf(ChangedSource), "class Order\n{\n}\n", cancellationToken);
@@ -244,14 +292,60 @@ internal static class GateStepCanaries
             return baseFailed;
         }
 
+        if (harmless)
+        {
+            await File.WriteAllTextAsync(scratch.PathOf(ChangedSource), "class Order\n{\n  int total;\n}\n", cancellationToken);
+            return await CanaryGit.CommitAllAsync(scratch.Project, "harmless change", initialize: false, cancellationToken);
+        }
+
         await File.AppendAllTextAsync(scratch.PathOf(Manifest.FileName), "protected:\n  - \"docs/**\"\n", cancellationToken);
         File.Delete(scratch.PathOf(LinkedGuide));
         await File.WriteAllTextAsync(scratch.PathOf(ChangedSource), "class Order\n{\n#pragma warning disable CS0414\n  string key = \"planted\";\n}\n", cancellationToken);
         return await CanaryGit.CommitAllAsync(scratch.Project, "canary change", initialize: false, cancellationToken);
     }
 
-    private static Task<ProcessResult> SucceedingAsync(string fileName, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeLimit, CancellationToken cancellationToken) =>
-        Task.FromResult(new ProcessResult(0, "Build succeeded.", string.Empty, 0, TimedOut: false));
+    /// <summary>Each tool reports nothing wrong: the harmless twin's run. A call the stand-in does not know is added to <paramref name="unknown"/> and fails.</summary>
+    private static async Task<ProcessResult> HarmlessAsync(string fileName, IReadOnlyList<string> arguments, List<string> unknown, CancellationToken cancellationToken)
+    {
+        string tool = Path.GetFileNameWithoutExtension(fileName);
+        string verb = arguments.Count > 0 ? arguments[0] : string.Empty;
+        if (tool == GitleaksStandIn && verb is "git" or "dir")
+        {
+            int report = arguments.ToList().IndexOf(LeakReportOption);
+            if (report >= 0)
+            {
+                await File.WriteAllTextAsync(arguments[report + 1], "[]", cancellationToken);
+            }
+
+            return new ProcessResult(0, "no leaks found", string.Empty, 0, TimedOut: false);
+        }
+
+        if (tool != "dotnet")
+        {
+            return Unknown(fileName, arguments, unknown);
+        }
+
+        switch (verb)
+        {
+            case "build":
+                return new ProcessResult(0, "Build succeeded.", string.Empty, 0, TimedOut: false);
+            case "test":
+                string results = arguments[arguments.ToList().IndexOf("--results-directory") + 1];
+                Directory.CreateDirectory(results);
+                await File.WriteAllTextAsync(Path.Combine(results, "canary.trx"), PassingTrx, cancellationToken);
+                return new ProcessResult(0, "Passed Canary.Tests.Other", string.Empty, 0, TimedOut: false);
+            case "format":
+                return new ProcessResult(0, string.Empty, string.Empty, 0, TimedOut: false);
+            case "package":
+                return new ProcessResult(0, NoAdvisory, string.Empty, 0, TimedOut: false);
+            case "tool" when arguments is [_, "restore", ..]:
+                return new ProcessResult(0, "Restore was successful.", string.Empty, 0, TimedOut: false);
+            case "ef":
+                return new ProcessResult(0, NoModelChanges, string.Empty, 0, TimedOut: false);
+            default:
+                return Unknown(fileName, arguments, unknown);
+        }
+    }
 
     /// <summary>
     /// Each tool reports its violation: the run the steps judge as a real one. A call the stand-in does not know is added to
@@ -298,6 +392,14 @@ internal static class GateStepCanaries
                 return Unknown(fileName, arguments, unknown);
         }
     }
+
+    private static string CoveringReport(string project) => $"""
+        <?xml version="1.0" encoding="utf-8"?>
+        <coverage line-rate="1" version="1.9">
+          <sources><source>{project}</source></sources>
+          <packages><package name="Canary"><classes><class name="Order" filename="{ChangedSource}"><lines><line number="3" hits="1" /></lines></class></classes></package></packages>
+        </coverage>
+        """;
 
     private static ProcessResult Unknown(string fileName, IReadOnlyList<string> arguments, List<string> unknown)
     {
