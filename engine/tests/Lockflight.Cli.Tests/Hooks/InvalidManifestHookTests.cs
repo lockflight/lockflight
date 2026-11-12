@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 
@@ -74,5 +75,34 @@ public sealed class InvalidManifestHookTests : IDisposable
         Assert.Contains("update --project", output + error, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task WithAnInvalidManifestATypedApproveIsRefusedNotPassedToTheAgent()
+    {
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "user-prompt-expansion"], Expansion("lockflight:approve"), projectRoot.FullName);
+
+        Assert.Equal(ExitCode.HookBlock, exitCode);
+        Assert.Contains("/lockflight:approve was not run", error, StringComparison.Ordinal);
+        Assert.Contains("lockflight.yaml:4:1", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WithAnInvalidManifestAnotherTypedCommandStillExpands()
+    {
+        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "user-prompt-expansion"], Expansion("commit"), projectRoot.FullName);
+
+        Assert.Equal(ExitCode.Pass, exitCode);
+    }
+
     public void Dispose() => projectRoot.Delete(recursive: true);
+
+    private string Expansion(string command) => JsonSerializer.Serialize(new Dictionary<string, object>
+    {
+        ["hook_event_name"] = "UserPromptExpansion",
+        ["cwd"] = projectRoot.FullName,
+        ["session_id"] = "s1",
+        ["command_name"] = command,
+        ["command_source"] = "plugin",
+        ["command_args"] = "spec",
+        ["prompt"] = $"/{command} spec",
+    });
 }
