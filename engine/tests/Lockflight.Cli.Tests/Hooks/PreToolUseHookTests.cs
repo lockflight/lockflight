@@ -62,9 +62,9 @@ public sealed class PreToolUseHookTests : IDisposable
     [Fact]
     public async Task InputThatIsNotJsonIsBlockedRatherThanAllowed()
     {
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], "not json", projectRoot.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], "not json", projectRoot.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Fact]

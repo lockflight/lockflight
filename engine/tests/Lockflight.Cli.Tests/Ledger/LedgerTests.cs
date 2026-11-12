@@ -3,6 +3,8 @@ using Lockflight.Cli.Config;
 using Lockflight.Cli.Hosting;
 using Lockflight.Cli.Ledger;
 
+using Lockflight.Cli.Tests.Hooks;
+
 namespace Lockflight.Cli.Tests.Ledger;
 
 public sealed class LedgerTests : IDisposable
@@ -34,9 +36,21 @@ public sealed class LedgerTests : IDisposable
         File.WriteAllText(Path.Combine(projectRoot.FullName, LedgerWriter.RelativeDirectory), "not a directory");
         string payload = HookPayloads.ToolCall("Write", Path.Combine(projectRoot.FullName, "secrets", "key.txt"), projectRoot.FullName);
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
+    }
+
+    [Fact]
+    public async Task AnUnwritableLedgerLeavesAnAllowedCallAllowed()
+    {
+        Directory.CreateDirectory(Path.Combine(projectRoot.FullName, ".lockflight"));
+        File.WriteAllText(Path.Combine(projectRoot.FullName, LedgerWriter.RelativeDirectory), "not a directory");
+        string payload = HookPayloads.ToolCall("Write", Path.Combine(projectRoot.FullName, "src", "ok.txt"), projectRoot.FullName);
+
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, projectRoot.FullName);
+
+        Assert.True(exitCode == ExitCode.Pass, error);
     }
 
     [Fact]

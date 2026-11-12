@@ -35,9 +35,9 @@ public sealed class WorkspaceGuardTests : IDisposable
     {
         string payload = HookPayloads.ToolCall("Edit", Path.Combine(shell.FullName, relativePath), shell.FullName);
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, shell.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "pre-tool-use"], payload, shell.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     [Theory]

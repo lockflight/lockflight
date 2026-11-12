@@ -108,9 +108,9 @@ public sealed class ShellGuardScenarioTests : IDisposable
     [InlineData("Write-Host ok\nRemove-Item lockflight.yaml")]
     public async Task PowerShellFormsOfAProtectedWriteAreBlocked(string command)
     {
-        (ExitCode exitCode, _, _) = await RunAsync("PowerShell", command);
+        (ExitCode exitCode, _, string error) = await RunAsync("PowerShell", command);
 
-        Assert.True(exitCode == ExitCode.HookBlock, $"'{command}' was allowed");
+        HookAssert.Blocked(exitCode, error, $"'{command}' was allowed");
     }
 
     [Theory]

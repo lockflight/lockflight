@@ -62,9 +62,9 @@ public sealed class StopPendingApprovalTests : IDisposable
         await TestConsole.RunAsync(["redgreen", "start", "--feature", "f1"], string.Empty, root.FullName);
         new ApprovalStore(Feature).Save(ApprovalPhase.Tasks, "dev@example.com", DateTimeOffset.UnixEpoch, "0.0.0-test");
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
         Assert.True(HasGateRun());
     }
 
@@ -77,9 +77,9 @@ public sealed class StopPendingApprovalTests : IDisposable
             DateTimeOffset.UnixEpoch, "engine:baseline", BlockedReasonCode.BaselineNeeded, "a baseline is needed", [need]);
         BlockedReportFile.WriteLocal(root.FullName, report with { Feature = "f1" });
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
         Assert.True(HasGateRun());
     }
 
@@ -90,9 +90,9 @@ public sealed class StopPendingApprovalTests : IDisposable
         await TestConsole.RunAsync(["redgreen", "start", "--feature", "f1"], string.Empty, root.FullName);
         await File.WriteAllTextAsync(Path.Combine(root.FullName, "Later.cs"), "class Later { }\n", TestContext.Current.CancellationToken);
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
         Assert.True(HasGateRun());
     }
 
@@ -104,9 +104,9 @@ public sealed class StopPendingApprovalTests : IDisposable
         await File.AppendAllTextAsync(Feature.TasksPath, "- [ ] T002 [US1] (FR-001) Test B\n", TestContext.Current.CancellationToken);
         await TestConsole.RunAsync(["redgreen", "start", "--feature", "f1"], string.Empty, root.FullName);
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
         Assert.True(HasGateRun());
     }
 
@@ -117,9 +117,9 @@ public sealed class StopPendingApprovalTests : IDisposable
         await TestConsole.RunAsync(["redgreen", "start", "--feature", "f1"], string.Empty, root.FullName);
         Directory.CreateDirectory(Path.Combine(root.FullName, "specs", "f2"));
 
-        (ExitCode exitCode, _, _) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
+        (ExitCode exitCode, _, string error) = await TestConsole.RunAsync(["hook", "stop"], StopPayload(), root.FullName);
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
         Assert.True(HasGateRun());
     }
 

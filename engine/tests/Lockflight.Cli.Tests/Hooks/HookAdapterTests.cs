@@ -143,10 +143,10 @@ public sealed class HookAdapterTests : IDisposable
     [Fact]
     public async Task WithoutTheVariableThePayloadIsClaudeCodes()
     {
-        (ExitCode exitCode, _, _) = await RunAsync(
+        (ExitCode exitCode, _, string error) = await RunAsync(
             "pre-tool-use", JsonSerializer.Serialize(new { tool_name = "Edit", cwd = root.FullName, tool_input = new { file_path = Path.Combine(root.FullName, Manifest.FileName) } }));
 
-        Assert.Equal(ExitCode.HookBlock, exitCode);
+        HookAssert.Blocked(exitCode, error);
     }
 
     public void Dispose() => TempDirectories.DeleteRecursively(root);
