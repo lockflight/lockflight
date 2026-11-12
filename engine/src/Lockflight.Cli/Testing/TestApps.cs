@@ -16,6 +16,12 @@ internal static class TestApps
     private const int MaxDetailLength = 300;
 
     /// <summary>
+    /// Evaluations at once: each is a <c>dotnet msbuild</c> process of a few hundred megabytes, and red/green, trace and the CI judge
+    /// all run them, so one per core would exhaust the memory of a large machine running a solution with many projects.
+    /// </summary>
+    private const int MaxParallelEvaluations = 4;
+
+    /// <summary>
     /// The properties <c>dotnet test</c> on VSTest reads to add data collectors, adapter paths, loggers or another run settings file to
     /// the run, which the host-tampering check lists.
     /// </summary>
@@ -28,7 +34,7 @@ internal static class TestApps
          "-getProperty:RunSettingsFilePath", .. VSTestProperties.Select(property => $"-getProperty:{property}")];
 
     /// <summary>
-    /// The projects are evaluated in parallel (<c>dotnet msbuild -getProperty</c> only evaluates; it builds nothing), within
+    /// The projects are evaluated in parallel, at most <see cref="MaxParallelEvaluations"/> at a time (<c>dotnet msbuild -getProperty</c> only evaluates; it builds nothing), within
     /// <paramref name="timeLimit"/> for all of them together. A project whose evaluation fails or runs out of time is reported as
     /// unevaluated, never taken for a project without tests; one that evaluates and is no test application of these frameworks is left out.
     /// </summary>
@@ -38,7 +44,7 @@ internal static class TestApps
         string[] projects = [.. Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Where(path => !IsBuildOutput(root, path)).Order(StringComparer.Ordinal)];
         ProjectEvaluation[] evaluations = new ProjectEvaluation[projects.Length];
         TimeBudget budget = new(timeLimit, time);
-        ParallelOptions options = new() { MaxDegreeOfParallelism = Environment.ProcessorCount, CancellationToken = cancellationToken };
+        ParallelOptions options = new() { MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, MaxParallelEvaluations), CancellationToken = cancellationToken };
         await Parallel.ForEachAsync(
             Enumerable.Range(0, projects.Length),
             options,
