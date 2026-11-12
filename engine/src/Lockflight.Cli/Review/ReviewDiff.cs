@@ -139,11 +139,20 @@ internal sealed record ReviewDiff(string Whole, string Shown, int Limit, int Fil
         return [.. sections];
     }
 
-    /// <summary>The new-side path of a file's diff, from <c>diff --git a/… b/…</c> (quoted when git quotes it); the header line otherwise.</summary>
+    /// <summary>
+    /// The new-side path of a file's diff, from <c>diff --git a/… b/…</c> (quoted when git quotes it); the header line otherwise. When
+    /// both sides name the same path (any change but a move), the header is split in its middle, so a path that itself holds
+    /// <c>" b/"</c> (<c>docs b/notes.md</c>) is read whole; a move falls back to the last <c>" b/"</c>.
+    /// </summary>
     private static string PathOf(string section)
     {
         int lineEnd = section.IndexOf('\n', StringComparison.Ordinal);
         string header = lineEnd < 0 ? section : section[..lineEnd];
+        if (header.StartsWith(FileHeader, StringComparison.Ordinal) && SamePath(header[FileHeader.Length..]) is string same)
+        {
+            return same;
+        }
+
         int quoted = header.LastIndexOf(" \"b/", StringComparison.Ordinal);
         if (quoted >= 0 && header.EndsWith('"'))
         {
@@ -152,5 +161,26 @@ internal sealed record ReviewDiff(string Whole, string Shown, int Limit, int Fil
 
         int plain = header.LastIndexOf(" b/", StringComparison.Ordinal);
         return plain >= 0 ? header[(plain + 3)..] : header;
+    }
+
+    /// <summary>The path of <c>a/P b/P</c> or <c>"a/P" "b/P"</c>; null when the two sides differ.</summary>
+    private static string? SamePath(string sides)
+    {
+        int middle = sides.Length / 2;
+        if (sides.Length % 2 == 0 || sides[middle] != ' ')
+        {
+            return null;
+        }
+
+        string left = sides[..middle];
+        string right = sides[(middle + 1)..];
+        if (left.StartsWith("a/", StringComparison.Ordinal) && right.StartsWith("b/", StringComparison.Ordinal) && left[2..] == right[2..])
+        {
+            return right[2..];
+        }
+
+        return left.StartsWith("\"a/", StringComparison.Ordinal) && right.StartsWith("\"b/", StringComparison.Ordinal) && right.EndsWith('"') && left[3..] == right[3..]
+            ? right[3..^1]
+            : null;
     }
 }
